@@ -47,8 +47,12 @@ void main() {
     final auth = MockFirebaseAuth(signedIn: true);
     final service = AuthService(auth);
 
-    expectLater(service.authStateChanges(), emitsThrough(isNull));
+    final expectation = expectLater(
+      service.authStateChanges(),
+      emitsThrough(isNull),
+    );
     await service.signOut();
+    await expectation;
   });
 
   test('sendPasswordReset delegates without throwing', () async {

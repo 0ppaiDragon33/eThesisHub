@@ -78,6 +78,11 @@ class UserRepository {
     if (data == null) return null;
     final raw = Map<String, dynamic>.from(data);
     final createdAt = raw['createdAt'];
+    // createdAt is null in the local snapshot until the server acknowledges a
+    // FieldValue.serverTimestamp() write, so a client reading its own freshly
+    // created profile legitimately sees no timestamp. Falling back to "now"
+    // keeps that path working; it cannot distinguish that case from genuinely
+    // malformed data, which is an accepted trade-off.
     raw['createdAt'] =
         createdAt is Timestamp ? createdAt.toDate() : DateTime.now().toUtc();
     return AppUser.fromMap(uid, raw);

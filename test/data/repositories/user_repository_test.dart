@@ -87,7 +87,7 @@ void main() {
       email: 'watched@isufst.edu.ph',
     );
 
-    expectLater(
+    await expectLater(
       repo.watchUser('uid-4').map((u) => u?.fullName),
       emits('Watched'),
     );
