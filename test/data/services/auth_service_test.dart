@@ -50,4 +50,28 @@ void main() {
     expectLater(service.authStateChanges(), emitsThrough(isNull));
     await service.signOut();
   });
+
+  test('sendPasswordReset delegates without throwing', () async {
+    final auth = MockFirebaseAuth();
+    final service = AuthService(auth);
+
+    expect(
+      service.sendPasswordReset('kjvargas@isufst.edu.ph'),
+      completes,
+    );
+  });
+
+  test('sendEmailVerification succeeds with a signed-in user', () async {
+    final auth = MockFirebaseAuth(
+      signedIn: true,
+      mockUser: MockUser(
+        uid: 'uid-1',
+        email: 'kjvargas@isufst.edu.ph',
+        isEmailVerified: false,
+      ),
+    );
+    final service = AuthService(auth);
+
+    expect(service.sendEmailVerification(), completes);
+  });
 }
