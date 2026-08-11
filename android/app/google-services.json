@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "643806259002",
+    "project_id": "ethesishub-43a04",
+    "storage_bucket": "ethesishub-43a04.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:643806259002:android:184d729a5e231520979203",
+        "android_client_info": {
+          "package_name": "com.example.ethesishub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "643806259002-u8ujf0ese3m90370dmuv29qjdjtrtmut.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBidNRB_N5NjTNIsngdh90z4vqafQLyVso"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "643806259002-u8ujf0ese3m90370dmuv29qjdjtrtmut.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
