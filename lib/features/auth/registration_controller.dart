@@ -13,6 +13,11 @@ class RegistrationController {
   ///
   /// If the profile write fails after creating the auth account, the account
   /// is deleted to free the email for retry and prevent the UI from hanging.
+  /// Sending the verification email is NOT part of that rollback: it is
+  /// routine for it to fail transiently (e.g. `too-many-requests`), and once
+  /// the profile document exists it can never be deleted (`firestore.rules`
+  /// sets `allow delete: if false` on `users`), so destroying the auth
+  /// account at that point would orphan the profile forever.
   Future<String?> submit({
     required String fullName,
     required String email,
@@ -45,8 +50,8 @@ class RegistrationController {
       final user = credential.user!;
       final uid = user.uid;
 
-      // Create profile and send verification; if either fails, delete the
-      // just-created account to free the email and prevent the button hanging.
+      // Create the profile; if this fails, delete the just-created account
+      // to free the email and prevent the button hanging.
       try {
         await users.createStudentProfile(
           uid: uid,
@@ -54,8 +59,6 @@ class RegistrationController {
           email: email,
           program: program,
         );
-        await auth.sendEmailVerification();
-        return null;
       } catch (e) {
         try {
           await user.delete();
@@ -65,6 +68,18 @@ class RegistrationController {
         }
         return 'Could not complete registration. Please try again.';
       }
+
+      // The profile now exists and can never be deleted, so from here on we
+      // never roll back. A failure to send the verification email is routine
+      // (e.g. too-many-requests) and recoverable via the Resend button.
+      try {
+        await auth.sendEmailVerification();
+      } catch (e) {
+        return 'Account created, but we could not send the verification '
+            'email. Use the Resend button on the next screen.';
+      }
+
+      return null;
     } catch (e) {
       // Catch-all to ensure no exception escapes; this must never throw
       return 'Could not complete registration. Please try again.';
