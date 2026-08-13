@@ -59,7 +59,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() {
-        _busy = false;
         _error = switch (e.code) {
           'wrong-password' || 'invalid-credential' =>
             'Incorrect email or password.',
@@ -68,6 +67,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _ => 'Sign-in failed. Please try again.',
         };
       });
+    } on FirebaseException {
+      // Handle Firestore errors (e.g., internal errors during invite read).
+      // This must come after FirebaseAuthException since it's a subtype.
+      if (!mounted) return;
+      setState(() {
+        _error = 'Sign-in failed. Please try again.';
+      });
+    } catch (_) {
+      // Catch any other unexpected errors
+      if (!mounted) return;
+      setState(() {
+        _error = 'An unexpected error occurred. Please try again.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _busy = false);
     }
   }
 
@@ -77,11 +92,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _error = 'Enter your email first, then tap Reset.');
       return;
     }
-    await ref.read(authServiceProvider).sendPasswordReset(email);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Password reset link sent to $email')),
-    );
+    try {
+      await ref.read(authServiceProvider).sendPasswordReset(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password reset link sent to $email')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Failed to send reset link. Please try again.');
+    }
   }
 
   @override
