@@ -10,6 +10,9 @@ class RegistrationController {
   final Ref _ref;
 
   /// Returns an error message, or null when registration succeeded.
+  ///
+  /// If the profile write fails after creating the auth account, the account
+  /// is deleted to free the email for retry and prevent the UI from hanging.
   Future<String?> submit({
     required String fullName,
     required String email,
@@ -27,23 +30,44 @@ class RegistrationController {
     final users = _ref.read(userRepositoryProvider);
 
     try {
-      final credential = await auth.register(email: email, password: password);
-      final uid = credential.user!.uid;
+      // Create the auth account first
+      UserCredential credential;
+      try {
+        credential = await auth.register(email: email, password: password);
+      } on FirebaseAuthException catch (e) {
+        return switch (e.code) {
+          'email-already-in-use' => 'That email is already registered.',
+          'weak-password' => 'Choose a stronger password.',
+          _ => 'Registration failed. Please try again.',
+        };
+      }
 
-      await users.createStudentProfile(
-        uid: uid,
-        fullName: fullName,
-        email: email,
-        program: program,
-      );
-      await auth.sendEmailVerification();
-      return null;
-    } on FirebaseAuthException catch (e) {
-      return switch (e.code) {
-        'email-already-in-use' => 'That email is already registered.',
-        'weak-password' => 'Choose a stronger password.',
-        _ => 'Registration failed. Please try again.',
-      };
+      final user = credential.user!;
+      final uid = user.uid;
+
+      // Create profile and send verification; if either fails, delete the
+      // just-created account to free the email and prevent the button hanging.
+      try {
+        await users.createStudentProfile(
+          uid: uid,
+          fullName: fullName,
+          email: email,
+          program: program,
+        );
+        await auth.sendEmailVerification();
+        return null;
+      } catch (e) {
+        try {
+          await user.delete();
+        } catch (deleteError) {
+          // Rollback delete failed; still return the original error
+          return 'Could not complete registration. Please try again.';
+        }
+        return 'Could not complete registration. Please try again.';
+      }
+    } catch (e) {
+      // Catch-all to ensure no exception escapes; this must never throw
+      return 'Could not complete registration. Please try again.';
     }
   }
 }
