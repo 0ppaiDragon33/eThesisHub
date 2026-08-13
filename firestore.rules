@@ -1,0 +1,94 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function myEmail() {
+      return request.auth.token.email;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isCoordinator() {
+      return signedIn() && myRole() == 'coordinator';
+    }
+
+    function isDean() {
+      return signedIn() && myRole() == 'dean';
+    }
+
+    function invitedRoleFor(email) {
+      return get(/databases/$(database)/documents/facultyInvites/$(email)).data.role;
+    }
+
+    function hasInvite(email) {
+      return exists(/databases/$(database)/documents/facultyInvites/$(email));
+    }
+
+    // Only the listed fields may differ between the stored and incoming doc.
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(fields);
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() &&
+                 (request.auth.uid == uid || isCoordinator() || isDean());
+      allow list: if isCoordinator() || isDean();
+
+      // Self-registration: student role only, and only for yourself.
+      allow create: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.role == 'student'
+                    && request.resource.data.email == myEmail();
+
+      // Profile edits by the owner, but never the role.
+      allow update: if signedIn()
+                    && request.auth.uid == uid
+                    && onlyChanged(['fullName', 'college', 'program', 'specialization']);
+
+      // Invite promotion: only to exactly the invited role, for your own email.
+      allow update: if verified()
+                    && request.auth.uid == uid
+                    && onlyChanged(['role'])
+                    && hasInvite(myEmail())
+                    && request.resource.data.role == invitedRoleFor(myEmail());
+
+      // Coordinators administer accounts.
+      allow update: if isCoordinator();
+
+      allow delete: if false;
+    }
+
+    match /facultyInvites/{email} {
+      // You may read only your own invite; the collection is never listable.
+      allow get: if signedIn() && myEmail() == email;
+      allow list: if isCoordinator();
+      allow create, update: if isCoordinator();
+      // The invitee consumes their own invite after promotion.
+      allow delete: if isCoordinator() || (verified() && myEmail() == email);
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if signedIn()
+                    && request.resource.data.actorUid == request.auth.uid;
+      allow get, list: if isCoordinator() || isDean();
+      allow update, delete: if false;
+    }
+
+    // Deny-by-default for everything not matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
