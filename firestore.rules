@@ -12,7 +12,7 @@ service cloud.firestore {
     }
 
     function myEmail() {
-      return request.auth.token.email;
+      return request.auth.token.email.lower();
     }
 
     function myRole() {
@@ -46,11 +46,18 @@ service cloud.firestore {
                  (request.auth.uid == uid || isCoordinator() || isDean());
       allow list: if isCoordinator() || isDean();
 
-      // Self-registration: student role only, and only for yourself.
+      // Self-registration: student role only, only for yourself, and only
+      // the fields createStudentProfile actually writes.
       allow create: if signedIn()
                     && request.auth.uid == uid
                     && request.resource.data.role == 'student'
-                    && request.resource.data.email == myEmail();
+                    && request.resource.data.email == myEmail()
+                    && request.resource.data.keys().hasOnly(
+                         ['fullName', 'email', 'role', 'college', 'program',
+                          'specialization', 'active', 'createdAt', 'createdBy'])
+                    && request.resource.data.active == true
+                    && request.resource.data.createdBy == null
+                    && request.resource.data.createdAt == request.time;
 
       // Profile edits by the owner, but never the role.
       allow update: if signedIn()
@@ -64,15 +71,22 @@ service cloud.firestore {
                     && hasInvite(myEmail())
                     && request.resource.data.role == invitedRoleFor(myEmail());
 
-      // Coordinators administer accounts.
-      allow update: if isCoordinator();
+      // Coordinators administer accounts but may never write `role`, and may
+      // never target their own account. Role changes happen only through the
+      // invite path above, so every elevation leaves a facultyInvites record.
+      allow update: if isCoordinator()
+                    && request.auth.uid != uid
+                    && onlyChanged(['fullName', 'college', 'program',
+                                    'specialization', 'active']);
 
       allow delete: if false;
     }
 
     match /facultyInvites/{email} {
-      // You may read only your own invite; the collection is never listable.
-      allow get: if signedIn() && myEmail() == email;
+      // You may read only your own invite once your address is verified, or
+      // if you're a coordinator; the collection is never listable by anyone
+      // but a coordinator.
+      allow get: if (verified() && myEmail() == email) || isCoordinator();
       allow list: if isCoordinator();
       allow create, update: if isCoordinator();
       // The invitee consumes their own invite after promotion.
@@ -81,7 +95,11 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow create: if signedIn()
-                    && request.resource.data.actorUid == request.auth.uid;
+                    && request.resource.data.actorUid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(
+                         ['actorUid', 'action', 'targetType', 'targetId',
+                          'metadata', 'timestamp'])
+                    && request.resource.data.timestamp == request.time;
       allow get, list: if isCoordinator() || isDean();
       allow update, delete: if false;
     }
