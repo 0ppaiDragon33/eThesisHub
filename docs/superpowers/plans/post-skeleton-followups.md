@@ -63,3 +63,23 @@ These were raised during review and judged not worth acting on:
 ## Accepted by human ruling
 
 - **Two coordinators can promote each other to dean**, and a coordinator holding a second verifiable address can self-elevate on that second account. Rules cannot close this while coordinators may mint deans. Belongs in Scope and Limitations.
+
+---
+
+## Running the Firestore rules tests
+
+`firebase-tools` 15.x requires **Java 21 or newer**. Eclipse Temurin 21 is
+installed at `C:\Program Filesclipse Adoptium\jdk-21.0.12.8-hotspot`, but a
+shell whose PATH still points at JDK 17 will fail with *"firebase-tools no
+longer supports Java version before 21"*.
+
+From Git Bash:
+
+```bash
+export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-21.0.12.8-hotspot"
+export PATH="$JAVA_HOME/bin:$PATH"
+cd rules-test && npm test
+```
+
+Setting `JAVA_HOME` permanently in the system environment variables avoids
+repeating this.
