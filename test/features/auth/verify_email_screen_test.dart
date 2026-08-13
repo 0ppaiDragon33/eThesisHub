@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/app.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/data/services/auth_service.dart';
@@ -65,6 +66,58 @@ class FailingSignOutService extends AuthService {
   Future<void> signOut() async {
     throw FirebaseAuthException(code: 'unknown');
   }
+}
+
+/// A User whose reload() flips an externally-owned flag rather than mutating
+/// itself, so that (like real FirebaseAuth) the *same* User object returned
+/// before reload() stays stale, while a freshly-read `currentUser` reflects
+/// the change. `props` includes the verified flag so distinct instances with
+/// different verification states are never treated as Equatable-equal.
+// ignore: must_be_immutable
+class _TrackedUser extends MockUser {
+  _TrackedUser({
+    required super.uid,
+    required super.email,
+    required bool verified,
+    this.onReload,
+  })  : _verified = verified,
+        super(isEmailVerified: verified);
+
+  final bool _verified;
+  final VoidCallback? onReload;
+
+  @override
+  bool get emailVerified => _verified;
+
+  @override
+  List<Object?> get props => [...super.props, _verified];
+
+  @override
+  Future<void> reload() async {
+    onReload?.call();
+  }
+}
+
+/// Simulates real FirebaseAuth's authStateChanges(): re-subscribing (as
+/// `ref.invalidate(authStateProvider)` causes) yields a fresh User reflecting
+/// current state, but reload() alone never pushes a new stream event.
+class _FlippableAuthService extends AuthService {
+  _FlippableAuthService(super.auth, this._uid, this._email);
+
+  final String _uid;
+  final String _email;
+  bool _verified = false;
+
+  @override
+  User? get currentUser => _TrackedUser(
+        uid: _uid,
+        email: _email,
+        verified: _verified,
+        onReload: () => _verified = true,
+      );
+
+  @override
+  Stream<User?> authStateChanges() => Stream.value(currentUser);
 }
 
 void main() {
@@ -241,5 +294,54 @@ void main() {
 
     // Should show error in snackbar
     expect(find.textContaining('Failed to sign out'), findsOneWidget);
+  });
+
+  testWidgets(
+      'continuing after verification navigates to the dashboard '
+      '(fails without invalidating authStateProvider)', (tester) async {
+    const uid = 'uid-nav';
+    const email = 'student@isufst.edu.ph';
+
+    final db = FakeFirebaseFirestore();
+    await UserRepository(db).createStudentProfile(
+      uid: uid,
+      fullName: 'Nav Student',
+      email: email,
+    );
+
+    final mockAuth = MockFirebaseAuth();
+    final authService = _FlippableAuthService(mockAuth, uid, email);
+
+    final container = ProviderContainer(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(mockAuth),
+        authServiceProvider.overrideWithValue(authService),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Starts unverified, so the router lands on the verify-email screen.
+    expect(find.text('Verify your email'), findsOneWidget);
+
+    // Tap continue: reload() flips the service's internal verified flag,
+    // then the screen must invalidate authStateProvider so the router picks
+    // up the change and redirects onward.
+    await tester.tap(find.byKey(const Key('reload')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Thesis'), findsOneWidget,
+        reason: 'without invalidating authStateProvider, the router never '
+            're-evaluates its redirect and the user is stuck on '
+            '/verify-email');
+    expect(find.text('Verify your email'), findsNothing);
   });
 }

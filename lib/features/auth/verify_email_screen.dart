@@ -60,6 +60,14 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       }
 
       if (!mounted) return;
+
+      // authStateChanges() does not emit on reload(), so the cached User in
+      // authStateProvider still reports emailVerified == false even though
+      // auth.currentUser is now verified. Invalidating forces a fresh
+      // subscription that picks up the current (verified) user, which fires
+      // the router's refresh notifier and lets the redirect proceed.
+      ref.invalidate(authStateProvider);
+
       setState(() {
         _busy = false;
         _message = 'Email verified! You can now proceed.';
