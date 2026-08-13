@@ -46,7 +46,9 @@ class UserRepository {
   Future<UserRole?> fetchInviteRole(String email) async {
     final snapshot = await _invites.doc(normalise(email)).get();
     if (!snapshot.exists) return null;
-    return UserRole.tryParse(snapshot.data()!['role'] as String?);
+    final data = snapshot.data()!;
+    if (data['consumedAt'] != null) return null;
+    return UserRole.tryParse(data['role'] as String?);
   }
 
   Future<void> createInvite({
@@ -58,10 +60,14 @@ class UserRepository {
       'role': role.value,
       'invitedBy': invitedBy,
       'createdAt': FieldValue.serverTimestamp(),
+      'consumedAt': null,
     });
   }
 
   /// Applies a pending invite, returning the granted role or null if none.
+  ///
+  /// The invite is marked consumed rather than deleted, so every completed
+  /// promotion leaves a permanent record.
   Future<UserRole?> promoteFromInvite({
     required String uid,
     required String email,
@@ -70,7 +76,9 @@ class UserRepository {
     if (role == null) return null;
 
     await _users.doc(uid).update({'role': role.value});
-    await _invites.doc(normalise(email)).delete();
+    await _invites.doc(normalise(email)).update({
+      'consumedAt': FieldValue.serverTimestamp(),
+    });
     return role;
   }
 

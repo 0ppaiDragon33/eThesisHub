@@ -93,6 +93,7 @@ test("a student MAY promote themselves when a matching invite exists", async () 
     await setDoc(doc(db, "facultyInvites/invited@isufst.edu.ph"), {
       role: "faculty",
       invitedBy: "seed",
+      consumedAt: null,
     });
     await setDoc(doc(db, "users/invited-uid"), studentProfile("invited@isufst.edu.ph"));
   });
@@ -115,6 +116,7 @@ test("an invited user may NOT claim a role higher than their invite", async () =
     await setDoc(doc(db, "facultyInvites/greedy@isufst.edu.ph"), {
       role: "faculty",
       invitedBy: "seed",
+      consumedAt: null,
     });
     await setDoc(doc(db, "users/greedy-uid"), studentProfile("greedy@isufst.edu.ph"));
   });
@@ -136,6 +138,7 @@ test("a user may not read an invite belonging to someone else", async () => {
     await setDoc(doc(ctx.firestore(), "facultyInvites/other@isufst.edu.ph"), {
       role: "dean",
       invitedBy: "seed",
+      consumedAt: null,
     });
   });
 
@@ -248,6 +251,7 @@ test("a mixed-case token email can create its profile and consume an invite stor
     await setDoc(doc(ctx.firestore(), `facultyInvites/${lowercasedEmail}`), {
       role: "faculty",
       invitedBy: "seed",
+      consumedAt: null,
     });
   });
 
@@ -265,6 +269,7 @@ test("an unverified caller may NOT read an invite for their own address", async 
     await setDoc(doc(ctx.firestore(), "facultyInvites/unverified@isufst.edu.ph"), {
       role: "faculty",
       invitedBy: "seed",
+      consumedAt: null,
     });
   });
 
@@ -314,6 +319,143 @@ test("an audit log may NOT be overwritten via setDoc on an existing id", async (
       metadata: {},
       timestamp: serverTimestamp(),
     })
+  );
+});
+
+// --- Added for review round 2: self-invite / consumed-invite lockdown ---
+
+test("a coordinator may NOT create an invite for their own address", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/coord4-uid"), {
+      ...studentProfile("coord4@isufst.edu.ph"),
+      role: "coordinator",
+    });
+  });
+
+  const coordinator = env
+    .authenticatedContext("coord4-uid", {
+      email: "coord4@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    setDoc(doc(coordinator, "facultyInvites/coord4@isufst.edu.ph"), {
+      role: "dean",
+      invitedBy: "coord4-uid",
+      consumedAt: null,
+    })
+  );
+});
+
+test("a coordinator may NOT create an invite with a role outside the allowed set", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/coord5-uid"), {
+      ...studentProfile("coord5@isufst.edu.ph"),
+      role: "coordinator",
+    });
+  });
+
+  const coordinator = env
+    .authenticatedContext("coord5-uid", {
+      email: "coord5@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    setDoc(doc(coordinator, "facultyInvites/newhire@isufst.edu.ph"), {
+      role: "student",
+      invitedBy: "coord5-uid",
+      consumedAt: null,
+    })
+  );
+});
+
+test("an invitee may NOT delete their own invite", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyInvites/nodel@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "seed",
+      consumedAt: null,
+    });
+  });
+
+  const invitee = env
+    .authenticatedContext("nodel-uid", {
+      email: "nodel@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    deleteDoc(doc(invitee, "facultyInvites/nodel@isufst.edu.ph"))
+  );
+});
+
+test("an invitee MAY mark their own invite consumed", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyInvites/consume@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "seed",
+      consumedAt: null,
+    });
+  });
+
+  const invitee = env
+    .authenticatedContext("consume-uid", {
+      email: "consume@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(invitee, "facultyInvites/consume@isufst.edu.ph"), {
+      consumedAt: serverTimestamp(),
+    })
+  );
+});
+
+test("a consumed invite may NOT be used to promote again", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "facultyInvites/replay@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "seed",
+      consumedAt: serverTimestamp(),
+    });
+    await setDoc(doc(db, "users/replay-uid"), studentProfile("replay@isufst.edu.ph"));
+  });
+
+  const replay = env
+    .authenticatedContext("replay-uid", {
+      email: "replay@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    updateDoc(doc(replay, "users/replay-uid"), { role: "faculty" })
+  );
+});
+
+test("a coordinator may NOT update their OWN account via the coordinator branch", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/coord6-uid"), {
+      ...studentProfile("coord6@isufst.edu.ph"),
+      role: "coordinator",
+    });
+  });
+
+  const coordinator = env
+    .authenticatedContext("coord6-uid", {
+      email: "coord6@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    updateDoc(doc(coordinator, "users/coord6-uid"), { active: false })
   );
 });
 

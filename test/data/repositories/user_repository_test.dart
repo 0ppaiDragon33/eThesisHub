@@ -42,7 +42,8 @@ void main() {
     );
   });
 
-  test('promoteFromInvite upgrades the user and consumes the invite', () async {
+  test('promoteFromInvite upgrades the user and marks the invite consumed',
+      () async {
     await repo.createStudentProfile(
       uid: 'uid-2',
       fullName: 'Dr. Reyes',
@@ -61,7 +62,47 @@ void main() {
 
     expect(newRole, UserRole.coordinator);
     expect((await repo.fetchUser('uid-2'))!.role, UserRole.coordinator);
+
+    // The invite document still exists (never deleted) but is now consumed,
+    // so fetchInviteRole treats it as absent.
+    final inviteDoc =
+        await db.collection('facultyInvites').doc('reyes@isufst.edu.ph').get();
+    expect(inviteDoc.exists, isTrue);
+    expect(inviteDoc.data()!['consumedAt'], isNotNull);
     expect(await repo.fetchInviteRole('reyes@isufst.edu.ph'), isNull);
+  });
+
+  test('a consumed invite cannot promote a second time', () async {
+    await repo.createStudentProfile(
+      uid: 'uid-5',
+      fullName: 'Dr. Santos',
+      email: 'santos@isufst.edu.ph',
+    );
+    await repo.createInvite(
+      email: 'santos@isufst.edu.ph',
+      role: UserRole.faculty,
+      invitedBy: 'seed',
+    );
+
+    final firstRole = await repo.promoteFromInvite(
+      uid: 'uid-5',
+      email: 'santos@isufst.edu.ph',
+    );
+    expect(firstRole, UserRole.faculty);
+
+    // Simulate a second user somehow reusing the same (now-consumed) invite.
+    await repo.createStudentProfile(
+      uid: 'uid-6',
+      fullName: 'Imposter',
+      email: 'santos2@isufst.edu.ph',
+    );
+    final secondRole = await repo.promoteFromInvite(
+      uid: 'uid-6',
+      email: 'santos@isufst.edu.ph',
+    );
+
+    expect(secondRole, isNull);
+    expect((await repo.fetchUser('uid-6'))!.role, UserRole.student);
   });
 
   test('promoteFromInvite is a no-op without an invite', () async {
