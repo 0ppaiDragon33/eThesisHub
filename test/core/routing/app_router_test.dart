@@ -6,12 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ethesishub/app.dart';
+import 'package:ethesishub/core/routing/app_router.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-Future<ProviderScope> scopeFor(UserRole role, {required String uid}) async {
+Future<ProviderContainer> containerFor(UserRole role, {required String uid}) async {
   final db = FakeFirebaseFirestore();
   await UserRepository(db).createStudentProfile(
     uid: uid,
@@ -31,7 +32,7 @@ Future<ProviderScope> scopeFor(UserRole role, {required String uid}) async {
     isEmailVerified: true,
   );
 
-  return ProviderScope(
+  return ProviderContainer(
     overrides: [
       sharedPrefsProvider.overrideWithValue(prefs),
       firestoreProvider.overrideWithValue(db),
@@ -43,59 +44,108 @@ Future<ProviderScope> scopeFor(UserRole role, {required String uid}) async {
       ),
       authStateProvider.overrideWith((ref) => Stream.value(mockUser as User?)),
     ],
-    child: const EThesisHubApp(),
   );
 }
 
 void main() {
   testWidgets('student lands on the student dashboard', (tester) async {
-    await tester.pumpWidget(await scopeFor(UserRole.student, uid: 'u1'));
+    final container = await containerFor(UserRole.student, uid: 'u1');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('My Thesis'), findsOneWidget);
   });
 
   testWidgets('faculty lands on the faculty dashboard', (tester) async {
-    await tester.pumpWidget(await scopeFor(UserRole.faculty, uid: 'u2'));
+    final container = await containerFor(UserRole.faculty, uid: 'u2');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('My Advisees'), findsOneWidget);
   });
 
   testWidgets('coordinator lands on the coordinator dashboard',
       (tester) async {
-    await tester.pumpWidget(await scopeFor(UserRole.coordinator, uid: 'u3'));
+    final container = await containerFor(UserRole.coordinator, uid: 'u3');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('All Theses'), findsOneWidget);
   });
 
   testWidgets('dean lands on the dean dashboard', (tester) async {
-    await tester.pumpWidget(await scopeFor(UserRole.dean, uid: 'u4'));
+    final container = await containerFor(UserRole.dean, uid: 'u4');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('College Overview'), findsOneWidget);
   });
 
-  testWidgets('student is redirected from dean dashboard to student',
-      (tester) async {
-    // This test verifies the role guard: a student trying to access a dean
-    // dashboard URL is redirected back to their own dashboard.
-    // The redirect logic in goRouterProvider implements this guard.
-    await tester.pumpWidget(await scopeFor(UserRole.student, uid: 'u1'));
+  testWidgets('student cannot reach the dean dashboard', (tester) async {
+    final container = await containerFor(UserRole.student, uid: 'u1');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('My Thesis'), findsOneWidget);
+
+    // Attempt to reach another role's dashboard by route.
+    container.read(goRouterProvider).go('/dean');
     await tester.pumpAndSettle();
 
-    // Verify student is on student dashboard
-    expect(find.text('My Thesis'), findsOneWidget);
+    // Should be redirected back to student dashboard
     expect(find.text('College Overview'), findsNothing);
+    expect(find.text('My Thesis'), findsOneWidget);
   });
 
-  testWidgets('faculty is redirected from coordinator dashboard to faculty',
-      (tester) async {
-    // This test verifies the role guard: a faculty member trying to access
-    // a coordinator dashboard URL is redirected back to their own dashboard.
-    // The redirect logic in goRouterProvider implements this guard.
-    await tester.pumpWidget(await scopeFor(UserRole.faculty, uid: 'u2'));
+  testWidgets('faculty cannot reach the coordinator dashboard', (tester) async {
+    final container = await containerFor(UserRole.faculty, uid: 'u2');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('My Advisees'), findsOneWidget);
+
+    // Attempt to reach another role's dashboard by route.
+    container.read(goRouterProvider).go('/coordinator');
     await tester.pumpAndSettle();
 
-    // Verify faculty is on faculty dashboard
-    expect(find.text('My Advisees'), findsOneWidget);
+    // Should be redirected back to faculty dashboard
     expect(find.text('All Theses'), findsNothing);
+    expect(find.text('My Advisees'), findsOneWidget);
   });
 }
