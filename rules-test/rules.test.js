@@ -459,6 +459,60 @@ test("a coordinator may NOT update their OWN account via the coordinator branch"
   );
 });
 
+// --- Added for final fix wave: inviteUnconsumed() missing-field tolerance,
+// and a positive control on invite creation ---
+
+test("a coordinator MAY create a valid invite for someone else", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/coord7-uid"), {
+      ...studentProfile("coord7@isufst.edu.ph"),
+      role: "coordinator",
+    });
+  });
+
+  const coordinator = env
+    .authenticatedContext("coord7-uid", {
+      email: "coord7@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    setDoc(doc(coordinator, "facultyInvites/newfaculty@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "coord7-uid",
+      consumedAt: null,
+    })
+  );
+});
+
+test("promotion succeeds against an invite with no consumedAt field at all", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    // Simulates a console-created invite where the admin omitted
+    // `consumedAt: null` entirely, rather than setting it explicitly.
+    await setDoc(doc(db, "facultyInvites/noconsumedat@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "seed",
+    });
+    await setDoc(
+      doc(db, "users/noconsumedat-uid"),
+      studentProfile("noconsumedat@isufst.edu.ph")
+    );
+  });
+
+  const invited = env
+    .authenticatedContext("noconsumedat-uid", {
+      email: "noconsumedat@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(invited, "users/noconsumedat-uid"), { role: "faculty" })
+  );
+});
+
 test.after(async () => {
   await env.cleanup();
 });

@@ -36,8 +36,12 @@ service cloud.firestore {
     }
 
     function inviteUnconsumed(email) {
+      // Tolerate a missing `consumedAt` key rather than erroring (which
+      // would deny). Console-created invites are currently the only way to
+      // issue one, so an admin who omits `consumedAt: null` must not get a
+      // silent, undiagnosable failure.
       return get(/databases/$(database)/documents/facultyInvites/$(email))
-             .data.consumedAt == null;
+             .data.get('consumedAt', null) == null;
     }
 
     // Only the listed fields may differ between the stored and incoming doc.
@@ -83,9 +87,9 @@ service cloud.firestore {
       // never target their own account. Role changes happen only by the
       // invitee applying an invite the coordinator issued, and coordinators
       // can never invite themselves (see facultyInvites `create`/`update`
-      // below) or delete an invite once issued — only the invitee can mark it
-      // consumed, never delete it — so every elevation leaves a permanent
-      // facultyInvites record.
+      // below). The beneficiary of an elevation can never remove its
+      // facultyInvites record (only mark it consumed) — but coordinators can
+      // delete or overwrite invites, so this is not a permanent guarantee.
       allow update: if isCoordinator()
                     && request.auth.uid != uid
                     && onlyChanged(['fullName', 'college', 'program',
