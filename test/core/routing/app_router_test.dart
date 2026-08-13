@@ -256,4 +256,47 @@ void main() {
     expect(find.text('My Thesis'), findsNothing);
   });
 
+  // --- BLOCKING 4: guard coverage for the two primary auth redirects ---
+
+  testWidgets('signed-out user navigating to a protected route lands on /login',
+      (tester) async {
+    final container = await containerForSignedOut();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    container.read(goRouterProvider).go('/coordinator');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('All Theses'), findsNothing);
+  });
+
+  testWidgets(
+      'unverified user navigating to a protected route lands on /verify-email',
+      (tester) async {
+    final container =
+        await containerFor(UserRole.coordinator, uid: 'u6', isEmailVerified: false);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    container.read(goRouterProvider).go('/coordinator');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Verify your email'), findsOneWidget);
+    expect(find.text('All Theses'), findsNothing);
+  });
 }

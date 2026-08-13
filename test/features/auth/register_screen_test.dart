@@ -102,7 +102,10 @@ void main() {
 
     // Verify error message appears and submit button is re-enabled
     expect(find.textContaining('Could not complete registration'), findsOneWidget);
-    expect(find.byKey(const Key('submit')).first, isNotNull);
+    expect(
+      tester.widget<FilledButton>(find.byKey(const Key('submit'))).onPressed,
+      isNotNull,
+    );
   });
 }
 
