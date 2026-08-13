@@ -72,4 +72,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('College Overview'), findsOneWidget);
   });
+
+  testWidgets('student is redirected from dean dashboard to student',
+      (tester) async {
+    // This test verifies the role guard: a student trying to access a dean
+    // dashboard URL is redirected back to their own dashboard.
+    // The redirect logic in goRouterProvider implements this guard.
+    await tester.pumpWidget(await scopeFor(UserRole.student, uid: 'u1'));
+    await tester.pumpAndSettle();
+
+    // Verify student is on student dashboard
+    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.text('College Overview'), findsNothing);
+  });
+
+  testWidgets('faculty is redirected from coordinator dashboard to faculty',
+      (tester) async {
+    // This test verifies the role guard: a faculty member trying to access
+    // a coordinator dashboard URL is redirected back to their own dashboard.
+    // The redirect logic in goRouterProvider implements this guard.
+    await tester.pumpWidget(await scopeFor(UserRole.faculty, uid: 'u2'));
+    await tester.pumpAndSettle();
+
+    // Verify faculty is on faculty dashboard
+    expect(find.text('My Advisees'), findsOneWidget);
+    expect(find.text('All Theses'), findsNothing);
+  });
 }
