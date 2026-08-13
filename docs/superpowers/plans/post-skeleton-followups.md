@@ -13,7 +13,7 @@ Nothing here blocks the branch. Everything blocking was fixed in commits
 
 | # | Item | Why it matters | Fix |
 |---|---|---|---|
-| 1 | `AppConfig.enforceInstitutionalDomain` is `false` (commit `481192d`) | The manuscript's Scope and Limitations states registration is restricted to institutional addresses. That claim is untrue while this is false. | `git revert 481192d`, then confirm 64 passing / 0 skipped |
+| ~~1~~ | ~~`AppConfig.enforceInstitutionalDomain` is `false`~~ | — | **DONE** — reverted in `10bc289`. Flag is `true`; 63 tests pass, 0 skipped |
 | 2 | Dean role never exercised on live infrastructure | Exit criteria §9.1 asks for all four roles. Covered by automated routing and guard tests, but not signed into live. | Console: set a test account's `role` to `dean`, sign in, confirm "College Overview" |
 | 3 | Orphaned `users` documents have no cleanup path | `firestore.rules` sets `allow delete: if false` on `users`, so a document orphaned by a deleted auth account is permanent. One exists from a mistyped registration. | Document in Scope and Limitations — a real cleanup path needs Cloud Functions (Blaze) |
 | 4 | Account `active` flag is inert | `AppUser.active` is parsed and a coordinator can write it, but nothing reads it. Deactivating an account currently has no effect. | Either treat `!profile.active` as force-sign-out in the router, or scope the claim in the manuscript. Full enforcement belongs in M1 |
