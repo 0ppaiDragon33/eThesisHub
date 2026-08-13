@@ -3125,9 +3125,19 @@ Reload the app. Expected: you land on **All Theses**, not **My Thesis**.
 
 - [ ] **Step 5: Verify invite-based promotion end to end**
 
-1. In the Console, create `facultyInvites/{some.faculty@isufst.edu.ph}` with `role: "faculty"` and `invitedBy: "<your uid>"`
+> **Corrected after Task 8.** The rules were tightened and the consumption model changed. Three differences from the original instructions:
+> - The invite document **must** include `consumedAt: null`. `inviteUnconsumed()` dereferences that field, so an invite created without it is denied and promotion silently fails.
+> - The document id must be the **lowercased** email — rules compare against `request.auth.token.email.lower()`.
+> - Consumed invites are **marked, not deleted**, so the document survives with `consumedAt` set.
+
+1. In the Console, create `facultyInvites/{some.faculty@isufst.edu.ph}` (id lowercased) with:
+   - `role` (string) = `"faculty"`
+   - `invitedBy` (string) = `"<your uid>"`
+   - `consumedAt` (null) = `null`
 2. Register a second account with that exact email, verify it, and sign in
-3. Expected: the account lands on **My Advisees**, and the `facultyInvites` document is gone
+3. Expected: the account lands on **My Advisees**, and the `facultyInvites` document still exists with `consumedAt` now set to a timestamp
+
+A faculty member who verifies mid-session can also press **I've verified — continue** on the verification screen; that applies the invite without signing out and back in.
 
 - [ ] **Step 6: Verify a student cannot escalate**
 
