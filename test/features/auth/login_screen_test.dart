@@ -193,9 +193,12 @@ void main() {
     // Sign-in should succeed with no error visible
     expect(find.textContaining('Incorrect'), findsNothing);
     expect(find.textContaining('failed'), findsNothing);
-    // Button should be re-enabled
-    expect(find.byKey(const Key('submit')).evaluate().single.renderObject,
-        isA<RenderObject>());
+    // Button should be re-enabled (this proves the finally block fired)
+    final submitButton = tester.widget<FilledButton>(
+      find.byKey(const Key('submit')),
+    );
+    expect(submitButton.onPressed, isNotNull,
+        reason: 'finally must reset _busy so the button is usable again');
   });
 
   testWidgets('shows error when invite read throws non-permission-denied error',
@@ -236,6 +239,12 @@ void main() {
 
     // Should show error message
     expect(find.textContaining('failed'), findsOneWidget);
+    // Button must be re-enabled (this proves the finally block fired)
+    final submitButton = tester.widget<FilledButton>(
+      find.byKey(const Key('submit')),
+    );
+    expect(submitButton.onPressed, isNotNull,
+        reason: 'finally must reset _busy so the button is usable again');
   });
 
   testWidgets('password reset shows error on failure', (tester) async {

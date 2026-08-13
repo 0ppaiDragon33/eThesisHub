@@ -54,8 +54,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           }
         }
       }
-      if (!mounted) return;
-      setState(() => _busy = false);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() {
