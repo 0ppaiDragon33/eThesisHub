@@ -79,8 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _error = 'An unexpected error occurred. Please try again.';
       });
     } finally {
-      if (!mounted) return;
-      setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 

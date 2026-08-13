@@ -49,9 +49,7 @@ class FailingPromoteUserRepository extends UserRepository {
 
 /// Custom auth service that fails on sendEmailVerification.
 class FailingEmailService extends AuthService {
-  final MockFirebaseAuth _mockAuth;
-
-  FailingEmailService(this._mockAuth) : super(_mockAuth);
+  FailingEmailService(MockFirebaseAuth mockAuth) : super(mockAuth);
 
   @override
   Future<void> sendEmailVerification() async {
@@ -61,9 +59,7 @@ class FailingEmailService extends AuthService {
 
 /// Custom auth service that fails on signOut.
 class FailingSignOutService extends AuthService {
-  final MockFirebaseAuth _mockAuth;
-
-  FailingSignOutService(this._mockAuth) : super(_mockAuth);
+  FailingSignOutService(MockFirebaseAuth mockAuth) : super(mockAuth);
 
   @override
   Future<void> signOut() async {

@@ -31,11 +31,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
   // drop navigation state. The redirect callback uses ref.read to get current values.
   final refreshNotifier = _RouterRefreshNotifier();
 
-  ref.listen(authStateProvider, (_, __) {
+  ref.listen(authStateProvider, (_, _) {
     refreshNotifier.notify();
   });
 
-  ref.listen(currentUserProvider, (_, __) {
+  ref.listen(currentUserProvider, (_, _) {
     refreshNotifier.notify();
   });
 
@@ -78,27 +78,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               return null;
             },
             loading: () => null, // still loading profile, stay put
-            error: (_, __) => null,
+            error: (_, _) => null,
           );
         },
         loading: () => null, // still loading auth, stay put
-        error: (_, __) => onAuthScreen ? null : '/login',
+        error: (_, _) => onAuthScreen ? null : '/login',
       );
     },
     routes: [
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(
         path: '/verify-email',
-        builder: (_, __) => const VerifyEmailScreen(),
+        builder: (_, _) => const VerifyEmailScreen(),
       ),
-      GoRoute(path: '/student', builder: (_, __) => const StudentDashboard()),
-      GoRoute(path: '/faculty', builder: (_, __) => const FacultyDashboard()),
+      GoRoute(path: '/student', builder: (_, _) => const StudentDashboard()),
+      GoRoute(path: '/faculty', builder: (_, _) => const FacultyDashboard()),
       GoRoute(
         path: '/coordinator',
-        builder: (_, __) => const CoordinatorDashboard(),
+        builder: (_, _) => const CoordinatorDashboard(),
       ),
-      GoRoute(path: '/dean', builder: (_, __) => const DeanDashboard()),
+      GoRoute(path: '/dean', builder: (_, _) => const DeanDashboard()),
     ],
   );
 });
