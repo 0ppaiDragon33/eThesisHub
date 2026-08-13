@@ -1,0 +1,144 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isCoordinator() {
+      return signedIn() && myRole() == 'coordinator';
+    }
+
+    function isDean() {
+      return signedIn() && myRole() == 'dean';
+    }
+
+    function invitedRoleFor(email) {
+      return get(/databases/$(database)/documents/facultyInvites/$(email)).data.role;
+    }
+
+    function hasInvite(email) {
+      return exists(/databases/$(database)/documents/facultyInvites/$(email));
+    }
+
+    function inviteUnconsumed(email) {
+      // Tolerate a missing `consumedAt` key rather than erroring (which
+      // would deny). Console-created invites are currently the only way to
+      // issue one, so an admin who omits `consumedAt: null` must not get a
+      // silent, undiagnosable failure.
+      return get(/databases/$(database)/documents/facultyInvites/$(email))
+             .data.get('consumedAt', null) == null;
+    }
+
+    // Only the listed fields may differ between the stored and incoming doc.
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(fields);
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() &&
+                 (request.auth.uid == uid || isCoordinator() || isDean());
+      allow list: if isCoordinator() || isDean();
+
+      // Self-registration: student role only, only for yourself, and only
+      // the fields createStudentProfile actually writes.
+      allow create: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.role == 'student'
+                    && request.resource.data.email == myEmail()
+                    && request.resource.data.keys().hasOnly(
+                         ['fullName', 'email', 'role', 'college', 'program',
+                          'specialization', 'active', 'createdAt', 'createdBy'])
+                    && request.resource.data.active == true
+                    && request.resource.data.createdBy == null
+                    && request.resource.data.createdAt == request.time;
+
+      // Profile edits by the owner, but never the role.
+      allow update: if signedIn()
+                    && request.auth.uid == uid
+                    && onlyChanged(['fullName', 'college', 'program', 'specialization']);
+
+      // Invite promotion: only to exactly the invited role, for your own
+      // email, and only while the invite is still unconsumed (so it cannot
+      // be replayed after the invitee has already marked it consumed).
+      allow update: if verified()
+                    && request.auth.uid == uid
+                    && onlyChanged(['role'])
+                    && hasInvite(myEmail())
+                    && inviteUnconsumed(myEmail())
+                    && request.resource.data.role == invitedRoleFor(myEmail());
+
+      // Coordinators administer accounts but may never write `role`, and may
+      // never target their own account. Role changes happen only by the
+      // invitee applying an invite the coordinator issued, and coordinators
+      // can never invite themselves (see facultyInvites `create`/`update`
+      // below). The beneficiary of an elevation can never remove its
+      // facultyInvites record (only mark it consumed) — but coordinators can
+      // delete or overwrite invites, so this is not a permanent guarantee.
+      allow update: if isCoordinator()
+                    && request.auth.uid != uid
+                    && onlyChanged(['fullName', 'college', 'program',
+                                    'specialization', 'active']);
+
+      allow delete: if false;
+    }
+
+    match /facultyInvites/{email} {
+      // You may read only your own invite once your address is verified, or
+      // if you're a coordinator; the collection is never listable by anyone
+      // but a coordinator.
+      allow get: if (verified() && myEmail() == email) || isCoordinator();
+      allow list: if isCoordinator();
+
+      // Coordinators issue invites, but never to themselves, and only for a
+      // real role — this is what closes off the self-invite escalation path.
+      allow create, update: if isCoordinator()
+                            && email != myEmail()
+                            && request.resource.data.role in
+                               ['faculty', 'coordinator', 'dean'];
+
+      // The invitee marks their own invite consumed; they may never delete
+      // it, so a completed promotion always leaves a record.
+      allow update: if verified()
+                    && myEmail() == email
+                    && onlyChanged(['consumedAt'])
+                    && request.resource.data.consumedAt == request.time;
+
+      // Only coordinators may delete invites (e.g. to retract an unclaimed
+      // one). The invitee can never delete their own — see the consume-only
+      // branch above.
+      allow delete: if isCoordinator();
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if signedIn()
+                    && request.resource.data.actorUid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(
+                         ['actorUid', 'action', 'targetType', 'targetId',
+                          'metadata', 'timestamp'])
+                    && request.resource.data.timestamp == request.time;
+      allow get, list: if isCoordinator() || isDean();
+      allow update, delete: if false;
+    }
+
+    // Deny-by-default for everything not matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

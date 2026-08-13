@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# SDD scratch workspace — not part of the deliverable
+.superpowers/
+
+# Firestore rules test dependencies
+rules-test/node_modules/

@@ -10,6 +10,16 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-12-ethesishub-design.md`
 
+## Status
+
+- **Task 1 — COMPLETE.** Dependencies installed, counter demo cleared, `lib/app.dart` created.
+- **Task 2 — COMPLETE.** Firebase project (Spark) with Auth and Firestore, FlutterFire configured for Android and web, Supabase project and `thesis-documents` bucket, `AppConfig` populated, `main.dart` wired, `sharedPrefsProvider` created.
+- **Git initialized** at commit `d73be05`. Commit steps in every task are live and must be executed.
+- **Riverpod pinned to 2.6.1.** `flutter pub add` originally resolved 3.4.2, whose API differs from this plan's code. Do **not** upgrade Riverpod while executing this plan.
+- **Known upstream deprecation:** `supabase_flutter` 2.17.1 deprecates `anonKey` in favour of `publishableKey` (`lib/main.dart`). Harmless; fix opportunistically.
+
+**Start at Task 3.**
+
 **Scope:** This plan covers **only** the walking skeleton (spec §9.1). Modules M1–M6 each get their own plan, written when reached.
 
 ## Global Constraints
@@ -2599,19 +2609,15 @@ class EThesisHubApp extends ConsumerWidget {
 }
 ```
 
-- [ ] **Step 6: Update the original smoke test**
+- [ ] **Step 6: Delete the original smoke test**
 
-`test/widget_test.dart` from Task 1 pumps `EThesisHubApp` without a `ProviderScope` and will now fail. Replace its contents:
+`test/widget_test.dart` from Task 1 pumps `EThesisHubApp` without a `ProviderScope` and will now fail. Delete the file:
 
-```dart
-import 'package:flutter_test/flutter_test.dart';
-
-void main() {
-  test('placeholder — app widget is covered by app_router_test.dart', () {
-    expect(true, isTrue);
-  });
-}
+```bash
+git rm test/widget_test.dart
 ```
+
+`EThesisHubApp` is genuinely covered by the four routing tests in this task. Do **not** replace it with a placeholder test that asserts a constant — a test that cannot fail adds no coverage and misreports the suite size.
 
 - [ ] **Step 7: Run the full suite**
 
@@ -2745,7 +2751,23 @@ final facultyModeProvider =
     NotifierProvider<FacultyModeNotifier, FacultyMode>(FacultyModeNotifier.new);
 ```
 
-- [ ] **Step 5: Wire the switch into the faculty dashboard**
+- [ ] **Step 5: Add position-count providers**
+
+The mode switch depends on two facts that do not exist until M1: how many adviser positions this faculty member holds, and how much work is pending in the mode they are not looking at. Expose them as providers now so M1 fills in the bodies without touching the widget. Append to `lib/providers/faculty_mode_provider.dart`:
+
+```dart
+/// Number of theses where the signed-in faculty member is the adviser.
+/// M1 replaces this body with a query over `theses` filtered by adviserUid.
+final adviserPositionCountProvider = Provider<int>((ref) => 0);
+
+/// Items awaiting action in whichever mode is NOT currently selected.
+/// M1/M3 replace this body with real pending-work counts.
+final pendingInOtherModeProvider = Provider<int>((ref) => 0);
+```
+
+Do **not** hardcode these values as constants inside the widget — UI branching on a literal is unreachable code until M1 and reads as dead code.
+
+- [ ] **Step 6: Wire the switch into the faculty dashboard**
 
 Replace `lib/features/dashboard/faculty_dashboard.dart`:
 
@@ -2760,15 +2782,11 @@ import 'package:ethesishub/providers/faculty_mode_provider.dart';
 class FacultyDashboard extends ConsumerWidget {
   const FacultyDashboard({super.key});
 
-  /// Replaced in M1 by a real count of adviser positions held.
-  static const bool holdsAdviserPositions = true;
-
-  /// Replaced in M1/M3 by real pending-work counts.
-  static const int inactiveModePendingCount = 0;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(facultyModeProvider);
+    final holdsAdviserPositions = ref.watch(adviserPositionCountProvider) > 0;
+    final pendingElsewhere = ref.watch(pendingInOtherModeProvider);
 
     return ResponsiveScaffold(
       title: 'eThesisHub',
@@ -2783,8 +2801,8 @@ class FacultyDashboard extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Badge(
-              isLabelVisible: inactiveModePendingCount > 0,
-              label: Text('$inactiveModePendingCount'),
+              isLabelVisible: pendingElsewhere > 0,
+              label: Text('$pendingElsewhere'),
               child: SegmentedButton<FacultyMode>(
                 segments: const [
                   ButtonSegment(
@@ -2814,14 +2832,14 @@ class FacultyDashboard extends ConsumerWidget {
 }
 ```
 
-The two `static const` values are honest placeholders for data that does not exist until M1 — they are named and typed so M1 replaces them mechanically. The routing test asserts `'My Advisees'`, which remains the default mode's label.
+The routing test from Task 12 asserts `'My Advisees'`, which remains the default (adviser) mode's label. Note that with `adviserPositionCountProvider` returning 0, the toggle is hidden until M1 supplies real positions — this is the panel-only auto-lock behaviour from spec §8.4 working correctly, not a bug.
 
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 7: Run the full suite**
 
 Run: `flutter test`
 Expected: PASS, all tests
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A
@@ -3107,9 +3125,19 @@ Reload the app. Expected: you land on **All Theses**, not **My Thesis**.
 
 - [ ] **Step 5: Verify invite-based promotion end to end**
 
-1. In the Console, create `facultyInvites/{some.faculty@isufst.edu.ph}` with `role: "faculty"` and `invitedBy: "<your uid>"`
+> **Corrected after Task 8.** The rules were tightened and the consumption model changed. Three differences from the original instructions:
+> - The invite document **must** include `consumedAt: null`. `inviteUnconsumed()` dereferences that field, so an invite created without it is denied and promotion silently fails.
+> - The document id must be the **lowercased** email — rules compare against `request.auth.token.email.lower()`.
+> - Consumed invites are **marked, not deleted**, so the document survives with `consumedAt` set.
+
+1. In the Console, create `facultyInvites/{some.faculty@isufst.edu.ph}` (id lowercased) with:
+   - `role` (string) = `"faculty"`
+   - `invitedBy` (string) = `"<your uid>"`
+   - `consumedAt` (null) = `null`
 2. Register a second account with that exact email, verify it, and sign in
-3. Expected: the account lands on **My Advisees**, and the `facultyInvites` document is gone
+3. Expected: the account lands on **My Advisees**, and the `facultyInvites` document still exists with `consumedAt` now set to a timestamp
+
+A faculty member who verifies mid-session can also press **I've verified — continue** on the verification screen; that applies the invite without signing out and back in.
 
 - [ ] **Step 6: Verify a student cannot escalate**
 
