@@ -3,16 +3,9 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ethesishub/core/config/app_config.dart';
 import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
-
-/// True while the institutional-domain check is temporarily disabled for
-/// testing. `testWidgets` only accepts a bool here; the human-readable
-/// reminder is printed by test/core/config/email_validator_test.dart.
-/// RESTORE AppConfig.enforceInstitutionalDomain TO true BEFORE DEFENSE.
-const skipWhileEnforcementDisabled = !AppConfig.enforceInstitutionalDomain;
 
 Widget wrap(Widget child, {required FakeFirebaseFirestore db}) {
   return ProviderScope(
@@ -60,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('isufst.edu.ph'), findsOneWidget);
-  }, skip: skipWhileEnforcementDisabled);
+  });
 
   testWidgets('creates a student profile on success', (tester) async {
     final db = FakeFirebaseFirestore();
