@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/features/auth/registration_controller.dart';
 
@@ -104,6 +105,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   key: const Key('submit'),
                   onPressed: _busy ? null : _submit,
                   child: Text(_busy ? 'Creating…' : 'Create account'),
+                ),
+                TextButton(
+                  key: const Key('goToLogin'),
+                  onPressed: () => context.go('/login'),
+                  child: const Text('Already have an account? Sign in'),
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,6 +43,24 @@ Future<ProviderContainer> containerFor(UserRole role, {required String uid}) asy
         ),
       ),
       authStateProvider.overrideWith((ref) => Stream.value(mockUser as User?)),
+    ],
+  );
+}
+
+Future<ProviderContainer> containerForSignedOut() async {
+  final db = FakeFirebaseFirestore();
+
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+
+  return ProviderContainer(
+    overrides: [
+      sharedPrefsProvider.overrideWithValue(prefs),
+      firestoreProvider.overrideWithValue(db),
+      firebaseAuthProvider.overrideWithValue(
+        MockFirebaseAuth(signedIn: false),
+      ),
+      authStateProvider.overrideWith((ref) => Stream.value(null)),
     ],
   );
 }
@@ -146,5 +165,57 @@ void main() {
     // Should be redirected back to faculty dashboard
     expect(find.text('All Theses'), findsNothing);
     expect(find.text('My Advisees'), findsOneWidget);
+  });
+
+  testWidgets('signed-out user can reach registration from sign-in',
+      (tester) async {
+    final container = await containerForSignedOut();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Should be on Sign in screen
+    expect(find.text('Sign in'), findsWidgets);
+
+    // Tap the "goToRegister" button to navigate to registration
+    await tester.tap(find.byKey(const Key('goToRegister')));
+    await tester.pumpAndSettle();
+
+    // Should be on Create account screen
+    expect(find.text('Create account'), findsWidgets);
+  });
+
+  testWidgets('signed-out user can get back to sign-in from registration',
+      (tester) async {
+    final container = await containerForSignedOut();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Navigate to registration screen
+    container.read(goRouterProvider).go('/register');
+    await tester.pumpAndSettle();
+
+    // Should be on Create account screen
+    expect(find.text('Create account'), findsWidgets);
+
+    // Tap the "goToLogin" button to navigate back to sign-in
+    await tester.tap(find.byKey(const Key('goToLogin')));
+    await tester.pumpAndSettle();
+
+    // Should be back on Sign in screen
+    expect(find.text('Sign in'), findsWidgets);
   });
 }

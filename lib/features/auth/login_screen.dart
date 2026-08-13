@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -148,6 +149,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   key: const Key('reset'),
                   onPressed: _busy ? null : _resetPassword,
                   child: const Text('Forgot password?'),
+                ),
+                TextButton(
+                  key: const Key('goToRegister'),
+                  onPressed: () => context.go('/register'),
+                  child: const Text('New here? Create account'),
                 ),
               ],
             ),
