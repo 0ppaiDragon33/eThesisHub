@@ -17,8 +17,29 @@ void main() {
 
     final logs = await db.collection('auditLogs').get();
     expect(logs.docs, hasLength(1));
-    expect(logs.docs.first.data()['actorUid'], 'uid-1');
-    expect(logs.docs.first.data()['action'], 'role.promoted');
-    expect(logs.docs.first.data()['metadata']['to'], 'faculty');
+    final data = logs.docs.first.data();
+
+    expect(data['actorUid'], 'uid-1');
+    expect(data['action'], 'role.promoted');
+    expect(data['targetType'], 'user');
+    expect(data['targetId'], 'uid-1');
+    expect(data['metadata']['to'], 'faculty');
+
+    // The deployed Firestore rule uses hasOnly, so an extra or missing key
+    // breaks every audit write in production. This assertion prevents
+    // regressions where a field is added without updating the rule.
+    expect(
+      data.keys,
+      unorderedEquals([
+        'actorUid',
+        'action',
+        'targetType',
+        'targetId',
+        'metadata',
+        'timestamp',
+      ]),
+      reason: 'auditLogs rules use hasOnly — an extra or missing key breaks '
+          'every audit write in production',
+    );
   });
 }

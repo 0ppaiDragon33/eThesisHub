@@ -15,7 +15,7 @@ class StoragePaths {
     required String documentId,
     required String extension,
   }) {
-    return 'theses/$thesisId/$documentId/${_uuid.v4()}-${_uuid.v4()}.$extension';
+    return 'theses/$thesisId/$documentId/${_uuid.v4()}.$extension';
   }
 }
 

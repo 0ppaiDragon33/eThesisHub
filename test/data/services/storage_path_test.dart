@@ -11,9 +11,17 @@ void main() {
 
     expect(path, startsWith('theses/thesis-1/doc-1/'));
     expect(path, endsWith('.pdf'));
-    // A UUID v4 has 36 characters; the segment must not be predictable.
+
     final filename = path.split('/').last;
-    expect(filename.length, greaterThan(36));
+    // Filename must be a genuine UUID v4 (36 chars) + extension.
+    // Regex pattern: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx.ext
+    // where x = [0-9a-f], y = [89ab]
+    final uuidV4Pattern = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.\w+$',
+      caseSensitive: false,
+    );
+    expect(filename, matches(uuidV4Pattern),
+        reason: 'filename must be a genuine UUID v4 to prove unguessability');
   });
 
   test('two calls never produce the same path', () {
