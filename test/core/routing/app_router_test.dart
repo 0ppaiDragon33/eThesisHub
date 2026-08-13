@@ -12,7 +12,21 @@ import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-Future<ProviderContainer> containerFor(UserRole role, {required String uid}) async {
+/// Seeds the stream with the mock's current user immediately (working around
+/// firebase_auth_mocks' authStateChanges() being a plain, non-replaying
+/// broadcast stream that would otherwise drop the constructor's initial
+/// emission), then forwards every subsequent authStateChanges() event (e.g.
+/// from a later signOut() call) so tests can observe live auth transitions.
+Stream<User?> _seededAuthState(FirebaseAuth auth) async* {
+  yield auth.currentUser;
+  yield* auth.authStateChanges();
+}
+
+Future<ProviderContainer> containerFor(
+  UserRole role, {
+  required String uid,
+  bool isEmailVerified = true,
+}) async {
   final db = FakeFirebaseFirestore();
   await UserRepository(db).createStudentProfile(
     uid: uid,
@@ -29,7 +43,7 @@ Future<ProviderContainer> containerFor(UserRole role, {required String uid}) asy
   final mockUser = MockUser(
     uid: uid,
     email: 'test@isufst.edu.ph',
-    isEmailVerified: true,
+    isEmailVerified: isEmailVerified,
   );
 
   return ProviderContainer(
@@ -42,7 +56,9 @@ Future<ProviderContainer> containerFor(UserRole role, {required String uid}) asy
           mockUser: mockUser,
         ),
       ),
-      authStateProvider.overrideWith((ref) => Stream.value(mockUser as User?)),
+      authStateProvider.overrideWith(
+        (ref) => _seededAuthState(ref.watch(firebaseAuthProvider)),
+      ),
     ],
   );
 }
@@ -218,4 +234,26 @@ void main() {
     // Should be back on Sign in screen
     expect(find.text('Sign in'), findsWidgets);
   });
+
+  testWidgets('signing out from a dashboard returns to the login screen',
+      (tester) async {
+    final container = await containerFor(UserRole.student, uid: 'u1');
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('My Thesis'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('signOut')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('My Thesis'), findsNothing);
+  });
+
 }

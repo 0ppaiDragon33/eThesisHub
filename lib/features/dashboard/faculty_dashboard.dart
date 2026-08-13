@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
+import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
 
@@ -47,6 +48,7 @@ class FacultyDashboard extends ConsumerWidget {
               ),
             ),
           ),
+        const SignOutButton(),
       ],
       body: Center(
         child: Text(

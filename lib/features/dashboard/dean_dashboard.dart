@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
+import 'package:ethesishub/core/widgets/sign_out_button.dart';
 
 class DeanDashboard extends ConsumerWidget {
   const DeanDashboard({super.key});
@@ -15,6 +16,7 @@ class DeanDashboard extends ConsumerWidget {
         NavDestination(label: 'Overview', icon: Icons.dashboard),
         NavDestination(label: 'Approvals', icon: Icons.approval),
       ],
+      actions: [SignOutButton()],
       body: Center(child: Text('College Overview')),
     );
   }

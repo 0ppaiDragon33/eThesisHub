@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -106,6 +107,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A signed-in user with no users/{uid} profile document lands here with
+    // no error and no way out (see app_router.dart). Surface who they're
+    // signed in as and let them escape via sign-out.
+    final signedInUser = ref.watch(authStateProvider).valueOrNull;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Sign in')),
       body: Center(
@@ -116,6 +122,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (signedInUser != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Signed in as ${signedInUser.email} — sign out?',
+                          ),
+                        ),
+                        const SignOutButton(),
+                      ],
+                    ),
+                  ),
                 TextField(
                   key: const Key('email'),
                   controller: _email,

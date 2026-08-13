@@ -63,7 +63,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final profileAsync = ref.read(currentUserProvider);
           return profileAsync.when(
             data: (profile) {
-              if (profile == null) return null; // still loading profile
+              // currentUserProvider is a StreamProvider, and AsyncLoading
+              // already covers the "still loading" case (handled below). A
+              // settled `data(null)` here means the users/{uid} document
+              // does not exist for this signed-in, verified account (e.g.
+              // it was never created, or was removed). Send them to /login,
+              // which shows a "signed in as X — sign out" affordance so
+              // they aren't stuck with no error and no escape.
+              if (profile == null) {
+                return onAuthScreen ? null : '/login';
+              }
 
               final home = homeRouteFor(profile.role);
               if (onAuthScreen || location == '/verify-email') return home;

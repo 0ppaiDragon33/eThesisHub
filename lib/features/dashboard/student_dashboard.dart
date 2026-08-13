@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
+import 'package:ethesishub/core/widgets/sign_out_button.dart';
 
 class StudentDashboard extends ConsumerWidget {
   const StudentDashboard({super.key});
@@ -15,6 +16,7 @@ class StudentDashboard extends ConsumerWidget {
         NavDestination(label: 'Thesis', icon: Icons.description),
         NavDestination(label: 'Archive', icon: Icons.library_books),
       ],
+      actions: [SignOutButton()],
       body: Center(child: Text('My Thesis')),
     );
   }
