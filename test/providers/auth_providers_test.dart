@@ -1,4 +1,5 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,19 +17,19 @@ void main() {
       email: 'kjvargas@isufst.edu.ph',
     );
 
+    final mockUser = MockUser(
+      uid: 'uid-1',
+      email: 'kjvargas@isufst.edu.ph',
+      isEmailVerified: true,
+    );
+
     final container = ProviderContainer(
       overrides: [
         firestoreProvider.overrideWithValue(db),
         firebaseAuthProvider.overrideWithValue(
-          MockFirebaseAuth(
-            signedIn: true,
-            mockUser: MockUser(
-              uid: 'uid-1',
-              email: 'kjvargas@isufst.edu.ph',
-              isEmailVerified: true,
-            ),
-          ),
+          MockFirebaseAuth(signedIn: true, mockUser: mockUser),
         ),
+        authStateProvider.overrideWith((ref) => Stream.value(mockUser as User?)),
       ],
     );
     addTearDown(container.dispose);
@@ -43,6 +44,7 @@ void main() {
       overrides: [
         firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth()),
+        authStateProvider.overrideWith((ref) => Stream.value(null as User?)),
       ],
     );
     addTearDown(container.dispose);
