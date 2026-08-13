@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 class VerifyEmailScreen extends ConsumerStatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -47,10 +48,23 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       // User is now verified; apply any pending invite.
       if (user.email != null) {
         try {
-          await ref.read(userRepositoryProvider).promoteFromInvite(
+          final role = await ref.read(userRepositoryProvider).promoteFromInvite(
                 uid: user.uid,
                 email: user.email!,
               );
+          if (role != null) {
+            try {
+              await ref.read(auditServiceProvider).log(
+                    actorUid: user.uid,
+                    action: 'role.promoted',
+                    targetType: 'user',
+                    targetId: user.uid,
+                    metadata: {'role': role.value},
+                  );
+            } catch (_) {
+              // Audit logging must never block sign-in.
+            }
+          }
         } on FirebaseException catch (e) {
           // permission-denied is fine (no invite), but other errors matter.
           if (e.code != 'permission-denied') {

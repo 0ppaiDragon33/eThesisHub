@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -44,10 +45,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final user = credential.user;
       if (user != null && user.email != null) {
         try {
-          await ref.read(userRepositoryProvider).promoteFromInvite(
+          final role = await ref.read(userRepositoryProvider).promoteFromInvite(
                 uid: user.uid,
                 email: user.email!,
               );
+          if (role != null) {
+            try {
+              await ref.read(auditServiceProvider).log(
+                    actorUid: user.uid,
+                    action: 'role.promoted',
+                    targetType: 'user',
+                    targetId: user.uid,
+                    metadata: {'role': role.value},
+                  );
+            } catch (_) {
+              // Audit logging must never block sign-in.
+            }
+          }
         } on FirebaseException catch (e) {
           // PERMISSION_DENIED is expected if email isn't verified yet.
           // Allow sign-in to continue; user can be promoted on next login.
