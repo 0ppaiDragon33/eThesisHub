@@ -70,7 +70,9 @@ theses/{thesisId}
   adviserUid         string?   null until nomination is approved
   panelistUids[]     string[]  empty until nomination is approved
   coordinatorRecommendedAt timestamp?
+  coordinatorRecommendedBy string?    uid of the coordinator who recommended
   deanApprovedAt           timestamp?
+  deanApprovedBy           string?    uid of the dean who approved
   createdAt, updatedAt
 
   nominations/{nomineeUid}
@@ -86,16 +88,33 @@ facultyDirectory/{uid}
 
 ### 4.0a `panelistUids[]` holds only the nominated members
 
-The Dean and Research Coordinator sit on the thesis panel **ex officio** — by
-virtue of their role, not by nomination. They are never nominated, never give a
-Conforme, and are never written into `panelistUids[]`.
+The Dean and the Research Coordinators sit on the thesis panel **ex officio** —
+by virtue of their role, not by nomination. They are never nominated, never give
+a Conforme, and are never written into `panelistUids[]`.
+
+**There may be more than one coordinator** (for example a Research Coordinator
+and a Research Chair, or one per programme), and **all of them sit on every
+panel**. This matches how `isCoordinator()` already works in the deployed rules,
+so no rule needs to distinguish between them.
 
 So the effective panel at any defence is:
 
 ```
-Dean (ex officio) + Research Coordinator (ex officio)
+Dean (ex officio) + every Coordinator (ex officio)
   + adviserUid + panelistUids[]        ← the nominated three or more
 ```
+
+Two consequences to carry forward:
+
+- **Panel size varies with staffing.** Appointing another coordinator enlarges
+  every panel in the system, including theses already in progress. Nothing
+  breaks, but M3's quorum check must count the panel as derived here rather than
+  assuming a fixed size.
+- **Any one coordinator's recommendation advances the nomination.** Form 1 has a
+  single *"Recommending Approval: College Research Coordinator"* signature line,
+  so this is not a vote requiring all of them. `coordinatorRecommendedBy` records
+  which one acted, because with several coordinators an unattributed timestamp
+  would be useless in an audit.
 
 This resolves a contradiction in the manual itself: Guidelines §4a lists the
 Dean and Coordinator as panel members at (a) and (b), then says at (d) that the
@@ -185,7 +204,7 @@ re-nomination. Accepted Conformes on other slots stand, and the status remains
 
 | Collection | Read | Write |
 |---|---|---|
-| `theses` | Leader, assigned adviser, assigned panelists, coordinator, dean | Leader creates with `leaderUid == self` and `status: 'draft'`; status transitions gated per role. Only a coordinator may set `coordinatorRecommendedAt`; only a dean may set `deanApprovedAt`, `adviserUid` and `panelistUids[]` |
+| `theses` | Leader, assigned adviser, assigned panelists, any coordinator, dean | Leader creates with `leaderUid == self` and `status: 'draft'`; status transitions gated per role. Only a coordinator may set `coordinatorRecommendedAt`, and must set `coordinatorRecommendedBy` to their own uid; only a dean may set `deanApprovedAt`, `deanApprovedBy` (own uid), `adviserUid` and `panelistUids[]` |
 | `nominations` | Same as parent thesis, plus the nominee | Leader creates while the thesis is `draft` or `nomination_pending_conforme`; **only the nominee** may set their own `conformeStatus`, `respondedAt` and `declineReason` — nothing else |
 | `facultyDirectory` | Any verified user | Own entry only, and only while your `users` role is not `student` |
 
