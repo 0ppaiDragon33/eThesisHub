@@ -8,8 +8,11 @@ import 'package:ethesishub/app.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/data/services/auth_service.dart';
+import 'package:ethesishub/data/models/app_user.dart';
+import 'package:ethesishub/data/repositories/faculty_directory_repository.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Records calls to promoteFromInvite.
 class RecordingUserRepository extends UserRepository {
@@ -44,6 +47,21 @@ class FailingPromoteUserRepository extends UserRepository {
       plugin: 'cloud_firestore',
       code: 'internal',
       message: 'Internal error during promote.',
+    );
+  }
+}
+
+/// Throws a non-permission-denied error from the directory write, to prove
+/// it can't strand a verified user on this screen.
+class FailingFacultyDirectoryRepository extends FacultyDirectoryRepository {
+  FailingFacultyDirectoryRepository(super.db);
+
+  @override
+  Future<void> upsertOwnEntry(AppUser user) async {
+    throw FirebaseException(
+      plugin: 'cloud_firestore',
+      code: 'unavailable',
+      message: 'Simulated transient Firestore outage.',
     );
   }
 }
@@ -343,5 +361,57 @@ void main() {
             're-evaluates its redirect and the user is stuck on '
             '/verify-email');
     expect(find.text('Verify your email'), findsNothing);
+  });
+
+  testWidgets(
+      'a non-permission-denied directory write failure does not strand a '
+      'verified user on this screen', (tester) async {
+    const uid = 'uid-nav-2';
+    const email = 'student2@isufst.edu.ph';
+
+    final db = FakeFirebaseFirestore();
+    await UserRepository(db).createStudentProfile(
+      uid: uid,
+      fullName: 'Nav Student Two',
+      email: email,
+    );
+
+    final mockAuth = MockFirebaseAuth();
+    final authService = _FlippableAuthService(mockAuth, uid, email);
+
+    final container = ProviderContainer(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(mockAuth),
+        authServiceProvider.overrideWithValue(authService),
+        facultyDirectoryRepositoryProvider
+            .overrideWithValue(FailingFacultyDirectoryRepository(db)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Starts unverified, so the router lands on the verify-email screen.
+    expect(find.text('Verify your email'), findsOneWidget);
+
+    // Tap continue: the directory write throws 'unavailable'. That must be
+    // absorbed the same way the audit-log failure is absorbed, so
+    // ref.invalidate(authStateProvider) still runs and the router still
+    // redirects onward — the user must not see "Verification failed."
+    await tester.tap(find.byKey(const Key('reload')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Thesis'), findsOneWidget,
+        reason: 'a non-permission-denied directory write failure must not '
+            'skip the authStateProvider invalidate and strand the user on '
+            '/verify-email');
+    expect(find.textContaining('Verification failed'), findsNothing);
   });
 }

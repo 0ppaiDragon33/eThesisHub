@@ -69,13 +69,17 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
 
           // Keep the faculty directory current. Written by the subject's own
           // client because Spark has no Cloud Functions. Also backfills anyone
-          // promoted before this module shipped.
-          final profile = await ref.read(userRepositoryProvider).fetchUser(user.uid);
-          if (profile != null) {
-            await ref
-                .read(facultyDirectoryRepositoryProvider)
-                .upsertOwnEntry(profile);
-          }
+          // promoted before this module shipped. Best-effort — the directory
+          // entry must never block sign-in. Same guard as the audit log above.
+          try {
+            final profile =
+                await ref.read(userRepositoryProvider).fetchUser(user.uid);
+            if (profile != null) {
+              await ref
+                  .read(facultyDirectoryRepositoryProvider)
+                  .upsertOwnEntry(profile);
+            }
+          } catch (_) {}
         } on FirebaseException catch (e) {
           // permission-denied is fine (no invite), but other errors matter.
           if (e.code != 'permission-denied') {
