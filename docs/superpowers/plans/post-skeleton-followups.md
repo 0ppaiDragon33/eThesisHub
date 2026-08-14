@@ -83,3 +83,42 @@ cd rules-test && npm test
 
 Setting `JAVA_HOME` permanently in the system environment variables avoids
 repeating this.
+
+---
+
+## Title Justification vs. built architecture — manuscript contradictions
+
+The Capstone Title Justification (Title/Concept Hearing, 28 Feb 2026) describes
+an architecture the project did not build. Chapter III describes the built one
+correctly, so the two documents disagree with each other. Flagged for correction
+before the defence; **no code change is intended** — the built architecture is
+right for the Spark plan and is working and tested.
+
+| Title Justification claims | What exists |
+|---|---|
+| Backend: Node.js + Express.js | No custom backend; the Flutter client talks to Firebase directly |
+| JWT authentication and session management | Firebase Auth; the SDK manages ID tokens |
+| Password hashing with bcrypt | Firebase Auth owns credentials; the app never handles a password |
+| SQL queries; prevention of SQL injection | Firestore is NoSQL — there is no SQL anywhere in the system |
+| Three-tier client–server with an Application Layer | Two-tier: client + Firebase, with security rules as the authorization layer |
+| Mobile: Flutter Android **and iOS** | Android and Web only (iOS needs macOS tooling and an Apple developer account) |
+| Deployment to a VPS or Firebase Hosting | Firebase Hosting |
+
+Two further points worth correcting in the same pass:
+
+1. **The data-flow example is wrong for this system.** It reads "Student submits
+   thesis title → Adviser receives notification → Adviser reviews and updates
+   status." In the agreed process the title defence happens *after* nomination,
+   and the panel decides — so no adviser exists at title-submission time, and the
+   adviser is not the approver.
+2. **"Prevents SQL injection" cannot be claimed.** The honest OWASP claims for
+   this system are A01 Broken Access Control (enforced by security rules, proven
+   against the deployed rules by an independent client) and A07 Identification
+   and Authentication Failures. Injection is not applicable to a NoSQL document
+   store accessed through a typed SDK.
+
+**How to defend the difference if asked:** Firestore security rules replace the
+Express authorization layer, and Firebase Auth replaces both JWT session handling
+and bcrypt password storage. The security boundary moved from application code to
+the data layer, which is stronger — it holds even when a caller bypasses the app
+entirely, which the verification record demonstrates.
