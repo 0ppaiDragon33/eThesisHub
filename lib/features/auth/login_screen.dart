@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -61,6 +62,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             } catch (_) {
               // Audit logging must never block sign-in.
             }
+          }
+
+          // Keep the faculty directory current. Written by the subject's own
+          // client because Spark has no Cloud Functions. Also backfills anyone
+          // promoted before this module shipped.
+          final profile = await ref.read(userRepositoryProvider).fetchUser(user.uid);
+          if (profile != null) {
+            await ref
+                .read(facultyDirectoryRepositoryProvider)
+                .upsertOwnEntry(profile);
           }
         } on FirebaseException catch (e) {
           // PERMISSION_DENIED is expected if email isn't verified yet.
