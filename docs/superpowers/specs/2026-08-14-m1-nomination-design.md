@@ -47,9 +47,13 @@ longer holds now that the Dean and Coordinator sit ex officio (§4.0a) —
 nominating them as well would count them twice, and would let a Coordinator
 decline a seat they hold by role.
 
-Students therefore nominate only accounts whose role is `faculty`. The
-`facultyDirectory` picker excludes the Dean and Coordinator, and the rules reject
-a nomination naming either of them.
+Students therefore **choose** only accounts whose role is `faculty`. The
+`facultyDirectory` picker excludes the Dean and Coordinators.
+
+They are still **recorded** as panel members, so Form 1 shows the complete panel
+— the system adds those entries itself, marked ex officio (§4.0b). The
+distinction is between choosing and recording: the student chooses three or more
+faculty; the system records everyone who sits on the resulting panel.
 
 *Consequence to accept:* a faculty member who is later promoted to Coordinator
 while already serving as a nominated panel member on an existing thesis would
@@ -81,9 +85,10 @@ theses/{thesisId}
   createdAt, updatedAt
 
   nominations/{nomineeUid}
-    position         string     adviser | panelist
+    position         string     adviser | panelist | coordinator | dean
     nomineeName      string     denormalised from facultyDirectory
-    conformeStatus   string     pending | accepted | declined
+    exOfficio        bool       true for coordinator and dean entries
+    conformeStatus   string     pending | accepted | declined | exOfficio
     respondedAt      timestamp?
     declineReason    string?
 
@@ -108,6 +113,27 @@ So the effective panel at any defence is:
 Dean (ex officio) + every Coordinator (ex officio)
   + adviserUid + panelistUids[]        ← the nominated three or more
 ```
+
+### 4.0b Ex officio members are recorded, but never asked
+
+For completeness of the paper record, the system writes `nominations` entries for
+the Dean and every Coordinator when the student submits, marked
+`exOfficio: true` and `conformeStatus: 'exOfficio'`. They therefore appear on
+Form 1 as full panel members.
+
+They are **not** selectable in the picker, are **never** sent a Conforme request,
+and cannot decline. A seat held by role is not an invitation.
+
+**This changes the record only — never their powers.** Every capability the Dean
+and Coordinators hold is derived from their role, not from these entries:
+
+- Firestore rules gate on `isCoordinator()` and `isDean()`, which already grant
+  read access to every thesis and write access to the recommend and approve steps
+- M1b's title decision is the Dean's because they are the Dean
+- The pre-oral and final defence panel is derived per §4.0a, so they attend,
+  comment and count toward §4f quorum regardless
+
+Deleting every `exOfficio` entry would change nothing except what Form 1 prints.
 
 Two consequences to carry forward:
 
@@ -173,7 +199,7 @@ Faculty promoted before this module ships need a one-off backfill.
 ```
 draft                             group created
   → nomination_pending_conforme   adviser + 3 or more panelists nominated
-  → nomination_pending_coordinator  all Conformes accepted
+  → nomination_pending_coordinator  every non-ex-officio Conforme accepted
   → nomination_pending_dean       coordinator recommended
   → nomination_approved           Dean approved; adviserUid + panelistUids fixed
                                   (Form 1 complete — M1b begins here)
@@ -222,13 +248,16 @@ generated form. Only genuinely free text is an input.
 | Collection | Read | Write |
 |---|---|---|
 | `theses` | Leader, assigned adviser, assigned panelists, any coordinator, dean | Leader creates with `leaderUid == self` and `status: 'draft'`; status transitions gated per role. Only a coordinator may set `coordinatorRecommendedAt`, and must set `coordinatorRecommendedBy` to their own uid; only a dean may set `deanApprovedAt`, `deanApprovedBy` (own uid), `adviserUid` and `panelistUids[]` |
-| `nominations` | Same as parent thesis, plus the nominee | Leader creates while the thesis is `draft` or `nomination_pending_conforme`; **only the nominee** may set their own `conformeStatus`, `respondedAt` and `declineReason` — nothing else |
+| `nominations` | Same as parent thesis, plus the nominee | Leader creates while the thesis is `draft` or `nomination_pending_conforme`, including the ex officio entries (`exOfficio: true`, `conformeStatus: 'exOfficio'`, which the rules must pin to exactly those values so a student cannot forge an acceptance); **only the nominee** may set their own `conformeStatus`, `respondedAt` and `declineReason`, and only on an entry where `exOfficio == false` |
 | `facultyDirectory` | Any verified user | Own entry only, and only while your `users` role is not `student` |
 
 Students cannot read one another's theses.
 
 At Dean approval the rules must enforce `panelistUids.size() >= 3` and that every
-nomination's `conformeStatus` is `accepted`.
+nomination **where `exOfficio == false`** has `conformeStatus == 'accepted'`.
+Ex officio entries carry `conformeStatus: 'exOfficio'` and are excluded from this
+check — requiring them to be `accepted` would block every approval, since they
+are never asked.
 
 ### 7.2 Collection-group query
 
@@ -284,6 +313,11 @@ reproducing the printed layout exactly.
   ~22px of clear signing space, then the printed name, then the role beneath it.
   The recorded acceptance sits right-aligned on the same row so it cannot collide
   with a handwritten signature.
+- **Ex officio entries** appear in the Conforme list after the nominated members,
+  their role rendered as *Research Coordinator (ex officio)* and *Dean (ex
+  officio)*, with "Ex officio member" in place of an acceptance timestamp. The
+  full panel therefore reads in one place, even though only the nominated members
+  were asked to accept.
 - **No horizontal rules above any name.** Signing space is blank.
 - **Verification strip** — states that acceptances were recorded against verified
   institutional accounts, with the reference code. This is what gives a
