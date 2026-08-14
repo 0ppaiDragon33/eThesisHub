@@ -179,4 +179,122 @@ class ThesisRepository {
         .snapshots()
         .map((s) => s.docs.map((d) => _toThesis(d.id, d.data())).toList());
   }
+
+  /// Records a nominee's Conforme and, once every nomination that actually
+  /// needs one has been accepted, advances the thesis.
+  ///
+  /// Ex-officio seats (`needsConforme == false`) are never asked and must
+  /// never gate this — see `Nomination.needsConforme`.
+  Future<void> respondToNomination({
+    required String thesisId,
+    required String nomineeUid,
+    required bool accept,
+    String? declineReason,
+  }) async {
+    await _nominations(thesisId).doc(nomineeUid).update({
+      'conformeStatus':
+          (accept ? ConformeStatus.accepted : ConformeStatus.declined).value,
+      'respondedAt': FieldValue.serverTimestamp(),
+      'declineReason': accept ? null : declineReason,
+    });
+
+    if (!accept) return;
+
+    final snap = await _nominations(thesisId).get();
+    final all = snap.docs.map((d) => _toNomination(d.id, d.data())).toList();
+    final outstanding = all
+        .where((n) => n.needsConforme)
+        .where((n) => n.conformeStatus != ConformeStatus.accepted);
+
+    if (outstanding.isEmpty) {
+      await _theses.doc(thesisId).update({
+        'status': ThesisStatus.nominationPendingCoordinator.value,
+      });
+    }
+  }
+
+  /// A Research Coordinator recommends the thesis to the Dean. Only valid
+  /// while the thesis is awaiting coordinator action.
+  Future<void> recommend({
+    required String thesisId,
+    required String coordinatorUid,
+  }) async {
+    final thesis = await watchThesis(thesisId).first;
+    if (thesis == null ||
+        thesis.status != ThesisStatus.nominationPendingCoordinator) {
+      throw StateError(
+          'Cannot recommend a thesis that is not pending coordinator review.');
+    }
+    await _theses.doc(thesisId).update({
+      'status': ThesisStatus.nominationPendingDean.value,
+      'coordinatorRecommendedAt': FieldValue.serverTimestamp(),
+      'coordinatorRecommendedBy': coordinatorUid,
+    });
+  }
+
+  /// The Dean approves. Fixes `adviserUid` and `panelistUids` from the
+  /// accepted nominations, so the stored panel can never disagree with what
+  /// the nominees actually accepted.
+  ///
+  /// Per spec §4.0a: ex-officio members and the adviser must never appear in
+  /// `panelistUids[]` — the adviser lives in `adviserUid` instead — and
+  /// declined nominees must never appear in either.
+  Future<void> approve({
+    required String thesisId,
+    required String deanUid,
+  }) async {
+    final thesis = await watchThesis(thesisId).first;
+    if (thesis == null || thesis.status != ThesisStatus.nominationPendingDean) {
+      throw StateError('Cannot approve a thesis that is not pending dean review.');
+    }
+
+    final snap = await _nominations(thesisId).get();
+    final all = snap.docs.map((d) => _toNomination(d.id, d.data())).toList();
+
+    final accepted =
+        all.where((n) => n.conformeStatus == ConformeStatus.accepted);
+
+    final adviser = accepted
+        .where((n) => n.position == NominationPosition.adviser)
+        .toList();
+    final panelists = accepted
+        .where((n) =>
+            n.position == NominationPosition.panelist && !n.exOfficio)
+        .map((n) => n.nomineeUid)
+        .toList();
+
+    if (adviser.isEmpty) {
+      throw StateError('Cannot approve without an accepted adviser.');
+    }
+    if (panelists.length < 3) {
+      throw StateError('Cannot approve with fewer than three panel members.');
+    }
+
+    await _theses.doc(thesisId).update({
+      'status': ThesisStatus.nominationApproved.value,
+      'adviserUid': adviser.first.nomineeUid,
+      'panelistUids': panelists,
+      'deanApprovedAt': FieldValue.serverTimestamp(),
+      'deanApprovedBy': deanUid,
+    });
+  }
+
+  /// Every nomination addressed to this user that still needs their
+  /// Conforme, across all theses, paired with the id of the thesis it
+  /// belongs to (the inbox cannot act on a nomination without knowing its
+  /// parent thesis). Requires the collection-group rule on `nominations`.
+  Stream<List<({String thesisId, Nomination nomination})>>
+      watchMyPendingNominations(String uid) {
+    return _db
+        .collectionGroup('nominations')
+        .where(FieldPath.documentId, isEqualTo: uid)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) => (
+                  thesisId: d.reference.parent.parent!.id,
+                  nomination: _toNomination(d.id, d.data()),
+                ))
+            .where((r) => r.nomination.conformeStatus == ConformeStatus.pending)
+            .toList());
+  }
 }
