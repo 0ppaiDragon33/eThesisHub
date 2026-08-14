@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
@@ -265,5 +267,90 @@ void main() {
         thesisId: id, nomineeUid: 'p1', accept: true);
     final pending = await repo.watchMyPendingNominations('p1').first;
     expect(pending, isEmpty);
+  });
+
+  // --- Finding 1: respondToNomination must never walk status backwards ---
+
+  test(
+      'a response arriving after the thesis is already approved cannot walk '
+      'it backwards (regression: reviewer-reported bug)', () async {
+    // Reviewer's exact scenario: accept-all -> recommend -> approve -> one
+    // more accept from a nominee who already accepted. Before the fix,
+    // respondToNomination recomputed "outstanding is empty -> advance to
+    // nominationPendingCoordinator" unconditionally on *every* call, with
+    // no status guard at all, so this regressed an already-APPROVED thesis
+    // back to nominationPendingCoordinator.
+    await acceptAll();
+    await repo.recommend(thesisId: id, coordinatorUid: 'c1');
+    await repo.approve(thesisId: id, deanUid: 'd1');
+
+    final approved = await repo.watchThesis(id).first;
+    expect(approved!.status, ThesisStatus.nominationApproved);
+
+    await expectLater(
+      repo.respondToNomination(thesisId: id, nomineeUid: 'a1', accept: true),
+      throwsA(isA<StateError>()),
+    );
+
+    final after = await repo.watchThesis(id).first;
+    expect(after!.status, ThesisStatus.nominationApproved,
+        reason: 'thesis status must never move backwards under any input');
+  });
+
+  test(
+      'a response arriving after conforme review has closed but before '
+      'approval is rejected, not silently recorded', () async {
+    // Same guard, checked from the other open transition: once every
+    // nominee has settled and the thesis has moved to
+    // nominationPendingCoordinator, a late/duplicate/retried response must
+    // not be able to overwrite an already-recorded Conforme.
+    await acceptAll();
+    final pending = await repo.watchThesis(id).first;
+    expect(pending!.status, ThesisStatus.nominationPendingCoordinator);
+
+    await expectLater(
+      repo.respondToNomination(
+          thesisId: id,
+          nomineeUid: 'p1',
+          accept: false,
+          declineReason: 'late'),
+      throwsA(isA<StateError>()),
+    );
+
+    final noms = await repo.watchNominations(id).first;
+    final p1 = noms.firstWhere((n) => n.nomineeUid == 'p1');
+    expect(p1.conformeStatus, ConformeStatus.accepted,
+        reason: 'the late response must not overwrite the earlier record');
+  });
+
+  // --- Finding 2: approve() must be atomic with its nomination reads ---
+
+  test(
+      'approve() re-reads nominations fresh inside its transaction: a '
+      'decline landing mid-flight cannot slip a decliner into '
+      'panelistUids[] (regression: non-atomic read-then-write)', () async {
+    await acceptAll();
+    await repo.recommend(thesisId: id, coordinatorUid: 'c1');
+
+    final approveFuture = repo.approve(thesisId: id, deanUid: 'd1');
+
+    // Simulate a concurrent client declining p3 while approve() is
+    // mid-flight, bypassing the repository entirely (as an external write
+    // -- a retried client, a second device -- would). The two-microtask
+    // delay is an empirically-derived, implementation-coupled number: it
+    // lands after approve()'s upfront nomination-id query but while its
+    // per-document transaction reads are still in flight. See the task-6
+    // fix-1 report for how this was derived (by racing the same write
+    // against both the pre-fix and post-fix implementation and observing
+    // where they diverge) and for the honest limits of this technique.
+    unawaited(Future<void>.value().then((_) => Future<void>.value()).then(
+        (_) => db
+            .collection('theses')
+            .doc(id)
+            .collection('nominations')
+            .doc('p3')
+            .update({'conformeStatus': 'declined'})));
+
+    await expectLater(approveFuture, throwsA(isA<StateError>()));
   });
 }
