@@ -7,6 +7,8 @@ import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 
+import '../../support/fake_firestore_settle.dart';
+
 FacultyDirectoryEntry entry(String uid, String name, String role) =>
     FacultyDirectoryEntry(uid: uid, fullName: name, role: role);
 
@@ -39,6 +41,7 @@ void main() {
     for (final uid in ['a1', 'p1', 'p2', 'p3']) {
       await repo.respondToNomination(
           thesisId: id, nomineeUid: uid, accept: true);
+      await settleFakeTransaction();
     }
   }
 
@@ -70,6 +73,7 @@ void main() {
     await repo.respondToNomination(thesisId: id, nomineeUid: 'p1', accept: true);
     await repo.respondToNomination(thesisId: id, nomineeUid: 'p2', accept: true);
     await repo.respondToNomination(thesisId: id, nomineeUid: 'p3', accept: true);
+    await settleFakeTransaction();
 
     final noms = await repo.watchNominations(id).first;
     final dean = noms.firstWhere((n) => n.nomineeUid == 'd1');
@@ -83,6 +87,7 @@ void main() {
   test('a partial set does not advance', () async {
     await repo.respondToNomination(
         thesisId: id, nomineeUid: 'a1', accept: true);
+    await settleFakeTransaction();
     final thesis = await repo.watchThesis(id).first;
     expect(thesis!.status, ThesisStatus.nominationPendingConforme);
   });
@@ -97,6 +102,7 @@ void main() {
     await repo.respondToNomination(thesisId: id, nomineeUid: 'a1', accept: true);
     await repo.respondToNomination(thesisId: id, nomineeUid: 'p1', accept: true);
     await repo.respondToNomination(thesisId: id, nomineeUid: 'p2', accept: true);
+    await settleFakeTransaction();
 
     final thesis = await repo.watchThesis(id).first;
     expect(thesis!.status, ThesisStatus.nominationPendingConforme);
@@ -106,6 +112,7 @@ void main() {
     await repo.respondToNomination(
         thesisId: id, nomineeUid: 'p1', accept: false,
         declineReason: 'Already at capacity');
+    await settleFakeTransaction();
     final noms = await repo.watchNominations(id).first;
     final p1 = noms.firstWhere((n) => n.nomineeUid == 'p1');
     expect(p1.conformeStatus, ConformeStatus.declined);
@@ -127,6 +134,7 @@ void main() {
     await acceptAll();
     await repo.recommend(thesisId: id, coordinatorUid: 'c1');
     await repo.approve(thesisId: id, deanUid: 'd1');
+    await settleFakeTransaction();
 
     final thesis = await repo.watchThesis(id).first;
     expect(thesis!.status, ThesisStatus.nominationApproved);
@@ -144,6 +152,7 @@ void main() {
     await acceptAll();
     await repo.recommend(thesisId: id, coordinatorUid: 'c1');
     await repo.approve(thesisId: id, deanUid: 'd1');
+    await settleFakeTransaction();
 
     final thesis = await repo.watchThesis(id).first;
     expect(thesis!.panelistUids.contains('d1'), isFalse);
@@ -176,6 +185,7 @@ void main() {
     await acceptAll();
     await repo.recommend(thesisId: id, coordinatorUid: 'c1');
     await repo.approve(thesisId: id, deanUid: 'd1');
+    await settleFakeTransaction();
 
     final thesis = await repo.watchThesis(id).first;
     expect(thesis!.panelistUids.contains('c-extra'), isFalse);
@@ -193,6 +203,7 @@ void main() {
     await acceptAll();
     await repo.recommend(thesisId: id, coordinatorUid: 'c1');
     await repo.approve(thesisId: id, deanUid: 'd1');
+    await settleFakeTransaction();
 
     final thesis = await repo.watchThesis(id).first;
     expect(thesis!.adviserUid, 'a1');
@@ -238,6 +249,7 @@ void main() {
         thesisId: id2, nomineeUid: 'p3', accept: true);
     await repo.respondToNomination(
         thesisId: id2, nomineeUid: 'p4', accept: true);
+    await settleFakeTransaction();
 
     final mid = await repo.watchThesis(id2).first;
     expect(mid!.status, ThesisStatus.nominationPendingConforme,
@@ -247,6 +259,7 @@ void main() {
     await db.collection('theses').doc(id2).update(
         {'status': ThesisStatus.nominationPendingDean.value});
     await repo.approve(thesisId: id2, deanUid: 'd1');
+    await settleFakeTransaction();
 
     final thesis = await repo.watchThesis(id2).first;
     expect(thesis!.panelistUids.contains('p1'), isFalse);
@@ -265,6 +278,7 @@ void main() {
       () async {
     await repo.respondToNomination(
         thesisId: id, nomineeUid: 'p1', accept: true);
+    await settleFakeTransaction();
     final pending = await repo.watchMyPendingNominations('p1').first;
     expect(pending, isEmpty);
   });
@@ -283,6 +297,7 @@ void main() {
     await acceptAll();
     await repo.recommend(thesisId: id, coordinatorUid: 'c1');
     await repo.approve(thesisId: id, deanUid: 'd1');
+    await settleFakeTransaction();
 
     final approved = await repo.watchThesis(id).first;
     expect(approved!.status, ThesisStatus.nominationApproved);

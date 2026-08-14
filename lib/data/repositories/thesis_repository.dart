@@ -201,30 +201,6 @@ class ThesisRepository {
     return snap.docs.map((d) => d.id).toList();
   }
 
-  /// Yields one extra microtask turn after `runTransaction` resolves.
-  ///
-  /// Observed, not assumed: `fake_cloud_firestore` 4.2.0's `_DummyTransaction`
-  /// (`fake_cloud_firestore_instance.dart`) issues each `Transaction.update`/
-  /// `.set` as `documentReference.update(data)` **without awaiting it** —
-  /// by design, since real `Transaction.update()` also returns
-  /// synchronously (writes are staged and committed as a batch by the real
-  /// SDK when the handler returns). But the fake does not defer/batch: it
-  /// fires the real, awaitable `MockDocumentReference.update()` and drops
-  /// the Future. That method's first line is `await
-  /// _firestore.maybeThrowSecurityException(...)`, itself one `await
-  /// Future.value()` — so the fake's actual write to its backing map lands
-  /// exactly one microtask turn *after* `runTransaction()` can have already
-  /// resolved. Confirmed empirically: immediately after `await
-  /// _db.runTransaction(...)`, a plain `watchThesis(id).first` (which reads
-  /// via `snapshots().startWith(_getSync())`, i.e. synchronously at
-  /// subscription time) could observe the pre-write value, while an
-  /// awaited `.get()` call — which itself yields once internally — always
-  /// observed the post-write value. A single extra microtask hop closes
-  /// that gap without any wall-clock delay. This has no effect against the
-  /// real `cloud_firestore` SDK, where `runTransaction()` never resolves
-  /// before the commit is confirmed.
-  Future<void> _settleAfterTransaction() => Future<void>.value();
-
   /// Records a nominee's Conforme and, once every nomination that actually
   /// needs one has been accepted, advances the thesis — atomically with the
   /// read that decides it, and only while the thesis is still awaiting
@@ -298,7 +274,6 @@ class ThesisRepository {
         });
       }
     });
-    await _settleAfterTransaction();
   }
 
   /// A Research Coordinator recommends the thesis to the Dean. Only valid
@@ -391,7 +366,6 @@ class ThesisRepository {
         'deanApprovedBy': deanUid,
       });
     });
-    await _settleAfterTransaction();
   }
 
   /// Every nomination addressed to this user that still needs their
