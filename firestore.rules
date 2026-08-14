@@ -136,6 +136,139 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    function thesisData(thesisId) {
+      return get(/databases/$(database)/documents/theses/$(thesisId)).data;
+    }
+
+    function isThesisLeader(thesisId) {
+      return signedIn() && thesisData(thesisId).leaderUid == request.auth.uid;
+    }
+
+    function isOnPanel(thesisId) {
+      return signedIn() && (
+        thesisData(thesisId).adviserUid == request.auth.uid ||
+        request.auth.uid in thesisData(thesisId).panelistUids
+      );
+    }
+
+    match /theses/{thesisId} {
+      allow get: if isThesisLeader(thesisId)
+                 || isOnPanel(thesisId)
+                 || isCoordinator() || isDean();
+      allow list: if isCoordinator() || isDean();
+
+      // A leader creates their own thesis, always as a draft with an empty
+      // panel. Nothing here may arrive pre-approved.
+      allow create: if verified()
+                    && request.resource.data.leaderUid == request.auth.uid
+                    && request.resource.data.status == 'draft'
+                    && request.resource.data.adviserUid == null
+                    && request.resource.data.panelistUids.size() == 0
+                    && request.resource.data.academicYear.matches('[0-9]{4}-[0-9]{4}');
+
+      // The leader edits group details and may submit the nomination, but
+      // may never touch the approval fields. Beyond the plan's original
+      // membership check (`status in ['draft', 'nominationPendingConforme']`),
+      // this also pins the status transition itself: without a prior-status
+      // guard a leader could revert an already-approved thesis back to
+      // 'draft' (or replay the submit step) at any point after coordinator
+      // or dean action, undoing their sign-off with no matching event. The
+      // only status changes allowed here are "no change" (editing group
+      // details) and the single forward step draft -> nominationPendingConforme.
+      allow update: if isThesisLeader(thesisId)
+                    && onlyChanged(['memberNames', 'workingTitle', 'college',
+                                    'program', 'semester', 'academicYear',
+                                    'status'])
+                    && (
+                      request.resource.data.status == resource.data.status
+                      || (resource.data.status == 'draft'
+                          && request.resource.data.status ==
+                             'nominationPendingConforme')
+                    );
+
+      // A nominee's acceptance advances the status — but ONLY the caller's
+      // own nomination on THIS thesis, and only forward from the exact
+      // stage that acceptance belongs to. Ruling 2: the plan's original form
+      // (`verified() && onlyChanged(['status']) && ... == 'nominationPendingCoordinator'`)
+      // let any verified stranger flip any thesis into that state. This adds
+      // (a) proof the caller is a nominee on this thesis via a
+      // nominations/{uid} doc, and (b) a prior-status pin so the transition
+      // can never be replayed to walk a thesis backwards from a later stage.
+      allow update: if verified()
+                    && exists(/databases/$(database)/documents/theses/$(thesisId)/nominations/$(request.auth.uid))
+                    && resource.data.status == 'nominationPendingConforme'
+                    && onlyChanged(['status'])
+                    && request.resource.data.status ==
+                       'nominationPendingCoordinator';
+
+      // Same prior-status pin: without it, a coordinator could push ANY
+      // thesis (a draft, one still awaiting Conforme, even an already
+      // approved one) straight to 'nominationPendingDean', skipping the
+      // nomination stage entirely or reopening an approved thesis.
+      allow update: if isCoordinator()
+                    && onlyChanged(['status', 'coordinatorRecommendedAt',
+                                    'coordinatorRecommendedBy'])
+                    && request.resource.data.coordinatorRecommendedBy ==
+                       request.auth.uid
+                    && resource.data.status == 'nominationPendingCoordinator'
+                    && request.resource.data.status == 'nominationPendingDean';
+
+      // Same prior-status pin: without it, a dean could approve directly
+      // from any stage, skipping coordinator recommendation entirely.
+      allow update: if isDean()
+                    && onlyChanged(['status', 'deanApprovedAt',
+                                    'deanApprovedBy', 'adviserUid',
+                                    'panelistUids'])
+                    && request.resource.data.deanApprovedBy == request.auth.uid
+                    && resource.data.status == 'nominationPendingDean'
+                    && request.resource.data.status == 'nominationApproved'
+                    && request.resource.data.panelistUids.size() >= 3;
+
+      allow delete: if false;
+
+      match /nominations/{nomineeUid} {
+        allow get, list: if isThesisLeader(thesisId)
+                         || request.auth.uid == nomineeUid
+                         || isCoordinator() || isDean();
+
+        // The leader writes every entry, including the ex officio ones —
+        // but those are pinned so a student cannot forge an acceptance.
+        allow create: if isThesisLeader(thesisId)
+                      && (
+                        (request.resource.data.exOfficio == false
+                         && request.resource.data.conformeStatus == 'pending')
+                        ||
+                        (request.resource.data.exOfficio == true
+                         && request.resource.data.conformeStatus == 'exOfficio')
+                      );
+
+        // Only the nominee answers, and only on a seat that was asked.
+        allow update: if verified()
+                      && request.auth.uid == nomineeUid
+                      && resource.data.exOfficio == false
+                      && onlyChanged(['conformeStatus', 'respondedAt',
+                                      'declineReason'])
+                      && request.resource.data.conformeStatus in
+                         ['accepted', 'declined'];
+
+        // Re-nomination of a declined slot.
+        allow delete: if isThesisLeader(thesisId)
+                      && resource.data.conformeStatus == 'declined';
+      }
+    }
+
+    // The faculty inbox queries nominations across all theses.
+    match /{path=**}/nominations/{nomineeUid} {
+      allow read: if verified() && request.auth.uid == nomineeUid;
+    }
+
+    match /facultyDirectory/{uid} {
+      allow read: if verified();
+      allow write: if signedIn()
+                   && request.auth.uid == uid
+                   && myRole() != 'student';
+    }
+
     // Deny-by-default for everything not matched above.
     match /{document=**} {
       allow read, write: if false;

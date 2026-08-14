@@ -513,6 +513,311 @@ test("promotion succeeds against an invite with no consumedAt field at all", asy
   );
 });
 
+// --- Task 7: theses, nominations, faculty directory ---
+
+async function seedThesis(id, leaderUid, status, extra = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses", id), {
+      leaderUid, status, panelistUids: [], adviserUid: null,
+      memberNames: [], workingTitle: "T", college: "CICT",
+      program: "BSIT", semester: "First", academicYear: "2026-2027",
+      ...extra,
+    });
+  });
+}
+
+async function seedNomination(thesisId, uid, overrides = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `theses/${thesisId}/nominations/${uid}`), {
+      nomineeName: "Dr. X", position: "panelist", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+      ...overrides,
+    });
+  });
+}
+
+test("a student may create their own thesis as draft", async () => {
+  await assertSucceeds(
+    setDoc(doc(student, "theses/t-new"), {
+      leaderUid: "student-uid", status: "draft", panelistUids: [],
+      adviserUid: null, memberNames: [], workingTitle: "T",
+      college: "CICT", program: "BSIT", semester: "First",
+      academicYear: "2026-2027",
+    })
+  );
+});
+
+test("a student may NOT create a thesis owned by someone else", async () => {
+  await assertFails(
+    setDoc(doc(student, "theses/t-other"), {
+      leaderUid: "someone-else", status: "draft", panelistUids: [],
+      adviserUid: null, memberNames: [], workingTitle: "T",
+      college: "CICT", program: "BSIT", semester: "First",
+      academicYear: "2026-2027",
+    })
+  );
+});
+
+test("a student may NOT create a thesis already approved", async () => {
+  await assertFails(
+    setDoc(doc(student, "theses/t-cheat"), {
+      leaderUid: "student-uid", status: "nominationApproved",
+      panelistUids: [], adviserUid: null, memberNames: [],
+      workingTitle: "T", college: "CICT", program: "BSIT",
+      semester: "First", academicYear: "2026-2027",
+    })
+  );
+});
+
+test("a student may NOT read another student's thesis", async () => {
+  await seedThesis("t-private", "other-uid", "draft");
+  await assertFails(getDoc(doc(student, "theses/t-private")));
+});
+
+test("a student may NOT set the approval fields", async () => {
+  await seedThesis("t-mine", "student-uid", "nominationPendingDean");
+  await assertFails(
+    updateDoc(doc(student, "theses/t-mine"), {
+      status: "nominationApproved", adviserUid: "a1",
+      panelistUids: ["p1", "p2", "p3"],
+    })
+  );
+});
+
+test("only the nominee may write their own conforme", async () => {
+  await seedThesis("t-conf", "student-uid", "nominationPendingConforme");
+  await seedNomination("t-conf", "invited-uid", { nomineeName: "Dr. X" });
+
+  await assertFails(
+    updateDoc(doc(student, "theses/t-conf/nominations/invited-uid"), {
+      conformeStatus: "accepted",
+    })
+  );
+
+  const nominee = env
+    .authenticatedContext("invited-uid", {
+      email: "invited@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(nominee, "theses/t-conf/nominations/invited-uid"), {
+      conformeStatus: "accepted",
+    })
+  );
+});
+
+test("a student may NOT forge an ex officio acceptance", async () => {
+  await seedThesis("t-forge", "student-uid", "draft");
+  await assertFails(
+    setDoc(doc(student, "theses/t-forge/nominations/fake-uid"), {
+      nomineeName: "Dr. Fake", position: "panelist", exOfficio: true,
+      conformeStatus: "accepted", respondedAt: null, declineReason: null,
+    })
+  );
+});
+
+test("anyone verified may read the faculty directory", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyDirectory/f1"), {
+      fullName: "Dr. Armada", role: "faculty",
+      college: "CICT", specialization: "SE",
+    });
+  });
+  await assertSucceeds(getDoc(doc(student, "facultyDirectory/f1")));
+});
+
+test("a student may NOT write a faculty directory entry", async () => {
+  await assertFails(
+    setDoc(doc(student, "facultyDirectory/student-uid"), {
+      fullName: "A Student", role: "faculty",
+      college: "CICT", specialization: null,
+    })
+  );
+});
+
+// --- Ruling 2: nominee status-advance must be scoped to a real nominee on
+// THIS thesis, moving only from nominationPendingConforme. The plan's
+// original rule (verified() + onlyChanged(['status']) + target status only)
+// let any verified stranger flip any thesis forward. First prove the allow
+// path actually works for a real nominee on the right prior status — a
+// falsifiability control for the deny tests that follow — then prove a
+// stranger with no nomination doc is denied, and prove a nominee cannot
+// replay the same transition from a later stage to walk the thesis
+// backwards.
+
+test("a nominee on the thesis MAY advance it from nominationPendingConforme", async () => {
+  await seedThesis("t-advance-ok", "leader-uid", "nominationPendingConforme");
+  await seedNomination("t-advance-ok", "nominee-uid");
+
+  const nominee = env
+    .authenticatedContext("nominee-uid", {
+      email: "nominee@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(nominee, "theses/t-advance-ok"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+test("a stranger with no nomination on the thesis may NOT advance it", async () => {
+  await seedThesis("t-advance-stranger", "leader-uid", "nominationPendingConforme");
+  // student-uid has no nominations/{uid} doc under this thesis at all.
+
+  await assertFails(
+    updateDoc(doc(student, "theses/t-advance-stranger"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+test("a nominee may NOT advance a thesis that is already nominationApproved", async () => {
+  await seedThesis("t-advance-backwards", "leader-uid", "nominationApproved");
+  await seedNomination("t-advance-backwards", "nominee2-uid");
+
+  const nominee = env
+    .authenticatedContext("nominee2-uid", {
+      email: "nominee2@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    updateDoc(doc(nominee, "theses/t-advance-backwards"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+// --- Self-review follow-up: the plan's coordinator/dean branches and the
+// leader's own status-editing branch had no prior-status guard either — the
+// same class of hole Ruling 2 flagged for the nominee branch. Prove the
+// legitimate forward transition still works (falsifiability control), then
+// prove the skip/backward path is denied.
+
+test("a leader MAY move their own thesis from draft to nominationPendingConforme", async () => {
+  await seedThesis("t-leader-forward", "student-uid", "draft");
+  await assertSucceeds(
+    updateDoc(doc(student, "theses/t-leader-forward"), {
+      status: "nominationPendingConforme",
+    })
+  );
+});
+
+test("a leader may NOT revert their own already-approved thesis back to draft", async () => {
+  await seedThesis("t-leader-revert", "student-uid", "nominationApproved");
+  await assertFails(
+    updateDoc(doc(student, "theses/t-leader-revert"), { status: "draft" })
+  );
+});
+
+test("a coordinator MAY recommend a thesis that is pending coordinator review", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/coord-thesis-uid"), {
+      fullName: "Coord", email: "coordthesis@isufst.edu.ph", role: "coordinator",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+  await seedThesis("t-coord-ok", "leader-uid", "nominationPendingCoordinator");
+
+  const coordinator = env
+    .authenticatedContext("coord-thesis-uid", {
+      email: "coordthesis@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(coordinator, "theses/t-coord-ok"), {
+      status: "nominationPendingDean",
+      coordinatorRecommendedAt: serverTimestamp(),
+      coordinatorRecommendedBy: "coord-thesis-uid",
+    })
+  );
+});
+
+test("a coordinator may NOT recommend a thesis that is still a draft (stage skip)", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/coord-skip-uid"), {
+      fullName: "Coord", email: "coordskip@isufst.edu.ph", role: "coordinator",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+  await seedThesis("t-coord-skip", "leader-uid", "draft");
+
+  const coordinator = env
+    .authenticatedContext("coord-skip-uid", {
+      email: "coordskip@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    updateDoc(doc(coordinator, "theses/t-coord-skip"), {
+      status: "nominationPendingDean",
+      coordinatorRecommendedAt: serverTimestamp(),
+      coordinatorRecommendedBy: "coord-skip-uid",
+    })
+  );
+});
+
+test("a dean MAY approve a thesis that is pending dean review", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/dean-ok-uid"), {
+      fullName: "Dean", email: "deanok@isufst.edu.ph", role: "dean",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+  await seedThesis("t-dean-ok", "leader-uid", "nominationPendingDean");
+
+  const dean = env
+    .authenticatedContext("dean-ok-uid", {
+      email: "deanok@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dean, "theses/t-dean-ok"), {
+      status: "nominationApproved",
+      deanApprovedAt: serverTimestamp(),
+      deanApprovedBy: "dean-ok-uid",
+      adviserUid: "adv-1",
+      panelistUids: ["p1", "p2", "p3"],
+    })
+  );
+});
+
+test("a dean may NOT approve a thesis directly from draft (stage skip)", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/dean-skip-uid"), {
+      fullName: "Dean", email: "deanskip@isufst.edu.ph", role: "dean",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+  await seedThesis("t-dean-skip", "leader-uid", "draft");
+
+  const dean = env
+    .authenticatedContext("dean-skip-uid", {
+      email: "deanskip@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(
+    updateDoc(doc(dean, "theses/t-dean-skip"), {
+      status: "nominationApproved",
+      deanApprovedAt: serverTimestamp(),
+      deanApprovedBy: "dean-skip-uid",
+      adviserUid: "adv-1",
+      panelistUids: ["p1", "p2", "p3"],
+    })
+  );
+});
+
 test.after(async () => {
   await env.cleanup();
 });
