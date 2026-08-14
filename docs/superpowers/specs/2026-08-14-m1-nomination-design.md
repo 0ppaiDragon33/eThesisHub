@@ -64,7 +64,12 @@ can reconcile it if it happens.
 theses/{thesisId}
   leaderUid          string    the only account attached to this thesis
   memberNames[]      string[]  groupmates, recorded as names only
+  workingTitle       string    the group's initial idea; names the thesis in
+                               lists. NOT a candidate title — M1b's three or
+                               more candidates are separate and may differ
+  college            string    for the Form 1 letterhead
   program            string
+  semester           string    First | Second — Form 1 requires it
   academicYear       string    YYYY-YYYY
   status             string    see §5
   adviserUid         string?   null until nomination is approved
@@ -183,9 +188,9 @@ re-nomination. Accepted Conformes on other slots stand, and the status remains
 ## 6. Screens
 
 **Student (leader)**
-1. **Create thesis** — member names, program, academic year
+1. **Create thesis** — working title, member names, college, program, semester, academic year
 2. **Nominate** — search `facultyDirectory`; select one adviser and three or more panel members
-3. **Thesis status** — current stage, per-nominee Conforme state, re-nominate action on any declined slot
+3. **Thesis status** — current stage, per-nominee Conforme state, re-nominate action on any declined slot, and **Download Form 1** once approved
 
 **Faculty**
 1. **Nomination inbox** — pending nominations; accept, or decline with a reason
@@ -227,7 +232,48 @@ match /{path=**}/nominations/{nomineeUid} {
 Worth naming because it is easy to write the query, watch it fail with
 `permission-denied`, and wrongly conclude the data model is at fault.
 
-### 7.3 Audit
+### 7.3 Form 1 generation
+
+Once the nomination reaches `nomination_approved`, the leader can download
+**Form 1 — Nomination of Thesis Adviser and Panel Members** as a PDF, generated
+with the `pdf` and `printing` packages.
+
+**It prints what happened, not blank signature lines.** Because Conforme,
+recommendation and approval are all recorded in the app, each signature block
+renders the recorded action instead:
+
+```
+Conforme:
+    Dr. Noel A. Armada      Accepted 14 Aug 2026, 10:22 — via eThesisHub
+    Dr. L. Diamante         Accepted 14 Aug 2026, 11:05 — via eThesisHub
+    ...
+Recommending Approval:
+    Dr. J. Bito-onon        Recommended 15 Aug 2026 — via eThesisHub
+Approved:
+    Dr. N. Siason Jr.       Approved 16 Aug 2026 — via eThesisHub
+```
+
+**Fidelity.** Match the printed form's wording, headings and control number
+(`RD-30-06/24-04`) so the R&D office recognises it; render cleanly rather than
+reproducing the printed layout exactly. Two deliberate departures:
+
+- **Three or more panel rows.** The printed form has two blanks, which
+  contradicts §4a's requirement of three panel members. The generated form grows
+  with the actual panel.
+- **Recorded acceptances replace signature lines**, per the decision that in-app
+  acceptance is the record.
+
+**Data sources.** Adviser and panel names come from each nomination's
+denormalised `nomineeName`; the coordinator and dean names from
+`facultyDirectory`; the student's name from `users`; and `college`, `semester`
+and `academicYear` from the thesis.
+
+**Institutional risk to confirm.** If the R&D office still requires wet
+signatures, a form printing "Accepted via eThesisHub" will not satisfy them.
+Worth checking with the Research Coordinator before the defence — it is a policy
+question, not a technical one.
+
+### 7.4 Audit
 
 `AuditService` is already wired. M1a adds `nomination.approved` at the Dean's
 approval. It must write exactly the six whitelisted keys, and an audit failure
@@ -238,9 +284,15 @@ must never break the approval it records.
 ## 8. Out of scope
 
 - **Everything about titles** — candidate titles, justification documents,
-  presentations and the title defence are M1b (§11)
+  presentations and the title defence are M1b (§11). `workingTitle` is captured
+  in M1a only to name the thesis in lists; it is not a candidate.
+- **Form 2 — Appointment as Undergraduate Thesis Adviser** — deferred by
+  decision. It requires a tentative title, which does not exist until M1b.
+- **Uploading signed scans** — not needed; in-app acceptance is the record.
 - **Guidelines §1e coordinator-assign fallback** — deferred by decision
-- **Form 1 PDF generation** — M6
+- **All other forms (3, 4a, 4b, 5a, 5b, 5c, 7, 8)** — their data comes from
+  later modules. Each should emit its own form once its data model exists, reusing
+  the PDF scaffolding M1a builds; M6 then covers whatever remains
 - **§1c five-advisees-per-faculty cap** — still on the parent backlog
 - Groupmate accounts, group-member self-service, transfer of leadership
 
