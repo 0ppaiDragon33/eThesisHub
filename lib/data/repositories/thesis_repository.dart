@@ -83,12 +83,40 @@ class ThesisRepository {
         s.docs.map((d) => _toNomination(d.id, d.data())).toList());
   }
 
+  Map<String, dynamic> _nominationMap({
+    required String name,
+    required NominationPosition position,
+    required bool exOfficio,
+    required ConformeStatus conformeStatus,
+  }) => {
+        'nomineeName': name,
+        'position': position.value,
+        'exOfficio': exOfficio,
+        'conformeStatus': conformeStatus.value,
+        'respondedAt': null,
+        'declineReason': null,
+      };
+
   /// Writes every nomination and advances the thesis in one batch, so a
   /// half-submitted nomination cannot exist.
   ///
-  /// Ex officio entries are written by the leader's client too, but the rules
-  /// pin their `exOfficio` and `conformeStatus` values so a student cannot
-  /// forge an acceptance.
+  /// A nominee's uid can collide across roles — the Dean or a Research
+  /// Coordinator may also be nominated by name as adviser or panelist "for
+  /// the sake of records". Precedence is resolved explicitly here, by
+  /// building one map of uid -> nomination doc before writing anything, so
+  /// the result never depends on write/batch ordering:
+  ///
+  ///   adviser  >  ex officio  >  panelist
+  ///
+  /// - A panelist nomination that collides with an ex-officio seat collapses
+  ///   into that single ex-officio entry (`exOfficio: true`, no Conforme
+  ///   asked) — sitting on the panel already follows from holding the
+  ///   office.
+  /// - An adviser nomination always wins, even over an ex-officio seat:
+  ///   supervising a specific thesis is a personal commitment distinct from
+  ///   an office-holder's panel seat, and Form 1 prints them on the Conforme
+  ///   line as Thesis Adviser, so they must accept (`exOfficio: false`,
+  ///   `conformeStatus: pending`).
   Future<void> submitNominations({
     required String thesisId,
     required FacultyDirectoryEntry adviser,
@@ -102,37 +130,40 @@ class ThesisRepository {
     final batch = _db.batch();
     final noms = _nominations(thesisId);
 
-    batch.set(noms.doc(adviser.uid), {
-      'nomineeName': adviser.fullName,
-      'position': NominationPosition.adviser.value,
-      'exOfficio': false,
-      'conformeStatus': ConformeStatus.pending.value,
-      'respondedAt': null,
-      'declineReason': null,
-    });
+    // Lowest precedence first, each later pass deliberately overwriting the
+    // uid's entry so the final map reflects `adviser > ex officio > panelist`
+    // regardless of what order the input lists happen to be in.
+    final writes = <String, Map<String, dynamic>>{};
 
     for (final p in panelists) {
-      batch.set(noms.doc(p.uid), {
-        'nomineeName': p.fullName,
-        'position': NominationPosition.panelist.value,
-        'exOfficio': false,
-        'conformeStatus': ConformeStatus.pending.value,
-        'respondedAt': null,
-        'declineReason': null,
-      });
+      writes[p.uid] = _nominationMap(
+        name: p.fullName,
+        position: NominationPosition.panelist,
+        exOfficio: false,
+        conformeStatus: ConformeStatus.pending,
+      );
     }
 
     for (final e in exOfficio) {
-      batch.set(noms.doc(e.uid), {
-        'nomineeName': e.fullName,
-        'position': e.role == 'dean'
-            ? NominationPosition.dean.value
-            : NominationPosition.coordinator.value,
-        'exOfficio': true,
-        'conformeStatus': ConformeStatus.exOfficio.value,
-        'respondedAt': null,
-        'declineReason': null,
-      });
+      writes[e.uid] = _nominationMap(
+        name: e.fullName,
+        position: e.role == 'dean'
+            ? NominationPosition.dean
+            : NominationPosition.coordinator,
+        exOfficio: true,
+        conformeStatus: ConformeStatus.exOfficio,
+      );
+    }
+
+    writes[adviser.uid] = _nominationMap(
+      name: adviser.fullName,
+      position: NominationPosition.adviser,
+      exOfficio: false,
+      conformeStatus: ConformeStatus.pending,
+    );
+
+    for (final entry in writes.entries) {
+      batch.set(noms.doc(entry.key), entry.value);
     }
 
     batch.update(_theses.doc(thesisId), {
