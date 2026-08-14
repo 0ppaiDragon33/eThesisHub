@@ -40,9 +40,21 @@ wrong. This document supersedes it on all four.
 | Research Coordinator | Recommends the nomination to the Dean |
 | Dean | Final approval, which fixes the adviser and panel |
 
-Nominee eligibility is unchanged from the parent spec: any account whose role is
-`faculty`, `coordinator` or `dean` may be nominated, because Guidelines §4a
-requires the panel to include the Research Coordinator or Chair.
+**Nominee eligibility — corrected.** The parent spec said any account with role
+`faculty`, `coordinator` or `dean` may be nominated, reasoning that Guidelines
+§4a requires the panel to include the Research Coordinator. That reasoning no
+longer holds now that the Dean and Coordinator sit ex officio (§4.0a) —
+nominating them as well would count them twice, and would let a Coordinator
+decline a seat they hold by role.
+
+Students therefore nominate only accounts whose role is `faculty`. The
+`facultyDirectory` picker excludes the Dean and Coordinator, and the rules reject
+a nomination naming either of them.
+
+*Consequence to accept:* a faculty member who is later promoted to Coordinator
+while already serving as a nominated panel member on an existing thesis would
+then appear twice on that panel. Rare enough to handle by hand; a later module
+can reconcile it if it happens.
 
 ---
 
