@@ -187,6 +187,18 @@ re-nomination. Accepted Conformes on other slots stand, and the status remains
 
 ## 6. Screens
 
+**Field types.** People and fixed sets are always chosen, never typed — a typo in
+a nominee's name or an academic year would silently corrupt the record and the
+generated form. Only genuinely free text is an input.
+
+| Field | Control |
+|---|---|
+| Working title | text input |
+| Group member names | text input, one per row, add more |
+| College, program, semester, academic year | dropdown |
+| Adviser, panel members | searchable dropdown from `facultyDirectory` |
+| Coordinator, Dean | **not selectable** — ex officio (§4.0a), shown read-only |
+
 **Student (leader)**
 1. **Create thesis** — working title, member names, college, program, semester, academic year
 2. **Nominate** — search `facultyDirectory`; select one adviser and three or more panel members
@@ -255,18 +267,72 @@ Approved:
 
 **Fidelity.** Match the printed form's wording, headings and control number
 (`RD-30-06/24-04`) so the R&D office recognises it; render cleanly rather than
-reproducing the printed layout exactly. Two deliberate departures:
+reproducing the printed layout exactly.
 
-- **Three or more panel rows.** The printed form has two blanks, which
-  contradicts §4a's requirement of three panel members. The generated form grows
-  with the actual panel.
-- **Recorded acceptances replace signature lines**, per the decision that in-app
-  acceptance is the record.
+**Layout, as approved in design review:**
 
-**Data sources.** Adviser and panel names come from each nomination's
-denormalised `nomineeName`; the coordinator and dean names from
-`facultyDirectory`; the student's name from `users`; and `college`, `semester`
-and `academicYear` from the thesis.
+- **Letterhead** — ISUFST seal left, university and R&D block centred, ISO 9001 /
+  UKAS accreditation marks right, over a blue rule. Form title and reference code
+  beneath.
+- **Body text** — the printed form's wording, with nominated names in bold. **No
+  underlines**: the names are printed values, not blanks to fill.
+- **Researchers** — stacked in a single right-aligned column directly under
+  "Very truly yours,", the leader first and labelled *Researcher · Group Leader*,
+  then each member from `memberNames[]` labelled *Researcher*. Roughly 20px of
+  clear space above each name to sign into.
+- **Conforme, Recommending Approval, Approved** — a flat list, each entry with
+  ~22px of clear signing space, then the printed name, then the role beneath it.
+  The recorded acceptance sits right-aligned on the same row so it cannot collide
+  with a handwritten signature.
+- **No horizontal rules above any name.** Signing space is blank.
+- **Verification strip** — states that acceptances were recorded against verified
+  institutional accounts, with the reference code. This is what gives a
+  system-generated form its authority in place of ink.
+- **Footer** — the university's guiding principles and a generation timestamp.
+- Fits one page with a five-member group and a six-person panel.
+
+**Three deliberate departures from the printed form:**
+
+1. **Three or more panel entries.** The printed form has two blanks, which
+   contradicts §4a's requirement of three panel members. The generated form grows
+   with the actual panel.
+2. **All researchers listed**, not only the leader who signs. The printed form
+   names one student; a group capstone has several.
+3. **First person plural** — "*We* have the honor to nominate … to be *our*
+   Undergraduate Thesis Adviser". With several researchers listed, the printed
+   singular reads wrongly. A solo thesis falls back to the singular.
+
+**The date** in the top-right is the date the **nomination was submitted**, not
+the date the PDF was generated. Regenerating an approved form months later must
+not silently change the date on it.
+
+**Data sources.** Every value is populated from captured data — nothing is typed
+into the form.
+
+| Form element | Source |
+|---|---|
+| `College of …` in the address block | `thesis.college` |
+| "this ___ semester" | `thesis.semester` |
+| "Academic Year ___" | `thesis.academicYear` |
+| Adviser name (body and Conforme) | `nominations` where `position = adviser` → `nomineeName` |
+| Panel member names (body and Conforme) | `nominations` where `position = panelist` → `nomineeName` |
+| Leader name | `users.fullName` of `leaderUid` |
+| Member names | `thesis.memberNames[]` |
+| Conforme acceptance timestamps | `nominations.respondedAt` |
+| Coordinator name | `facultyDirectory` lookup of `coordinatorRecommendedBy` |
+| Recommended timestamp | `thesis.coordinatorRecommendedAt` |
+| Dean name | `facultyDirectory` lookup of `deanApprovedBy` |
+| Approved timestamp | `thesis.deanApprovedAt` |
+| Reference code | derived from `thesisId` |
+| Date (top right) | date the nomination was submitted |
+| Control number, letterhead, footer | static |
+
+The panel names in the body sentence and in the Conforme block read from the
+**same** nomination records, so the two can never disagree — the failure a
+hand-typed form invites.
+
+`thesis.program` is captured at group creation but does not appear on Form 1; the
+printed form has no such field. It is retained for the archive and for M1b.
 
 **Institutional risk to confirm.** If the R&D office still requires wet
 signatures, a form printing "Accepted via eThesisHub" will not satisfy them.
