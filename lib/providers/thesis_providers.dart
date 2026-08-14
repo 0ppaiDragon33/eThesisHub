@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/repositories/faculty_directory_repository.dart';
+import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 final facultyDirectoryRepositoryProvider =
@@ -14,4 +16,15 @@ final facultyDirectoryRepositoryProvider =
 final selectableFacultyProvider =
     StreamProvider<List<FacultyDirectoryEntry>>((ref) {
   return ref.watch(facultyDirectoryRepositoryProvider).watchSelectableFaculty();
+});
+
+final thesisRepositoryProvider = Provider<ThesisRepository>(
+  (ref) => ThesisRepository(ref.watch(firestoreProvider)),
+);
+
+/// The signed-in leader's thesis, or null if they have not created one.
+final myThesisProvider = StreamProvider<Thesis?>((ref) {
+  final uid = ref.watch(authStateProvider).value?.uid;
+  if (uid == null) return Stream.value(null);
+  return ref.watch(thesisRepositoryProvider).watchThesisForLeader(uid);
 });
