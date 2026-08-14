@@ -72,6 +72,28 @@ facultyDirectory/{uid}
   fullName, college, specialization, role       ← deliberately no email
 ```
 
+### 4.0a `panelistUids[]` holds only the nominated members
+
+The Dean and Research Coordinator sit on the thesis panel **ex officio** — by
+virtue of their role, not by nomination. They are never nominated, never give a
+Conforme, and are never written into `panelistUids[]`.
+
+So the effective panel at any defence is:
+
+```
+Dean (ex officio) + Research Coordinator (ex officio)
+  + adviserUid + panelistUids[]        ← the nominated three or more
+```
+
+This resolves a contradiction in the manual itself: Guidelines §4a lists the
+Dean and Coordinator as panel members at (a) and (b), then says at (d) that the
+three nominated members "should include the Research Coordinator or Chair". They
+are counted once, ex officio.
+
+Later modules must derive the panel this way rather than reading
+`panelistUids[]` alone, or the Dean and Coordinator will be missing from quorum
+checks (§4f requires at least four present) and from defence attendance.
+
 ### 4.1 Why nominations are keyed by nominee uid
 
 Each faculty member writes only their own document, so a rule can bind the writer
@@ -238,18 +260,52 @@ One title approved → approvedTitle set → thesis → in_progress
 ```
 
 **Decided already**
+
 - Justification is an **uploaded document**, not a structured form — students
   already produce it in Word, and modelling a dozen sections as fields would be
-  painful on a phone and duplicate the paper trail
-- **Each panelist records their own decision**, mirroring the Conforme pattern,
-  rather than one person recording the panel's verdict
-- Chapters 1–3 are **not** part of this defence; that is the pre-oral later
+  painful on a phone and duplicate the paper trail.
+- A **presentation file** is uploaded alongside the candidate titles.
+- **The Dean records the approved title.** The Coordinator, nominated panel
+  members and the Adviser leave comments and suggestions on candidates but cast
+  no formal vote.
+
+  *This supersedes an earlier decision in the same review that each panelist
+  would record their own approve/reject.* The simpler model was chosen
+  deliberately: the defence happens in person, the panel reaches its decision in
+  the room, and the app records the outcome rather than discovering it. The cost
+  is a weaker per-person audit record for the title decision than the Conforme
+  chain gives for nomination.
+
+- **Comments are optional**, so a member who simply agrees is not forced to pad
+  the record.
+- The **Adviser does not vote** on the title, though they attend and may comment.
+- Chapters 1–3 are **not** part of this defence; that is the pre-oral (§12).
 
 **Open for M1b's own review**
-- Does approval need all panelists, a majority, or the Dean plus any panelist?
-- Does the Dean have a separate decision, or is the Dean one voter among the panel?
-- Do rejected candidates block resubmission of the same text?
-- File type and size limits for justifications and presentations
+
+- Does rejecting the whole set need a Dean's remark, as the parent design assumed?
+- Do rejected candidates block resubmitting the same title text?
+- File type and size limits for justification and presentation uploads.
+- Are comments visible to the student immediately, or only after the decision?
 
 **Reuses** `StorageService` (Supabase, public bucket, unguessable UUID paths)
 already built in the skeleton.
+
+---
+
+## 12. Beyond M1b — the pre-oral defence (forward context only)
+
+Recorded so later modules inherit it. Not specified here.
+
+After the title defence comes the **pre-oral defence**, which is where Chapters
+1–3 enter the process:
+
+- The student submits Chapters 1–3, viewable by the assigned panel — nominated
+  panel members, adviser, coordinator and dean
+- The student presents a PPTX at the defence
+- Guidelines §4c requires the proposal to reach each panel member **one week**
+  before the scheduled pre-oral defence
+
+This spans M2 (documents and revisions) and M3 (defence scheduling and live
+comments). The panel used for visibility and quorum must be derived per §4.0a,
+including the ex officio Dean and Coordinator.
