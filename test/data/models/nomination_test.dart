@@ -51,4 +51,35 @@ void main() {
     expect(restored.conformeStatus, ConformeStatus.accepted);
     expect(restored.respondedAt, DateTime.utc(2026, 8, 14));
   });
+
+  test('needsConforme excludes ex officio seats', () {
+    final nominated = Nomination.fromMap('uid-a', {
+      'nomineeName': 'Dr. Armada',
+      'position': 'adviser',
+      'exOfficio': false,
+      'conformeStatus': 'pending',
+    });
+    final exOfficio = Nomination.fromMap('uid-d', {
+      'nomineeName': 'Dr. Siason',
+      'position': 'dean',
+      'exOfficio': true,
+      'conformeStatus': 'exOfficio',
+    });
+
+    expect(nominated.needsConforme, isTrue,
+        reason: 'a nominated member must be asked to accept');
+    expect(exOfficio.needsConforme, isFalse,
+        reason: 'an ex officio seat is never asked — counting it would make '
+            'approval impossible for every panel');
+  });
+
+  test('unknown position degrades to panelist', () {
+    final n = Nomination.fromMap('uid-5', {
+      'nomineeName': 'X',
+      'position': 'unknown',
+      'exOfficio': false,
+      'conformeStatus': 'pending',
+    });
+    expect(n.position, NominationPosition.panelist);
+  });
 }

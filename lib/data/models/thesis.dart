@@ -58,6 +58,12 @@ class Thesis {
     );
   }
 
+  /// Read-side only — for round-tripping in tests and in-memory copies.
+  ///
+  /// Do NOT hand this to `.set()` or `.update()`: `createdAt` is emitted as a
+  /// client `DateTime`, and the rules pin server-written timestamps to
+  /// `request.time`. Repositories build their own write maps with
+  /// `FieldValue.serverTimestamp()`.
   Map<String, dynamic> toMap() => {
         'leaderUid': leaderUid,
         'memberNames': memberNames,
