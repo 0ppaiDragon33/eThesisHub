@@ -69,7 +69,7 @@ These were raised during review and judged not worth acting on:
 ## Running the Firestore rules tests
 
 `firebase-tools` 15.x requires **Java 21 or newer**. Eclipse Temurin 21 is
-installed at `C:\Program Filesclipse Adoptium\jdk-21.0.12.8-hotspot`, but a
+installed at `C:\Program Filesclipse Adoptium\jdk-21.0.12.8-hotspot`, but a
 shell whose PATH still points at JDK 17 will fail with *"firebase-tools no
 longer supports Java version before 21"*.
 
