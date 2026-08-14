@@ -52,25 +52,28 @@ void main() {
     expect(restored.respondedAt, DateTime.utc(2026, 8, 14));
   });
 
-  test('needsConforme excludes ex officio seats', () {
-    final nominated = Nomination.fromMap('uid-a', {
+  test('needsConforme reads exOfficio, not conformeStatus', () {
+    // Deliberately decorrelated: an accepted nominated member and a pending
+    // ex officio seat. If needsConforme wrongly read conformeStatus, the
+    // first assertion would fail — which is the point of this test.
+    final acceptedMember = Nomination.fromMap('uid-a', {
       'nomineeName': 'Dr. Armada',
       'position': 'adviser',
       'exOfficio': false,
-      'conformeStatus': 'pending',
+      'conformeStatus': 'accepted',
     });
-    final exOfficio = Nomination.fromMap('uid-d', {
+    final pendingExOfficio = Nomination.fromMap('uid-d', {
       'nomineeName': 'Dr. Siason',
       'position': 'dean',
       'exOfficio': true,
-      'conformeStatus': 'exOfficio',
+      'conformeStatus': 'pending',
     });
 
-    expect(nominated.needsConforme, isTrue,
-        reason: 'a nominated member must be asked to accept');
-    expect(exOfficio.needsConforme, isFalse,
-        reason: 'an ex officio seat is never asked — counting it would make '
-            'approval impossible for every panel');
+    expect(acceptedMember.needsConforme, isTrue,
+        reason: 'a nominated member always needs a Conforme, whatever their '
+            'current status');
+    expect(pendingExOfficio.needsConforme, isFalse,
+        reason: 'an ex officio seat is never asked, whatever its status');
   });
 
   test('unknown position degrades to panelist', () {
