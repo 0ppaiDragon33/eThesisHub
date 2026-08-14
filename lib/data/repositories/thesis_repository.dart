@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -80,6 +81,65 @@ class ThesisRepository {
   Stream<List<Nomination>> watchNominations(String thesisId) {
     return _nominations(thesisId).snapshots().map((s) =>
         s.docs.map((d) => _toNomination(d.id, d.data())).toList());
+  }
+
+  /// Writes every nomination and advances the thesis in one batch, so a
+  /// half-submitted nomination cannot exist.
+  ///
+  /// Ex officio entries are written by the leader's client too, but the rules
+  /// pin their `exOfficio` and `conformeStatus` values so a student cannot
+  /// forge an acceptance.
+  Future<void> submitNominations({
+    required String thesisId,
+    required FacultyDirectoryEntry adviser,
+    required List<FacultyDirectoryEntry> panelists,
+    required List<FacultyDirectoryEntry> exOfficio,
+  }) async {
+    if (panelists.length < 3) {
+      throw ArgumentError('At least three panel members are required.');
+    }
+
+    final batch = _db.batch();
+    final noms = _nominations(thesisId);
+
+    batch.set(noms.doc(adviser.uid), {
+      'nomineeName': adviser.fullName,
+      'position': NominationPosition.adviser.value,
+      'exOfficio': false,
+      'conformeStatus': ConformeStatus.pending.value,
+      'respondedAt': null,
+      'declineReason': null,
+    });
+
+    for (final p in panelists) {
+      batch.set(noms.doc(p.uid), {
+        'nomineeName': p.fullName,
+        'position': NominationPosition.panelist.value,
+        'exOfficio': false,
+        'conformeStatus': ConformeStatus.pending.value,
+        'respondedAt': null,
+        'declineReason': null,
+      });
+    }
+
+    for (final e in exOfficio) {
+      batch.set(noms.doc(e.uid), {
+        'nomineeName': e.fullName,
+        'position': e.role == 'dean'
+            ? NominationPosition.dean.value
+            : NominationPosition.coordinator.value,
+        'exOfficio': true,
+        'conformeStatus': ConformeStatus.exOfficio.value,
+        'respondedAt': null,
+        'declineReason': null,
+      });
+    }
+
+    batch.update(_theses.doc(thesisId), {
+      'status': ThesisStatus.nominationPendingConforme.value,
+    });
+
+    await batch.commit();
   }
 
   Stream<List<Thesis>> watchByStatus(ThesisStatus status) {
