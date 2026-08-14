@@ -274,6 +274,28 @@ void main() {
     expect(pending.first.nomination.nomineeUid, 'p1');
   });
 
+  // --- Review finding (c): the faculty inbox's collection-group query used
+  // `where(FieldPath.documentId, isEqualTo: uid)`, which real Firestore
+  // rejects with `invalid-argument` — inside a collection group a
+  // documentId() comparison must be given a full document path, so the inbox
+  // could not run at all. The query now filters on a `nomineeUid` FIELD,
+  // which only works if `submitNominations` actually writes that field.
+  // `fake_cloud_firestore` accepts the id form, so it cannot reproduce the
+  // client-side rejection itself; this asserts the prerequisite the fix
+  // depends on, and fails against the pre-fix repository, where the written
+  // document had no `nomineeUid` field at all.
+  test('every nomination carries nomineeUid as a field matching its doc id',
+      () async {
+    final raw =
+        await db.collection('theses').doc(id).collection('nominations').get();
+    expect(raw.docs, hasLength(5));
+    for (final d in raw.docs) {
+      expect(d.data()['nomineeUid'], d.id,
+          reason: 'the inbox filters on this field; the rules authorise on '
+              'the id, so the two must agree');
+    }
+  });
+
   test('the faculty inbox drops a nomination once it is no longer pending',
       () async {
     await repo.respondToNomination(

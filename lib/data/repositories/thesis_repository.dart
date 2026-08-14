@@ -83,12 +83,22 @@ class ThesisRepository {
         s.docs.map((d) => _toNomination(d.id, d.data())).toList());
   }
 
+  /// `nomineeUid` is stored as a field as well as being the document id.
+  /// The id is what every rule authorises on (`nominations/{nomineeUid}`,
+  /// including the collection-group read rule), so it must not move; but a
+  /// collection-group query cannot filter on the id — comparing
+  /// `FieldPath.documentId` inside a collection group requires a full
+  /// document path, not a bare id, and fails client-side with
+  /// `invalid-argument`. The field is what `watchMyPendingNominations`
+  /// filters on. Firestore rules pin the two to each other on create.
   Map<String, dynamic> _nominationMap({
+    required String uid,
     required String name,
     required NominationPosition position,
     required bool exOfficio,
     required ConformeStatus conformeStatus,
   }) => {
+        'nomineeUid': uid,
         'nomineeName': name,
         'position': position.value,
         'exOfficio': exOfficio,
@@ -137,6 +147,7 @@ class ThesisRepository {
 
     for (final p in panelists) {
       writes[p.uid] = _nominationMap(
+        uid: p.uid,
         name: p.fullName,
         position: NominationPosition.panelist,
         exOfficio: false,
@@ -146,6 +157,7 @@ class ThesisRepository {
 
     for (final e in exOfficio) {
       writes[e.uid] = _nominationMap(
+        uid: e.uid,
         name: e.fullName,
         position: e.role == 'dean'
             ? NominationPosition.dean
@@ -156,6 +168,7 @@ class ThesisRepository {
     }
 
     writes[adviser.uid] = _nominationMap(
+      uid: adviser.uid,
       name: adviser.fullName,
       position: NominationPosition.adviser,
       exOfficio: false,
@@ -372,11 +385,21 @@ class ThesisRepository {
   /// Conforme, across all theses, paired with the id of the thesis it
   /// belongs to (the inbox cannot act on a nomination without knowing its
   /// parent thesis). Requires the collection-group rule on `nominations`.
+  ///
+  /// Filters on the `nomineeUid` FIELD, not on the document id. The id is
+  /// still the uid — every rule authorises on it — but
+  /// `where(FieldPath.documentId, isEqualTo: uid)` on a collection group is
+  /// rejected client-side with `invalid-argument`: inside a collection group
+  /// a documentId() comparison must be given a full document path, and there
+  /// is no single path here (the same uid appears under every thesis). The
+  /// faculty inbox could not run at all until this changed. See
+  /// `_nominationMap` for the write side, and the rules' `create` branch,
+  /// which pins the field to the document id so the two can never diverge.
   Stream<List<({String thesisId, Nomination nomination})>>
       watchMyPendingNominations(String uid) {
     return _db
         .collectionGroup('nominations')
-        .where(FieldPath.documentId, isEqualTo: uid)
+        .where('nomineeUid', isEqualTo: uid)
         .snapshots()
         .map((s) => s.docs
             .map((d) => (

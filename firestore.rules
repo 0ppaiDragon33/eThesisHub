@@ -144,27 +144,77 @@ service cloud.firestore {
       return signedIn() && thesisData(thesisId).leaderUid == request.auth.uid;
     }
 
-    function isOnPanel(thesisId) {
-      return signedIn() && (
-        thesisData(thesisId).adviserUid == request.auth.uid ||
-        request.auth.uid in thesisData(thesisId).panelistUids
-      );
+    function roleOf(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    function hasNomination(thesisId, uid) {
+      return exists(/databases/$(database)/documents/theses/$(thesisId)/nominations/$(uid));
+    }
+
+    function nominationData(thesisId, uid) {
+      return get(/databases/$(database)/documents/theses/$(thesisId)/nominations/$(uid)).data;
     }
 
     match /theses/{thesisId} {
-      allow get: if isThesisLeader(thesisId)
-                 || isOnPanel(thesisId)
-                 || isCoordinator() || isDean();
-      allow list: if isCoordinator() || isDean();
+      // Finding (h): a nominee who has been asked for their Conforme needs
+      // the thesis title in their inbox, and `respondToNomination` reads the
+      // thesis inside its transaction — neither worked before, because a
+      // pending nominee is not yet on `panelistUids` (that array is only
+      // filled at dean approval). The thesis document is bound once with
+      // `let` so the leader/adviser/panel checks share a single read.
+      function mayReadThesis() {
+        let t = thesisData(thesisId);
+        return signedIn() && (
+          t.leaderUid == request.auth.uid ||
+          t.adviserUid == request.auth.uid ||
+          request.auth.uid in t.panelistUids ||
+          hasNomination(thesisId, request.auth.uid)
+        );
+      }
+
+      allow get: if mayReadThesis() || isCoordinator() || isDean();
+
+      // Finding (b): `watchThesisForLeader` queries
+      // `where('leaderUid', == , uid)`, which is a `list`, not a `get` — the
+      // student dashboard was denied outright. The leader arm is evaluated
+      // per returned document and is checked first so a student never pays
+      // for the `users` read that isCoordinator()/isDean() cost.
+      allow list: if (signedIn() && resource.data.leaderUid == request.auth.uid)
+                  || isCoordinator() || isDean();
 
       // A leader creates their own thesis, always as a draft with an empty
       // panel. Nothing here may arrive pre-approved.
+      //
+      // Finding (d): without `hasOnly` a leader could smuggle in
+      // `deanApprovedBy`, a client-chosen `createdAt`, or arbitrary junk at
+      // creation time — the update branches below only police the fields
+      // they name, so anything planted at create survived untouched. Every
+      // approval-track field is therefore pinned to its empty value here.
+      //
+      // The pins use `.get(key, default)` rather than a bare field read so a
+      // caller that simply omits an optional field (as the pre-existing
+      // "student may create their own thesis as draft" test does) is still
+      // accepted, while a caller that *supplies* one is held to the pinned
+      // value. Absence and the correct value are equivalent; a wrong value
+      // is not.
       allow create: if verified()
+                    && request.resource.data.keys().hasOnly(
+                         ['leaderUid', 'workingTitle', 'memberNames',
+                          'college', 'program', 'semester', 'academicYear',
+                          'status', 'adviserUid', 'panelistUids',
+                          'coordinatorRecommendedAt', 'coordinatorRecommendedBy',
+                          'deanApprovedAt', 'deanApprovedBy', 'createdAt'])
                     && request.resource.data.leaderUid == request.auth.uid
                     && request.resource.data.status == 'draft'
                     && request.resource.data.adviserUid == null
                     && request.resource.data.panelistUids.size() == 0
-                    && request.resource.data.academicYear.matches('[0-9]{4}-[0-9]{4}');
+                    && request.resource.data.academicYear.matches('[0-9]{4}-[0-9]{4}')
+                    && request.resource.data.get('createdAt', request.time) == request.time
+                    && request.resource.data.get('coordinatorRecommendedAt', null) == null
+                    && request.resource.data.get('coordinatorRecommendedBy', null) == null
+                    && request.resource.data.get('deanApprovedAt', null) == null
+                    && request.resource.data.get('deanApprovedBy', null) == null;
 
       // The leader edits group details and may submit the nomination, but
       // may never touch the approval fields. Beyond the plan's original
@@ -175,15 +225,22 @@ service cloud.firestore {
       // or dean action, undoing their sign-off with no matching event. The
       // only status changes allowed here are "no change" (editing group
       // details) and the single forward step draft -> nominationPendingConforme.
+      //
+      // Finding (e): the branch also had no *current*-status floor, so a
+      // leader could still rewrite `workingTitle` and `memberNames` on a
+      // thesis the dean had already approved — the approved record could
+      // drift away from what was signed. The thesis is now frozen to the
+      // leader the moment it leaves `draft`; the only write left to them is
+      // the single submit step below.
       allow update: if isThesisLeader(thesisId)
+                    && resource.data.status == 'draft'
                     && onlyChanged(['memberNames', 'workingTitle', 'college',
                                     'program', 'semester', 'academicYear',
                                     'status'])
                     && (
-                      request.resource.data.status == resource.data.status
-                      || (resource.data.status == 'draft'
-                          && request.resource.data.status ==
-                             'nominationPendingConforme')
+                      request.resource.data.status == 'draft'
+                      || request.resource.data.status ==
+                         'nominationPendingConforme'
                     );
 
       // A nominee's acceptance advances the status — but ONLY the caller's
@@ -194,8 +251,36 @@ service cloud.firestore {
       // (a) proof the caller is a nominee on this thesis via a
       // nominations/{uid} doc, and (b) a prior-status pin so the transition
       // can never be replayed to walk a thesis backwards from a later stage.
+      //
+      // Finding (a): mere existence of a nomination was too weak. Two people
+      // who must never advance a thesis both hold one — a nominee who has
+      // *declined* (`conformeStatus: 'declined'`), and the Dean or any
+      // Research Coordinator, who sit ex officio on EVERY thesis
+      // (`conformeStatus: 'exOfficio'`) and were never asked. Both were
+      // proven able to advance. The caller's own seat must now be one that
+      // was genuinely asked for a Conforme and has not refused.
+      //
+      // LIMITATION — this pins the seat, not the answer. The intended check
+      // is `== 'accepted'`, and it cannot be expressed while the client
+      // advances atomically. `respondToNomination` writes the acceptance and
+      // the status flip in ONE transaction, and rules evaluate every write
+      // in a transaction against the state BEFORE it: the caller's own
+      // nomination still reads `pending` at evaluation time, so `==
+      // 'accepted'` denies the legitimate flow outright. Verified against
+      // the emulator (probe: transaction accept+advance under an
+      // `== 'accepted'` rule -> permission-denied; the same two writes issued
+      // sequentially -> allowed). Tightening this to `== 'accepted'` requires
+      // first splitting `respondToNomination` into two sequential commits,
+      // which trades this for a thesis that wedges if the second commit is
+      // lost. `'pending'` is therefore accepted here and the residual gap is
+      // narrow: the caller must still hold a real, asked, unrefused seat on
+      // THIS thesis. Rules cannot check the OTHER nominees' answers under any
+      // formulation (no array/collection iteration) — that quorum check lives
+      // in `respondToNomination`'s transaction and is not expressible here.
       allow update: if verified()
-                    && exists(/databases/$(database)/documents/theses/$(thesisId)/nominations/$(request.auth.uid))
+                    && hasNomination(thesisId, request.auth.uid)
+                    && nominationData(thesisId, request.auth.uid)
+                       .conformeStatus in ['pending', 'accepted']
                     && resource.data.status == 'nominationPendingConforme'
                     && onlyChanged(['status'])
                     && request.resource.data.status ==
@@ -205,68 +290,206 @@ service cloud.firestore {
       // thesis (a draft, one still awaiting Conforme, even an already
       // approved one) straight to 'nominationPendingDean', skipping the
       // nomination stage entirely or reopening an approved thesis.
+      //
+      // Finding (f): `coordinatorRecommendedAt` was unpinned and a probe
+      // backdated it to 1999. The client writes
+      // `FieldValue.serverTimestamp()`, which arrives as exactly
+      // `request.time`, so pinning it costs nothing and makes the audit
+      // trail's dates unforgeable.
       allow update: if isCoordinator()
                     && onlyChanged(['status', 'coordinatorRecommendedAt',
                                     'coordinatorRecommendedBy'])
                     && request.resource.data.coordinatorRecommendedBy ==
                        request.auth.uid
+                    && request.resource.data.coordinatorRecommendedAt ==
+                       request.time
                     && resource.data.status == 'nominationPendingCoordinator'
                     && request.resource.data.status == 'nominationPendingDean';
 
       // Same prior-status pin: without it, a dean could approve directly
       // from any stage, skipping coordinator recommendation entirely.
+      //
+      // The derived panel is now checked as far as rules can reach:
+      //
+      // - `adviserUid` is a single value, so the nomination it names can be
+      //   fetched directly and must actually read `accepted`. A probe
+      //   previously installed `adviserUid: 'never-accepted-uid'` unopposed.
+      // - `panelistUids[]` genuinely cannot be validated: rules have no way
+      //   to iterate an array against sibling documents, so only its size is
+      //   checkable here. That every listed panelist accepted is enforced in
+      //   `ThesisRepository.approve`'s transaction, which re-reads each
+      //   nomination before writing. This remains a documented limitation.
+      //
+      // Finding (f): `deanApprovedAt` is pinned to `request.time` for the
+      // same reason as the coordinator's timestamp above.
       allow update: if isDean()
                     && onlyChanged(['status', 'deanApprovedAt',
                                     'deanApprovedBy', 'adviserUid',
                                     'panelistUids'])
                     && request.resource.data.deanApprovedBy == request.auth.uid
+                    && request.resource.data.deanApprovedAt == request.time
                     && resource.data.status == 'nominationPendingDean'
                     && request.resource.data.status == 'nominationApproved'
-                    && request.resource.data.panelistUids.size() >= 3;
+                    && request.resource.data.panelistUids.size() >= 3
+                    && request.resource.data.adviserUid != null
+                    && hasNomination(thesisId, request.resource.data.adviserUid)
+                    && nominationData(thesisId, request.resource.data.adviserUid)
+                       .conformeStatus == 'accepted';
 
       allow delete: if false;
 
       match /nominations/{nomineeUid} {
-        allow get, list: if isThesisLeader(thesisId)
-                         || request.auth.uid == nomineeUid
+        // The leader writes every entry, including the ex officio ones. Three
+        // separate holes were proven here and all three are closed by this
+        // one predicate; the thesis document and the nominee's role are each
+        // bound once with `let`, so the whole check costs two reads.
+        //
+        // Critical 1 — `exOfficio` was student-controlled. The old rule
+        // pinned `true` + `'exOfficio'` as a legal PAIR but never asked
+        // whether the nominee holds an office, so a leader could write any
+        // faculty member as `exOfficio: true` and that adviser or panelist
+        // would never be asked and never block. `exOfficio: true` now
+        // requires the nominee's real role to be `dean` or `coordinator`.
+        // The implication is deliberately one-directional: an office holder
+        // nominated AS ADVISER carries `exOfficio: false` and must accept
+        // like anyone else, and that case is unaffected.
+        //
+        // The role is read from `users/{nomineeUid}` rather than from
+        // `facultyDirectory/{nomineeUid}`: the directory is a client-written
+        // mirror maintained by its own subject at sign-in (see below), so
+        // trusting it here would make ex-officio status self-declarable —
+        // exactly the amplification finding (g) describes. `users.role` is
+        // the single source of truth, is writable only via the invite flow,
+        // and exists for every account, whereas a directory entry only
+        // appears after that faculty member's first sign-in.
+        //
+        // Critical 2 — nothing required the nominee to be anyone other than
+        // the leader themselves. A student nominated their OWN uid as
+        // ex officio, flipped the thesis to nominationPendingConforme, then
+        // satisfied the advance rule with their own nomination doc and
+        // reached the coordinator's desk with zero faculty participation.
+        // A nominee must now be a real, non-student account and must not be
+        // the leader.
+        //
+        // The `nomineeUid` field is pinned to the document id because the
+        // faculty inbox's collection-group query filters on the field while
+        // the collection-group read rule authorises on the id; if they could
+        // disagree, one nominee's seat could be filed under another's query.
+        function mayCreateNomination() {
+          let t = thesisData(thesisId);
+          let role = roleOf(nomineeUid);
+          let d = request.resource.data;
+          return signedIn()
+                 && t.leaderUid == request.auth.uid
+                 // Critical 3 — see the `delete` rule below.
+                 && t.status == 'draft'
+                 && nomineeUid != request.auth.uid
+                 && role in ['faculty', 'coordinator', 'dean']
+                 && d.nomineeUid == nomineeUid
+                 && (
+                      (d.exOfficio == false && d.conformeStatus == 'pending')
+                      ||
+                      (d.exOfficio == true
+                       && d.conformeStatus == 'exOfficio'
+                       && role in ['coordinator', 'dean'])
+                    );
+        }
+
+        allow get, list: if request.auth.uid == nomineeUid
+                         || isThesisLeader(thesisId)
                          || isCoordinator() || isDean();
 
-        // The leader writes every entry, including the ex officio ones —
-        // but those are pinned so a student cannot forge an acceptance.
-        allow create: if isThesisLeader(thesisId)
-                      && (
-                        (request.resource.data.exOfficio == false
-                         && request.resource.data.conformeStatus == 'pending')
-                        ||
-                        (request.resource.data.exOfficio == true
-                         && request.resource.data.conformeStatus == 'exOfficio')
-                      );
+        allow create: if mayCreateNomination();
 
         // Only the nominee answers, and only on a seat that was asked.
+        //
+        // Finding (f): `respondedAt` was unpinned and a probe backdated it.
+        // It must now be either left exactly as it stands or set to
+        // `request.time` — which is what the client's
+        // `FieldValue.serverTimestamp()` produces. The "unchanged" arm keeps
+        // a caller that writes only `conformeStatus` working; it cannot be
+        // used to plant a date, because the stored value it must match could
+        // only have come from an earlier pinned write.
         allow update: if verified()
                       && request.auth.uid == nomineeUid
                       && resource.data.exOfficio == false
                       && onlyChanged(['conformeStatus', 'respondedAt',
                                       'declineReason'])
                       && request.resource.data.conformeStatus in
-                         ['accepted', 'declined'];
+                         ['accepted', 'declined']
+                      && (request.resource.data.respondedAt == request.time
+                          || request.resource.data.respondedAt ==
+                             resource.data.respondedAt);
 
-        // Re-nomination of a declined slot.
+        // Critical 3 — decline laundering. The leader correctly could not
+        // UPDATE a declined nomination, but could delete it and re-create
+        // the same uid as `exOfficio: true`, erasing the refusal; the same
+        // move reset any `pending` seat that was taking too long to answer.
+        // Both `create` (above) and `delete` are therefore confined to a
+        // thesis that is still `draft` — once nominations have gone out, the
+        // roster is fixed and only the nominees themselves can write to it.
+        //
+        // INTENTIONAL: this makes the `declined` arm below unreachable in
+        // practice, because declines only happen at
+        // nominationPendingConforme. That is deliberate. A re-nomination
+        // flow is planned and will need this reopened — but it must be
+        // reopened with its own guard (an audit record, a status the leader
+        // cannot reach unilaterally, or coordinator approval), NOT by simply
+        // dropping the `draft` pin, which is what made laundering possible.
         allow delete: if isThesisLeader(thesisId)
+                      && thesisData(thesisId).status == 'draft'
                       && resource.data.conformeStatus == 'declined';
       }
     }
 
     // The faculty inbox queries nominations across all theses.
+    //
+    // This authorises on the `nomineeUid` FIELD, not on the {nomineeUid}
+    // document-id wildcard, and it has to: in a collection-group LIST the
+    // path wildcards are not bound — they evaluate to null, because the
+    // query spans every parent path and no single binding exists. The
+    // previous form (`request.auth.uid == nomineeUid`) therefore compared
+    // against null and denied the faculty inbox outright, on top of the
+    // client-side `invalid-argument` that finding (c) describes. Proven
+    // against the emulator: the doc-id form fails a collection-group query
+    // with "Null value error"; the field form allows exactly the caller's
+    // own nomination and still denies an unfiltered scan or a query for
+    // someone else's uid, because Firestore checks a list rule against the
+    // query's own constraints.
+    //
+    // The field is safe to trust here: the `create` rule pins it to the
+    // document id, which is what every other rule in this file authorises
+    // on, and no update branch can change it.
     match /{path=**}/nominations/{nomineeUid} {
-      allow read: if verified() && request.auth.uid == nomineeUid;
+      allow read: if verified()
+                  && resource.data.nomineeUid == request.auth.uid;
     }
 
     match /facultyDirectory/{uid} {
+      // Finding (g): the entry is written by its own subject (no Cloud
+      // Functions on Spark), and the old rule checked only that the caller
+      // was not a student — the document's CONTENT was unconstrained, so a
+      // faculty member could self-declare `role: 'dean'`. That fed the
+      // ex-officio picker and, before Critical 1 was fixed, the ex-officio
+      // nomination path itself. The written role must now equal the caller's
+      // real role from `users/{uid}`, and only the four keys
+      // `upsertOwnEntry` actually writes are accepted.
+      function mayWriteOwnDirectoryEntry() {
+        let role = myRole();
+        return signedIn()
+               && request.auth.uid == uid
+               && role != 'student'
+               && request.resource.data.keys().hasOnly(
+                    ['fullName', 'role', 'college', 'specialization'])
+               && request.resource.data.role == role;
+      }
+
       allow read: if verified();
-      allow write: if signedIn()
-                   && request.auth.uid == uid
-                   && myRole() != 'student';
+      allow create, update: if mayWriteOwnDirectoryEntry();
+      // Nobody removes a directory entry: a deleted entry would silently
+      // drop an office holder out of the ex-officio picker. Deactivation
+      // lives on `users.active` instead.
+      allow delete: if false;
     }
 
     // Deny-by-default for everything not matched above.

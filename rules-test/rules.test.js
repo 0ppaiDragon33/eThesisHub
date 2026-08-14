@@ -10,10 +10,16 @@ import {
   getDoc,
   getDocs,
   collection,
+  collectionGroup,
+  query,
+  where,
   setDoc,
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  writeBatch,
+  runTransaction,
+  Timestamp,
 } from "firebase/firestore";
 
 const env = await initializeTestEnvironment({
@@ -773,6 +779,15 @@ test("a dean MAY approve a thesis that is pending dean review", async () => {
     });
   });
   await seedThesis("t-dean-ok", "leader-uid", "nominationPendingDean");
+  // Fixture updated for the adviser-acceptance check added in fix wave 1:
+  // the dean's approval now verifies that the nomination named by
+  // `adviserUid` actually reads `accepted`. The assertion is unchanged — this
+  // only supplies the prerequisite document a real approval always has, which
+  // the original fixture omitted because nothing checked it.
+  await seedNomination("t-dean-ok", "adv-1", {
+    position: "adviser",
+    conformeStatus: "accepted",
+  });
 
   const dean = env
     .authenticatedContext("dean-ok-uid", {
@@ -815,6 +830,525 @@ test("a dean may NOT approve a thesis directly from draft (stage skip)", async (
       adviserUid: "adv-1",
       panelistUids: ["p1", "p2", "p3"],
     })
+  );
+});
+
+// =====================================================================
+// Task 7, fix wave 1 — the emulator-driven security review.
+//
+// House rule for this block: every deny test is paired with an allow test
+// that walks the SAME path with the right user, because a deny can pass for
+// the wrong reason (a typo'd path, a missing prerequisite document) and look
+// exactly like a rule doing its job.
+// =====================================================================
+
+async function seedUser(uid, role, email) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users", uid), {
+      fullName: "U", email, role, college: null, program: null,
+      specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+}
+
+function asUser(uid, email) {
+  return env
+    .authenticatedContext(uid, { email, email_verified: true })
+    .firestore();
+}
+
+// The nomination document `submitNominations` writes, including the
+// `nomineeUid` field the rules now pin to the document id.
+function nominationDoc(uid, overrides = {}) {
+  return {
+    nomineeUid: uid, nomineeName: "Dr. X", position: "panelist",
+    exOfficio: false, conformeStatus: "pending",
+    respondedAt: null, declineReason: null,
+    ...overrides,
+  };
+}
+
+// A leader with a users doc, used by the nomination tests below.
+const LEADER = "lead-uid";
+const LEADER_EMAIL = "lead@isufst.edu.ph";
+await seedUser(LEADER, "student", LEADER_EMAIL);
+await seedUser("fac-a", "faculty", "faca@isufst.edu.ph");
+await seedUser("fac-b", "faculty", "facb@isufst.edu.ph");
+await seedUser("dean-x", "dean", "deanx@isufst.edu.ph");
+await seedUser("coord-x", "coordinator", "coordx@isufst.edu.ph");
+await seedUser("stud-b", "student", "studb@isufst.edu.ph");
+const leader = asUser(LEADER, LEADER_EMAIL);
+
+// --- CRITICAL 1: exOfficio was student-controlled ---------------------
+
+test("C1 allow: a leader MAY nominate a real dean as an ex officio seat", async () => {
+  await seedThesis("c1-ok", LEADER, "draft");
+  await assertSucceeds(
+    setDoc(doc(leader, "theses/c1-ok/nominations/dean-x"),
+      nominationDoc("dean-x", {
+        position: "dean", exOfficio: true, conformeStatus: "exOfficio",
+      }))
+  );
+});
+
+test("C1 allow: a leader MAY nominate a real coordinator as an ex officio seat", async () => {
+  await seedThesis("c1-ok2", LEADER, "draft");
+  await assertSucceeds(
+    setDoc(doc(leader, "theses/c1-ok2/nominations/coord-x"),
+      nominationDoc("coord-x", {
+        position: "coordinator", exOfficio: true, conformeStatus: "exOfficio",
+      }))
+  );
+});
+
+test("C1 attack: a leader may NOT mark an ordinary faculty adviser ex officio", async () => {
+  // The reproduction from the review, verbatim: this write SUCCEEDED before
+  // the fix, and that adviser was then never asked and never blocked.
+  await seedThesis("c1-attack", LEADER, "draft");
+  await assertFails(
+    setDoc(doc(leader, "theses/c1-attack/nominations/fac-a"),
+      nominationDoc("fac-a", {
+        position: "adviser", exOfficio: true, conformeStatus: "exOfficio",
+      }))
+  );
+});
+
+test("C1 allow: a dean nominated AS ADVISER still carries exOfficio false and must accept", async () => {
+  // The one-directional constraint: office holder does not imply ex officio.
+  await seedThesis("c1-dean-adviser", LEADER, "draft");
+  await assertSucceeds(
+    setDoc(doc(leader, "theses/c1-dean-adviser/nominations/dean-x"),
+      nominationDoc("dean-x", {
+        position: "adviser", exOfficio: false, conformeStatus: "pending",
+      }))
+  );
+});
+
+// --- CRITICAL 2: leader self-nomination -> self-advance ----------------
+
+test("C2 attack step 1: a leader may NOT nominate themselves", async () => {
+  await seedThesis("c2-self", LEADER, "draft");
+  await assertFails(
+    setDoc(doc(leader, `theses/c2-self/nominations/${LEADER}`),
+      nominationDoc(LEADER, { exOfficio: true, conformeStatus: "exOfficio" }))
+  );
+});
+
+// `theses` create only requires a verified account, so a faculty account can
+// hold a thesis too. That is the case where `nomineeUid != leaderUid` does
+// the work on its own: for a STUDENT leader the "nominee must not be a
+// student" clause already covers self-nomination, so a student-only test
+// cannot tell whether the self-check exists at all (verified: deleting the
+// self-check failed no test until these two were added).
+test("C2 allow: a faculty leader MAY nominate a DIFFERENT faculty member", async () => {
+  await seedThesis("c2-fac-ok", "fac-a", "draft");
+  await assertSucceeds(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"),
+      "theses/c2-fac-ok/nominations/fac-b"), nominationDoc("fac-b"))
+  );
+});
+
+test("C2 attack: a faculty leader may NOT nominate THEMSELVES", async () => {
+  await seedThesis("c2-fac-self", "fac-a", "draft");
+  await assertFails(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"),
+      "theses/c2-fac-self/nominations/fac-a"), nominationDoc("fac-a"))
+  );
+});
+
+test("C2: a leader may NOT nominate another student either", async () => {
+  await seedThesis("c2-student", LEADER, "draft");
+  await assertFails(
+    setDoc(doc(leader, "theses/c2-student/nominations/stud-b"),
+      nominationDoc("stud-b"))
+  );
+});
+
+test("C2: a leader may NOT nominate a uid with no account at all", async () => {
+  await seedThesis("c2-ghost", LEADER, "draft");
+  await assertFails(
+    setDoc(doc(leader, "theses/c2-ghost/nominations/ghost-uid"),
+      nominationDoc("ghost-uid"))
+  );
+});
+
+test("C2: the nomineeUid field may NOT disagree with the document id", async () => {
+  await seedThesis("c2-mismatch", LEADER, "draft");
+  await assertFails(
+    setDoc(doc(leader, "theses/c2-mismatch/nominations/fac-a"),
+      nominationDoc("fac-b"))
+  );
+});
+
+test("C2 attack step 2: even a planted self-nomination cannot advance the thesis", async () => {
+  // Defence in depth. Suppose the nomination doc existed anyway (seeded here
+  // with rules disabled, standing in for the pre-fix create): the advance
+  // rule now also demands a seat that was genuinely asked, and an ex officio
+  // seat was not. The full chain the review proved is broken twice over.
+  await seedThesis("c2-advance", LEADER, "nominationPendingConforme");
+  await seedNomination("c2-advance", LEADER, {
+    exOfficio: true, conformeStatus: "exOfficio",
+  });
+  await assertFails(
+    updateDoc(doc(leader, "theses/c2-advance"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+// --- CRITICAL 3: decline laundering ------------------------------------
+
+test("C3 allow: a leader MAY delete a declined nomination while the thesis is still draft", async () => {
+  // Falsifiability control for the deny below: the delete path itself works
+  // for this user on this path when the thesis is draft.
+  await seedThesis("c3-draft", LEADER, "draft");
+  await seedNomination("c3-draft", "fac-a", { conformeStatus: "declined" });
+  await assertSucceeds(
+    deleteDoc(doc(leader, "theses/c3-draft/nominations/fac-a"))
+  );
+});
+
+test("C3 attack: a leader may NOT delete a decline once nominations have gone out", async () => {
+  await seedThesis("c3-launder", LEADER, "nominationPendingConforme");
+  await seedNomination("c3-launder", "fac-a", { conformeStatus: "declined" });
+  await assertFails(
+    deleteDoc(doc(leader, "theses/c3-launder/nominations/fac-a"))
+  );
+});
+
+test("C3 attack: a leader may NOT re-create a nomination after nominations have gone out", async () => {
+  // The other half of the laundering move — and the same rule stops a leader
+  // from resetting a `pending` seat that is taking too long to answer.
+  await seedThesis("c3-recreate", LEADER, "nominationPendingConforme");
+  await assertFails(
+    setDoc(doc(leader, "theses/c3-recreate/nominations/dean-x"),
+      nominationDoc("dean-x", {
+        exOfficio: true, conformeStatus: "exOfficio", position: "dean",
+      }))
+  );
+});
+
+test("C3: submitNominations' BATCH still passes — creates plus the status flip in one commit", async () => {
+  // The `draft` pin would be fatal if a batched write were evaluated against
+  // the state its own siblings produce. It is not: every write in a batch is
+  // evaluated against the pre-batch committed state, where the thesis is
+  // still draft. Asserted against the emulator rather than reasoned about.
+  await seedThesis("c3-batch", LEADER, "draft");
+  const batch = writeBatch(leader);
+  batch.set(doc(leader, "theses/c3-batch/nominations/fac-a"),
+    nominationDoc("fac-a", { position: "adviser" }));
+  batch.set(doc(leader, "theses/c3-batch/nominations/fac-b"),
+    nominationDoc("fac-b"));
+  batch.set(doc(leader, "theses/c3-batch/nominations/dean-x"),
+    nominationDoc("dean-x", {
+      position: "dean", exOfficio: true, conformeStatus: "exOfficio",
+    }));
+  batch.update(doc(leader, "theses/c3-batch"), {
+    status: "nominationPendingConforme",
+  });
+  await assertSucceeds(batch.commit());
+});
+
+// --- IMPORTANT (a): advancing requires a seat that was asked ------------
+
+test("(a) allow: a nominee who has ACCEPTED may advance the thesis", async () => {
+  await seedThesis("a-accepted", LEADER, "nominationPendingConforme");
+  await seedNomination("a-accepted", "fac-a", { conformeStatus: "accepted" });
+  await assertSucceeds(
+    updateDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "theses/a-accepted"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+test("(a) attack: a nominee who DECLINED may not advance the thesis", async () => {
+  await seedThesis("a-declined", LEADER, "nominationPendingConforme");
+  await seedNomination("a-declined", "fac-a", { conformeStatus: "declined" });
+  await assertFails(
+    updateDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "theses/a-declined"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+test("(a) attack: an ex officio coordinator may not advance a thesis they were never asked about", async () => {
+  // A coordinator sits ex officio on EVERY thesis, so before the fix every
+  // coordinator could advance every thesis awaiting Conforme.
+  await seedThesis("a-exofficio", LEADER, "nominationPendingConforme");
+  await seedNomination("a-exofficio", "coord-x", {
+    exOfficio: true, conformeStatus: "exOfficio", position: "coordinator",
+  });
+  await assertFails(
+    updateDoc(doc(asUser("coord-x", "coordx@isufst.edu.ph"), "theses/a-exofficio"), {
+      status: "nominationPendingCoordinator",
+    })
+  );
+});
+
+test("(a) allow: respondToNomination's atomic accept+advance TRANSACTION still passes", async () => {
+  // This is why the rule accepts 'pending' as well as 'accepted' — see the
+  // LIMITATION note in firestore.rules. Rules evaluate every write in a
+  // transaction against the state BEFORE it, so the acceptance written on the
+  // line above is invisible to the rule guarding the line below.
+  await seedThesis("a-txn", LEADER, "nominationPendingConforme");
+  await seedNomination("a-txn", "fac-a", { conformeStatus: "pending" });
+  const nominee = asUser("fac-a", "faca@isufst.edu.ph");
+
+  await assertSucceeds(
+    runTransaction(nominee, async (tx) => {
+      await tx.get(doc(nominee, "theses/a-txn"));
+      await tx.get(doc(nominee, "theses/a-txn/nominations/fac-a"));
+      tx.update(doc(nominee, "theses/a-txn/nominations/fac-a"), {
+        conformeStatus: "accepted", respondedAt: serverTimestamp(),
+        declineReason: null,
+      });
+      tx.update(doc(nominee, "theses/a-txn"), {
+        status: "nominationPendingCoordinator",
+      });
+    })
+  );
+});
+
+// --- IMPORTANT (b): the leader could not read their own thesis ---------
+
+test("(b) allow: a leader MAY run watchThesisForLeader's query on their own thesis", async () => {
+  await seedThesis("b-mine", LEADER, "draft");
+  await assertSucceeds(
+    getDocs(query(collection(leader, "theses"),
+      where("leaderUid", "==", LEADER)))
+  );
+});
+
+test("(b) a leader may NOT list theses that are not theirs", async () => {
+  await seedThesis("b-other", "someone-else", "draft");
+  await assertFails(
+    getDocs(query(collection(leader, "theses"),
+      where("leaderUid", "==", "someone-else")))
+  );
+});
+
+test("(b) a leader may NOT list the whole theses collection unfiltered", async () => {
+  await assertFails(getDocs(collection(leader, "theses")));
+});
+
+// --- IMPORTANT (c), rules side: the faculty inbox's real query ----------
+
+test("(c) allow: the faculty inbox's collection-group query on nomineeUid is permitted", async () => {
+  await seedThesis("c-inbox", LEADER, "nominationPendingConforme");
+  await seedNomination("c-inbox", "fac-a", { nomineeUid: "fac-a" });
+  await assertSucceeds(
+    getDocs(query(collectionGroup(asUser("fac-a", "faca@isufst.edu.ph"),
+      "nominations"), where("nomineeUid", "==", "fac-a")))
+  );
+});
+
+test("(c) the inbox query may NOT be turned into an unfiltered scan of every nomination", async () => {
+  await assertFails(
+    getDocs(collectionGroup(asUser("fac-a", "faca@isufst.edu.ph"), "nominations"))
+  );
+});
+
+test("(c) one faculty member may NOT run the inbox query for another", async () => {
+  await assertFails(
+    getDocs(query(collectionGroup(asUser("fac-b", "facb@isufst.edu.ph"),
+      "nominations"), where("nomineeUid", "==", "fac-a")))
+  );
+});
+
+// --- IMPORTANT (d): unbounded thesis create -----------------------------
+
+const draftThesis = (extra = {}) => ({
+  leaderUid: LEADER, status: "draft", panelistUids: [], adviserUid: null,
+  memberNames: [], workingTitle: "T", college: "CICT", program: "BSIT",
+  semester: "First", academicYear: "2026-2027", ...extra,
+});
+
+test("(d) allow: a leader MAY create the full document createThesis writes", async () => {
+  await assertSucceeds(
+    setDoc(doc(leader, "theses/d-full"), draftThesis({
+      coordinatorRecommendedAt: null, coordinatorRecommendedBy: null,
+      deanApprovedAt: null, deanApprovedBy: null,
+      createdAt: serverTimestamp(),
+    }))
+  );
+});
+
+test("(d) a leader may NOT plant deanApprovedBy at creation", async () => {
+  await assertFails(
+    setDoc(doc(leader, "theses/d-approved"),
+      draftThesis({ deanApprovedBy: "dean-x" }))
+  );
+});
+
+test("(d) a leader may NOT backdate createdAt at creation", async () => {
+  await assertFails(
+    setDoc(doc(leader, "theses/d-backdated"),
+      draftThesis({ createdAt: Timestamp.fromDate(new Date("1999-01-01")) }))
+  );
+});
+
+test("(d) a leader may NOT smuggle an unknown field into a thesis", async () => {
+  await assertFails(
+    setDoc(doc(leader, "theses/d-junk"), draftThesis({ isAwesome: true }))
+  );
+});
+
+// --- IMPORTANT (e): approved theses stayed mutable ----------------------
+
+test("(e) allow: a leader MAY still edit their thesis while it is a draft", async () => {
+  await seedThesis("e-draft", LEADER, "draft");
+  await assertSucceeds(
+    updateDoc(doc(leader, "theses/e-draft"), { workingTitle: "New title" })
+  );
+});
+
+test("(e) a leader may NOT edit an approved thesis", async () => {
+  await seedThesis("e-approved", LEADER, "nominationApproved");
+  await assertFails(
+    updateDoc(doc(leader, "theses/e-approved"), {
+      workingTitle: "Rewritten after approval",
+      memberNames: ["someone new"],
+    })
+  );
+});
+
+test("(e) a leader may NOT edit a thesis that is out for Conforme", async () => {
+  await seedThesis("e-conforme", LEADER, "nominationPendingConforme");
+  await assertFails(
+    updateDoc(doc(leader, "theses/e-conforme"), { workingTitle: "Changed" })
+  );
+});
+
+// --- IMPORTANT (f): timestamps were not pinned --------------------------
+
+const BACKDATED = Timestamp.fromDate(new Date("1999-01-01"));
+
+test("(f) a dean may NOT backdate deanApprovedAt", async () => {
+  await seedUser("dean-f", "dean", "deanf@isufst.edu.ph");
+  await seedThesis("f-dean", LEADER, "nominationPendingDean");
+  await seedNomination("f-dean", "fac-a", {
+    position: "adviser", conformeStatus: "accepted",
+  });
+  await assertFails(
+    updateDoc(doc(asUser("dean-f", "deanf@isufst.edu.ph"), "theses/f-dean"), {
+      status: "nominationApproved", deanApprovedAt: BACKDATED,
+      deanApprovedBy: "dean-f", adviserUid: "fac-a",
+      panelistUids: ["p1", "p2", "p3"],
+    })
+  );
+});
+
+test("(f) a coordinator may NOT backdate coordinatorRecommendedAt", async () => {
+  await seedUser("coord-f", "coordinator", "coordf@isufst.edu.ph");
+  await seedThesis("f-coord", LEADER, "nominationPendingCoordinator");
+  await assertFails(
+    updateDoc(doc(asUser("coord-f", "coordf@isufst.edu.ph"), "theses/f-coord"), {
+      status: "nominationPendingDean", coordinatorRecommendedAt: BACKDATED,
+      coordinatorRecommendedBy: "coord-f",
+    })
+  );
+});
+
+test("(f) allow: a nominee MAY record a response with a server timestamp", async () => {
+  await seedThesis("f-resp-ok", LEADER, "nominationPendingConforme");
+  await seedNomination("f-resp-ok", "fac-a");
+  await assertSucceeds(
+    updateDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"),
+      "theses/f-resp-ok/nominations/fac-a"), {
+      conformeStatus: "accepted", respondedAt: serverTimestamp(),
+    })
+  );
+});
+
+test("(f) a nominee may NOT backdate respondedAt", async () => {
+  await seedThesis("f-resp-bad", LEADER, "nominationPendingConforme");
+  await seedNomination("f-resp-bad", "fac-a");
+  await assertFails(
+    updateDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"),
+      "theses/f-resp-bad/nominations/fac-a"), {
+      conformeStatus: "accepted", respondedAt: BACKDATED,
+    })
+  );
+});
+
+// --- The accepted limitation, partly mitigated: adviserUid --------------
+
+test("adviser: a dean may NOT approve with an adviserUid that never accepted", async () => {
+  await seedUser("dean-adv", "dean", "deanadv@isufst.edu.ph");
+  await seedThesis("adv-never", LEADER, "nominationPendingDean");
+  await seedNomination("adv-never", "fac-a", {
+    position: "adviser", conformeStatus: "pending",
+  });
+  await assertFails(
+    updateDoc(doc(asUser("dean-adv", "deanadv@isufst.edu.ph"), "theses/adv-never"), {
+      status: "nominationApproved", deanApprovedAt: serverTimestamp(),
+      deanApprovedBy: "dean-adv", adviserUid: "fac-a",
+      panelistUids: ["p1", "p2", "p3"],
+    })
+  );
+});
+
+test("adviser: a dean may NOT approve with an adviserUid that was never nominated", async () => {
+  await seedUser("dean-adv2", "dean", "deanadv2@isufst.edu.ph");
+  await seedThesis("adv-ghost", LEADER, "nominationPendingDean");
+  await assertFails(
+    updateDoc(doc(asUser("dean-adv2", "deanadv2@isufst.edu.ph"), "theses/adv-ghost"), {
+      status: "nominationApproved", deanApprovedAt: serverTimestamp(),
+      deanApprovedBy: "dean-adv2", adviserUid: "never-accepted-uid",
+      panelistUids: ["p1", "p2", "p3"],
+    })
+  );
+});
+
+// --- MINOR (g): directory self-declaration ------------------------------
+
+test("(g) allow: a faculty member MAY write their own directory entry with their real role", async () => {
+  await assertSucceeds(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"), {
+      fullName: "Dr. A", role: "faculty", college: "CICT", specialization: "SE",
+    })
+  );
+});
+
+test("(g) attack: a faculty member may NOT self-declare the dean role", async () => {
+  await assertFails(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"), {
+      fullName: "Dr. A", role: "dean", college: "CICT", specialization: "SE",
+    })
+  );
+});
+
+test("(g) a directory entry may NOT carry unknown keys", async () => {
+  await assertFails(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"), {
+      fullName: "Dr. A", role: "faculty", college: "CICT",
+      specialization: "SE", isDean: true,
+    })
+  );
+});
+
+test("(g) a directory entry may NOT be deleted", async () => {
+  await assertFails(
+    deleteDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"))
+  );
+});
+
+// --- MINOR (h): a pending nominee could not read the parent thesis ------
+
+test("(h) allow: a pending nominee MAY read the thesis they were nominated to", async () => {
+  await seedThesis("h-nominee", LEADER, "nominationPendingConforme");
+  await seedNomination("h-nominee", "fac-a");
+  await assertSucceeds(
+    getDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "theses/h-nominee"))
+  );
+});
+
+test("(h) a faculty member with no nomination on the thesis still may NOT read it", async () => {
+  await seedThesis("h-stranger", LEADER, "nominationPendingConforme");
+  await seedNomination("h-stranger", "fac-a");
+  await assertFails(
+    getDoc(doc(asUser("fac-b", "facb@isufst.edu.ph"), "theses/h-stranger"))
   );
 });
 
