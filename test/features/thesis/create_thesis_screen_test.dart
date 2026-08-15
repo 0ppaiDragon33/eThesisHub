@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -22,7 +23,23 @@ Widget wrap(FakeFirebaseFirestore db, {List<Override> extraOverrides = const []}
         )),
         ...extraOverrides,
       ],
-      child: const MaterialApp(home: CreateThesisScreen()),
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/thesis/create',
+          routes: [
+            GoRoute(
+              path: '/thesis/create',
+              builder: (_, _) => const CreateThesisScreen(),
+            ),
+            GoRoute(
+              path: '/thesis',
+              builder: (_, _) => const Scaffold(
+                body: Center(child: Text('status screen', key: Key('landedOnStatus'))),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
 
 /// Rejects every create with permission-denied, as the real security rules
@@ -280,23 +297,9 @@ void main() {
     expect(docs.docs, hasLength(1));
   });
 
-  testWidgets('a successful create shows a confirmation', (tester) async {
-    useTallSurface(tester);
-    final db = FakeFirebaseFirestore();
-    await tester.pumpWidget(wrap(db));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-        find.byKey(const Key('workingTitle')), 'eThesisHub');
-    await tester.tap(find.byKey(const Key('submit')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('successMessage')), findsOneWidget);
-  });
-
   testWidgets(
-      'a further tap after a successful create makes no second thesis',
-      (tester) async {
+      'a successful create navigates to the thesis status screen, not an '
+      'in-place message', (tester) async {
     useTallSurface(tester);
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(wrap(db));
@@ -307,19 +310,10 @@ void main() {
     await tester.tap(find.byKey(const Key('submit')));
     await tester.pumpAndSettle();
 
-    // The button must no longer be live: a second tap must not be able to
-    // reach _submit at all.
-    final submitButton =
-        tester.widget<FilledButton>(find.byKey(const Key('submit')));
-    expect(submitButton.onPressed, isNull,
-        reason: 'the submit button must be disabled once the group has '
-            'already been created, so a second tap cannot create a second '
-            'thesis');
-
-    await tester.tap(find.byKey(const Key('submit')), warnIfMissed: false);
-    await tester.pumpAndSettle();
-
-    final docs = await db.collection('theses').get();
-    expect(docs.docs, hasLength(1));
+    // Falsifiability: if the navigation call were deleted, the create-thesis
+    // form (and its 'submit' key) would still be on screen and this
+    // wouldn't fire.
+    expect(find.byKey(const Key('landedOnStatus')), findsOneWidget);
+    expect(find.byKey(const Key('submit')), findsNothing);
   });
 }

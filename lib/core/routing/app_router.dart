@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
@@ -10,7 +11,13 @@ import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
 import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
 import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
 import 'package:ethesishub/features/dashboard/student_dashboard.dart';
+import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
+import 'package:ethesishub/features/nomination/review_queue_screen.dart';
+import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
+import 'package:ethesishub/features/thesis/nominate_screen.dart';
+import 'package:ethesishub/features/thesis/thesis_status_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Simple ChangeNotifier that allows external code to trigger notifications.
 class _RouterRefreshNotifier extends ChangeNotifier {
@@ -36,6 +43,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
   });
 
   ref.listen(currentUserProvider, (_, _) {
+    refreshNotifier.notify();
+  });
+
+  // Needed so the `/thesis/nominate` bare-visit fallback (below) gets a
+  // second chance to redirect once the leader's thesis has actually loaded
+  // — the first redirect evaluation can land before this stream's first
+  // event arrives, same class of race documented on authStateProvider.
+  ref.listen(myThesisProvider, (_, _) {
     refreshNotifier.notify();
   });
 
@@ -84,6 +99,43 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 return home;
               }
 
+              // M1a screens are role-scoped. A wrong-role user goes to their
+              // own home rather than seeing an empty or forbidden screen.
+              // This is a UX guard only — the real authorization boundary is
+              // firestore.rules, which every screen's writes and reads still
+              // go through regardless of what the client permits.
+              const studentOnly = ['/thesis', '/thesis/create', '/thesis/nominate'];
+              if (studentOnly.any(location.startsWith) &&
+                  profile.role != UserRole.student) {
+                return home;
+              }
+              // Open to faculty, coordinators and deans — a coordinator or
+              // dean nominated as a panel member on someone else's thesis
+              // still needs their own inbox.
+              if (location.startsWith('/nominations') &&
+                  profile.role == UserRole.student) {
+                return home;
+              }
+              if (location.startsWith('/review') &&
+                  profile.role != UserRole.coordinator &&
+                  profile.role != UserRole.dean) {
+                return home;
+              }
+
+              // '/thesis/nominate' reads its thesis id from a required
+              // query parameter. A bare visit (typed directly, or reached
+              // with no thesis context) falls back to the signed-in
+              // leader's own thesis rather than crashing on the route
+              // builder's null-check; a leader with no thesis yet is sent
+              // to create one first.
+              if (location.startsWith('/thesis/nominate') &&
+                  state.uri.queryParameters['id'] == null) {
+                final myThesis = ref.read(myThesisProvider).valueOrNull;
+                return myThesis == null
+                    ? '/thesis/create'
+                    : '/thesis/nominate?id=${myThesis.id}';
+              }
+
               return null;
             },
             loading: () => null, // still loading profile, stay put
@@ -108,6 +160,36 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const CoordinatorDashboard(),
       ),
       GoRoute(path: '/dean', builder: (_, _) => const DeanDashboard()),
+      GoRoute(
+        path: '/thesis/create',
+        builder: (_, _) => const CreateThesisScreen(),
+      ),
+      GoRoute(
+        path: '/thesis',
+        builder: (_, _) => const ThesisStatusScreen(),
+      ),
+      GoRoute(
+        path: '/thesis/nominate',
+        builder: (context, state) =>
+            NominateScreen(thesisId: state.uri.queryParameters['id']!),
+      ),
+      GoRoute(
+        path: '/nominations',
+        builder: (_, _) => const NominationInboxScreen(),
+      ),
+      GoRoute(
+        path: '/review',
+        builder: (context, state) {
+          final profile = ref.read(currentUserProvider).value;
+          final isDean = profile?.role == UserRole.dean;
+          return ReviewQueueScreen(
+            queue: isDean
+                ? ThesisStatus.nominationPendingDean
+                : ThesisStatus.nominationPendingCoordinator,
+            isDean: isDean,
+          );
+        },
+      ),
     ],
   );
 });
