@@ -54,10 +54,18 @@ void main() {
     expect(pending, isEmpty);
   });
 
-  test('watchThesis converts non-null coordinatorRecommendedAt and deanApprovedAt',
-      () async {
+  test(
+      'watchThesis converts non-null coordinatorRecommendedAt, deanApprovedAt '
+      'and nominationsSubmittedAt', () async {
+    // Every nullable timestamp field gets its own distinct value on purpose:
+    // a helper that reads the wrong map key (e.g. `_toThesis` copy-pasting
+    // `coordinatorRecommendedAt`'s line for `nominationsSubmittedAt` without
+    // changing the key) would still pass if two fields shared a value, and
+    // would only be caught with every value different from every other.
+    final createdAt = DateTime.utc(2026, 1, 1);
     final coordinatorAt = DateTime.utc(2026, 3, 1, 9, 0, 0);
     final deanAt = DateTime.utc(2026, 4, 15, 14, 30, 0);
+    final nominationsSubmittedAt = DateTime.utc(2026, 2, 10, 11, 45, 0);
     final doc = db.collection('theses').doc();
     await doc.set({
       'leaderUid': 'leader-1',
@@ -74,13 +82,15 @@ void main() {
       'coordinatorRecommendedBy': 'coordinator-1',
       'deanApprovedAt': Timestamp.fromDate(deanAt),
       'deanApprovedBy': 'dean-1',
-      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 1, 1)),
+      'nominationsSubmittedAt': Timestamp.fromDate(nominationsSubmittedAt),
+      'createdAt': Timestamp.fromDate(createdAt),
     });
 
     final thesis = await repo.watchThesis(doc.id).first;
 
     expect(thesis!.coordinatorRecommendedAt!.toUtc(), coordinatorAt);
     expect(thesis.deanApprovedAt!.toUtc(), deanAt);
+    expect(thesis.nominationsSubmittedAt!.toUtc(), nominationsSubmittedAt);
   });
 
   test('watchNominations converts a non-null respondedAt', () async {

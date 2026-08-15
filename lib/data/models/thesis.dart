@@ -18,6 +18,7 @@ class Thesis {
     this.coordinatorRecommendedBy,
     this.deanApprovedAt,
     this.deanApprovedBy,
+    this.nominationsSubmittedAt,
   });
 
   final String id;
@@ -36,6 +37,7 @@ class Thesis {
   final String? coordinatorRecommendedBy;
   final DateTime? deanApprovedAt;
   final String? deanApprovedBy;
+  final DateTime? nominationsSubmittedAt;
 
   factory Thesis.fromMap(String id, Map<String, dynamic> map) {
     return Thesis(
@@ -55,6 +57,7 @@ class Thesis {
       coordinatorRecommendedBy: map['coordinatorRecommendedBy'] as String?,
       deanApprovedAt: map['deanApprovedAt'] as DateTime?,
       deanApprovedBy: map['deanApprovedBy'] as String?,
+      nominationsSubmittedAt: map['nominationsSubmittedAt'] as DateTime?,
     );
   }
 
@@ -80,5 +83,6 @@ class Thesis {
         'coordinatorRecommendedBy': coordinatorRecommendedBy,
         'deanApprovedAt': deanApprovedAt,
         'deanApprovedBy': deanApprovedBy,
+        'nominationsSubmittedAt': nominationsSubmittedAt,
       };
 }

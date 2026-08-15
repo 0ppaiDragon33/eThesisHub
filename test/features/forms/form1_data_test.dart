@@ -109,6 +109,44 @@ void main() {
     expect(adviserRow.status, isNot('Ex officio member'));
   });
 
+  test('submittedOn is the nomination submission date, not the creation date',
+      () {
+    // Deliberately distinct from createdAt: if the two were equal, a bug
+    // that reads `createdAt` instead of `nominationsSubmittedAt` would still
+    // pass this assertion. That correlated-fixture trap has bitten this
+    // branch before.
+    final withSubmission = Thesis(
+      id: 't3', leaderUid: 'l1', memberNames: const [],
+      workingTitle: 'X', college: 'CICT', program: 'BSIT',
+      semester: 'First', academicYear: '2026-2027',
+      status: ThesisStatus.nominationApproved, panelistUids: const [],
+      createdAt: DateTime.utc(2026, 6, 1),
+      nominationsSubmittedAt: DateTime.utc(2026, 8, 14, 10, 22),
+    );
+    final data = Form1Data.assemble(
+      thesis: withSubmission, nominations: nominations,
+      leaderName: 'Karl', directoryNames: const {},
+    );
+    expect(data.submittedOn, DateTime.utc(2026, 8, 14, 10, 22));
+    expect(data.submittedOn, isNot(withSubmission.createdAt));
+  });
+
+  test('submittedOn falls back to createdAt when nominationsSubmittedAt is '
+      'null (a thesis predating the field)', () {
+    final legacy = Thesis(
+      id: 't4', leaderUid: 'l1', memberNames: const [],
+      workingTitle: 'X', college: 'CICT', program: 'BSIT',
+      semester: 'First', academicYear: '2026-2027',
+      status: ThesisStatus.nominationApproved, panelistUids: const [],
+      createdAt: DateTime.utc(2026, 6, 1),
+    );
+    final data = Form1Data.assemble(
+      thesis: legacy, nominations: nominations,
+      leaderName: 'Karl', directoryNames: const {},
+    );
+    expect(data.submittedOn, DateTime.utc(2026, 6, 1));
+  });
+
   test('ex officio entries come after nominated members in conformeRows order', () {
     final data = Form1Data.assemble(
       thesis: thesis, nominations: nominations,

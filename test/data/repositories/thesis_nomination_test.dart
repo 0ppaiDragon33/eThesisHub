@@ -71,6 +71,17 @@ void main() {
     expect(thesis!.status, ThesisStatus.nominationPendingConforme);
   });
 
+  test('stamps nominationsSubmittedAt in the same write as the status flip',
+      () async {
+    final before = await repo.watchThesis(thesisId).first;
+    expect(before!.nominationsSubmittedAt, isNull);
+
+    await submit();
+
+    final after = await repo.watchThesis(thesisId).first;
+    expect(after!.nominationsSubmittedAt, isNotNull);
+  });
+
   test('rejects fewer than three panel members', () async {
     expect(
       () => repo.submitNominations(

@@ -232,16 +232,26 @@ service cloud.firestore {
       // drift away from what was signed. The thesis is now frozen to the
       // leader the moment it leaves `draft`; the only write left to them is
       // the single submit step below.
+      // `nominationsSubmittedAt` is the letter date Form 1 prints and is set
+      // by the same write that flips status to 'nominationPendingConforme'
+      // (`ThesisRepository.submitNominations`'s batch). It is optional here
+      // (`.get(..., request.time)` defaults to a trivially-true comparison
+      // when the key is absent, which covers the plain in-place edits this
+      // branch also serves) but when supplied it is pinned to `request.time`
+      // exactly like the coordinator/dean timestamps below, so a leader can
+      // never backdate the letter their own submission produces.
       allow update: if isThesisLeader(thesisId)
                     && resource.data.status == 'draft'
                     && onlyChanged(['memberNames', 'workingTitle', 'college',
                                     'program', 'semester', 'academicYear',
-                                    'status'])
+                                    'status', 'nominationsSubmittedAt'])
                     && (
                       request.resource.data.status == 'draft'
                       || request.resource.data.status ==
                          'nominationPendingConforme'
-                    );
+                    )
+                    && request.resource.data.get('nominationsSubmittedAt',
+                         request.time) == request.time;
 
       // A nominee's acceptance advances the status — but ONLY the caller's
       // own nomination on THIS thesis, and only forward from the exact

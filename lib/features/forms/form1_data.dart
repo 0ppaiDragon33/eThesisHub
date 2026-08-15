@@ -126,7 +126,12 @@ class Form1Data {
           thesis.coordinatorRecommendedBy, directoryNames, exOfficio),
       deanName:
           _nameFor(thesis.deanApprovedBy, directoryNames, exOfficio),
-      submittedOn: thesis.createdAt,
+      // The letter date is when the nomination was submitted, not when the
+      // group record was created — those can be weeks apart. Older theses
+      // predate this field and have no recorded submission moment; rather
+      // than print a blank or misleading date, fall back to `createdAt` so
+      // the form always carries a real date.
+      submittedOn: thesis.nominationsSubmittedAt ?? thesis.createdAt,
     );
   }
 

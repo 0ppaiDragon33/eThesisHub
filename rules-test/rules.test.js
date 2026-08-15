@@ -713,6 +713,32 @@ test("a leader MAY move their own thesis from draft to nominationPendingConforme
   );
 });
 
+// --- Fix wave: nominationsSubmittedAt, the letter date Form 1 prints,
+// stamped by the same write that flips status to nominationPendingConforme
+// (ThesisRepository.submitNominations' batch). Same request.time pin as the
+// coordinator/dean timestamps above — a leader must not be able to backdate
+// the date on their own submission letter.
+
+test("a leader MAY submit nominations with a server-timestamped nominationsSubmittedAt", async () => {
+  await seedThesis("t-submit-stamp-ok", "student-uid", "draft");
+  await assertSucceeds(
+    updateDoc(doc(student, "theses/t-submit-stamp-ok"), {
+      status: "nominationPendingConforme",
+      nominationsSubmittedAt: serverTimestamp(),
+    })
+  );
+});
+
+test("a leader may NOT backdate nominationsSubmittedAt when submitting nominations", async () => {
+  await seedThesis("t-submit-stamp-bad", "student-uid", "draft");
+  await assertFails(
+    updateDoc(doc(student, "theses/t-submit-stamp-bad"), {
+      status: "nominationPendingConforme",
+      nominationsSubmittedAt: Timestamp.fromDate(new Date("1999-01-01")),
+    })
+  );
+});
+
 test("a leader may NOT revert their own already-approved thesis back to draft", async () => {
   await seedThesis("t-leader-revert", "student-uid", "nominationApproved");
   await assertFails(

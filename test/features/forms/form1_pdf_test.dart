@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -32,6 +33,8 @@ void main() {
     String? coordinatorRecommendedBy,
     String? deanApprovedBy,
     List<String> memberNames = const ['Bagsain, Karlo June'],
+    DateTime? createdAt,
+    DateTime? nominationsSubmittedAt,
   }) =>
       Thesis(
         id: 't1', leaderUid: 'l1', memberNames: memberNames,
@@ -39,9 +42,10 @@ void main() {
         semester: 'First', academicYear: '2026-2027',
         status: ThesisStatus.nominationApproved,
         panelistUids: const ['p1', 'p2', 'p3'],
-        createdAt: DateTime.utc(2026, 8, 14), adviserUid: 'a1',
+        createdAt: createdAt ?? DateTime.utc(2026, 8, 14), adviserUid: 'a1',
         coordinatorRecommendedBy: coordinatorRecommendedBy,
         deanApprovedBy: deanApprovedBy,
+        nominationsSubmittedAt: nominationsSubmittedAt,
       );
 
   final acceptedNominations = [
@@ -116,6 +120,30 @@ void main() {
     expect(exOfficioIndex, greaterThan(adviserIndex));
   });
 
+  test(
+      'the printed date is the nomination submission date, not the group '
+      'creation date', () async {
+    // createdAt and nominationsSubmittedAt are deliberately different
+    // months, so a bug that prints `createdAt` (Finding 2's actual bug)
+    // shows up as the wrong month in the extracted text, not merely a wrong
+    // day on an otherwise-matching fixture.
+    final data = Form1Data.assemble(
+      thesis: buildThesis(
+        createdAt: DateTime.utc(2026, 6, 1),
+        nominationsSubmittedAt: DateTime.utc(2026, 8, 14),
+      ),
+      nominations: acceptedNominations,
+      leaderName: 'Karl Joshua P. Vargas',
+      directoryNames: const {},
+    );
+
+    final bytes = await buildForm1Pdf(data);
+    final text = _extractText(bytes);
+
+    expect(text, contains('14 August 2026'));
+    expect(text, isNot(contains('1 June 2026')));
+  });
+
   test('a solo thesis reads in the singular, not the plural', () async {
     final soloThesis = buildThesis(memberNames: const []);
     final data = Form1Data.assemble(
@@ -136,5 +164,63 @@ void main() {
 
     expect(text, contains('I have the honor'));
     expect(text, isNot(contains('We have the honor')));
+  });
+
+  // --- §7.3: "nominated names in bold" -------------------------------
+  //
+  // `_extractText` pulls literal strings out of `Tj`/`TJ` operators, but the
+  // font-weight distinction between a Helvetica and a Helvetica-Bold glyph
+  // run lives in the graphics-state operators around the text-showing ops,
+  // not in the parenthesized string literals themselves — the extractor
+  // cannot see it. `buildAdviserParagraphSpan` and `buildPanelParagraphSpan`
+  // are exposed as standalone, non-rendering functions specifically so the
+  // span tree can be asserted on directly instead: this inspects the actual
+  // `pw.TextStyle` the widget tree carries, which is what `pdf` consults to
+  // choose the font when the page is rendered.
+  test('the adviser name in the body paragraph is bold; the rest is not',
+      () {
+    final data = Form1Data.assemble(
+      thesis: buildThesis(),
+      nominations: acceptedNominations,
+      leaderName: 'Karl Joshua P. Vargas',
+      directoryNames: const {},
+    );
+
+    final span = buildAdviserParagraphSpan(data);
+    final children = span.children!.cast<pw.TextSpan>();
+
+    final nameSpan =
+        children.firstWhere((s) => s.text == data.adviserName.toUpperCase());
+    expect(nameSpan.style?.fontWeight, pw.FontWeight.bold);
+
+    final proseSpans = children.where((s) => s != nameSpan);
+    expect(proseSpans, isNotEmpty);
+    for (final s in proseSpans) {
+      expect(s.style?.fontWeight, isNot(pw.FontWeight.bold));
+    }
+  });
+
+  test('the panel names in the body paragraph are bold; the rest is not',
+      () {
+    final data = Form1Data.assemble(
+      thesis: buildThesis(),
+      nominations: acceptedNominations,
+      leaderName: 'Karl Joshua P. Vargas',
+      directoryNames: const {},
+    );
+
+    final span = buildPanelParagraphSpan(data);
+    final children = span.children!.cast<pw.TextSpan>();
+
+    final expectedPanelText = panelSentence(data.panelNames).toUpperCase();
+    final nameSpan =
+        children.firstWhere((s) => s.text == expectedPanelText);
+    expect(nameSpan.style?.fontWeight, pw.FontWeight.bold);
+
+    final proseSpans = children.where((s) => s != nameSpan);
+    expect(proseSpans, isNotEmpty);
+    for (final s in proseSpans) {
+      expect(s.style?.fontWeight, isNot(pw.FontWeight.bold));
+    }
   });
 }

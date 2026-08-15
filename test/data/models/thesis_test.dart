@@ -38,4 +38,24 @@ void main() {
     expect(restored.academicYear, '2026-2027');
     expect(restored.memberNames, contains('Solinap, Jepte'));
   });
+
+  test('nominationsSubmittedAt defaults to null when absent', () {
+    final t = Thesis.fromMap('t4', base());
+    expect(t.nominationsSubmittedAt, isNull);
+  });
+
+  test('parses a non-null nominationsSubmittedAt', () {
+    final submittedAt = DateTime.utc(2026, 8, 15, 9, 30);
+    final t = Thesis.fromMap(
+        't5', {...base(), 'nominationsSubmittedAt': submittedAt});
+    expect(t.nominationsSubmittedAt, submittedAt);
+  });
+
+  test('toMap round-trips nominationsSubmittedAt', () {
+    final submittedAt = DateTime.utc(2026, 8, 15, 9, 30);
+    final original =
+        Thesis.fromMap('t6', {...base(), 'nominationsSubmittedAt': submittedAt});
+    final restored = Thesis.fromMap('t6', original.toMap());
+    expect(restored.nominationsSubmittedAt, submittedAt);
+  });
 }

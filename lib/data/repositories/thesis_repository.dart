@@ -24,6 +24,7 @@ class ThesisRepository {
     raw['createdAt'] = _date(raw['createdAt']) ?? DateTime.now().toUtc();
     raw['coordinatorRecommendedAt'] = _date(raw['coordinatorRecommendedAt']);
     raw['deanApprovedAt'] = _date(raw['deanApprovedAt']);
+    raw['nominationsSubmittedAt'] = _date(raw['nominationsSubmittedAt']);
     return Thesis.fromMap(id, raw);
   }
 
@@ -181,6 +182,7 @@ class ThesisRepository {
 
     batch.update(_theses.doc(thesisId), {
       'status': ThesisStatus.nominationPendingConforme.value,
+      'nominationsSubmittedAt': FieldValue.serverTimestamp(),
     });
 
     await batch.commit();
