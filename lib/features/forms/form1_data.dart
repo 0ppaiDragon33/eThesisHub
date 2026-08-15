@@ -94,7 +94,10 @@ class Form1Data {
           name: n.nomineeName,
           role: roleLabel(n),
           status: n.conformeStatus == ConformeStatus.accepted
-              ? 'Accepted · ${_stamp(n.respondedAt)} — via eThesisHub'
+              // A hyphen, not an em dash: the `pdf` package's built-in
+              // Helvetica has no glyph for U+2014 in this render path and
+              // silently drops it, which is worse than a plainer dash.
+              ? 'Accepted · ${_stamp(n.respondedAt)} - via eThesisHub'
               : n.conformeStatus.value,
         ),
       for (final n in exOfficio)
