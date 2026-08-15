@@ -101,6 +101,7 @@ class _NominationInboxScreenState
     final pending = ref.watch(myPendingNominationsProvider);
 
     return Scaffold(
+      key: const Key('nominationInboxScreen'),
       appBar: AppBar(title: const Text('Nomination inbox')),
       body: pending.when(
         loading: () => const Center(child: CircularProgressIndicator()),

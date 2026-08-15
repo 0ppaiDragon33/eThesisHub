@@ -124,6 +124,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     final label = widget.isDean ? 'Approve' : 'Recommend';
 
     return Scaffold(
+      key: const Key('reviewQueueScreen'),
       appBar: AppBar(
         title: Text(widget.isDean
             ? 'Nomination approvals'

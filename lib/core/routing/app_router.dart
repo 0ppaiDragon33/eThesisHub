@@ -130,10 +130,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // to create one first.
               if (location.startsWith('/thesis/nominate') &&
                   state.uri.queryParameters['id'] == null) {
-                final myThesis = ref.read(myThesisProvider).valueOrNull;
-                return myThesis == null
-                    ? '/thesis/create'
-                    : '/thesis/nominate?id=${myThesis.id}';
+                // Distinguish "still loading" from "has no thesis" — reading
+                // `.valueOrNull` here would treat an unsettled stream the
+                // same as a settled `null`, misrouting a leader who genuinely
+                // has a thesis to /thesis/create on first load (this bites
+                // on Web, where a page reload re-runs this redirect before
+                // myThesisProvider's first snapshot has arrived; in-app
+                // navigation never sees it because the provider is already
+                // warm by then). While loading, hold here (no redirect) —
+                // the route builder below renders a brief loading state for
+                // the bare-visit case, and the `ref.listen(myThesisProvider)`
+                // above re-triggers this same redirect, at this same
+                // location, once the stream settles.
+                final myThesisAsync = ref.read(myThesisProvider);
+                return myThesisAsync.when(
+                  data: (myThesis) => myThesis == null
+                      ? '/thesis/create'
+                      : '/thesis/nominate?id=${myThesis.id}',
+                  loading: () => null,
+                  error: (_, _) => '/thesis/create',
+                );
               }
 
               return null;
@@ -170,8 +186,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/thesis/nominate',
-        builder: (context, state) =>
-            NominateScreen(thesisId: state.uri.queryParameters['id']!),
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          if (id == null) {
+            // Bare visit while the redirect above is still waiting on
+            // myThesisProvider's first snapshot (see the redirect callback
+            // for why it does not commit to a destination yet). Brief and
+            // self-resolving: the moment that provider settles, the
+            // refreshListenable fires and the redirect sends us to
+            // /thesis/create or /thesis/nominate?id=... as appropriate.
+            return const Scaffold(
+              key: Key('nominateBareVisitLoading'),
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return NominateScreen(thesisId: id);
+        },
       ),
       GoRoute(
         path: '/nominations',

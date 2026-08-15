@@ -68,6 +68,7 @@ class ThesisStatusScreen extends ConsumerWidget {
     final thesisAsync = ref.watch(myThesisProvider);
 
     return Scaffold(
+      key: const Key('thesisStatusScreen'),
       appBar: AppBar(title: const Text('My thesis')),
       body: thesisAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
