@@ -35,6 +35,13 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
 
   String? _error;
   bool _busy = false;
+  // Set once a create succeeds. There is no navigation yet — Task 15 owns
+  // routing and will replace this in-place confirmation with navigation to
+  // the thesis status screen. Until then this also doubles as the guard
+  // that stops a second tap from creating a second thesis: nothing in the
+  // security rules stops one leader owning several theses, so the screen
+  // must refuse to submit again once it has already succeeded once.
+  bool _created = false;
 
   @override
   void dispose() {
@@ -78,6 +85,7 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
             semester: _semester,
             academicYear: _academicYear,
           );
+      if (mounted) setState(() => _created = true);
     } on FirebaseException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -169,17 +177,29 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
                 _dropdown('academicYear', 'Academic year', _academicYear,
                     kAcademicYears, (v) => setState(() => _academicYear = v)),
                 const SizedBox(height: 20),
+                if (_created)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Thesis group created.',
+                      key: Key('successMessage'),
+                    ),
+                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(_error!,
+                        key: const Key('error'),
                         style: TextStyle(
                             color: Theme.of(context).colorScheme.error)),
                   ),
                 FilledButton(
                   key: const Key('submit'),
-                  onPressed: (_busy || !signedIn) ? null : _submit,
-                  child: Text(_busy ? 'Creating…' : 'Create group'),
+                  onPressed:
+                      (_busy || !signedIn || _created) ? null : _submit,
+                  child: Text(_busy
+                      ? 'Creating…'
+                      : (_created ? 'Created' : 'Create group')),
                 ),
               ],
             ),

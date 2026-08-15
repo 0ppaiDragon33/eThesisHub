@@ -127,7 +127,14 @@ void main() {
     await tester.tap(find.byKey(const Key('submit')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Working title'), findsWidgets);
+    // Assert on the error Text's own Key, not on text content: the label
+    // 'Working title' sits on screen at all times (it's the TextField's
+    // labelText), so matching on it would pass even if validation never
+    // ran. The distinct error message, found by its Key, can only appear
+    // if the empty-title branch in _submit actually fired.
+    expect(find.byKey(const Key('error')), findsOneWidget);
+    final errorText = tester.widget<Text>(find.byKey(const Key('error')));
+    expect(errorText.data, contains('is required'));
   });
 
   testWidgets('creates a draft thesis owned by the signed-in leader',
@@ -269,6 +276,49 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
     expect(repo.callCount, 1);
+    final docs = await db.collection('theses').get();
+    expect(docs.docs, hasLength(1));
+  });
+
+  testWidgets('a successful create shows a confirmation', (tester) async {
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('workingTitle')), 'eThesisHub');
+    await tester.tap(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('successMessage')), findsOneWidget);
+  });
+
+  testWidgets(
+      'a further tap after a successful create makes no second thesis',
+      (tester) async {
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('workingTitle')), 'eThesisHub');
+    await tester.tap(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
+
+    // The button must no longer be live: a second tap must not be able to
+    // reach _submit at all.
+    final submitButton =
+        tester.widget<FilledButton>(find.byKey(const Key('submit')));
+    expect(submitButton.onPressed, isNull,
+        reason: 'the submit button must be disabled once the group has '
+            'already been created, so a second tap cannot create a second '
+            'thesis');
+
+    await tester.tap(find.byKey(const Key('submit')), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
     final docs = await db.collection('theses').get();
     expect(docs.docs, hasLength(1));
   });
