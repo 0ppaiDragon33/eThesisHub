@@ -54,4 +54,21 @@ class FacultyDirectoryRepository {
         .map((d) => FacultyDirectoryEntry.fromMap(d.id, d.data()))
         .toList();
   }
+
+  /// Every directory entry regardless of role: faculty, coordinators and the
+  /// dean alike. The project owner ruled that coordinators and the dean can
+  /// still be nominated by name as an ordinary adviser or panelist "for the
+  /// sake of records," even though they also sit on every panel ex officio
+  /// (via [fetchExOfficio]) without being asked to accept — so the picker
+  /// that offers ordinary nominees needs the whole directory, not just
+  /// [watchSelectableFaculty]'s faculty-only slice.
+  Stream<List<FacultyDirectoryEntry>> watchAllDirectory() {
+    return _col.snapshots().map((s) {
+      final list = s.docs
+          .map((d) => FacultyDirectoryEntry.fromMap(d.id, d.data()))
+          .toList();
+      list.sort((a, b) => a.fullName.compareTo(b.fullName));
+      return list;
+    });
+  }
 }

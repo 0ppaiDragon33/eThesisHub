@@ -19,6 +19,14 @@ final selectableFacultyProvider =
   return ref.watch(facultyDirectoryRepositoryProvider).watchSelectableFaculty();
 });
 
+/// Every nominable directory entry — faculty, coordinators and the dean
+/// alike. Backs the nomination pickers, which offer coordinators and the
+/// dean as ordinary nominees "for the sake of records" even though they also
+/// get an automatic ex-officio seat that nobody picks and nobody accepts.
+final allDirectoryProvider = StreamProvider<List<FacultyDirectoryEntry>>((ref) {
+  return ref.watch(facultyDirectoryRepositoryProvider).watchAllDirectory();
+});
+
 final thesisRepositoryProvider = Provider<ThesisRepository>(
   (ref) => ThesisRepository(ref.watch(firestoreProvider)),
 );
