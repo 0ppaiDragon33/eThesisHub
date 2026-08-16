@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/app_user.dart';
+import 'package:ethesishub/data/models/faculty_invite.dart';
 import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/data/services/auth_service.dart';
 
@@ -22,6 +23,14 @@ final userRepositoryProvider = Provider<UserRepository>(
 
 final authStateProvider = StreamProvider<User?>(
   (ref) => ref.watch(authServiceProvider).authStateChanges(),
+);
+
+/// Every faculty invite, open and consumed. Only coordinators may read this —
+/// the security rules deny `list` to everyone else — so the stream surfaces
+/// an error rather than an empty list for any other role, and the screen says
+/// so instead of implying there are none.
+final facultyInvitesProvider = StreamProvider<List<FacultyInvite>>(
+  (ref) => ref.watch(userRepositoryProvider).watchInvites(),
 );
 
 /// The signed-in user's profile, or null when signed out.

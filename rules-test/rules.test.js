@@ -493,6 +493,197 @@ test("a coordinator MAY create a valid invite for someone else", async () => {
   );
 });
 
+// --- invite create is now key-whitelisted and value-pinned ----------------
+// The invite document is read during promotion, so anything plantable here
+// reaches a privilege decision. Each test below has its allow-control in
+// "a coordinator MAY create a valid invite for someone else" above.
+
+async function asCoordinator(uid, email) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}`), {
+      ...studentProfile(email),
+      role: "coordinator",
+    });
+  });
+  return env
+    .authenticatedContext(uid, { email, email_verified: true })
+    .firestore();
+}
+
+test("an invite MAY carry college and specialization", async () => {
+  const coordinator = await asCoordinator("coord-inv1", "coordinv1@isufst.edu.ph");
+  await assertSucceeds(
+    setDoc(doc(coordinator, "facultyInvites/withcollege@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "coord-inv1",
+      createdAt: serverTimestamp(),
+      consumedAt: null,
+      college: "CICT",
+      specialization: "Software Engineering",
+    })
+  );
+});
+
+test("an invite may NOT carry unknown keys", async () => {
+  const coordinator = await asCoordinator("coord-inv2", "coordinv2@isufst.edu.ph");
+  await assertFails(
+    setDoc(doc(coordinator, "facultyInvites/junk@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "coord-inv2",
+      consumedAt: null,
+      isDean: true,
+    })
+  );
+});
+
+test("an invite may NOT arrive already consumed", async () => {
+  // Pre-consuming would be inert today, but `consumedAt` is what makes an
+  // invite single-use — it must only ever be set by the invitee applying it.
+  const coordinator = await asCoordinator("coord-inv3", "coordinv3@isufst.edu.ph");
+  await assertFails(
+    setDoc(doc(coordinator, "facultyInvites/preconsumed@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "coord-inv3",
+      consumedAt: Timestamp.fromDate(new Date("2026-01-01")),
+    })
+  );
+});
+
+test("a coordinator may NOT forge invitedBy as someone else", async () => {
+  // invitedBy is the only attribution the invite carries; a coordinator who
+  // could name another coordinator as the issuer could hand off the paper
+  // trail for an elevation they made.
+  const coordinator = await asCoordinator("coord-inv4", "coordinv4@isufst.edu.ph");
+  await assertFails(
+    setDoc(doc(coordinator, "facultyInvites/forged@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "some-other-coordinator",
+      consumedAt: null,
+    })
+  );
+});
+
+test("a coordinator may NOT backdate an invite", async () => {
+  const coordinator = await asCoordinator("coord-inv5", "coordinv5@isufst.edu.ph");
+  await assertFails(
+    setDoc(doc(coordinator, "facultyInvites/backdated@isufst.edu.ph"), {
+      role: "faculty",
+      invitedBy: "coord-inv5",
+      createdAt: Timestamp.fromDate(new Date("1999-01-01")),
+      consumedAt: null,
+    })
+  );
+});
+
+test("a coordinator may NOT un-consume an invite to replay a promotion", async () => {
+  // Without the consumedAt pin a coordinator could reopen a spent invite,
+  // letting the same promotion be applied a second time.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyInvites/spent@isufst.edu.ph"), {
+      role: "dean",
+      invitedBy: "seed",
+      consumedAt: Timestamp.fromDate(new Date("2026-02-02")),
+    });
+  });
+  const coordinator = await asCoordinator("coord-inv6", "coordinv6@isufst.edu.ph");
+  await assertFails(
+    updateDoc(doc(coordinator, "facultyInvites/spent@isufst.edu.ph"), {
+      consumedAt: null,
+    })
+  );
+});
+
+test("END TO END: a coordinator invites, the invitee claims the role AND the profile fields", async () => {
+  // promoteFromInvite issues THREE separate writes because the rules police
+  // them under three different branches: the role (invite branch,
+  // onlyChanged(['role'])), the profile fields (account-owner branch,
+  // onlyChanged(['fullName','college','program','specialization'])), and the
+  // consume. A single update touching role AND college satisfies neither
+  // branch's onlyChanged and would be denied in production while passing
+  // every fake_cloud_firestore test. This replays the real sequence.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/e2e-invitee"), {
+      ...studentProfile("e2einvitee@isufst.edu.ph"),
+    });
+  });
+
+  const coordinator = await asCoordinator("coord-e2e", "coorde2e@isufst.edu.ph");
+  await assertSucceeds(
+    setDoc(doc(coordinator, "facultyInvites/e2einvitee@isufst.edu.ph"), {
+      role: "coordinator",
+      invitedBy: "coord-e2e",
+      createdAt: serverTimestamp(),
+      consumedAt: null,
+      college: "CICT",
+      specialization: "Data Science",
+    })
+  );
+
+  const invitee = env
+    .authenticatedContext("e2e-invitee", {
+      email: "e2einvitee@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  // 1. the role
+  await assertSucceeds(
+    updateDoc(doc(invitee, "users/e2e-invitee"), { role: "coordinator" })
+  );
+  // 2. the profile fields the invite carried
+  await assertSucceeds(
+    updateDoc(doc(invitee, "users/e2e-invitee"), {
+      college: "CICT",
+      specialization: "Data Science",
+    })
+  );
+  // 3. consume the invite
+  await assertSucceeds(
+    updateDoc(doc(invitee, "facultyInvites/e2einvitee@isufst.edu.ph"), {
+      consumedAt: serverTimestamp(),
+    })
+  );
+
+  // ...and the directory write that the next sign-in performs.
+  await assertSucceeds(
+    setDoc(
+      doc(invitee, "facultyDirectory/e2e-invitee"),
+      { fullName: "Dr. E2E", role: "coordinator" },
+      { merge: true }
+    )
+  );
+
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const u = await getDoc(doc(ctx.firestore(), "users/e2e-invitee"));
+    assert.equal(u.data().role, "coordinator");
+    assert.equal(u.data().college, "CICT");
+    assert.equal(u.data().specialization, "Data Science");
+  });
+});
+
+test("the promotion may NOT bundle role and college into one write", async () => {
+  // The reason promoteFromInvite splits its writes. Bundled, this satisfies
+  // neither onlyChanged branch.
+  const invitee = asUser("bundle-uid", "bundle@isufst.edu.ph");
+
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "users/bundle-uid"), {
+      ...studentProfile("bundle@isufst.edu.ph"),
+    });
+    await setDoc(doc(db, "facultyInvites/bundle@isufst.edu.ph"), {
+      role: "faculty", invitedBy: "seed", consumedAt: null, college: "CICT",
+    });
+  });
+
+  await assertFails(
+    updateDoc(doc(invitee, "users/bundle-uid"), {
+      role: "faculty",
+      college: "CICT",
+    })
+  );
+});
+
 test("promotion succeeds against an invite with no consumedAt field at all", async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();

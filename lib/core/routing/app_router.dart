@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
@@ -219,6 +220,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             isDean: isDean,
           );
         },
+      ),
+      // Coordinator-only in practice, but the guard here is UX, not
+      // security: the rules deny `list` on facultyInvites and refuse the
+      // write to anyone who is not a coordinator, so a student who typed
+      // this path would reach a screen that can load nothing and save
+      // nothing.
+      GoRoute(
+        path: '/faculty',
+        builder: (_, _) => const FacultyInvitesScreen(),
       ),
     ],
   );

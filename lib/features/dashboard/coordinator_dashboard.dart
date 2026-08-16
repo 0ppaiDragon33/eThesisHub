@@ -12,7 +12,13 @@ class CoordinatorDashboard extends ConsumerWidget {
     return ResponsiveScaffold(
       title: 'eThesisHub',
       selectedIndex: 0,
-      onDestinationSelected: _noop,
+      // 'Faculty' now leads somewhere. 'Defenses' is still inert — that
+      // module is not built — and a tab that silently does nothing reads as
+      // a broken app rather than an unbuilt one, so it should either lead
+      // somewhere or be removed before the defence.
+      onDestinationSelected: (i) {
+        if (i == 1) context.go('/faculty');
+      },
       destinations: const [
         NavDestination(label: 'Theses', icon: Icons.folder),
         NavDestination(label: 'Faculty', icon: Icons.badge),
@@ -30,6 +36,12 @@ class CoordinatorDashboard extends ConsumerWidget {
               onPressed: () => context.go('/review'),
               child: const Text('Nomination recommendations'),
             ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              key: const Key('goToFaculty'),
+              onPressed: () => context.go('/faculty'),
+              child: const Text('Invite faculty'),
+            ),
           ],
         ),
       ),
@@ -37,4 +49,3 @@ class CoordinatorDashboard extends ConsumerWidget {
   }
 }
 
-void _noop(int _) {}

@@ -107,10 +107,35 @@ service cloud.firestore {
 
       // Coordinators issue invites, but never to themselves, and only for a
       // real role — this is what closes off the self-invite escalation path.
+      //
+      // `college` and `specialization` ride along on the invite and are
+      // applied to the account at promotion, because nothing else in the app
+      // fills them. They are optional: an invite may omit either.
+      //
+      // The key whitelist is what stops a coordinator planting anything else
+      // here. Without it this create was unbounded, the same gap the thesis
+      // create rule had — and an invite document is read during promotion,
+      // so junk planted here reaches a privilege decision.
       allow create, update: if isCoordinator()
                             && email != myEmail()
+                            && request.resource.data.keys().hasOnly(
+                                 ['role', 'invitedBy', 'createdAt',
+                                  'consumedAt', 'college', 'specialization'])
                             && request.resource.data.role in
-                               ['faculty', 'coordinator', 'dean'];
+                               ['faculty', 'coordinator', 'dean']
+                            && request.resource.data.invitedBy ==
+                               request.auth.uid
+                            // `.get(key, default)` so a caller that omits an
+                            // optional field is accepted while one that
+                            // supplies it is held to the pinned value —
+                            // absence and the correct value are equivalent,
+                            // a wrong value is not. A backdated `createdAt`
+                            // or an invite that arrives pre-consumed are both
+                            // refused.
+                            && request.resource.data.get('createdAt',
+                                 request.time) == request.time
+                            && request.resource.data.get('consumedAt', null)
+                               == null;
 
       // The invitee marks their own invite consumed; they may never delete
       // it, so a completed promotion always leaves a record.
