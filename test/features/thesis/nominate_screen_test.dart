@@ -3,6 +3,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -49,7 +50,29 @@ Widget wrap(FakeFirebaseFirestore db) => ProviderScope(
               isEmailVerified: true),
         )),
       ],
-      child: const MaterialApp(home: NominateScreen(thesisId: 't1')),
+      // A router rather than a bare home, because a successful submission
+      // navigates to the thesis status screen. Staying put used to leave the
+      // leader looking at "Nominations can only be submitted while this
+      // thesis is still a draft" — a refusal message, immediately after the
+      // submission succeeded.
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/thesis/nominate',
+          routes: [
+            GoRoute(
+              path: '/thesis/nominate',
+              builder: (_, _) => const NominateScreen(thesisId: 't1'),
+            ),
+            GoRoute(
+              path: '/thesis',
+              builder: (_, _) => const Scaffold(
+                body: Center(
+                    child: Text('status', key: Key('landedOnStatus'))),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
 
 /// The nomination form has more fields than fit in the default 800x600 test
@@ -397,13 +420,16 @@ void main() {
 
     expect(find.byKey(const Key('error')), findsNothing);
 
-    // The submission moves the thesis out of `draft`, so the screen's own
-    // status stream immediately swaps the form for its "no longer draft"
-    // state — the success message and the submit button go with it. That is
-    // the correct behaviour (the leader continues on the status screen), so
-    // the proof that this selection was ACCEPTED is the roster it committed,
-    // not a message that is gone by the time we can look for it.
+    // A successful submission navigates to the thesis status screen, where
+    // the leader watches each Conforme arrive. Before this, the screen
+    // stayed put and its own status stream replaced the form with
+    // "Nominations can only be submitted while this thesis is still a
+    // draft" — a refusal message shown immediately after success.
+    expect(find.byKey(const Key('landedOnStatus')), findsOneWidget);
     expect(find.byKey(const Key('submitNomination')), findsNothing);
+    expect(find.byKey(const Key('notDraft')), findsNothing,
+        reason: 'the leader must never be shown the draft-only refusal as '
+            'the outcome of a successful submission');
 
     // 1 adviser + 3 panelists + 2 ex-officio seats. This is the assertion
     // that distinguishes acceptance from the deny case above, where the

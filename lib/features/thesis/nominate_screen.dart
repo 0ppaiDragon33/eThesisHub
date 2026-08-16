@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -51,7 +52,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
 
   String? _error;
   bool _busy = false;
-  bool _submitted = false;
+
   List<FacultyDirectoryEntry> _exOfficio = const [];
 
   @override
@@ -89,7 +90,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   }
 
   Future<void> _submit(List<FacultyDirectoryEntry> faculty) async {
-    if (_busy || _submitted) return;
+    if (_busy) return;
 
     final chosenUids = _panelUids.whereType<String>().toSet();
 
@@ -182,7 +183,16 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
             panelists: panelists,
             exOfficio: _exOfficio,
           );
-      if (mounted) setState(() => _submitted = true);
+      // Straight to the status screen, which is where the leader watches
+      // each nominee's Conforme arrive.
+      //
+      // Staying put was actively misleading: submitting moves the thesis out
+      // of `draft`, this screen watches that status, and so the form was
+      // replaced by "Nominations can only be submitted while this thesis is
+      // still a draft" — which reads as a refusal of the thing that had just
+      // succeeded. Navigating also makes a second submission unreachable,
+      // which no flag on this screen can do as reliably.
+      if (mounted) context.go('/thesis');
     } on FirebaseException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -427,14 +437,6 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    if (_submitted)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          'Nomination submitted.',
-                          key: Key('successMessage'),
-                        ),
-                      ),
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
@@ -445,14 +447,9 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                       ),
                     FilledButton(
                       key: const Key('submitNomination'),
-                      onPressed: (_busy || _submitted)
-                          ? null
-                          : () => _submit(faculty),
-                      child: Text(_busy
-                          ? 'Submitting…'
-                          : (_submitted
-                              ? 'Submitted'
-                              : 'Submit nomination')),
+                      onPressed: _busy ? null : () => _submit(faculty),
+                      child: Text(
+                          _busy ? 'Submitting…' : 'Submit nomination'),
                     ),
                   ],
                 ),
