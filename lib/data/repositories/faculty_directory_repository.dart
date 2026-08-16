@@ -19,14 +19,42 @@ class FacultyDirectoryRepository {
 
   /// Written by the subject's own client — there are no Cloud Functions on
   /// Spark, so the directory is maintained client-side at sign-in.
+  ///
+  /// Ownership is split, and deliberately so.
+  ///
+  /// `fullName` and `role` are owned by the app: registration collects the
+  /// name and [UserRepository.promoteFromInvite] sets the role, so both are
+  /// always authoritative here and are always written.
+  ///
+  /// `college` and `specialization` are not. Registration never collects a
+  /// college (only a program), `createStudentProfile` hardcodes
+  /// `specialization: null`, and `promoteFromInvite` touches only `role` — so
+  /// no code path ever fills either one, and for a real faculty account both
+  /// arrive here null. They are therefore written **only when the profile
+  /// actually has a value**, and a plain `set` has become a merge.
+  ///
+  /// Without that, this method overwrote both with null on every single
+  /// sign-in. An administrator filling them in through the Firebase Console —
+  /// the only way they can currently be set at all — would watch the values
+  /// disappear the next time that person signed in, with no error anywhere.
+  /// They feed [FacultyDirectoryEntry.subtitle], the "— CICT" that
+  /// disambiguates two faculty who share a surname in the nomination picker.
+  ///
+  /// The merge is safe against the security rules: under `SetOptions(merge:
+  /// true)` `request.resource.data` is the merged *result*, not the written
+  /// subset, so `keys().hasOnly([...])` and the `role == myRole()` pin both
+  /// still apply to the whole document.
   Future<void> upsertOwnEntry(AppUser user) async {
     if (user.role == UserRole.student) return;
+    final college = user.college;
+    final specialization = user.specialization;
     await _col.doc(user.uid).set({
       'fullName': user.fullName,
       'role': user.role.value,
-      'college': user.college,
-      'specialization': user.specialization,
-    });
+      if (college != null && college.isNotEmpty) 'college': college,
+      if (specialization != null && specialization.isNotEmpty)
+        'specialization': specialization,
+    }, SetOptions(merge: true));
   }
 
   Future<FacultyDirectoryEntry?> fetch(String uid) async {

@@ -1517,6 +1517,55 @@ test("(g) allow: a faculty member MAY write their own directory entry with their
   );
 });
 
+// `upsertOwnEntry` no longer writes `college`/`specialization` when the
+// profile carries neither — which is every real faculty account, since
+// nothing in the app ever fills them — and its plain `set` became a merge, so
+// an administrator's Console values survive the next sign-in instead of being
+// nulled. That reasoning rests on a claim about the rules that has to be
+// checked rather than assumed: under `{ merge: true }`, `request.resource.data`
+// is the merged RESULT, not the written subset, so `keys().hasOnly([...])` and
+// the `role == myRole()` pin still govern the whole document.
+test("(g) allow: a merge write of only the app-owned fields is accepted, and preserves the rest", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyDirectory/fac-a"), {
+      fullName: "Dr. A", role: "faculty",
+      college: "CICT", specialization: "Software Engineering",
+    });
+  });
+
+  await assertSucceeds(
+    setDoc(
+      doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"),
+      { fullName: "Dr. A", role: "faculty" },
+      { merge: true }
+    )
+  );
+
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const after = await getDoc(doc(ctx.firestore(), "facultyDirectory/fac-a"));
+    assert.equal(after.data().college, "CICT");
+    assert.equal(after.data().specialization, "Software Engineering");
+  });
+});
+
+test("(g) attack: a merge write may NOT smuggle in a role the caller does not hold", async () => {
+  // The merge must not become a hole: writing a subset does not exempt the
+  // document from the role pin.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyDirectory/fac-a"), {
+      fullName: "Dr. A", role: "faculty", college: "CICT",
+    });
+  });
+
+  await assertFails(
+    setDoc(
+      doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"),
+      { role: "dean" },
+      { merge: true }
+    )
+  );
+});
+
 test("(g) attack: a faculty member may NOT self-declare the dean role", async () => {
   await assertFails(
     setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/fac-a"), {
