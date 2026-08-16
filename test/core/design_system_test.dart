@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/core/config/app_config.dart';
@@ -134,6 +135,41 @@ void main() {
       expect(find.text('Could not load the review queue.'), findsOneWidget);
       await tester.tap(find.text('Try again'));
       expect(retried, isTrue);
+    });
+
+    testWidgets('a missing Firestore index is named, not blamed on the network',
+        (tester) async {
+      // This cost real debugging time: the faculty dashboard showed "check
+      // your connection" for a collection-group query with no index, which
+      // sent the reader hunting a network fault that did not exist. There
+      // are no server-side logs on Spark, so the screen is the only place
+      // the cause can appear.
+      await tester.pumpWidget(wrap(ErrorState(
+        message: 'Could not load your nominations.',
+        error: FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'failed-precondition',
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('needs a Firestore index'), findsOneWidget);
+      expect(find.byKey(const Key('errorCode')), findsOneWidget);
+      expect(find.text('[failed-precondition]'), findsOneWidget);
+      // The generic copy must give way to the specific cause.
+      expect(find.text('Could not load your nominations.'), findsNothing);
+    });
+
+    testWidgets('an unrecognised failure keeps the caller message',
+        (tester) async {
+      await tester.pumpWidget(wrap(ErrorState(
+        message: 'Could not load your nominations.',
+        error: FirebaseException(plugin: 'cloud_firestore', code: 'internal'),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not load your nominations.'), findsOneWidget);
+      expect(find.text('[internal]'), findsOneWidget);
     });
   });
 

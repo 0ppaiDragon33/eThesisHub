@@ -36,9 +36,9 @@ class DeanDashboard extends ConsumerWidget {
         children: [
           queueAsync.when(
             loading: () => const LoadingState(),
-            error: (_, _) => const ErrorState(
-              message: 'Could not load the approval queue. Check your '
-                  'connection and try again.',
+            error: (e, _) => ErrorState(
+              error: e,
+              message: 'Could not load the approval queue.',
             ),
             data: (theses) {
               if (theses.isEmpty) {

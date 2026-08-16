@@ -70,9 +70,9 @@ class FacultyDashboard extends ConsumerWidget {
         children: [
           pendingAsync.when(
             loading: () => const LoadingState(),
-            error: (_, _) => const ErrorState(
-              message: 'Could not load your nominations. Check your '
-                  'connection and try again.',
+            error: (e, _) => ErrorState(
+              error: e,
+              message: 'Could not load your nominations.',
             ),
             data: (pending) => pending.isEmpty
                 ? const EmptyState(

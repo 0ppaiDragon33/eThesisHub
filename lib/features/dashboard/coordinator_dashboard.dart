@@ -41,9 +41,9 @@ class CoordinatorDashboard extends ConsumerWidget {
         children: [
           queueAsync.when(
             loading: () => const LoadingState(),
-            error: (_, _) => const ErrorState(
-              message: 'Could not load the review queue. Check your '
-                  'connection and try again.',
+            error: (e, _) => ErrorState(
+              error: e,
+              message: 'Could not load the review queue.',
             ),
             data: (theses) {
               if (theses.isEmpty) {

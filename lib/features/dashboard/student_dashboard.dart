@@ -31,10 +31,10 @@ class StudentDashboard extends ConsumerWidget {
       actions: const [SignOutButton()],
       body: thesisAsync.when(
         loading: () => const LoadingState(label: 'Loading your thesis…'),
-        error: (_, _) => const PageShell(children: [
+        error: (e, _) => PageShell(children: [
           ErrorState(
-            message: 'Could not load your thesis group. Check your '
-                'connection and try again.',
+            error: e,
+            message: 'Could not load your thesis group.',
           ),
         ]),
         data: (thesis) {

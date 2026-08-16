@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
@@ -62,10 +63,36 @@ class ErrorState extends StatelessWidget {
     super.key,
     required this.message,
     this.onRetry,
+    this.error,
   });
 
   final String message;
   final VoidCallback? onRetry;
+
+  /// The underlying failure, shown as a short code beneath the message.
+  ///
+  /// There are no server-side logs on the Spark plan, so when something is
+  /// refused in the field the only place the reason can surface is the
+  /// screen. Without it a missing Firestore index and a dropped connection
+  /// look identical, and the friendly copy actively misleads: "check your
+  /// connection" sent someone hunting a network problem that did not exist.
+  ///
+  /// Kept to the code alone, never a stack trace or a raw exception string.
+  final Object? error;
+
+  /// Firestore's own codes, translated into what to actually do. Anything
+  /// unrecognised falls through to the caller's message.
+  static String? _hintFor(Object? error) {
+    if (error is! FirebaseException) return null;
+    return switch (error.code) {
+      'failed-precondition' =>
+        'This query needs a Firestore index that has not been created yet.',
+      'permission-denied' =>
+        'The security rules refused this read for your account.',
+      'unavailable' => 'Could not reach Firestore.',
+      _ => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +112,21 @@ class ErrorState extends StatelessWidget {
           Icon(Icons.error_outline, size: 20, color: scheme.error),
           const SizedBox(width: AppTokens.sm),
           Expanded(
-            child: Text(message,
-                style: text.bodyMedium?.copyWith(color: scheme.error)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_hintFor(error) ?? message,
+                    style: text.bodyMedium?.copyWith(color: scheme.error)),
+                if (error is FirebaseException) ...[
+                  const SizedBox(height: AppTokens.xs),
+                  Text(
+                    '[${(error as FirebaseException).code}]',
+                    key: const Key('errorCode'),
+                    style: text.labelSmall?.copyWith(color: scheme.error),
+                  ),
+                ],
+              ],
+            ),
           ),
           if (onRetry != null)
             TextButton(onPressed: onRetry, child: const Text('Try again')),
