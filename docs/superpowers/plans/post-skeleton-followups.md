@@ -145,3 +145,13 @@ Everything ISUFST-specific is a string or a list — no architecture change. Aud
 The right shape if it is ever wanted: move all of it into `AppConfig` as one `Institution` record (name, address, contact, form reference, motto, colleges, programs, accent colour), so a new institution is one file. The colleges and programs lists appearing twice each is the tell that they want a single home regardless.
 
 Not worth doing speculatively — the department has not said yes, and Form 1's layout was approved against ISUFST's actual form.
+
+## Scoping coordinators to a department (only needed beyond one department)
+
+`fetchExOfficio()` gives every coordinator an ex-officio seat on every thesis. Correct today: ISUFST CICT has a college-wide research coordinator and a department coordinator, and **both cover this department**, so both belong on Form 1. Confirmed with the owner 2026-08-16.
+
+It becomes wrong as soon as a second department uses the system — the college-wide coordinator should still hold a seat on their theses, but this department's coordinator should not.
+
+The fix when that day comes: give a coordinator a scope (college-wide, or a named department/program) on `facultyDirectory`, and have `fetchExOfficio()` take the thesis's college/program and return only the coordinators covering it. That also changes the panel cap, which is computed as `9 - 1 - exOfficioSeatCount`.
+
+Not attendance. Form 1 records appointment to the panel, not who turns up to a session — a coordinator with a class that day still holds the seat. Attendance belongs to M3's defence scheduling, if it is tracked at all.
