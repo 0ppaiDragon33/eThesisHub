@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
 import 'package:ethesishub/features/auth/registration_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -61,6 +62,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Renders nothing while the domain restriction is enforced.
+                const InstitutionalDomainNotice(),
                 TextField(
                   key: const Key('fullName'),
                   controller: _fullName,

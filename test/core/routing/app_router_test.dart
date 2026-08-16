@@ -227,7 +227,12 @@ void main() {
     // Should be on Create account screen
     expect(find.text('Create account'), findsWidgets);
 
-    // Tap the "goToLogin" button to navigate back to sign-in
+    // Scroll it into view first: the register form is taller than the
+    // default 800x600 test surface, so the link at the bottom is off-screen
+    // and a bare tap misses. (It grew when the testing-mode notice was
+    // added above the fields.)
+    await tester.ensureVisible(find.byKey(const Key('goToLogin')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('goToLogin')));
     await tester.pumpAndSettle();
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/core/config/app_config.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
+import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
@@ -132,6 +134,27 @@ void main() {
       expect(find.text('Could not load the review queue.'), findsOneWidget);
       await tester.tap(find.text('Try again'));
       expect(retried, isTrue);
+    });
+  });
+
+  group('InstitutionalDomainNotice', () {
+    testWidgets('shows exactly when the domain restriction is relaxed',
+        (tester) async {
+      // The notice exists so a relaxation cannot be forgotten. Tying the
+      // assertion to the flag is deliberate here — the claim being made is
+      // that the two always agree, in whichever state the flag is left.
+      await tester.pumpWidget(wrap(const InstitutionalDomainNotice()));
+      await tester.pumpAndSettle();
+
+      final finder = find.byKey(const Key('domainEnforcementOff'));
+      if (AppConfig.enforceInstitutionalDomain) {
+        expect(finder, findsNothing,
+            reason: 'enforcement is on, so nothing should be announced');
+      } else {
+        expect(finder, findsOneWidget,
+            reason: 'enforcement is off and must say so on screen');
+        expect(find.textContaining('any email address'), findsOneWidget);
+      }
     });
   });
 
