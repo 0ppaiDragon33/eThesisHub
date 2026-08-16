@@ -144,7 +144,17 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Group members'),
+                const Text('Your groupmates'),
+                // Says plainly that the leader is already counted. Labelled
+                // "Group members", this read as "list the group", and a
+                // leader added themselves again — which printed them twice
+                // on Form 1 and pushed a five-person group onto a second
+                // sheet.
+                Text(
+                  'You are already listed as the group leader. Add everyone '
+                  'else here.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 for (var i = 0; i < _members.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),

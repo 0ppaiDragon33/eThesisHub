@@ -50,11 +50,47 @@ void main() {
     final adviserRow =
         data.conformeRows.firstWhere((r) => r.name == 'Dr. Armada');
     expect(adviserRow.status, contains('Accepted'));
+  });
 
-    final deanRow =
-        data.conformeRows.firstWhere((r) => r.name == 'Dr. Siason');
-    expect(deanRow.status, 'Ex officio member');
-    expect(deanRow.role, contains('ex officio'));
+  test('an ex officio member who signs below is not also listed above', () {
+    // The Coordinator who recommends and the Dean who approves each get
+    // their own signature block. Printing them again as "Ex officio member"
+    // in the Conforme list repeated what those blocks already say, and cost
+    // four lines — which is what pushed a six-researcher form off the sheet.
+    final data = Form1Data.assemble(
+      thesis: thesis, nominations: nominations,
+      leaderName: 'Karl Joshua P. Vargas', directoryNames: const {},
+    );
+
+    final names = data.conformeRows.map((r) => r.name);
+    expect(names, isNot(contains('Dr. Bito-onon')),
+        reason: 'she signs Recommending Approval below');
+    expect(names, isNot(contains('Dr. Siason')),
+        reason: 'he signs Approved below');
+    // The signature blocks still name them.
+    expect(data.coordinatorName, 'Dr. Bito-onon');
+    expect(data.deanName, 'Dr. Siason');
+  });
+
+  test('an ex officio member who signs nowhere is still listed', () {
+    // A college can have more than one coordinator and only one of them
+    // recommends. The others sign nowhere on the form, so this row is the
+    // only record that they sit on the panel — dropping every ex officio
+    // row wholesale would erase them.
+    final data = Form1Data.assemble(
+      thesis: thesis,
+      nominations: [
+        ...nominations,
+        nom('c2', 'Dr. Zamora', NominationPosition.coordinator,
+            ex: true, status: ConformeStatus.exOfficio),
+      ],
+      leaderName: 'Karl Joshua P. Vargas', directoryNames: const {},
+    );
+
+    final zamora =
+        data.conformeRows.firstWhere((r) => r.name == 'Dr. Zamora');
+    expect(zamora.status, 'Ex officio member');
+    expect(zamora.role, contains('ex officio'));
   });
 
   test('all researchers are listed with the leader first', () {
@@ -206,12 +242,20 @@ void main() {
   });
 
   test('ex officio entries come after nominated members in conformeRows order', () {
+    // Ordered against a coordinator who signs nowhere: c1 and d1 both have
+    // signature blocks below, so their ex-officio rows are deliberately not
+    // printed and there would otherwise be nothing left to order.
     final data = Form1Data.assemble(
-      thesis: thesis, nominations: nominations,
+      thesis: thesis,
+      nominations: [
+        ...nominations,
+        nom('c2', 'Dr. Zamora', NominationPosition.coordinator,
+            ex: true, status: ConformeStatus.exOfficio),
+      ],
       leaderName: 'Karl', directoryNames: const {},
     );
     final names = data.conformeRows.map((r) => r.name).toList();
-    final exOfficioNames = {'Dr. Bito-onon', 'Dr. Siason'};
+    const exOfficioNames = {'Dr. Zamora'};
     final firstExOfficioIndex =
         names.indexWhere((n) => exOfficioNames.contains(n));
     final lastNominatedIndex =

@@ -92,6 +92,13 @@ void main() {
             nomineeUid: 'c1', nomineeName: 'Dr. Bito-onon',
             position: NominationPosition.coordinator, exOfficio: true,
             conformeStatus: ConformeStatus.exOfficio),
+        // A second coordinator who signs nowhere. Needed for this test to
+        // have anything to order: c1 and d1 both have signature blocks
+        // below, so their ex-officio rows are deliberately not printed.
+        Nomination(
+            nomineeUid: 'c2', nomineeName: 'Dr. Zamora',
+            position: NominationPosition.coordinator, exOfficio: true,
+            conformeStatus: ConformeStatus.exOfficio),
       ],
       leaderName: 'Karl Joshua P. Vargas',
       directoryNames: const {'c1': 'Dr. Bito-onon', 'd1': 'Dr. Siason'},

@@ -80,6 +80,12 @@ class Form1Data {
         .where((n) => n.position == NominationPosition.panelist)
         .toList();
 
+    /// True when this person already has a signature block lower on the
+    /// form — the Coordinator who recommended, or the Dean who approved.
+    bool signsBelow(String uid) =>
+        uid == thesis.coordinatorRecommendedBy ||
+        uid == thesis.deanApprovedBy;
+
     String roleLabel(Nomination n) => switch (n.position) {
           NominationPosition.adviser => 'Thesis Adviser',
           NominationPosition.panelist => 'Panel Member',
@@ -100,12 +106,25 @@ class Form1Data {
               ? 'Accepted · ${_stamp(n.respondedAt)} - via eThesisHub'
               : n.conformeStatus.value,
         ),
+      // Ex-officio members, but only those who do not already sign further
+      // down the form.
+      //
+      // The Coordinator who recommends and the Dean who approves each get
+      // their own signature block, and printing them a second time as
+      // "Ex officio member" said nothing the block below did not — while
+      // costing four lines, which is what pushed a six-researcher form past
+      // the bottom of the sheet. The approved layout never had these rows.
+      //
+      // Not dropped wholesale, though: a college can have more than one
+      // coordinator, and only one of them recommends. The others sign
+      // nowhere, so their seat on the panel is recorded here or not at all.
       for (final n in exOfficio)
-        ConformeRow(
-          name: n.nomineeName,
-          role: roleLabel(n),
-          status: 'Ex officio member',
-        ),
+        if (!signsBelow(n.nomineeUid))
+          ConformeRow(
+            name: n.nomineeName,
+            role: roleLabel(n),
+            status: 'Ex officio member',
+          ),
     ];
 
     return Form1Data(
