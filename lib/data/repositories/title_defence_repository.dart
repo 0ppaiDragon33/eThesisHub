@@ -23,9 +23,6 @@ class TitleDefenceRepository {
 
   final FirebaseFirestore _db;
 
-  // Unused in this task — the Dean's title decision methods (added in a
-  // later task on this plan) log to the audit trail through this.
-  // ignore: unused_field
   final AuditService _audit;
 
   /// Three is the floor; ten is the ceiling and it is a rules constraint, not
@@ -204,5 +201,96 @@ class TitleDefenceRepository {
     required String uid,
   }) {
     return _composing(thesisId).doc(uid).delete();
+  }
+
+  /// The Dean records which candidate the panel approved.
+  ///
+  /// Guarded on the CURRENT persisted status, not on anything the caller
+  /// supplies. M1a shipped a transition without that guard and a stale tab
+  /// could walk an approved thesis backwards.
+  Future<void> approveTitle({
+    required String thesisId,
+    required String candidateTitleId,
+    required String deanUid,
+  }) async {
+    await _requirePendingDefence(thesisId);
+
+    final candidate = await _candidates(thesisId).doc(candidateTitleId).get();
+    if (!candidate.exists) {
+      throw ArgumentError('That candidate title is not on this thesis.');
+    }
+
+    await _thesis(thesisId).update({
+      'status': ThesisStatus.titleApproved.value,
+      'approvedTitleId': candidateTitleId,
+      'titleDecidedBy': deanUid,
+      'titleDecidedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _writeAuditLog(
+      deanUid: deanUid,
+      thesisId: thesisId,
+      action: 'title.approved',
+      metadata: {'approvedTitleId': candidateTitleId},
+    );
+  }
+
+  /// The Dean rejects the whole set. The remark is required: the student must
+  /// know what to fix, and the panel's comments may not say it plainly.
+  Future<void> rejectTitles({
+    required String thesisId,
+    required String deanUid,
+    required String remark,
+  }) async {
+    final text = remark.trim();
+    if (text.isEmpty) {
+      throw ArgumentError('Say why the set is being rejected.');
+    }
+    await _requirePendingDefence(thesisId);
+
+    await _thesis(thesisId).update({
+      'status': ThesisStatus.titleRejected.value,
+      'titleRejectionRemark': text,
+      'titleDecidedBy': deanUid,
+      'titleDecidedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _writeAuditLog(
+      deanUid: deanUid,
+      thesisId: thesisId,
+      action: 'title.rejected',
+      metadata: {'remark': text},
+    );
+  }
+
+  Future<void> _requirePendingDefence(String thesisId) async {
+    final snap = await _thesis(thesisId).get();
+    if (!snap.exists) throw StateError('That thesis no longer exists.');
+    final status = ThesisStatus.fromString(snap.data()!['status'] as String?);
+    if (status != ThesisStatus.titlePendingDefence) {
+      throw StateError('This title defence has already been decided.');
+    }
+  }
+
+  /// Best-effort, and deliberately after the decision has committed. The
+  /// decision is the point; the log must never be able to prevent one.
+  Future<void> _writeAuditLog({
+    required String deanUid,
+    required String thesisId,
+    required String action,
+    required Map<String, dynamic> metadata,
+  }) async {
+    try {
+      await _audit.log(
+        actorUid: deanUid,
+        action: action,
+        targetType: 'thesis',
+        targetId: thesisId,
+        metadata: metadata,
+      );
+    } catch (_) {
+      // Swallowed on purpose. A thesis must not be left undecided because a
+      // log write failed — the same posture the sign-in path takes.
+    }
   }
 }
