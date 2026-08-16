@@ -139,6 +139,10 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
     final invitesAsync = ref.watch(facultyInvitesProvider);
 
     return Scaffold(
+      // Identifies the destination for reachability tests. Asserting on the
+      // AppBar title instead would match the dashboard button that opens
+      // this screen, and so would pass whether or not navigation happened.
+      key: const Key('facultyInvitesScreen'),
       appBar: AppBar(title: const Text('Faculty')),
       body: Center(
         child: ConstrainedBox(

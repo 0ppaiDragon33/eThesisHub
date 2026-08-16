@@ -138,6 +138,27 @@ void main() {
     expect(find.byKey(const Key('goToReview')), findsNothing);
   });
 
+  testWidgets('a coordinator reaches the faculty invites screen', (tester) async {
+    // This caught a real defect: '/faculty' was registered twice — the
+    // faculty dashboard and then this screen — and go_router takes the
+    // first match, so the invites screen was unreachable and the button
+    // landed the coordinator on the faculty dashboard instead. The screen's
+    // own widget tests pump it directly, bypassing the router, so only a
+    // navigation test can see this.
+    final c = await containerFor('coordinator', 'u5');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToFaculty')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('goToFaculty')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+    expect(find.byKey(const Key('goToFaculty')), findsNothing);
+  });
+
   testWidgets('a dean reaches the review (approval) queue from the dashboard link',
       (tester) async {
     final c = await containerFor('dean', 'u4');

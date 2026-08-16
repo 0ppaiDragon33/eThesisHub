@@ -226,8 +226,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // write to anyone who is not a coordinator, so a student who typed
       // this path would reach a screen that can load nothing and save
       // nothing.
+      // NOT '/faculty' — that path is already the faculty dashboard (above),
+      // and go_router takes the first match, so registering it twice left
+      // this screen unreachable: the coordinator's "Invite faculty" button
+      // landed on the faculty dashboard instead.
       GoRoute(
-        path: '/faculty',
+        path: '/invites',
         builder: (_, _) => const FacultyInvitesScreen(),
       ),
     ],

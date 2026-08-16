@@ -17,7 +17,7 @@ class CoordinatorDashboard extends ConsumerWidget {
       // a broken app rather than an unbuilt one, so it should either lead
       // somewhere or be removed before the defence.
       onDestinationSelected: (i) {
-        if (i == 1) context.go('/faculty');
+        if (i == 1) context.go('/invites');
       },
       destinations: const [
         NavDestination(label: 'Theses', icon: Icons.folder),
@@ -39,7 +39,7 @@ class CoordinatorDashboard extends ConsumerWidget {
             const SizedBox(height: 12),
             FilledButton.tonal(
               key: const Key('goToFaculty'),
-              onPressed: () => context.go('/faculty'),
+              onPressed: () => context.go('/invites'),
               child: const Text('Invite faculty'),
             ),
           ],
