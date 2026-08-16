@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import assert from "node:assert/strict";
 import {
   initializeTestEnvironment,
   assertFails,
@@ -901,6 +902,11 @@ const LEADER_EMAIL = "lead@isufst.edu.ph";
 await seedUser(LEADER, "student", LEADER_EMAIL);
 await seedUser("fac-a", "faculty", "faca@isufst.edu.ph");
 await seedUser("fac-b", "faculty", "facb@isufst.edu.ph");
+// Three more faculty: a full roster needs an adviser plus three panelists
+// (fac-a..fac-d), and `fac-e` is the outsider the C1 scoping tests use.
+await seedUser("fac-c", "faculty", "facc@isufst.edu.ph");
+await seedUser("fac-d", "faculty", "facd@isufst.edu.ph");
+await seedUser("fac-e", "faculty", "face@isufst.edu.ph");
 await seedUser("dean-x", "dean", "deanx@isufst.edu.ph");
 await seedUser("coord-x", "coordinator", "coordx@isufst.edu.ph");
 await seedUser("stud-b", "student", "studb@isufst.edu.ph");
@@ -1112,26 +1118,200 @@ test("(a) attack: an ex officio coordinator may not advance a thesis they were n
   );
 });
 
-test("(a) allow: respondToNomination's atomic accept+advance TRANSACTION still passes", async () => {
-  // This is why the rule accepts 'pending' as well as 'accepted' — see the
-  // LIMITATION note in firestore.rules. Rules evaluate every write in a
-  // transaction against the state BEFORE it, so the acceptance written on the
-  // line above is invisible to the rule guarding the line below.
-  await seedThesis("a-txn", LEADER, "nominationPendingConforme");
-  await seedNomination("a-txn", "fac-a", { conformeStatus: "pending" });
-  const nominee = asUser("fac-a", "faca@isufst.edu.ph");
+// Seeds the exact roster `submitNominations` writes: one adviser, three
+// panelists, and one ex-officio seat each for the dean and the coordinator.
+// A single-nomination fixture cannot exercise `respondToNomination` honestly —
+// the whole point of the sibling reads is deciding whether OTHER seats are
+// still outstanding, and with one document there are none.
+async function seedFullRoster(thesisId, status = "nominationPendingConforme", overrides = {}) {
+  await seedThesis(thesisId, LEADER, status);
+  await seedNomination(thesisId, "fac-a", {
+    nomineeUid: "fac-a", position: "adviser",
+    conformeStatus: overrides["fac-a"] ?? "pending",
+  });
+  await seedNomination(thesisId, "fac-b", {
+    nomineeUid: "fac-b", position: "panelist",
+    conformeStatus: overrides["fac-b"] ?? "pending",
+  });
+  await seedNomination(thesisId, "fac-c", {
+    nomineeUid: "fac-c", position: "panelist",
+    conformeStatus: overrides["fac-c"] ?? "pending",
+  });
+  await seedNomination(thesisId, "fac-d", {
+    nomineeUid: "fac-d", position: "panelist",
+    conformeStatus: overrides["fac-d"] ?? "pending",
+  });
+  await seedNomination(thesisId, "dean-x", {
+    nomineeUid: "dean-x", position: "dean",
+    exOfficio: true, conformeStatus: "exOfficio",
+  });
+  await seedNomination(thesisId, "coord-x", {
+    nomineeUid: "coord-x", position: "coordinator",
+    exOfficio: true, conformeStatus: "exOfficio",
+  });
+}
 
-  await assertSucceeds(
-    runTransaction(nominee, async (tx) => {
-      await tx.get(doc(nominee, "theses/a-txn"));
-      await tx.get(doc(nominee, "theses/a-txn/nominations/fac-a"));
-      tx.update(doc(nominee, "theses/a-txn/nominations/fac-a"), {
-        conformeStatus: "accepted", respondedAt: serverTimestamp(),
-        declineReason: null,
-      });
-      tx.update(doc(nominee, "theses/a-txn"), {
+// `ThesisRepository.respondToNomination`, replayed call for call:
+//   1. `_nominationIds()` — a plain LIST of the whole subcollection, outside
+//      the transaction (Transaction.get takes no Query in cloud_firestore).
+//   2. a transaction that gets the thesis, then gets EVERY sibling nomination,
+//      then writes the caller's conforme and — if nothing is outstanding —
+//      flips the thesis status.
+async function replayRespondToNomination(db, thesisId, nomineeUid, accept = true) {
+  const listed = await getDocs(collection(db, `theses/${thesisId}/nominations`));
+  const ids = listed.docs.map((d) => d.id);
+
+  return runTransaction(db, async (tx) => {
+    const thesisSnap = await tx.get(doc(db, `theses/${thesisId}`));
+    const noms = [];
+    for (const id of ids) {
+      const snap = await tx.get(doc(db, `theses/${thesisId}/nominations/${id}`));
+      if (snap.exists()) noms.push({ id, ...snap.data() });
+    }
+    if (thesisSnap.data().status !== "nominationPendingConforme") {
+      throw new Error("wrong status");
+    }
+    tx.update(doc(db, `theses/${thesisId}/nominations/${nomineeUid}`), {
+      conformeStatus: accept ? "accepted" : "declined",
+      respondedAt: serverTimestamp(),
+      declineReason: null,
+    });
+    if (!accept) return;
+    const outstanding = noms.filter(
+      (n) => n.id !== nomineeUid && !n.exOfficio &&
+             n.conformeStatus !== "accepted"
+    );
+    if (outstanding.length === 0) {
+      tx.update(doc(db, `theses/${thesisId}`), {
         status: "nominationPendingCoordinator",
       });
+    }
+  });
+}
+
+// --- CRITICAL C1: a nominee must be able to read their co-nominees ------
+//
+// House rule for this block, as everywhere above: every deny is paired with an
+// allow that walks the SAME path with the right user.
+
+test("C1 allow: a nominee MAY list the whole nominations subcollection of their own thesis", async () => {
+  // The exact first call `respondToNomination` makes, and the one that was
+  // denied. A `list` never binds {nomineeUid}, so the own-seat arm cannot
+  // carry it — only the new nominee arm can. Six documents, not one.
+  await seedFullRoster("c1r-list");
+  const nominee = asUser("fac-b", "facb@isufst.edu.ph");
+  const snap = await assertSucceeds(
+    getDocs(collection(nominee, "theses/c1r-list/nominations"))
+  );
+  assert.equal(snap.docs.length, 6);
+});
+
+test("C1 allow: a nominee MAY get a CO-nominee's document on their own thesis", async () => {
+  // The second denied call: the per-sibling tx.get inside the transaction.
+  await seedFullRoster("c1r-sibling");
+  const nominee = asUser("fac-b", "facb@isufst.edu.ph");
+  await assertSucceeds(
+    getDoc(doc(nominee, "theses/c1r-sibling/nominations/fac-a"))
+  );
+});
+
+test("C1 attack: a faculty member with NO seat on the thesis may NOT list its nominations", async () => {
+  // Scoping, negative half. `fac-e` holds no nomination on this thesis; the
+  // allow above proves the very same list succeeds on the very same path for
+  // someone who does, so this denial is the rule and not a broken fixture.
+  await seedFullRoster("c1r-outsider");
+  await assertFails(
+    getDocs(collection(asUser("fac-e", "face@isufst.edu.ph"),
+      "theses/c1r-outsider/nominations"))
+  );
+});
+
+test("C1 attack: a nominee on one thesis may NOT read the nominations of ANOTHER thesis", async () => {
+  // The enumeration the new arm must not enable. `fac-b` genuinely sits on
+  // c1r-mine (proved by the allow above, same user, same shape) and holds no
+  // seat on c1r-theirs, whose roster is faculty they have nothing to do with.
+  await seedFullRoster("c1r-mine");
+  await seedThesis("c1r-theirs", "stud-b", "nominationPendingConforme");
+  await seedNomination("c1r-theirs", "fac-e", { nomineeUid: "fac-e" });
+  const nominee = asUser("fac-b", "facb@isufst.edu.ph");
+
+  await assertSucceeds(
+    getDocs(collection(nominee, "theses/c1r-mine/nominations"))
+  );
+  await assertFails(
+    getDocs(collection(nominee, "theses/c1r-theirs/nominations"))
+  );
+  await assertFails(
+    getDoc(doc(nominee, "theses/c1r-theirs/nominations/fac-e"))
+  );
+});
+
+test("C1: the nominee arm does NOT reopen the unfiltered collection-group scan", async () => {
+  // The cross-thesis match block is a different rule and is untouched. A
+  // nominee still cannot sweep every nomination in the database, nor run the
+  // inbox query for somebody else.
+  await seedFullRoster("c1r-cg");
+  const nominee = asUser("fac-b", "facb@isufst.edu.ph");
+  await assertFails(getDocs(collectionGroup(nominee, "nominations")));
+  await assertFails(
+    getDocs(query(collectionGroup(nominee, "nominations"),
+      where("nomineeUid", "==", "fac-a")))
+  );
+});
+
+test("(a) allow: respondToNomination replayed CALL FOR CALL — list, sibling gets, accept, advance", async () => {
+  // This replaces a fixture that seeded ONE nomination and read only the
+  // caller's own document — a shape the client never issues, which is why it
+  // passed while the real call was denied throughout.
+  //
+  // It also still covers why the advance rule accepts 'pending' as well as
+  // 'accepted': rules evaluate every write in a transaction against the state
+  // BEFORE it, so the acceptance written below is invisible to the rule
+  // guarding the status flip beside it.
+  //
+  // Every other nominee has already accepted, so this caller is the last
+  // outstanding one and the transaction takes the advance branch.
+  await seedFullRoster("a-txn", "nominationPendingConforme", {
+    "fac-a": "accepted", "fac-c": "accepted", "fac-d": "accepted",
+  });
+  const nominee = asUser("fac-b", "facb@isufst.edu.ph");
+
+  await assertSucceeds(replayRespondToNomination(nominee, "a-txn", "fac-b"));
+
+  // Read back through a genuinely authorized reader (the leader), not with
+  // rules disabled — the effect has to be visible on the real read surface.
+  const t = await getDoc(doc(leader, "theses/a-txn"));
+  assert.equal(t.data().status, "nominationPendingCoordinator");
+  const n = await getDoc(doc(leader, "theses/a-txn/nominations/fac-b"));
+  assert.equal(n.data().conformeStatus, "accepted");
+});
+
+test("(a) allow: a NON-final nominee's response is recorded without advancing", async () => {
+  // The other branch of the same call: siblings are still outstanding, so the
+  // transaction writes only the conforme. Proves the sibling reads are load
+  // bearing rather than incidental.
+  await seedFullRoster("a-txn-partial");
+  const nominee = asUser("fac-b", "facb@isufst.edu.ph");
+
+  await assertSucceeds(
+    replayRespondToNomination(nominee, "a-txn-partial", "fac-b")
+  );
+
+  const t = await getDoc(doc(leader, "theses/a-txn-partial"));
+  assert.equal(t.data().status, "nominationPendingConforme");
+  const n = await getDoc(doc(leader, "theses/a-txn-partial/nominations/fac-b"));
+  assert.equal(n.data().conformeStatus, "accepted");
+});
+
+test("(a) attack: a nominee may NOT use their seat to write a CO-nominee's conforme", async () => {
+  // The read widening must not have become a write widening. The allow above
+  // proves fac-b can write their OWN seat on this same path.
+  await seedFullRoster("a-txn-cross");
+  await assertFails(
+    updateDoc(doc(asUser("fac-b", "facb@isufst.edu.ph"),
+      "theses/a-txn-cross/nominations/fac-a"), {
+      conformeStatus: "accepted", respondedAt: serverTimestamp(),
+      declineReason: null,
     })
   );
 });
@@ -1376,6 +1556,154 @@ test("(h) a faculty member with no nomination on the thesis still may NOT read i
   await assertFails(
     getDoc(doc(asUser("fac-b", "facb@isufst.edu.ph"), "theses/h-stranger"))
   );
+});
+
+// =====================================================================
+// END TO END — the real client sequence, replayed against the real rules.
+//
+// C1 got through because every layer was checked in isolation: each rule had
+// a test, each repository method had a test, and no test ever issued the
+// *sequence* of calls a real user's taps produce. This one does, in order,
+// with the right authenticated context for each actor and with no
+// `withSecurityRulesDisabled` seeding of anything the client itself writes.
+//
+// COVERAGE, stated plainly. This is the client's Firestore traffic replayed
+// call for call — same paths, same field maps, same batch/transaction
+// grouping, same ordering, same actors — under the deployed
+// `firestore.rules`. What it is NOT: it does not execute the Dart in
+// `ThesisRepository`, so a defect that lives purely in Dart (a wrong local
+// filter, a bad `Timestamp` conversion) is out of its reach — those remain the
+// Dart suite's job. What it does catch, and what nothing else in either suite
+// could, is a client/rules disagreement: a call the Dart issues that the rules
+// refuse. That is exactly the class C1 belonged to. The two shapes are kept in
+// step by hand; the field maps below are transcribed from
+// `ThesisRepository._nominationMap`/`createThesis`/`approve`.
+// =====================================================================
+
+test("END TO END: create -> submit -> four conformes -> recommend -> approve, under the real rules", async () => {
+  const T = "e2e-thesis";
+  const nominee = (uid) => asUser(uid, `${uid}@isufst.edu.ph`);
+
+  // --- 1. the leader creates the thesis (createThesis) ---------------
+  await assertSucceeds(
+    setDoc(doc(leader, `theses/${T}`), {
+      leaderUid: LEADER, workingTitle: "A Real Thesis",
+      memberNames: ["Member Two"], college: "CICT", program: "BSIT",
+      semester: "First", academicYear: "2026-2027", status: "draft",
+      adviserUid: null, panelistUids: [],
+      coordinatorRecommendedAt: null, coordinatorRecommendedBy: null,
+      deanApprovedAt: null, deanApprovedBy: null,
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // --- 2. submitNominations' batch: 6 creates + the status flip -----
+  // One adviser, three panelists, and one ex-officio seat each for the dean
+  // and the coordinator — the full roster the nominate screen produces, in
+  // one commit, exactly as `submitNominations` writes it.
+  const nom = (uid, position, exOfficio) => ({
+    nomineeUid: uid, nomineeName: `Dr. ${uid}`, position,
+    exOfficio, conformeStatus: exOfficio ? "exOfficio" : "pending",
+    respondedAt: null, declineReason: null,
+  });
+  const batch = writeBatch(leader);
+  batch.set(doc(leader, `theses/${T}/nominations/fac-a`), nom("fac-a", "adviser", false));
+  batch.set(doc(leader, `theses/${T}/nominations/fac-b`), nom("fac-b", "panelist", false));
+  batch.set(doc(leader, `theses/${T}/nominations/fac-c`), nom("fac-c", "panelist", false));
+  batch.set(doc(leader, `theses/${T}/nominations/fac-d`), nom("fac-d", "panelist", false));
+  batch.set(doc(leader, `theses/${T}/nominations/dean-x`), nom("dean-x", "dean", true));
+  batch.set(doc(leader, `theses/${T}/nominations/coord-x`), nom("coord-x", "coordinator", true));
+  batch.update(doc(leader, `theses/${T}`), {
+    status: "nominationPendingConforme",
+    nominationsSubmittedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+
+  // --- 3. each nominee's inbox query, then their respondToNomination --
+  // All four, in turn — the ex-officio pair are never asked. The first three
+  // must record without advancing; the fourth is the last outstanding seat
+  // and must carry the thesis to the coordinator.
+  for (const uid of ["fac-a", "fac-b", "fac-c", "fac-d"]) {
+    const db = nominee(uid);
+    // watchMyPendingNominations
+    await assertSucceeds(
+      getDocs(query(collectionGroup(db, "nominations"),
+        where("nomineeUid", "==", uid)))
+    );
+    // the inbox reads the parent thesis for its title
+    await assertSucceeds(getDoc(doc(db, `theses/${T}`)));
+    // respondToNomination — the list, the sibling gets, the writes
+    await assertSucceeds(replayRespondToNomination(db, T, uid));
+  }
+
+  const afterConforme = await getDoc(doc(leader, `theses/${T}`));
+  assert.equal(afterConforme.data().status, "nominationPendingCoordinator");
+
+  // --- 4. the coordinator recommends --------------------------------
+  const coord = asUser("coord-x", "coordx@isufst.edu.ph");
+  await assertSucceeds(
+    getDocs(query(collection(coord, "theses"),
+      where("status", "==", "nominationPendingCoordinator")))
+  );
+  await assertSucceeds(
+    updateDoc(doc(coord, `theses/${T}`), {
+      status: "nominationPendingDean",
+      coordinatorRecommendedAt: serverTimestamp(),
+      coordinatorRecommendedBy: "coord-x",
+    })
+  );
+
+  // --- 5. the dean approves (ThesisRepository.approve) ---------------
+  const dean = asUser("dean-x", "deanx@isufst.edu.ph");
+  await assertSucceeds(
+    getDocs(query(collection(dean, "theses"),
+      where("status", "==", "nominationPendingDean")))
+  );
+  const listed = await getDocs(collection(dean, `theses/${T}/nominations`));
+  const ids = listed.docs.map((d) => d.id);
+  await assertSucceeds(
+    runTransaction(dean, async (tx) => {
+      await tx.get(doc(dean, `theses/${T}`));
+      const all = [];
+      for (const id of ids) {
+        const s = await tx.get(doc(dean, `theses/${T}/nominations/${id}`));
+        if (s.exists()) all.push({ id, ...s.data() });
+      }
+      const accepted = all.filter((n) => n.conformeStatus === "accepted");
+      const adviser = accepted.filter((n) => n.position === "adviser");
+      const panelists = accepted
+        .filter((n) => n.position === "panelist" && !n.exOfficio)
+        .map((n) => n.nomineeUid);
+      assert.equal(adviser.length, 1);
+      assert.equal(panelists.length, 3);
+      tx.update(doc(dean, `theses/${T}`), {
+        status: "nominationApproved",
+        adviserUid: adviser[0].nomineeUid,
+        panelistUids: panelists,
+        deanApprovedAt: serverTimestamp(),
+        deanApprovedBy: "dean-x",
+      });
+    })
+  );
+
+  // --- 6. the leader's Form 1 reads ---------------------------------
+  const finalThesis = await assertSucceeds(getDoc(doc(leader, `theses/${T}`)));
+  const finalNoms =
+    await assertSucceeds(getDocs(collection(leader, `theses/${T}/nominations`)));
+
+  assert.equal(finalThesis.data().status, "nominationApproved");
+  assert.equal(finalThesis.data().adviserUid, "fac-a");
+  assert.deepEqual([...finalThesis.data().panelistUids].sort(),
+    ["fac-b", "fac-c", "fac-d"]);
+  assert.equal(finalNoms.docs.length, 6);
+  // The ex-officio pair are on the roster and print on Form 1, but were never
+  // asked to accept and never land on panelistUids.
+  const byId = Object.fromEntries(finalNoms.docs.map((d) => [d.id, d.data()]));
+  for (const uid of ["dean-x", "coord-x"]) {
+    assert.equal(byId[uid].conformeStatus, "exOfficio");
+    assert.equal(byId[uid].exOfficio, true);
+    assert.ok(!finalThesis.data().panelistUids.includes(uid));
+  }
 });
 
 test.after(async () => {

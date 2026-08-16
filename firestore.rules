@@ -405,7 +405,67 @@ service cloud.firestore {
                     );
         }
 
+        // C1 — the Conforme stage was denied for every real faculty user.
+        //
+        // A nominee must be able to read their CO-nominees, not only their own
+        // seat. `ThesisRepository.respondToNomination` cannot decide whether
+        // the acceptance it is about to write is the LAST outstanding one
+        // without seeing every sibling nomination on this thesis, and that
+        // quorum check is not expressible in rules (no collection iteration —
+        // see the LIMITATION note on the advance rule above). So the client
+        // lists `theses/{id}/nominations` and then `tx.get`s each document.
+        //
+        // Under the previous form both were denied: the `list` never binds the
+        // {nomineeUid} wildcard (it evaluates to null across the queried
+        // collection), so `request.auth.uid == nomineeUid` was false, and a
+        // nominee reading a co-nominee's document failed the same comparison.
+        // The list is the first call `respondToNomination` makes, so it threw
+        // before the transaction even opened: every faculty member tapped
+        // Accept, saw "Could not record your response.", and no thesis could
+        // ever leave `nominationPendingConforme`.
+        //
+        // SCOPE — this cannot be used to enumerate other theses.
+        // `hasNomination()` is evaluated against `thesisId`, the wildcard of
+        // the ENCLOSING `match /theses/{thesisId}`, which is bound for every
+        // `get`/`list` addressed at `theses/{thesisId}/nominations`. The
+        // caller therefore reaches exactly the nominations of a thesis they
+        // themselves hold a seat on, and holding that seat is not something
+        // they can grant themselves — only the leader creates nominations, and
+        // only while the thesis is still `draft` (`mayCreateNomination()`).
+        // Cross-thesis reads are a different match block entirely
+        // (`/{path=**}/nominations/{nomineeUid}` at the bottom of this file),
+        // which is untouched and still admits only
+        // `resource.data.nomineeUid == request.auth.uid` — so the faculty
+        // inbox's collection-group query is still one nominee's own seats, and
+        // an unfiltered scan of every nomination is still denied.
+        //
+        // NOT gated on the caller's own seat being non-`declined`, deliberately:
+        // - It would protect nothing. The roster is fixed the moment the
+        //   thesis leaves `draft` (create and delete are both pinned to
+        //   `draft`), so a nominee who declines has already lawfully read
+        //   every co-nominee this arm would later show them. Denying the
+        //   second read of an unchanged list withholds no information.
+        // - It would re-create C1 in miniature. The nomination `update` rule
+        //   below accepts `conformeStatus in ['accepted', 'declined']` with no
+        //   pin on the prior value, so a nominee who declined and then wants to
+        //   accept after all is permitted to WRITE that reversal — and the only
+        //   client path to it, `respondToNomination`, opens with exactly this
+        //   list. Denying the read while permitting the write is the precise
+        //   shape of the defect this arm exists to close.
+        //   (Residual, pre-existing and unchanged here: such a reversal can
+        //   record the acceptance but cannot itself trip the advance, because
+        //   the thesis `update` rule pins the caller's seat to
+        //   ['pending', 'accepted'] and theirs still reads 'declined'.)
+        // - Domain: everyone on a panel is printed together on Form 1, which
+        //   is handed to the Dean, so co-panel visibility is not a disclosure.
+        //
+        // This is a READ widening only. No write rule is touched.
+        function isNomineeOnThisThesis() {
+          return signedIn() && hasNomination(thesisId, request.auth.uid);
+        }
+
         allow get, list: if request.auth.uid == nomineeUid
+                         || isNomineeOnThisThesis()
                          || isThesisLeader(thesisId)
                          || isCoordinator() || isDean();
 
