@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:ethesishub/data/models/candidate_title.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/models/title_comment.dart';
 import 'package:ethesishub/data/services/audit_service.dart';
 
 /// One candidate as the screen has it: text plus an already-uploaded file.
@@ -104,5 +105,60 @@ class TitleDefenceRepository {
       'presentationUrl': presentationUrl,
     });
     await batch.commit();
+  }
+
+  CollectionReference<Map<String, dynamic>> _comments(String thesisId) =>
+      _thesis(thesisId).collection('titleComments');
+
+  TitleComment _toComment(String id, Map<String, dynamic> raw) {
+    return TitleComment.fromMap(id, {
+      ...raw,
+      'createdAt': (raw['createdAt'] as Timestamp?)?.toDate(),
+    });
+  }
+
+  /// Every comment on the thesis, oldest first.
+  ///
+  /// One listener for the whole defence rather than one per candidate:
+  /// comments carry `candidateTitleId` and the screen groups them. Nesting
+  /// them under each candidate would have meant N listeners or a
+  /// collection-group query, and the latter needs an index Firestore never
+  /// creates on its own.
+  Stream<List<TitleComment>> watchComments(String thesisId) {
+    return _comments(thesisId)
+        .orderBy('createdAt')
+        .snapshots()
+        .map((s) => s.docs.map((d) => _toComment(d.id, d.data())).toList());
+  }
+
+  /// Records a remark against one candidate title.
+  ///
+  /// Append-only: there is deliberately no `editComment` and no
+  /// `deleteComment` on this class. A comment is part of the record the
+  /// student eventually reads, and once the panel has seen it, rewriting or
+  /// removing it would rewrite history rather than correct it. That
+  /// property is enforced where it can actually be enforced — the security
+  /// rules — and by review of this class; it is not something a unit test
+  /// against this API can prove, since the absence of a method cannot fail
+  /// a test that never calls it.
+  Future<void> addComment({
+    required String thesisId,
+    required String candidateTitleId,
+    required String authorUid,
+    required String authorName,
+    required String authorRole,
+    required String body,
+  }) async {
+    final text = body.trim();
+    if (text.isEmpty) throw ArgumentError('A comment cannot be empty.');
+
+    await _comments(thesisId).add({
+      'candidateTitleId': candidateTitleId,
+      'authorUid': authorUid,
+      'authorName': authorName,
+      'authorRole': authorRole,
+      'body': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 }
