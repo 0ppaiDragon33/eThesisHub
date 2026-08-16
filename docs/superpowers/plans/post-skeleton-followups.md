@@ -155,3 +155,19 @@ It becomes wrong as soon as a second department uses the system — the college-
 The fix when that day comes: give a coordinator a scope (college-wide, or a named department/program) on `facultyDirectory`, and have `fetchExOfficio()` take the thesis's college/program and return only the coordinators covering it. That also changes the panel cap, which is computed as `9 - 1 - exOfficioSeatCount`.
 
 Not attendance. Form 1 records appointment to the panel, not who turns up to a session — a coordinator with a class that day still holds the seat. Attendance belongs to M3's defence scheduling, if it is tracked at all.
+
+## Form 1 page count — open with the adviser
+
+Measured 2026-08-16, researchers that fit on ONE page (adviser + 3 panel + 2 ex officio, one of whom signs below):
+
+| Paper | Current spacing | Tighter gaps (14/15pt) |
+|---|---|---|
+| Short bond 8.5x11 | 0 | 1 |
+| A4 (current format) | 1 | 3 |
+| Long bond 8.5x13 | 3 | 5 |
+
+A typical group of 5 researchers therefore runs to two pages on A4. Left at two pages deliberately: `pw.MultiPage` flows correctly and the Dean's signature block is intact on page 2, which is the only thing that ever mattered. The earlier one-page appearance was `pw.Page` clipping, not fitting.
+
+Open with the owner's adviser: whether the real Form 1 is a long-bond form, and how researcher names should be structured on it. Both change the answer and neither can be decided from the code.
+
+If one page on A4 ever becomes a requirement, the only lever big enough is a two-column researcher list — roughly halves the tallest block. The owner explicitly asked for a single right-aligned column under "Very truly yours," so that needs their say-so, not an assumption.
