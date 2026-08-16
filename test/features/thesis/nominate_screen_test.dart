@@ -327,55 +327,32 @@ void main() {
   });
 
   testWidgets(
-      'refuses a panel of three that collapses to two because one pick '
-      'already sits ex officio', (tester) async {
+      'a panel picker never offers an ex-officio office holder, but the '
+      'adviser picker does', (tester) async {
+    // Choosing a coordinator or the dean as a PANEL member adds nobody:
+    // submitNominations collapses the pick into the automatic ex-officio seat
+    // they already hold, so a panel of three would commit as two and the
+    // thesis would wedge unrecoverably at approve(). The screen used to offer
+    // the choice and then refuse it at submit; it no longer offers it.
+    //
+    // The adviser slot must still offer them. A coordinator or the dean can
+    // genuinely advise a thesis — that position carries exOfficio: false,
+    // needs their Conforme, and prints on Form 1 as Thesis Adviser.
     useTallSurface(tester);
-    final db = await seeded();
-
-    await tester.pumpWidget(wrap(db));
+    await tester.pumpWidget(wrap(await seeded()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('adviser')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dr. Armada — CICT').last);
-    await tester.pumpAndSettle();
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, contains('coord'));
+    expect(adviser, contains('dean'));
 
-    await tester.tap(find.byKey(const Key('panel0')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dr. Diamante — CICT').last);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('panel1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dr. Padojinog — CICT').last);
-    await tester.pumpAndSettle();
-
-    // Third pick is the Research Coordinator, who is deliberately still
-    // offered in the picker ("for the sake of records") but already holds an
-    // automatic ex-officio seat. submitNominations collapses this pick into
-    // that seat, so the panel would commit with TWO real members — and the
-    // thesis would then wedge unrecoverably at approve().
-    await tester.tap(find.byKey(const Key('panel2')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dr. Bito-onon — coordinator · CICT').last);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('submitNomination')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    // The raw count is 3, so a naive `chosenUids.length >= 3` accepts this.
-    // The message must name the person and say what it leaves them with,
-    // otherwise the user cannot tell why three picks were refused.
-    expect(error.data, contains('Dr. Bito-onon'));
-    expect(error.data, contains('ex officio'));
-    expect(error.data, contains('that leaves only 2'));
-
-    final noms = await db.collection('theses/t1/nominations').get();
-    expect(noms.docs, isEmpty,
-        reason: 'a submission that would wedge the thesis must never reach '
-            'the repository');
+    for (final slot in ['panel0', 'panel1', 'panel2']) {
+      final panel = await openDropdownValues(tester, Key(slot));
+      expect(panel, isNot(contains('coord')), reason: '$slot offered a coordinator');
+      expect(panel, isNot(contains('dean')), reason: '$slot offered the dean');
+      // The four ordinary faculty are all still there.
+      expect(panel, containsAll(['Armada', 'Diamante', 'Padojinog', 'Braganza']));
+    }
   });
 
   testWidgets('accepts three panel picks that survive the ex-officio collapse',

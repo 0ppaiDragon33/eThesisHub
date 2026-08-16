@@ -17,12 +17,18 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 const kMaxNominationDocs = 9;
 
 /// Lets the thesis leader nominate an adviser and three or more panel
-/// members from the faculty directory. The dean and every research
-/// coordinator are recorded automatically as ex-officio panel members —
-/// never chosen here, never asked to accept — but the project owner ruled
-/// that they may still be nominated by name as an ordinary adviser or
-/// panelist "for the sake of records," so they remain selectable in the
-/// pickers alongside plain faculty.
+/// members from the faculty directory.
+///
+/// The dean and every research coordinator are recorded automatically as
+/// ex-officio panel members — never chosen here, never asked to accept. They
+/// are therefore absent from the panel-member pickers: choosing one there
+/// adds nobody, because `submitNominations` resolves the pick into the seat
+/// they already hold, and a panel of three would commit as two.
+///
+/// They do remain in the ADVISER picker. A coordinator or the dean can
+/// genuinely advise a thesis, and that is an ordinary position — it carries
+/// `exOfficio: false`, it needs their Conforme, and it prints on Form 1 as
+/// Thesis Adviser.
 ///
 /// Every nominee this screen submits is validated to still resolve against
 /// the live directory, and the panel size is capped so the resulting batch
@@ -238,13 +244,41 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     return taken;
   }
 
+  /// The adviser picker offers everyone; a panel picker hides the ex-officio
+  /// office holders.
+  ///
+  /// A Research Coordinator or the Dean genuinely can advise a thesis, and
+  /// that is a real position: it carries `exOfficio: false`, it needs their
+  /// Conforme, and it prints on Form 1 as Thesis Adviser. So the adviser slot
+  /// must keep offering them.
+  ///
+  /// A panel slot must not. They already sit on every panel by office — the
+  /// "Also on your panel" card below lists them — so choosing one as a panel
+  /// member adds nobody: `submitNominations` resolves that pick into their
+  /// single automatic seat. Offering the choice at all only led to a
+  /// submit-time refusal for something the screen could have ruled out.
+  ///
+  /// The effective-panel-size check in [_submit] and the matching invariant
+  /// in `submitNominations` both stay. This filter makes that state
+  /// unreachable through the UI; it does not make it unreachable, and the
+  /// repository is the layer that has to hold the line.
+  List<FacultyDirectoryEntry> _offerableFor(
+    bool isAdviserSlot,
+    List<FacultyDirectoryEntry> faculty,
+  ) {
+    if (isAdviserSlot) return faculty;
+    final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
+    return faculty.where((f) => !exOfficioUids.contains(f.uid)).toList();
+  }
+
   DropdownButtonFormField<String> _picker(
     String key,
     String label,
     String? value,
     List<FacultyDirectoryEntry> faculty,
-    ValueChanged<String?> onChanged,
-  ) {
+    ValueChanged<String?> onChanged, {
+    bool isAdviserSlot = false,
+  }) {
     // `DropdownButtonFormField` asserts, on every rebuild, that its
     // `initialValue` matches exactly one item in `items` — not just at
     // construction. A previous pick can vanish from the live directory
@@ -254,7 +288,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     // to displaying no selection here keeps the widget alive; `_adviserUid`
     // / `_panelUids` still remember the stale uid so submit can reject it
     // with a proper message instead of a build-time assertion failure.
-    final displayValue = faculty.any((f) => f.uid == value) ? value : null;
+    final offerable = _offerableFor(isAdviserSlot, faculty);
+    final displayValue = offerable.any((f) => f.uid == value) ? value : null;
     final taken = _takenExcept(value);
     return DropdownButtonFormField<String>(
       key: Key(key),
@@ -262,7 +297,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       isExpanded: true,
       decoration: InputDecoration(labelText: label),
       items: [
-        for (final f in faculty)
+        for (final f in offerable)
           if (!taken.contains(f.uid))
             DropdownMenuItem(
               value: f.uid,
@@ -332,7 +367,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _picker('adviser', 'Thesis Adviser', _adviserUid, faculty,
-                        (v) => setState(() => _adviserUid = v)),
+                        (v) => setState(() => _adviserUid = v),
+                        isAdviserSlot: true),
                     const SizedBox(height: 20),
                     Text('Panel members (minimum 3, at most $_maxPanelists)'),
                     for (var i = 0; i < _panelUids.length; i++)
@@ -380,7 +416,10 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                             Text(
                               'They sit on every panel by role, so there is '
                               'nothing to choose and nothing for them to '
-                              'accept.',
+                              'accept. That is why they are not listed as '
+                              'panel members above — though one of them may '
+                              'still be chosen as your thesis adviser, which '
+                              'they would be asked to accept.',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
