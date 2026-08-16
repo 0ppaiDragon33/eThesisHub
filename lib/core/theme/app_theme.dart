@@ -118,7 +118,15 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          // Size(64, 48), never Size.fromHeight(48). `fromHeight` is
+          // Size(double.infinity, 48), and an infinite MINIMUM width makes
+          // any button inside a Row throw "BoxConstraints forces an infinite
+          // width" during layout, taking the whole subtree down with it —
+          // which is exactly how the nomination inbox rendered as a blank
+          // screen while its data was fine. 64 is Material's own minimum;
+          // buttons that should fill their line still do, because a
+          // stretched Column bounds them.
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTokens.radiusSm),
           ),
@@ -130,7 +138,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          // See the filled button above — same trap, same fix.
+          minimumSize: const Size(64, 48),
           side: BorderSide(color: rule),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTokens.radiusSm),

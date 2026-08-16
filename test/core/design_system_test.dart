@@ -195,6 +195,81 @@ void main() {
   });
 
   group('AppTheme', () {
+    testWidgets('buttons lay out inside a Row', (tester) async {
+      // A Row gives its children unbounded width, so a button theme with
+      // `minimumSize: Size.fromHeight(48)` — which is Size(infinity, 48) —
+      // throws "BoxConstraints forces an infinite width" during layout and
+      // takes the whole subtree with it. That is what left the nomination
+      // inbox rendering as an empty screen while its data was fine: the
+      // Accept/Decline buttons sit in a Row, and every dashboard escaped it
+      // only because their buttons sit in a stretched Column.
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: Row(
+            children: [
+              FilledButton(onPressed: () {}, child: const Text('Accept')),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: () {}, child: const Text('Decline')),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Accept'), findsOneWidget);
+      expect(find.text('Decline'), findsOneWidget);
+
+      // Each button takes only the width it needs, rather than one of them
+      // eating the row.
+      expect(tester.getSize(find.byType(FilledButton)).width, lessThan(400));
+    });
+
+    testWidgets('a button in a stretched Column still fills its line',
+        (tester) async {
+      // The other half of the fix: dropping the infinite minimum width must
+      // not stop full-width buttons filling, which is how every form's
+      // submit button is laid out.
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: SizedBox(
+            width: 500,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(onPressed: () {}, child: const Text('Submit')),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final size = tester.getSize(find.byType(FilledButton));
+      expect(size.width, 500);
+      expect(size.height, 48, reason: 'the 48dp touch target must survive');
+    });
+
+    test('button themes set a height floor without demanding width', () {
+      // The height floor is the point (48dp touch target); the width must
+      // stay free so the same theme works in a Row and in a stretched
+      // Column alike.
+      for (final theme in [AppTheme.light, AppTheme.dark]) {
+        final filled = theme.filledButtonTheme.style?.minimumSize
+            ?.resolve({});
+        final outlined = theme.outlinedButtonTheme.style?.minimumSize
+            ?.resolve({});
+        for (final size in [filled, outlined]) {
+          expect(size, isNotNull);
+          expect(size!.height, 48);
+          expect(size.width.isFinite, isTrue,
+              reason: 'an infinite minimum width breaks any button in a Row');
+        }
+      }
+    });
+
     test('both themes define the full surface set rather than inheriting', () {
       // A half-defined dark theme is how a screen ends up with light text on
       // a light background: the seed generates something for every slot, so
