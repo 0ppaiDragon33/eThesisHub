@@ -41,13 +41,24 @@ void main() {
     expect(raw.data()!.containsKey('email'), isFalse);
   });
 
-  test('selectable faculty excludes coordinators and deans', () async {
-    await repo.upsertOwnEntry(user('f3', 'Dr. Faculty', UserRole.faculty));
-    await repo.upsertOwnEntry(user('c1', 'Dr. Coordinator', UserRole.coordinator));
-    await repo.upsertOwnEntry(user('d1', 'Dr. Dean', UserRole.dean));
+  // Replaces the `watchSelectableFaculty` (faculty-only) test that stood
+  // here. That method and its provider were removed as dead: nothing in
+  // `lib/` watched them, and under the owner's ruling that coordinators and
+  // the dean stay nominable, a faculty-only slice can never be the right
+  // source for a picker. `watchAllDirectory` is the path that actually ships,
+  // and it had no repository-level test of its own — so the coverage moves
+  // here rather than disappearing.
+  test('watchAllDirectory includes coordinators and the dean, sorted by name',
+      () async {
+    await repo.upsertOwnEntry(user('f3', 'Dr. Zamora', UserRole.faculty));
+    await repo.upsertOwnEntry(user('c1', 'Dr. Bito-onon', UserRole.coordinator));
+    await repo.upsertOwnEntry(user('d1', 'Dr. Siason', UserRole.dean));
 
-    final selectable = await repo.watchSelectableFaculty().first;
-    expect(selectable.map((e) => e.uid), ['f3']);
+    final all = await repo.watchAllDirectory().first;
+    // Every role is offered — this is exactly what the faculty-only slice
+    // got wrong — and the order is by full name, not by insertion.
+    expect(all.map((e) => e.uid), ['c1', 'd1', 'f3']);
+    expect(all.map((e) => e.role), ['coordinator', 'dean', 'faculty']);
   });
 
   test('fetchExOfficio returns coordinators and deans only', () async {

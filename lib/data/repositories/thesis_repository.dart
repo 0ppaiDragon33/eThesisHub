@@ -134,8 +134,24 @@ class ThesisRepository {
     required List<FacultyDirectoryEntry> panelists,
     required List<FacultyDirectoryEntry> exOfficio,
   }) async {
-    if (panelists.length < 3) {
-      throw ArgumentError('At least three panel members are required.');
+    // Counted AFTER the precedence collapse below, not before it. A raw
+    // `panelists.length >= 3` accepts a selection that commits as two: an
+    // office holder picked as a panelist collapses into their single
+    // ex-officio seat, and an adviser pick overrides a panelist pick for the
+    // same uid. What must be at least three is what `approve` will later
+    // count — `position == panelist && !exOfficio` — and what the Dean's own
+    // rule requires (`panelistUids.size() >= 3`). Getting this wrong is not
+    // recoverable: the shortfall only surfaces at `approve`, by which point no
+    // rule lets anyone move the thesis, in either direction.
+    final effectivePanel = panelists
+        .map((p) => p.uid)
+        .toSet()
+        .difference(exOfficio.map((e) => e.uid).toSet())
+        .difference({adviser.uid});
+    if (effectivePanel.length < 3) {
+      throw ArgumentError('At least three panel members are required, and '
+          'ex-officio members and the adviser do not count toward that '
+          'minimum — this submission would leave ${effectivePanel.length}.');
     }
 
     final batch = _db.batch();

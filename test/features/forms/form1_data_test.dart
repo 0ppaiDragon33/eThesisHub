@@ -147,6 +147,64 @@ void main() {
     expect(data.submittedOn, DateTime.utc(2026, 6, 1));
   });
 
+  // --- the signatory names Form 1 prints for the Dean -------------------
+  //
+  // `directoryNames` was passed `const {}` by the only production caller, so
+  // this branch was dead and both names rested entirely on the ex-officio
+  // fallback. `ThesisStatusScreen._download` now resolves the two uids
+  // against the live faculty directory, which is what these three pin down.
+
+  test('the ex-officio fallback names the coordinator and dean when the '
+      'directory has nothing to add', () {
+    final data = Form1Data.assemble(
+      thesis: thesis, nominations: nominations,
+      leaderName: 'Karl', directoryNames: const {},
+    );
+    expect(data.coordinatorName, 'Dr. Bito-onon');
+    expect(data.deanName, 'Dr. Siason');
+  });
+
+  test('a coordinator who holds NO ex-officio seat on this thesis prints '
+      'blank without the directory, and correctly with it', () {
+    // The case the wiring exists for: a coordinator promoted (or first signed
+    // in) AFTER this thesis's roster was fixed has no seat on it, and the
+    // roster can never be amended — creates are pinned to `draft`.
+    final recommendedByOutsider = Thesis(
+      id: 't5', leaderUid: 'l1', memberNames: const [],
+      workingTitle: 'X', college: 'CICT', program: 'BSIT',
+      semester: 'First', academicYear: '2026-2027',
+      status: ThesisStatus.nominationApproved, panelistUids: const ['p1'],
+      createdAt: DateTime.utc(2026, 8, 14), adviserUid: 'a1',
+      coordinatorRecommendedBy: 'c-new', deanApprovedBy: 'd1',
+    );
+
+    final withoutDirectory = Form1Data.assemble(
+      thesis: recommendedByOutsider, nominations: nominations,
+      leaderName: 'Karl', directoryNames: const {},
+    );
+    expect(withoutDirectory.coordinatorName, isNull,
+        reason: 'this is the blank name on the printed form');
+
+    final withDirectory = Form1Data.assemble(
+      thesis: recommendedByOutsider, nominations: nominations,
+      leaderName: 'Karl', directoryNames: const {'c-new': 'Dr. Nuevo'},
+    );
+    expect(withDirectory.coordinatorName, 'Dr. Nuevo');
+    expect(withDirectory.deanName, 'Dr. Siason',
+        reason: 'the dean still resolves through the ex-officio fallback');
+  });
+
+  test('the directory name wins over the ex-officio nomination name', () {
+    // A faculty member who has since changed their recorded name: the
+    // directory is live, the nomination is a snapshot taken at submission.
+    final data = Form1Data.assemble(
+      thesis: thesis, nominations: nominations,
+      leaderName: 'Karl',
+      directoryNames: const {'c1': 'Dr. Bito-onon, PhD'},
+    );
+    expect(data.coordinatorName, 'Dr. Bito-onon, PhD');
+  });
+
   test('ex officio entries come after nominated members in conformeRows order', () {
     final data = Form1Data.assemble(
       thesis: thesis, nominations: nominations,

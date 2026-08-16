@@ -23,7 +23,8 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// message here, not a raw error, and busy state is cleared on every path
 /// so the button is left tappable again afterward.
 ///
-/// Nothing routes to this screen yet — see Task 15.
+/// Reached from the faculty dashboard's "Nomination inbox" button, at
+/// `/nominations`.
 class NominationInboxScreen extends ConsumerStatefulWidget {
   const NominationInboxScreen({super.key});
 

@@ -34,12 +34,10 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// — matching `nomination_inbox_screen.dart`'s handling of the same class of
 /// race for `respondToNomination`.
 ///
-/// Nothing routes to this screen yet — see Task 15. It needs two links: one
-/// from a coordinator's landing area to
-/// `ReviewQueueScreen(queue: ThesisStatus.nominationPendingCoordinator,
-/// isDean: false)`, and one from the dean's to
-/// `ReviewQueueScreen(queue: ThesisStatus.nominationPendingDean,
-/// isDean: true)`.
+/// Both roles reach this screen at `/review`, which the router resolves to
+/// the matching pair: a coordinator gets
+/// `queue: ThesisStatus.nominationPendingCoordinator, isDean: false`, the
+/// dean gets `queue: ThesisStatus.nominationPendingDean, isDean: true`.
 class ReviewQueueScreen extends ConsumerStatefulWidget {
   const ReviewQueueScreen({
     super.key,
@@ -58,13 +56,15 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
   String? _error;
   final Set<String> _busy = {};
 
-  // Created once, not fresh on every build. A `StreamBuilder` recreated each
-  // build (as `_act`'s own `setState` calls trigger) tears down and
-  // resubscribes its stream every time — `fake_cloud_firestore`'s query
-  // listener never delivered a first event to the resubscribed stream in
-  // that churn, which hung `recommend`'s own internal `watchThesis(...)
-  // .first` read forever (same doc, listener churn mid-flight). Caching the
-  // stream keeps one stable subscription for the widget's lifetime.
+  // Created once, in a field, rather than fresh in `build`. This is the
+  // standard `StreamBuilder` discipline and it is required on its own terms
+  // here: `_act` calls `setState` (busy state, error text) on every tap, and a
+  // stream constructed inside `build` would be a NEW object each time, so
+  // `StreamBuilder` would cancel its subscription and resubscribe on every
+  // rebuild. Against real Firestore each resubscribe is a fresh listen —
+  // billed reads, a dropped snapshot cache, and a visible flash back through
+  // `!snap.hasData` to the spinner mid-interaction. One subscription for the
+  // widget's lifetime is simply correct, independent of any test setup.
   late final Stream<List<Thesis>> _queueStream =
       ref.read(thesisRepositoryProvider).watchByStatus(widget.queue);
 

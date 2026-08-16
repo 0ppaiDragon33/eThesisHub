@@ -26,8 +26,10 @@ const kMaxNominationDocs = 9;
 ///
 /// Every nominee this screen submits is validated to still resolve against
 /// the live directory, and the panel size is capped so the resulting batch
-/// never approaches the security rules' per-batch `get()` ceiling. Nothing
-/// routes to this screen yet — see Task 15.
+/// never approaches the security rules' per-batch `get()` ceiling.
+///
+/// Reached from the thesis status screen's "Nominate adviser and panel"
+/// button, at `/thesis/nominate?id=<thesisId>`.
 class NominateScreen extends ConsumerStatefulWidget {
   const NominateScreen({super.key, required this.thesisId});
 
@@ -102,6 +104,43 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     }
     if (chosenUids.contains(_adviserUid)) {
       setState(() => _error = 'The adviser cannot also be a panel member.');
+      return;
+    }
+
+    // The EFFECTIVE panel size — what survives `submitNominations`' collapse —
+    // not the raw pick count.
+    //
+    // Coordinators and the dean stay in the picker on purpose (the owner
+    // ruled they may be nominated by name "for the sake of records"), but
+    // `submitNominations` resolves `adviser > ex officio > panelist`, so
+    // picking one of them as a PANELIST collapses that pick into their single
+    // automatic ex-officio seat (`exOfficio: true`) rather than adding a
+    // panelist. Three picks including one office holder therefore commit as
+    // two real panel members.
+    //
+    // That failure is invisible and terminal if it is not caught here. The
+    // submission succeeds, every Conforme completes, the coordinator
+    // recommends — and only then does `approve` fail, on the same `>= 3` floor
+    // the Dean's own rule enforces (`firestore.rules`,
+    // `panelistUids.size() >= 3`), on every attempt, forever: no rule lets the
+    // leader back to `draft` to fix the roster. Raising it server-side cannot
+    // help either — by then nobody can act. This screen, before submit, is the
+    // last point at which the user can still change their selection.
+    final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
+    final collided = chosenUids.intersection(exOfficioUids);
+    if (chosenUids.length - collided.length < 3) {
+      final names = _exOfficio
+          .where((e) => collided.contains(e.uid))
+          .map((e) => e.fullName)
+          .join(', ');
+      final effective = chosenUids.length - collided.length;
+      setState(() => _error =
+          'Choose at least three panel members who are not already on this '
+          'panel ex officio. $names already ${collided.length == 1 ? 'has' : 'have'} '
+          'an automatic ex-officio seat on every panel, so choosing '
+          '${collided.length == 1 ? 'that person' : 'them'} as a panel member '
+          'adds nobody new — that leaves only $effective. '
+          'Please choose ${3 - effective} more.');
       return;
     }
 

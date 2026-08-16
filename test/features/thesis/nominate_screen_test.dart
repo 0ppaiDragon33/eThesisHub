@@ -233,4 +233,119 @@ void main() {
     expect(noms.docs, isEmpty,
         reason: 'an unresolvable nominee must never reach the repository');
   });
+
+  testWidgets(
+      'refuses a panel of three that collapses to two because one pick '
+      'already sits ex officio', (tester) async {
+    useTallSurface(tester);
+    final db = await seeded();
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Armada — CICT').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('panel0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Diamante — CICT').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('panel1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Padojinog — CICT').last);
+    await tester.pumpAndSettle();
+
+    // Third pick is the Research Coordinator, who is deliberately still
+    // offered in the picker ("for the sake of records") but already holds an
+    // automatic ex-officio seat. submitNominations collapses this pick into
+    // that seat, so the panel would commit with TWO real members — and the
+    // thesis would then wedge unrecoverably at approve().
+    await tester.tap(find.byKey(const Key('panel2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Bito-onon — CICT').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('submitNomination')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('error')), findsOneWidget);
+    final error = tester.widget<Text>(find.byKey(const Key('error')));
+    // The raw count is 3, so a naive `chosenUids.length >= 3` accepts this.
+    // The message must name the person and say what it leaves them with,
+    // otherwise the user cannot tell why three picks were refused.
+    expect(error.data, contains('Dr. Bito-onon'));
+    expect(error.data, contains('ex officio'));
+    expect(error.data, contains('that leaves only 2'));
+
+    final noms = await db.collection('theses/t1/nominations').get();
+    expect(noms.docs, isEmpty,
+        reason: 'a submission that would wedge the thesis must never reach '
+            'the repository');
+  });
+
+  testWidgets('accepts three panel picks that survive the ex-officio collapse',
+      (tester) async {
+    // Falsifiability control for the deny above: the same screen, the same
+    // taps, the same submit — with a third pick who is NOT an office holder
+    // — must go through. Otherwise the refusal above could be any unrelated
+    // validation failing.
+    useTallSurface(tester);
+    final db = await seeded();
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Armada — CICT').last);
+    await tester.pumpAndSettle();
+
+    for (final pick in [
+      ('panel0', 'Dr. Diamante — CICT'),
+      ('panel1', 'Dr. Padojinog — CICT'),
+      ('panel2', 'Dr. Braganza — CICT'),
+    ]) {
+      await tester.tap(find.byKey(Key(pick.$1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(pick.$2).last);
+      await tester.pumpAndSettle();
+    }
+
+    // Unlike the deny case above, this one actually reaches
+    // `submitNominations`, whose batch commit is not driven by
+    // `testWidgets`' fake clock — `pumpAndSettle` alone returns with `_busy`
+    // still true and neither message rendered. `runAsync` gives the real
+    // event loop a turn so the commit lands. Same pattern as the Task 11
+    // review-queue tests.
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('submitNomination')));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('error')), findsNothing);
+
+    // The submission moves the thesis out of `draft`, so the screen's own
+    // status stream immediately swaps the form for its "no longer draft"
+    // state — the success message and the submit button go with it. That is
+    // the correct behaviour (the leader continues on the status screen), so
+    // the proof that this selection was ACCEPTED is the roster it committed,
+    // not a message that is gone by the time we can look for it.
+    expect(find.byKey(const Key('submitNomination')), findsNothing);
+
+    // 1 adviser + 3 panelists + 2 ex-officio seats. This is the assertion
+    // that distinguishes acceptance from the deny case above, where the
+    // subcollection stays empty.
+    final noms = await db.collection('theses/t1/nominations').get();
+    expect(noms.docs.length, 6);
+
+    // And the point of the control: three REAL panel members survived, so
+    // `approve` will clear the Dean's `panelistUids.size() >= 3` floor.
+    final panel = noms.docs.where((d) =>
+        d.data()['position'] == 'panelist' && d.data()['exOfficio'] == false);
+    expect(panel, hasLength(3));
+  });
 }

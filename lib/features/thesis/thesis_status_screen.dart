@@ -53,11 +53,40 @@ class ThesisStatusScreen extends ConsumerWidget {
       WidgetRef ref, Thesis thesis, List<Nomination> nominations) async {
     final leader =
         await ref.read(userRepositoryProvider).fetchUser(thesis.leaderUid);
+
+    // Form 1 is printed and handed to the Dean, so the two signatory names on
+    // it must not come out blank.
+    //
+    // `Form1Data._nameFor` falls back to the thesis's own ex-officio
+    // nominations, and usually that is enough — every coordinator and the dean
+    // holding a directory entry at submission time gets an ex-officio seat on
+    // the thesis. But the fallback is not sufficient in the real cases the
+    // fallback exists for: a coordinator promoted AFTER this thesis's
+    // nominations went out has no seat on it and would print blank, as would
+    // one who had not yet signed in (and so had no directory entry) when the
+    // roster was fixed. The roster cannot be amended afterwards — creates are
+    // pinned to `draft` — so nothing recovers the name later.
+    //
+    // This was passed `const {}`, which made the directory branch dead and
+    // left both names resting entirely on that fallback. Resolving the two
+    // uids against the live directory here is one read each, only on the
+    // download path, and `facultyDirectory` is readable by any verified user.
+    final directory = ref.read(facultyDirectoryRepositoryProvider);
+    final directoryNames = <String, String>{};
+    for (final uid in <String?>{
+      thesis.coordinatorRecommendedBy,
+      thesis.deanApprovedBy,
+    }) {
+      if (uid == null) continue;
+      final entry = await directory.fetch(uid);
+      if (entry != null) directoryNames[uid] = entry.fullName;
+    }
+
     final data = Form1Data.assemble(
       thesis: thesis,
       nominations: nominations,
       leaderName: leader?.fullName ?? '',
-      directoryNames: const {},
+      directoryNames: directoryNames,
     );
     final bytes = await buildForm1Pdf(data);
     await Printing.sharePdf(bytes: bytes, filename: 'Form1-${thesis.id}.pdf');

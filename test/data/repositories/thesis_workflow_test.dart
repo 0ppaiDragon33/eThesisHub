@@ -130,6 +130,126 @@ void main() {
     expect(thesis.coordinatorRecommendedAt, isNotNull);
   });
 
+  test(
+      'approve refuses with its OWN message when no adviser accepted, not '
+      'with `adviser.first`s Bad state: No element', () async {
+    // The guard `if (adviser.isEmpty) throw StateError(...)` used to be
+    // unfalsifiable: `adviser.first` on the next line throws StateError by
+    // itself, so any test asserting only `throwsA(isA<StateError>())` passes
+    // whether the guard exists or not. Asserting the exact message is what
+    // separates the guard from the language.
+    await acceptAll();
+    await repo.recommend(thesisId: id, coordinatorUid: 'c1');
+    // The adviser's Conforme is withdrawn after the coordinator recommended.
+    // Reachable in practice: `respondToNomination` guards on status, but a
+    // decline recorded through any other path (or an admin correction) leaves
+    // exactly this state — pendingDean with no accepted adviser.
+    await db
+        .collection('theses')
+        .doc(id)
+        .collection('nominations')
+        .doc('a1')
+        .update({'conformeStatus': 'declined'});
+
+    await expectLater(
+      repo.approve(thesisId: id, deanUid: 'd1'),
+      throwsA(isA<StateError>().having((e) => e.message, 'message',
+          'Cannot approve without an accepted adviser.')),
+    );
+
+    final thesis = await repo.watchThesis(id).first;
+    expect(thesis!.status, ThesisStatus.nominationPendingDean,
+        reason: 'a refused approval must not move the thesis');
+  });
+
+  test(
+      'submitNominations refuses a panel that COLLAPSES below three, even '
+      'though three people were passed', () async {
+    // I2: an office holder picked as a panelist collapses into their single
+    // ex-officio seat, so this selection commits as two real panel members
+    // and the thesis then wedges permanently at approve(). The guard must
+    // count the effective panel, not the raw list length.
+    final id2 = await repo.createThesis(
+      leaderUid: 'leader-2', workingTitle: 'T2', memberNames: const [],
+      college: 'CICT', program: 'BSIT', semester: 'First',
+      academicYear: '2026-2027',
+    );
+
+    await expectLater(
+      repo.submitNominations(
+        thesisId: id2,
+        adviser: entry('a1', 'Dr. Armada', 'faculty'),
+        panelists: [
+          entry('p1', 'Dr. Diamante', 'faculty'),
+          entry('p2', 'Prof. Padojinog', 'faculty'),
+          entry('d1', 'Dr. Siason', 'dean'), // collides with the ex-officio seat
+        ],
+        exOfficio: [entry('d1', 'Dr. Siason', 'dean')],
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+
+    final noms =
+        await db.collection('theses').doc(id2).collection('nominations').get();
+    expect(noms.docs, isEmpty,
+        reason: 'nothing may be written when the panel is short');
+    final thesis = await repo.watchThesis(id2).first;
+    expect(thesis!.status, ThesisStatus.draft);
+  });
+
+  test('submitNominations refuses when a panelist pick collides with the '
+      'adviser pick', () async {
+    // The other half of the same collapse: `adviser > panelist`, so a uid
+    // passed in both lists is written once, as the adviser.
+    final id3 = await repo.createThesis(
+      leaderUid: 'leader-3', workingTitle: 'T3', memberNames: const [],
+      college: 'CICT', program: 'BSIT', semester: 'First',
+      academicYear: '2026-2027',
+    );
+
+    await expectLater(
+      repo.submitNominations(
+        thesisId: id3,
+        adviser: entry('a1', 'Dr. Armada', 'faculty'),
+        panelists: [
+          entry('p1', 'Dr. Diamante', 'faculty'),
+          entry('p2', 'Prof. Padojinog', 'faculty'),
+          entry('a1', 'Dr. Armada', 'faculty'), // same uid as the adviser
+        ],
+        exOfficio: [entry('d1', 'Dr. Siason', 'dean')],
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('submitNominations still accepts three panelists that survive the '
+      'collapse alongside an ex-officio seat', () async {
+    // Falsifiability control for the two denials above: the guard must not
+    // simply reject everything. This is the shape `setUp` already submits,
+    // asserted here explicitly so the denials are attributable to the
+    // collapse and not to the guard being broken.
+    final id4 = await repo.createThesis(
+      leaderUid: 'leader-4', workingTitle: 'T4', memberNames: const [],
+      college: 'CICT', program: 'BSIT', semester: 'First',
+      academicYear: '2026-2027',
+    );
+
+    await repo.submitNominations(
+      thesisId: id4,
+      adviser: entry('a1', 'Dr. Armada', 'faculty'),
+      panelists: [
+        entry('p1', 'Dr. Diamante', 'faculty'),
+        entry('p2', 'Prof. Padojinog', 'faculty'),
+        entry('p3', 'Dr. Braganza', 'faculty'),
+      ],
+      exOfficio: [entry('d1', 'Dr. Siason', 'dean')],
+    );
+
+    final noms =
+        await db.collection('theses').doc(id4).collection('nominations').get();
+    expect(noms.docs.length, 5);
+  });
+
   test('approve fixes the panel from accepted nominations', () async {
     await acceptAll();
     await repo.recommend(thesisId: id, coordinatorUid: 'c1');

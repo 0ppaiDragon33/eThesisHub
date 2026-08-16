@@ -129,6 +129,15 @@ void main() {
     // The coordinator (uid 'c1') is also named as a panelist "for the sake
     // of records". Ex officio wins over panelist: one document, not two,
     // and no Conforme is asked.
+    //
+    // FOUR panelists are passed, not three, and that is load-bearing rather
+    // than incidental: the collision means only THREE of them survive as real
+    // panel members, and `submitNominations` now refuses any submission whose
+    // effective panel would fall below three (I2 — such a thesis wedges
+    // permanently at `approve`). This fixture used to pass three, one of them
+    // the coordinator, which is precisely the wedging shape; the subject
+    // under test here is the collapse itself, so the fixture is widened to a
+    // submission that is legal rather than the assertions being weakened.
     await repo.submitNominations(
       thesisId: thesisId,
       adviser: entry('a1', 'Dr. Armada', 'faculty'),
@@ -136,15 +145,16 @@ void main() {
         entry('c1', 'Dr. Bito-onon', 'coordinator'),
         entry('p2', 'Prof. Padojinog', 'faculty'),
         entry('p3', 'Dr. Braganza', 'faculty'),
+        entry('p4', 'Dr. Diamante', 'faculty'),
       ],
       exOfficio: [entry('c1', 'Dr. Bito-onon', 'coordinator')],
     );
 
     final noms = await repo.watchNominations(thesisId).first;
-    // 4 distinct people total (a1, c1, p2, p3) — catches a collision that
+    // 5 distinct people total (a1, c1, p2, p3, p4) — catches a collision that
     // writes two separate documents (e.g. under different doc ids) instead
     // of resolving to one, which a same-uid count alone would miss.
-    expect(noms, hasLength(4));
+    expect(noms, hasLength(5));
     expect(noms.where((n) => n.nomineeUid == 'c1'), hasLength(1));
 
     final coordinator = noms.firstWhere((n) => n.nomineeUid == 'c1');

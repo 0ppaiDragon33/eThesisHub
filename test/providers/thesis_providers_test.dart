@@ -8,7 +8,12 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 void main() {
-  test('selectableFacultyProvider exposes only faculty', () async {
+  // Was `selectableFacultyProvider exposes only faculty`. That provider was
+  // removed as dead — nothing in `lib/` watched it, and its faculty-only
+  // filter contradicts the owner's ruling that coordinators and the dean stay
+  // nominable. `allDirectoryProvider` is what the nominate screen actually
+  // watches, so the provider-level coverage moves onto it.
+  test('allDirectoryProvider exposes every role, not just faculty', () async {
     final db = FakeFirebaseFirestore();
     final repo = FacultyDirectoryRepository(db);
     await repo.upsertOwnEntry(AppUser(
@@ -25,7 +30,8 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final faculty = await container.read(selectableFacultyProvider.future);
-    expect(faculty.map((e) => e.uid), ['f1']);
+    final all = await container.read(allDirectoryProvider.future);
+    expect(all.map((e) => e.uid), ['f1', 'd1']); // sorted by full name
+    expect(all.map((e) => e.role), ['faculty', 'dean']);
   });
 }

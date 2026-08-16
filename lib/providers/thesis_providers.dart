@@ -12,13 +12,6 @@ final facultyDirectoryRepositoryProvider =
   (ref) => FacultyDirectoryRepository(ref.watch(firestoreProvider)),
 );
 
-/// Faculty a student may nominate. Excludes the dean and coordinators,
-/// who sit on every panel ex officio.
-final selectableFacultyProvider =
-    StreamProvider<List<FacultyDirectoryEntry>>((ref) {
-  return ref.watch(facultyDirectoryRepositoryProvider).watchSelectableFaculty();
-});
-
 /// Every nominable directory entry — faculty, coordinators and the dean
 /// alike. Backs the nomination pickers, which offer coordinators and the
 /// dean as ordinary nominees "for the sake of records" even though they also

@@ -35,18 +35,6 @@ class FacultyDirectoryRepository {
     return FacultyDirectoryEntry.fromMap(uid, snap.data()!);
   }
 
-  /// Only `faculty` — the dean and coordinators are ex officio and must not
-  /// appear in the picker.
-  Stream<List<FacultyDirectoryEntry>> watchSelectableFaculty() {
-    return _col.where('role', isEqualTo: 'faculty').snapshots().map((s) {
-      final list = s.docs
-          .map((d) => FacultyDirectoryEntry.fromMap(d.id, d.data()))
-          .toList();
-      list.sort((a, b) => a.fullName.compareTo(b.fullName));
-      return list;
-    });
-  }
-
   Future<List<FacultyDirectoryEntry>> fetchExOfficio() async {
     final snap =
         await _col.where('role', whereIn: ['coordinator', 'dean']).get();
@@ -60,8 +48,14 @@ class FacultyDirectoryRepository {
   /// still be nominated by name as an ordinary adviser or panelist "for the
   /// sake of records," even though they also sit on every panel ex officio
   /// (via [fetchExOfficio]) without being asked to accept — so the picker
-  /// that offers ordinary nominees needs the whole directory, not just
-  /// [watchSelectableFaculty]'s faculty-only slice.
+  /// that offers ordinary nominees needs the whole directory.
+  ///
+  /// A faculty-only slice (`watchSelectableFaculty`, with a
+  /// `selectableFacultyProvider` over it) used to sit beside this one and has
+  /// been removed. Under that ruling it can never be the right source for a
+  /// nomination picker — it would silently drop exactly the people the owner
+  /// asked to keep nominable — and nothing in `lib/` watched it. Leaving it
+  /// available only invited someone to wire up the wrong one.
   Stream<List<FacultyDirectoryEntry>> watchAllDirectory() {
     return _col.snapshots().map((s) {
       final list = s.docs
