@@ -1,51 +1,85 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
+import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/core/widgets/status_chip.dart';
+import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 class CoordinatorDashboard extends ConsumerWidget {
   const CoordinatorDashboard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final queueAsync = ref.watch(
+        thesesByStatusProvider(ThesisStatus.nominationPendingCoordinator));
+
     return ResponsiveScaffold(
+      // Identifies this dashboard for routing tests. Asserting on heading
+      // copy instead ties every routing test to wording that changes.
+      key: const Key('coordinatorDashboard'),
       title: 'eThesisHub',
       selectedIndex: 0,
-      // 'Faculty' now leads somewhere. 'Defenses' is still inert — that
-      // module is not built — and a tab that silently does nothing reads as
-      // a broken app rather than an unbuilt one, so it should either lead
-      // somewhere or be removed before the defence.
+      // The coordinator is the one role with two real places to be, so this
+      // is the only dashboard whose navigation shows. 'Defenses' and
+      // 'Reports' arrive with their modules.
       onDestinationSelected: (i) {
         if (i == 1) context.go('/invites');
       },
       destinations: const [
-        NavDestination(label: 'Theses', icon: Icons.folder),
-        NavDestination(label: 'Faculty', icon: Icons.badge),
-        NavDestination(label: 'Defenses', icon: Icons.event),
+        NavDestination(label: 'Theses', icon: Icons.folder_outlined),
+        NavDestination(label: 'Faculty', icon: Icons.badge_outlined),
       ],
       actions: const [SignOutButton()],
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('All Theses'),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('goToReview'),
-              onPressed: () => context.go('/review'),
-              child: const Text('Nomination recommendations'),
+      body: PageShell(
+        title: 'Nomination recommendations',
+        subtitle: 'Theses whose nominees have all accepted, waiting on you.',
+        children: [
+          queueAsync.when(
+            loading: () => const LoadingState(),
+            error: (_, _) => const ErrorState(
+              message: 'Could not load the review queue. Check your '
+                  'connection and try again.',
             ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              key: const Key('goToFaculty'),
-              onPressed: () => context.go('/invites'),
-              child: const Text('Invite faculty'),
-            ),
-          ],
-        ),
+            data: (theses) {
+              if (theses.isEmpty) {
+                return const EmptyState(
+                  icon: Icons.task_alt,
+                  title: 'Nothing waiting',
+                  message: 'A thesis appears here once every nominee has '
+                      'accepted their Conforme.',
+                );
+              }
+              return Column(
+                children: [
+                  for (final t in theses)
+                    ListTile(
+                      title: Text(t.workingTitle),
+                      subtitle: Text('${t.program} · ${t.college}'),
+                      trailing: StatusChip(t.status, dense: true),
+                    ),
+                ],
+              );
+            },
+          ),
+          const Gap.lg(),
+          FilledButton(
+            key: const Key('goToReview'),
+            onPressed: () => context.go('/review'),
+            child: const Text('Open review queue'),
+          ),
+          const Gap.sm(),
+          OutlinedButton(
+            key: const Key('goToFaculty'),
+            onPressed: () => context.go('/invites'),
+            child: const Text('Invite faculty'),
+          ),
+        ],
       ),
     );
   }
 }
-

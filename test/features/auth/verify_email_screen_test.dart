@@ -356,7 +356,7 @@ void main() {
     await tester.tap(find.byKey(const Key('reload')));
     await tester.pumpAndSettle();
 
-    expect(find.text('My Thesis'), findsOneWidget,
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget,
         reason: 'without invalidating authStateProvider, the router never '
             're-evaluates its redirect and the user is stuck on '
             '/verify-email');
@@ -408,7 +408,7 @@ void main() {
     await tester.tap(find.byKey(const Key('reload')));
     await tester.pumpAndSettle();
 
-    expect(find.text('My Thesis'), findsOneWidget,
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget,
         reason: 'a non-permission-denied directory write failure must not '
             'skip the authStateProvider invalidate and strand the user on '
             '/verify-email');

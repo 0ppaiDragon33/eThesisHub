@@ -93,7 +93,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
   });
 
   testWidgets('faculty lands on the faculty dashboard', (tester) async {
@@ -107,7 +107,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('My Advisees'), findsOneWidget);
+    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
   });
 
   testWidgets('coordinator lands on the coordinator dashboard',
@@ -122,7 +122,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('All Theses'), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorDashboard')), findsOneWidget);
   });
 
   testWidgets('dean lands on the dean dashboard', (tester) async {
@@ -136,7 +136,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('College Overview'), findsOneWidget);
+    expect(find.byKey(const Key('deanDashboard')), findsOneWidget);
   });
 
   testWidgets('student cannot reach the dean dashboard', (tester) async {
@@ -150,15 +150,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
 
     // Attempt to reach another role's dashboard by route.
     container.read(goRouterProvider).go('/dean');
     await tester.pumpAndSettle();
 
     // Should be redirected back to student dashboard
-    expect(find.text('College Overview'), findsNothing);
-    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.byKey(const Key('deanDashboard')), findsNothing);
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
   });
 
   testWidgets('faculty cannot reach the coordinator dashboard', (tester) async {
@@ -172,15 +172,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('My Advisees'), findsOneWidget);
+    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
 
     // Attempt to reach another role's dashboard by route.
     container.read(goRouterProvider).go('/coordinator');
     await tester.pumpAndSettle();
 
     // Should be redirected back to faculty dashboard
-    expect(find.text('All Theses'), findsNothing);
-    expect(find.text('My Advisees'), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
+    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
   });
 
   testWidgets('signed-out user can reach registration from sign-in',
@@ -247,13 +247,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('signOut')));
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in'), findsWidgets);
-    expect(find.text('My Thesis'), findsNothing);
+    expect(find.byKey(const Key('studentDashboard')), findsNothing);
   });
 
   // --- BLOCKING 4: guard coverage for the two primary auth redirects ---
@@ -275,7 +275,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in'), findsWidgets);
-    expect(find.text('All Theses'), findsNothing);
+    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
   });
 
   testWidgets(
@@ -297,6 +297,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Verify your email'), findsOneWidget);
-    expect(find.text('All Theses'), findsNothing);
+    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
   });
 }

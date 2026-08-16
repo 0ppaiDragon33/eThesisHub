@@ -66,7 +66,17 @@ void main() {
 
   testWidgets('a student reaches their thesis status screen from the dashboard',
       (tester) async {
-    final c = await containerFor('student', 'u1');
+    // Needs a thesis to exist: with none, the dashboard shows the
+    // create-your-group empty state instead, which is the correct
+    // behaviour and has its own test above.
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').add({
+      'leaderUid': 'u1', 'status': 'draft', 'panelistUids': [],
+      'adviserUid': null, 'memberNames': [], 'workingTitle': 'A thesis',
+      'college': 'CICT', 'program': 'BSIT', 'semester': 'First',
+      'academicYear': '2026-2027',
+    });
+    final c = await containerFor('student', 'u1', db: db);
     addTearDown(c.dispose);
     await tester.pumpWidget(
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
@@ -189,7 +199,7 @@ void main() {
     c.read(goRouterProvider).go('/review');
     await tester.pumpAndSettle();
     expect(find.text('Nomination recommendations'), findsNothing);
-    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
   });
 
   testWidgets('a student cannot reach the nomination inbox', (tester) async {
@@ -202,7 +212,7 @@ void main() {
     c.read(goRouterProvider).go('/nominations');
     await tester.pumpAndSettle();
     expect(find.text('Nomination inbox'), findsNothing);
-    expect(find.text('My Thesis'), findsOneWidget);
+    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
   });
 
   testWidgets('a faculty member cannot reach the create-thesis screen',
@@ -216,7 +226,7 @@ void main() {
     c.read(goRouterProvider).go('/thesis/create');
     await tester.pumpAndSettle();
     expect(find.text('Create thesis group'), findsNothing);
-    expect(find.text('My Advisees'), findsOneWidget);
+    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
   });
 
   testWidgets(
@@ -267,7 +277,11 @@ void main() {
 
     await tester.pumpWidget(
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    // Also not pumpAndSettle, one step earlier and for the same reason: the
+    // student dashboard itself now renders a spinner while myThesisProvider
+    // is unsettled, and this test holds it unsettled on purpose.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     c.read(goRouterProvider).go('/thesis/nominate');
     // Not pumpAndSettle: the loading branch renders a CircularProgress
