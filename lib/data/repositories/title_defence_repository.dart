@@ -293,4 +293,27 @@ class TitleDefenceRepository {
       // log write failed — the same posture the sign-in path takes.
     }
   }
+
+  /// The id of every thesis this person holds a position on.
+  ///
+  /// A collection-group query on `nominations`, not a query on `theses`: the
+  /// rules allow a faculty member to LIST theses only if they are the leader,
+  /// a coordinator or the dean. They may however read their own nominations
+  /// across every thesis, which is the same query
+  /// `watchMyPendingNominations` uses — and it reuses that query's existing
+  /// COLLECTION_GROUP index on `nomineeUid`, so no index change is needed.
+  ///
+  /// No `conformeStatus` filter: a coordinator and the dean sit on every
+  /// panel ex officio and never accept, so filtering on acceptance would hide
+  /// exactly the people who chair the defence.
+  Stream<List<String>> watchMyThesisIds(String uid) {
+    return _db
+        .collectionGroup('nominations')
+        .where('nomineeUid', isEqualTo: uid)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) => d.reference.parent.parent!.id)
+            .toSet()
+            .toList());
+  }
 }

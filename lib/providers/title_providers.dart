@@ -31,3 +31,10 @@ final composingProvider =
     StreamProvider.family<List<ComposingIndicator>, String>((ref, thesisId) {
   return ref.watch(titleDefenceRepositoryProvider).watchComposing(thesisId);
 });
+
+/// Thesis ids the signed-in faculty member holds a position on.
+final myThesisIdsProvider = StreamProvider<List<String>>((ref) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(const []);
+  return ref.watch(titleDefenceRepositoryProvider).watchMyThesisIds(uid);
+});
