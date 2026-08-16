@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -35,8 +36,7 @@ class NominationInboxScreen extends ConsumerStatefulWidget {
       _NominationInboxScreenState();
 }
 
-class _NominationInboxScreenState
-    extends ConsumerState<NominationInboxScreen> {
+class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
   final _reason = TextEditingController();
   String? _decliningThesisId;
   String? _error;
@@ -62,7 +62,9 @@ class _NominationInboxScreenState
     });
 
     try {
-      await ref.read(thesisRepositoryProvider).respondToNomination(
+      await ref
+          .read(thesisRepositoryProvider)
+          .respondToNomination(
             thesisId: thesisId,
             nomineeUid: uid,
             accept: accept,
@@ -79,8 +81,7 @@ class _NominationInboxScreenState
       // the inbox open, the last co-nominee accepts (advancing the
       // thesis), then the stale tab taps Accept/Decline.
       if (mounted) {
-        setState(
-            () => _error = 'This nomination has already been completed.');
+        setState(() => _error = 'This nomination has already been completed.');
       }
     } on FirebaseException catch (_) {
       // Checked before the catch-all: FirebaseAuthException is itself a
@@ -112,89 +113,115 @@ class _NominationInboxScreenState
         // are no server-side logs on Spark, so the code shown beside this
         // message is the only way to tell a missing index from a rules
         // refusal without attaching a debugger.
-        error: (e, _) => PageShell(children: [
-          ErrorState(error: e, message: 'Could not load your nominations.'),
-        ]),
+        error: (e, _) => PageShell(
+          children: [
+            ErrorState(error: e, message: 'Could not load your nominations.'),
+          ],
+        ),
         data: (items) {
           if (items.isEmpty) {
-            return const PageShell(children: [
-              EmptyState(
-                icon: Icons.drafts_outlined,
-                title: 'No nominations waiting',
-                message: 'When a group nominates you as their adviser or a '
-                    'panel member, the request appears here.',
-              ),
-            ]);
-          }
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!,
-                      key: const Key('error'),
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
+            return const PageShell(
+              children: [
+                EmptyState(
+                  icon: Icons.drafts_outlined,
+                  title: 'No nominations waiting',
+                  message:
+                      'When a group nominates you as their adviser or a '
+                      'panel member, the request appears here.',
                 ),
-              for (final item in items)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _ThesisTitle(thesisId: item.thesisId),
-                        Text('Nominated as ${item.nomination.position.value}'),
-                        if (_decliningThesisId == item.thesisId) ...[
-                          const SizedBox(height: 8),
-                          TextField(
-                            key: const Key('declineReason'),
-                            controller: _reason,
-                            decoration: const InputDecoration(
-                                labelText: 'Reason for declining'),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                        Row(
+              ],
+            );
+          }
+          // Held to the same measure as every other screen. A ListView on
+          // its own runs edge to edge, so on a desktop window these cards
+          // stretched to a metre wide while the screen either side of them
+          // sat in a 620px column.
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: AppTokens.measure),
+              child: ListView(
+                padding: const EdgeInsets.all(AppTokens.lg),
+                children: [
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _error!,
+                        key: const Key('error'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  for (final item in items)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            FilledButton(
-                              key: Key('accept-${item.thesisId}'),
-                              onPressed: (uid == null ||
-                                      _busy.contains(item.thesisId))
-                                  ? null
-                                  : () => _respond(uid, item.thesisId, true),
-                              child: const Text('Accept'),
+                            _ThesisTitle(thesisId: item.thesisId),
+                            Text(
+                              'Nominated as ${item.nomination.position.value}',
                             ),
-                            const SizedBox(width: 10),
-                            if (_decliningThesisId == item.thesisId)
-                              OutlinedButton(
-                                key: const Key('confirmDecline'),
-                                onPressed: (uid == null ||
-                                        _busy.contains(item.thesisId))
-                                    ? null
-                                    : () =>
-                                        _respond(uid, item.thesisId, false),
-                                child: const Text('Confirm decline'),
-                              )
-                            else
-                              OutlinedButton(
-                                key: Key('decline-${item.thesisId}'),
-                                onPressed: _busy.contains(item.thesisId)
-                                    ? null
-                                    : () => setState(() {
-                                          _decliningThesisId = item.thesisId;
-                                          _error = null;
-                                        }),
-                                child: const Text('Decline'),
+                            if (_decliningThesisId == item.thesisId) ...[
+                              const SizedBox(height: 8),
+                              TextField(
+                                key: const Key('declineReason'),
+                                controller: _reason,
+                                decoration: const InputDecoration(
+                                  labelText: 'Reason for declining',
+                                ),
                               ),
+                            ],
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                FilledButton(
+                                  key: Key('accept-${item.thesisId}'),
+                                  onPressed:
+                                      (uid == null ||
+                                          _busy.contains(item.thesisId))
+                                      ? null
+                                      : () =>
+                                            _respond(uid, item.thesisId, true),
+                                  child: const Text('Accept'),
+                                ),
+                                const SizedBox(width: 10),
+                                if (_decliningThesisId == item.thesisId)
+                                  OutlinedButton(
+                                    key: const Key('confirmDecline'),
+                                    onPressed:
+                                        (uid == null ||
+                                            _busy.contains(item.thesisId))
+                                        ? null
+                                        : () => _respond(
+                                            uid,
+                                            item.thesisId,
+                                            false,
+                                          ),
+                                    child: const Text('Confirm decline'),
+                                  )
+                                else
+                                  OutlinedButton(
+                                    key: Key('decline-${item.thesisId}'),
+                                    onPressed: _busy.contains(item.thesisId)
+                                        ? null
+                                        : () => setState(() {
+                                            _decliningThesisId = item.thesisId;
+                                            _error = null;
+                                          }),
+                                    child: const Text('Decline'),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-            ],
+                ],
+              ),
+            ),
           );
         },
       ),
@@ -209,8 +236,7 @@ class _ThesisTitle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final thesis =
-        ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
+    final thesis = ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
     return StreamBuilder(
       stream: thesis,
       builder: (context, snap) => Text(
