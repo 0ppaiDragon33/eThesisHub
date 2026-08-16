@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:ethesishub/data/models/candidate_title.dart';
+import 'package:ethesishub/data/models/composing_indicator.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/title_comment.dart';
 import 'package:ethesishub/data/services/audit_service.dart';
@@ -160,5 +161,48 @@ class TitleDefenceRepository {
       'body': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  CollectionReference<Map<String, dynamic>> _composing(String thesisId) =>
+      _thesis(thesisId).collection('titleComposing');
+
+  /// Live "is writing" markers, stale ones included — the reader expires
+  /// them via [ComposingIndicator.isStaleAt], because there are no Cloud
+  /// Functions to sweep a laptop that was closed mid-comment.
+  Stream<List<ComposingIndicator>> watchComposing(String thesisId) {
+    return _composing(thesisId).snapshots().map((s) => s.docs
+        .map((d) => ComposingIndicator.fromMap(d.id, {
+              ...d.data(),
+              'updatedAt': (d.data()['updatedAt'] as Timestamp?)?.toDate(),
+            }))
+        .toList());
+  }
+
+  /// Called on focus and then roughly every 5 seconds while a comment field
+  /// is open. Deliberately not per keystroke: Spark allows 20,000 writes a
+  /// day, and keystroke-level writes would exhaust that in a few defences.
+  ///
+  /// Keyed by uid, so one person composing cannot produce two indicators.
+  Future<void> markComposing({
+    required String thesisId,
+    required String uid,
+    required String name,
+    required String role,
+    required String candidateTitleId,
+  }) {
+    return _composing(thesisId).doc(uid).set({
+      'name': name,
+      'role': role,
+      'candidateTitleId': candidateTitleId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// On submit or on blur. A double clear is normal and must not throw.
+  Future<void> clearComposing({
+    required String thesisId,
+    required String uid,
+  }) {
+    return _composing(thesisId).doc(uid).delete();
   }
 }

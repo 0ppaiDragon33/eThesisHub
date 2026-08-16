@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/candidate_title.dart';
+import 'package:ethesishub/data/models/composing_indicator.dart';
 import 'package:ethesishub/data/models/title_comment.dart';
 import 'package:ethesishub/data/repositories/title_defence_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -22,4 +23,11 @@ final candidateTitlesProvider =
 final titleCommentsProvider =
     StreamProvider.family<List<TitleComment>, String>((ref, thesisId) {
   return ref.watch(titleDefenceRepositoryProvider).watchComments(thesisId);
+});
+
+/// Who is currently writing, stale entries included. Filter with
+/// `isStaleAt(DateTime.now())` at the point of display.
+final composingProvider =
+    StreamProvider.family<List<ComposingIndicator>, String>((ref, thesisId) {
+  return ref.watch(titleDefenceRepositoryProvider).watchComposing(thesisId);
 });
