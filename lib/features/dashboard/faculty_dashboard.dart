@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
@@ -51,8 +52,17 @@ class FacultyDashboard extends ConsumerWidget {
         const SignOutButton(),
       ],
       body: Center(
-        child: Text(
-          mode == FacultyMode.adviser ? 'My Advisees' : 'My Panels',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(mode == FacultyMode.adviser ? 'My Advisees' : 'My Panels'),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const Key('goToInbox'),
+              onPressed: () => context.go('/nominations'),
+              child: const Text('Nomination inbox'),
+            ),
+          ],
         ),
       ),
     );

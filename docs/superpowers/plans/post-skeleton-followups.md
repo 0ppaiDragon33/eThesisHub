@@ -122,3 +122,12 @@ Express authorization layer, and Firebase Auth replaces both JWT session handlin
 and bcrypt password storage. The security boundary moved from application code to
 the data layer, which is stronger â€” it holds even when a caller bypasses the app
 entirely, which the verification record demonstrates.
+
+## From M1a Task 9 (deferred by Ruling 10)
+
+- **Nominate screen: no floor on the panel cap.** `maxPanelists = 9 - 1 - exOfficioSeatCount` can fall below the required 3 when a college has 7+ ex officio members (dean + coordinators). The screen then shows a contradictory "minimum 3, at most 1", and submit reports "Choose at least three panel members" without naming the structural cause. Cannot occur at ISUFST CICT (1 dean, 1-2 coordinators -> cap of 6-7). Fix: floor the cap and give the sub-3 case its own message.
+- **Nominate screen: duplicate person across roles** is only rejected at submit, not in the dropdowns. Harmless - the repository collision precedence collapses it correctly.
+- **Create-thesis screen: `kAcademicYears` is hardcoded** to 2026-2027 and 2027-2028 and will expire.
+- **Nomination inbox: add `exOfficio == false` to the query** as defence in depth. The ex-officio exclusion currently rides on `conformeStatus == 'pending'`, which is sound only because the rules pin the two together at create.
+- **Form 1 PDF: embed a bundled serif Unicode font.** The `pdf` package built-in Helvetica silently drops em dashes, en dashes and curly quotes (proven by probe; middot and Latin-1 accents are fine). An em dash was hyphen-substituted as a point fix, but the next curly quote or accented-beyond-Latin-1 name is lost silently. An embedded font also matches the serif face of the layout approved with the owner.
+- **Stalled-thesis recovery (M1a Ruling 13).** A declined nomination stalls a thesis permanently; recovery is Console-only. Needs a coordinator "reopen" action: a rules branch letting a coordinator return a stalled thesis to `draft`, the UI for it, and a fix for `_nominationIds` being snapshotted outside the approval transaction (re-nomination adds/removes nomination docs, which breaks that assumption — store nomination ids on the thesis doc so `tx.get` can read them).
