@@ -23,18 +23,24 @@ pw.Widget _signable(String name, String role, {String? status}) {
             children: [
               pw.SizedBox(height: 22),
               pw.Text(name, style: const pw.TextStyle(fontSize: 11.5)),
-              pw.Text(role,
-                  style: const pw.TextStyle(
-                      fontSize: 9, color: PdfColors.grey700)),
+              pw.Text(
+                role,
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                ),
+              ),
             ],
           ),
         ),
         if (status != null)
           pw.Expanded(
             flex: 42,
-            child: pw.Text(status,
-                textAlign: pw.TextAlign.right,
-                style: const pw.TextStyle(fontSize: 9, color: _green)),
+            child: pw.Text(
+              status,
+              textAlign: pw.TextAlign.right,
+              style: const pw.TextStyle(fontSize: 9, color: _green),
+            ),
           ),
       ],
     ),
@@ -42,7 +48,10 @@ pw.Widget _signable(String name, String role, {String? status}) {
 }
 
 const _bodyStyle = pw.TextStyle(fontSize: 11);
-const _boldNameStyle = pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold);
+const _boldNameStyle = pw.TextStyle(
+  fontSize: 11,
+  fontWeight: pw.FontWeight.bold,
+);
 
 /// The panel members read as one comma-joined, "and"-terminated sentence
 /// fragment — shared by the body paragraph and its bold span so the two can
@@ -50,7 +59,7 @@ const _boldNameStyle = pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold
 String panelSentence(List<String> panelNames) => panelNames.length <= 1
     ? panelNames.join()
     : '${panelNames.sublist(0, panelNames.length - 1).join(', ')} '
-        'and ${panelNames.last}';
+          'and ${panelNames.last}';
 
 /// §7.3: "the printed form's wording, with nominated names in bold." Built
 /// as a span tree (rather than a single `pw.Text`) specifically so the
@@ -62,31 +71,42 @@ String panelSentence(List<String> panelNames) => panelNames.length <= 1
 /// stream.
 pw.TextSpan buildAdviserParagraphSpan(Form1Data data) {
   final t = data.thesis;
-  return pw.TextSpan(style: _bodyStyle, children: [
-    pw.TextSpan(
-        text: '${data.subjectPronoun} have the honor to nominate Prof./Inst. '),
-    pw.TextSpan(
-        text: data.adviserName.toUpperCase(), style: _boldNameStyle),
-    pw.TextSpan(
-        text: ' to be ${data.possessivePronoun} Undergraduate Thesis Adviser '
+  return pw.TextSpan(
+    style: _bodyStyle,
+    children: [
+      pw.TextSpan(
+        text: '${data.subjectPronoun} have the honor to nominate Prof./Inst. ',
+      ),
+      pw.TextSpan(text: data.adviserName.toUpperCase(), style: _boldNameStyle),
+      pw.TextSpan(
+        text:
+            ' to be ${data.possessivePronoun} Undergraduate Thesis Adviser '
             'this ${t.semester.toUpperCase()} semester, Academic Year '
-            '${t.academicYear}.'),
-  ]);
+            '${t.academicYear}.',
+      ),
+    ],
+  );
 }
 
 /// Same treatment as [buildAdviserParagraphSpan], for the panel members'
 /// paragraph.
 pw.TextSpan buildPanelParagraphSpan(Form1Data data) {
-  return pw.TextSpan(style: _bodyStyle, children: [
-    pw.TextSpan(
-        text: 'Furthermore, ${data.subjectPronoun.toLowerCase()} '
+  return pw.TextSpan(
+    style: _bodyStyle,
+    children: [
+      pw.TextSpan(
+        text:
+            'Furthermore, ${data.subjectPronoun.toLowerCase()} '
             '${data.researchers.length > 1 ? "are" : "am"} nominating '
-            'Prof./Inst. '),
-    pw.TextSpan(
+            'Prof./Inst. ',
+      ),
+      pw.TextSpan(
         text: panelSentence(data.panelNames).toUpperCase(),
-        style: _boldNameStyle),
-    pw.TextSpan(text: ' to be ${data.possessivePronoun} panel members.'),
-  ]);
+        style: _boldNameStyle,
+      ),
+      pw.TextSpan(text: ' to be ${data.possessivePronoun} panel members.'),
+    ],
+  );
 }
 
 /// Generates Form 1 — Nomination of Thesis Adviser and Panel Members — as a
@@ -99,144 +119,204 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
   final t = data.thesis;
 
   doc.addPage(
-    pw.Page(
+    // MultiPage, not Page. `pw.Page` is a fixed single sheet and silently
+    // CLIPS whatever does not fit — no exception, no warning, just missing
+    // content. A real submission proved it: a group of six researchers with
+    // three panel members ran past the bottom of the sheet, and the
+    // generated form ended mid-Conforme. The last panel member's row, both
+    // ex-officio entries, the Coordinator's "Recommending Approval" block,
+    // the Dean's "Approved" block and the page footer were all simply
+    // absent — from the document that goes to the Dean for signature.
+    //
+    // The layout was tuned so a five-researcher group fits one sheet, and it
+    // still does. This only changes what happens when a group is larger:
+    // the form continues onto a second sheet instead of losing the approval
+    // it exists to record.
+    pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(40, 26, 40, 26),
-      build: (context) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text('RD-30-06/24-04',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
-          pw.SizedBox(height: 6),
-          pw.Center(
-            child: pw.Column(children: [
-              pw.Text('Republic of the Philippines',
-                  style: const pw.TextStyle(fontSize: 10)),
-              pw.Text(
-                  'ILOILO STATE UNIVERSITY OF FISHERIES SCIENCE AND TECHNOLOGY',
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
+      build: (context) => [
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'RD-30-06/24-04',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    'Republic of the Philippines',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                  pw.Text(
+                    'ILOILO STATE UNIVERSITY OF FISHERIES SCIENCE AND TECHNOLOGY',
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
                       fontSize: 11,
                       fontWeight: pw.FontWeight.bold,
-                      color: _accent)),
-              pw.Text('RESEARCH AND DEVELOPMENT',
-                  style: const pw.TextStyle(fontSize: 10)),
-              pw.Text('Tiwi, Barotac Nuevo, Iloilo | research@isufst.edu.ph',
-                  style: const pw.TextStyle(fontSize: 8.5)),
-            ]),
-          ),
-          pw.SizedBox(height: 5),
-          pw.Container(height: 2, color: _accent),
-          pw.SizedBox(height: 4),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text('Form 1. Nomination of Thesis Adviser and Panel Members',
-                  style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold)),
-              pw.Text('Ref. ${t.id.substring(0, t.id.length.clamp(0, 8)).toUpperCase()}',
-                  style: const pw.TextStyle(
-                      fontSize: 9, color: PdfColors.grey700)),
-            ],
-          ),
-          pw.SizedBox(height: 12),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text(
-                '${data.submittedOn.day} ${_month(data.submittedOn.month)} '
-                '${data.submittedOn.year}'),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Text('The Dean'),
-          pw.Text('College of ${t.college}'),
-          pw.Text('Iloilo State University of Fisheries Science and Technology'),
-          pw.Text('Barotac Nuevo, Iloilo'),
-          pw.SizedBox(height: 10),
-          pw.Text('Sir/Madam:'),
-          pw.SizedBox(height: 6),
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 30),
-            child: pw.RichText(
-              text: buildAdviserParagraphSpan(data),
-              textAlign: pw.TextAlign.justify,
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 30),
-            child: pw.RichText(
-              text: buildPanelParagraphSpan(data),
-              textAlign: pw.TextAlign.justify,
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 30),
-            child: pw.Text(
-                'Your approval on this matter is highly appreciated.'),
-          ),
-          pw.SizedBox(height: 12),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pw.Text('Very truly yours,',
-                    style: const pw.TextStyle(fontSize: 11)),
-                for (final r in data.researchers) ...[
-                  pw.SizedBox(height: 20),
-                  pw.Text(r.name.toUpperCase(),
-                      style: pw.TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: r.isLeader
-                              ? pw.FontWeight.bold
-                              : pw.FontWeight.normal)),
+                      color: _accent,
+                    ),
+                  ),
                   pw.Text(
-                      r.isLeader ? 'Researcher · Group Leader' : 'Researcher',
-                      style: const pw.TextStyle(
-                          fontSize: 9, color: PdfColors.grey700)),
+                    'RESEARCH AND DEVELOPMENT',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                  pw.Text(
+                    'Tiwi, Barotac Nuevo, Iloilo | research@isufst.edu.ph',
+                    style: const pw.TextStyle(fontSize: 8.5),
+                  ),
                 ],
+              ),
+            ),
+            pw.SizedBox(height: 5),
+            pw.Container(height: 2, color: _accent),
+            pw.SizedBox(height: 4),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Form 1. Nomination of Thesis Adviser and Panel Members',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.Text(
+                  'Ref. ${t.id.substring(0, t.id.length.clamp(0, 8)).toUpperCase()}',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.grey700,
+                  ),
+                ),
               ],
             ),
-          ),
-          pw.SizedBox(height: 14),
-          pw.Text('Conforme:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          for (final row in data.conformeRows)
-            _signable(row.name, row.role, status: row.status),
-          if (data.coordinatorName != null) ...[
-            pw.Text('Recommending Approval:',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            _signable(data.coordinatorName!, 'College Research Coordinator',
-                status: 'Recommended · '
-                    '${_stampOf(t.coordinatorRecommendedAt)}'),
-          ],
-          if (data.deanName != null) ...[
-            pw.Text('Approved:',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            _signable(data.deanName!, 'Dean, College of ${t.college}',
-                status: 'Approved · ${_stampOf(t.deanApprovedAt)}'),
-          ],
-          pw.SizedBox(height: 6),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(6),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.blue100),
-              color: PdfColors.blue50,
+            pw.SizedBox(height: 12),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                '${data.submittedOn.day} ${_month(data.submittedOn.month)} '
+                '${data.submittedOn.year}',
+              ),
             ),
-            child: pw.Text(
-              'Electronically completed in eThesisHub. Acceptances recorded '
-              'against verified institutional accounts.',
-              style: const pw.TextStyle(fontSize: 8),
+            pw.SizedBox(height: 10),
+            pw.Text('The Dean'),
+            pw.Text('College of ${t.college}'),
+            pw.Text(
+              'Iloilo State University of Fisheries Science and Technology',
             ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text(
-            'Integrity  ·  Social Justice  ·  Discipline  ·  Academic Excellence',
-            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-          ),
-        ],
-      ),
+            pw.Text('Barotac Nuevo, Iloilo'),
+            pw.SizedBox(height: 10),
+            pw.Text('Sir/Madam:'),
+            pw.SizedBox(height: 6),
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 30),
+              child: pw.RichText(
+                text: buildAdviserParagraphSpan(data),
+                textAlign: pw.TextAlign.justify,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 30),
+              child: pw.RichText(
+                text: buildPanelParagraphSpan(data),
+                textAlign: pw.TextAlign.justify,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 30),
+              child: pw.Text(
+                'Your approval on this matter is highly appreciated.',
+              ),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Very truly yours,',
+                    style: const pw.TextStyle(fontSize: 11),
+                  ),
+                  for (final r in data.researchers) ...[
+                    pw.SizedBox(height: 20),
+                    pw.Text(
+                      r.name.toUpperCase(),
+                      style: pw.TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: r.isLeader
+                            ? pw.FontWeight.bold
+                            : pw.FontWeight.normal,
+                      ),
+                    ),
+                    pw.Text(
+                      r.isLeader ? 'Researcher · Group Leader' : 'Researcher',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 14),
+            pw.Text(
+              'Conforme:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+            for (final row in data.conformeRows)
+              _signable(row.name, row.role, status: row.status),
+            if (data.coordinatorName != null) ...[
+              pw.Text(
+                'Recommending Approval:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              _signable(
+                data.coordinatorName!,
+                'College Research Coordinator',
+                status:
+                    'Recommended · '
+                    '${_stampOf(t.coordinatorRecommendedAt)}',
+              ),
+            ],
+            if (data.deanName != null) ...[
+              pw.Text(
+                'Approved:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              _signable(
+                data.deanName!,
+                'Dean, College of ${t.college}',
+                status: 'Approved · ${_stampOf(t.deanApprovedAt)}',
+              ),
+            ],
+            pw.SizedBox(height: 6),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(6),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.blue100),
+                color: PdfColors.blue50,
+              ),
+              child: pw.Text(
+                'Electronically completed in eThesisHub. Acceptances recorded '
+                'against verified institutional accounts.',
+                style: const pw.TextStyle(fontSize: 8),
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Text(
+              'Integrity  ·  Social Justice  ·  Discipline  ·  Academic Excellence',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            ),
+          ],
+        ),
+      ],
     ),
   );
 
@@ -244,9 +324,19 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
 }
 
 String _month(int m) => const [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ][m - 1];
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+][m - 1];
 
 String _stampOf(DateTime? d) {
   if (d == null) return '';

@@ -223,4 +223,55 @@ void main() {
       expect(s.style?.fontWeight, isNot(pw.FontWeight.bold));
     }
   });
+
+  test('a large group does not lose the approvals off the bottom', () async {
+    // Found in a real submission. The form was a single `pw.Page`, which
+    // CLIPS overflow silently — no exception, nothing in the logs. A group
+    // of six researchers pushed the end of the document past the sheet, and
+    // the generated PDF stopped mid-Conforme: the last panel member, both
+    // ex-officio entries, the Coordinator's recommendation and the Dean's
+    // approval were all absent from the form that goes to the Dean.
+    //
+    // Every existing test here uses a one-member group, which fits, so none
+    // of them could see it.
+    final data = Form1Data.assemble(
+      thesis: buildThesis(
+        memberNames: const [
+          'Bagsain, Karlo June',
+          'De los Reyes, Leonel',
+          'Eredillas, Butch S.',
+          'Solinap, Jepte',
+          'Vargas, Karl Joshua',
+        ],
+        coordinatorRecommendedBy: 'c1',
+        deanApprovedBy: 'd1',
+      ),
+      nominations: [
+        ...acceptedNominations,
+        Nomination(
+            nomineeUid: 'c1', nomineeName: 'Dr. Bito-onon',
+            position: NominationPosition.coordinator, exOfficio: true,
+            conformeStatus: ConformeStatus.exOfficio),
+      ],
+      leaderName: 'Kira Yuuki',
+      directoryNames: const {'c1': 'Dr. Bito-onon', 'd1': 'Dr. Siason'},
+    );
+
+    final text = _extractText(await buildForm1Pdf(data));
+
+    // The last researcher must survive, and so must everything after them.
+    expect(text, contains('VARGAS, KARL JOSHUA'));
+    // Every nominee's Conforme row, including the third panel member.
+    for (final p in ['Dr. p1', 'Dr. p2', 'Dr. p3']) {
+      expect(text, contains(p), reason: '$p lost off the bottom of the form');
+    }
+    // The ex-officio entries, which print after the nominated members.
+    expect(text, contains('Dr. Bito-onon'));
+    expect(text, contains('Dr. Siason'));
+    // And the two signature blocks the whole form exists to carry.
+    expect(text, contains('Recommending Approval'));
+    expect(text, contains('Approved'));
+    // The footer is last, so its presence proves nothing was truncated.
+    expect(text, contains('Academic Excellence'));
+  });
 }
