@@ -194,6 +194,50 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     }
   }
 
+  /// One line in a picker: the name, then whatever actually distinguishes
+  /// this person from a namesake.
+  ///
+  /// The separator is only drawn when there is something after it. Nothing in
+  /// the app fills `college` or `specialization` — they are set by hand in
+  /// the Firebase Console or not at all — so for most entries [subtitle] is
+  /// empty, and a hardcoded ' — ' rendered every option as "Karu Sama — "
+  /// with a dangling dash.
+  ///
+  /// Coordinators and the dean are named as such. They stay in the pickers
+  /// deliberately (the owner ruled they may be nominated by name "for the
+  /// sake of records"), but they also hold an automatic ex-officio seat, so
+  /// choosing one as a PANEL MEMBER adds nobody new and is refused at submit.
+  /// Seeing "— coordinator" next to the name is what makes that legible
+  /// before the refusal rather than after it.
+  String _optionLabel(FacultyDirectoryEntry f) {
+    final detail = [
+      if (f.role == 'coordinator' || f.role == 'dean') f.role,
+      if (f.subtitle.isNotEmpty) f.subtitle,
+    ].join(' · ');
+    return detail.isEmpty ? f.fullName : '${f.fullName} — $detail';
+  }
+
+  /// Everyone already chosen in another slot, so no picker offers them twice.
+  ///
+  /// One person can only hold one position on a thesis — the nomination
+  /// documents are keyed by uid, so a second pick of the same person is not a
+  /// second seat, it silently overwrites the first. Left unfiltered, the
+  /// screen invited exactly that: the same name could fill the adviser slot
+  /// and every panel slot at once, and the failure only surfaced at submit,
+  /// as "Choose at least three panel members" while three dropdowns visibly
+  /// held names (`chosenUids` is a Set, so the duplicates collapsed).
+  ///
+  /// [own] is the slot's own current value, which must stay in its own list —
+  /// `DropdownButtonFormField` asserts its value matches exactly one item.
+  Set<String> _takenExcept(String? own) {
+    final taken = <String>{
+      ?_adviserUid,
+      for (final u in _panelUids) ?u,
+    };
+    if (own != null) taken.remove(own);
+    return taken;
+  }
+
   DropdownButtonFormField<String> _picker(
     String key,
     String label,
@@ -211,6 +255,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     // / `_panelUids` still remember the stale uid so submit can reject it
     // with a proper message instead of a build-time assertion failure.
     final displayValue = faculty.any((f) => f.uid == value) ? value : null;
+    final taken = _takenExcept(value);
     return DropdownButtonFormField<String>(
       key: Key(key),
       initialValue: displayValue,
@@ -218,11 +263,11 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       decoration: InputDecoration(labelText: label),
       items: [
         for (final f in faculty)
-          DropdownMenuItem(
-            value: f.uid,
-            child: Text('${f.fullName} — ${f.subtitle}',
-                overflow: TextOverflow.ellipsis),
-          ),
+          if (!taken.contains(f.uid))
+            DropdownMenuItem(
+              value: f.uid,
+              child: Text(_optionLabel(f), overflow: TextOverflow.ellipsis),
+            ),
       ],
       onChanged: onChanged,
     );

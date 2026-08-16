@@ -102,6 +102,98 @@ void main() {
     expect(values, contains('dean'));
   });
 
+  testWidgets('a person chosen in one slot is not offered in the others',
+      (tester) async {
+    // The nomination documents are keyed by uid, so picking the same person
+    // twice is not two seats — the second write overwrites the first. Left
+    // unfiltered, the same name could fill the adviser slot and every panel
+    // slot, and the only complaint came at submit: "Choose at least three
+    // panel members" while three dropdowns visibly held names, because
+    // `chosenUids` is a Set and the duplicates had collapsed.
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Armada — CICT').last);
+    await tester.pumpAndSettle();
+
+    // `openDropdownValues` sees every DropdownMenuItem mounted at the time,
+    // which is the opened menu PLUS the item each other picker renders to
+    // display its own current selection. So a chosen person still appears
+    // once — as that chip — and the question is whether they appear a SECOND
+    // time as an entry in this menu. Counting occurrences says exactly that;
+    // `isNot(contains(...))` would be testing the chip, not the filter.
+    final panel0 = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel0.where((v) => v == 'Armada'), hasLength(1),
+        reason: 'the adviser chip only — Armada must not also be offered '
+            'as a panel member');
+    expect(panel0, contains('Diamante'));
+
+    await tester.tap(find.byKey(const Key('panel0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Diamante — CICT').last);
+    await tester.pumpAndSettle();
+
+    // A second panel slot now excludes both the adviser and panel 1 — two
+    // chips, no menu entries.
+    final panel1 = await openDropdownValues(tester, const Key('panel1'));
+    expect(panel1.where((v) => v == 'Armada'), hasLength(1));
+    expect(panel1.where((v) => v == 'Diamante'), hasLength(1));
+    expect(panel1, contains('Padojinog'));
+
+    // And the slot holding a pick must still offer that pick, or
+    // DropdownButtonFormField asserts its value matches exactly one item:
+    // its own menu entry plus its own chip.
+    expect(await openDropdownValues(tester, const Key('panel0'))
+        .then((v) => v.where((x) => x == 'Diamante')), hasLength(2));
+  });
+
+  testWidgets('an option with no college shows no dangling separator',
+      (tester) async {
+    // Nothing in the app fills college or specialization, so for a real
+    // faculty account `subtitle` is empty and a hardcoded ' — ' rendered
+    // every option as "Dr. Armada — ".
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('facultyDirectory').doc('bare').set(
+        {'fullName': 'Dr. Bare', 'role': 'faculty'});
+    await seedThesis(db);
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dr. Bare'), findsWidgets);
+    expect(find.textContaining('Dr. Bare —'), findsNothing);
+  });
+
+  testWidgets('an ex-officio office holder is labelled as one in the picker',
+      (tester) async {
+    // They stay nominable by name on purpose, but they also hold an
+    // automatic seat, so picking one as a PANEL member adds nobody and is
+    // refused at submit. The label is what makes that legible beforehand.
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+
+    // Assert the picker's FULL label, college included. The "Also on your
+    // panel" card below renders '<name> — <role>' too, so the shorter string
+    // matches whether or not the picker labels anything — this test passed
+    // with the role suffix deleted until the college was added to it.
+    // `findsWidgets`, not `findsOneWidget`: a closed DropdownButtonFormField
+    // still builds its items offstage to size itself, so each picker on
+    // screen contributes a copy.
+    expect(find.text('Dr. Bito-onon — coordinator · CICT'), findsWidgets);
+    expect(find.text('Dr. Siason — dean · CICT'), findsWidgets);
+    // An ordinary faculty member gets no role suffix.
+    expect(find.textContaining('Dr. Armada — faculty'), findsNothing);
+  });
+
   testWidgets('refuses fewer than three panel members', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(wrap(await seeded()));
@@ -265,7 +357,7 @@ void main() {
     // thesis would then wedge unrecoverably at approve().
     await tester.tap(find.byKey(const Key('panel2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Dr. Bito-onon — CICT').last);
+    await tester.tap(find.text('Dr. Bito-onon — coordinator · CICT').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('submitNomination')));
