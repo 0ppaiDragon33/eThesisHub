@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
+import 'package:ethesishub/core/widgets/password_strength_meter.dart';
 import 'package:ethesishub/features/auth/registration_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -16,6 +17,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _fullName = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _confirmPassword = TextEditingController();
   final _program = TextEditingController();
 
   String? _error;
@@ -26,6 +28,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _fullName.dispose();
     _email.dispose();
     _password.dispose();
+    _confirmPassword.dispose();
     _program.dispose();
     super.dispose();
   }
@@ -40,6 +43,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           fullName: _fullName.text,
           email: _email.text,
           password: _password.text,
+          confirmPassword: _confirmPassword.text,
           program: _program.text.trim().isEmpty ? null : _program.text.trim(),
         );
 
@@ -91,7 +95,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   key: const Key('password'),
                   controller: _password,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password'),
+                  // Rebuilds the meter as they type. The meter is guidance
+                  // only — nothing here blocks a submission.
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    helperText: 'At least 8 characters. A phrase of a few '
+                        'words works well.',
+                  ),
+                ),
+                PasswordStrengthMeter(_password.text),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('confirmPassword'),
+                  controller: _confirmPassword,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Confirm password'),
                 ),
                 const SizedBox(height: 20),
                 if (_error != null)

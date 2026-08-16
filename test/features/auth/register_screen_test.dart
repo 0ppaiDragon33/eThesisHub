@@ -25,8 +25,8 @@ void main() {
     await tester.pumpWidget(wrap(const RegisterScreen(),
         db: FakeFirebaseFirestore()));
 
-    // Exactly four TextField widgets: fullName, email, program, password
-    expect(find.byType(TextField), findsNWidgets(4));
+    // fullName, email, program, password, confirm password
+    expect(find.byType(TextField), findsNWidgets(5));
 
     // No role-selection widgets of any kind
     expect(find.byType(DropdownButton), findsNothing);
@@ -49,6 +49,13 @@ void main() {
     await tester.enterText(find.byKey(const Key('fullName')), 'Someone');
     await tester.enterText(find.byKey(const Key('email')), 'someone@gmail.com');
     await tester.enterText(find.byKey(const Key('password')), 'Str0ngPass!');
+    await tester.enterText(
+        find.byKey(const Key('confirmPassword')), 'Str0ngPass!');
+    // The form grew past the default 800x600 surface when the confirm field
+    // and strength meter arrived, so the button needs scrolling to before a
+    // tap will land on it.
+    await tester.ensureVisible(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('submit')));
     await tester.pumpAndSettle();
 
@@ -63,6 +70,13 @@ void main() {
     await tester.enterText(
         find.byKey(const Key('email')), 'kjvargas@isufst.edu.ph');
     await tester.enterText(find.byKey(const Key('password')), 'Str0ngPass!');
+    await tester.enterText(
+        find.byKey(const Key('confirmPassword')), 'Str0ngPass!');
+    // The form grew past the default 800x600 surface when the confirm field
+    // and strength meter arrived, so the button needs scrolling to before a
+    // tap will land on it.
+    await tester.ensureVisible(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('submit')));
     await tester.pumpAndSettle();
 
@@ -90,6 +104,13 @@ void main() {
     await tester.enterText(
         find.byKey(const Key('email')), 'kjvargas@isufst.edu.ph');
     await tester.enterText(find.byKey(const Key('password')), 'Str0ngPass!');
+    await tester.enterText(
+        find.byKey(const Key('confirmPassword')), 'Str0ngPass!');
+    // The form grew past the default 800x600 surface when the confirm field
+    // and strength meter arrived, so the button needs scrolling to before a
+    // tap will land on it.
+    await tester.ensureVisible(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('submit')));
     await tester.pumpAndSettle();
 
@@ -99,6 +120,83 @@ void main() {
       tester.widget<FilledButton>(find.byKey(const Key('submit'))).onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('a mismatched confirmation never reaches Firebase',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final db = FakeFirebaseFirestore();
+    await tester.pumpWidget(wrap(const RegisterScreen(), db: db));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('fullName')), 'Dr. Armada');
+    await tester.enterText(
+        find.byKey(const Key('email')), 'armada@isufst.edu.ph');
+    await tester.enterText(
+        find.byKey(const Key('password')), 'a decent long passphrase');
+    await tester.enterText(
+        find.byKey(const Key('confirmPassword')), 'a different passphrase');
+    await tester.tap(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('The two passwords do not match.'), findsOneWidget);
+    // The account must not have been created: the profile write is the only
+    // observable side effect here, so its absence is the proof.
+    expect((await db.collection('users').get()).docs, isEmpty);
+  });
+
+  testWidgets('a well-known password is refused with a usable reason',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final db = FakeFirebaseFirestore();
+    await tester.pumpWidget(wrap(const RegisterScreen(), db: db));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('fullName')), 'Dr. Armada');
+    await tester.enterText(
+        find.byKey(const Key('email')), 'armada@isufst.edu.ph');
+    await tester.enterText(find.byKey(const Key('password')), 'password123');
+    await tester.enterText(
+        find.byKey(const Key('confirmPassword')), 'password123');
+    await tester.tap(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
+
+    // It is long enough to pass the length floor, so only the well-known
+    // check can be refusing it — and the message must say what to do, not
+    // recite a rule.
+    expect(find.textContaining('too easy to guess'), findsOneWidget);
+    expect((await db.collection('users').get()).docs, isEmpty);
+  });
+
+  testWidgets('the strength meter appears as you type and rates a passphrase '
+      'above a short complex password', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+        wrap(const RegisterScreen(), db: FakeFirebaseFirestore()));
+    await tester.pumpAndSettle();
+
+    // Nothing before anything is typed — the form should not open with a red
+    // bar already showing.
+    expect(find.byKey(const Key('passwordStrength')), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('password')), 'Xy7!aB2#');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('passwordStrength')), findsOneWidget);
+    expect(find.text('Fair'), findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const Key('password')), 'four word pass phrase');
+    await tester.pumpAndSettle();
+    expect(find.text('Strong'), findsOneWidget);
   });
 }
 

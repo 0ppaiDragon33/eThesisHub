@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/config/email_validator.dart';
+import 'package:ethesishub/core/config/password_policy.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 class RegistrationController {
@@ -22,13 +23,25 @@ class RegistrationController {
     required String fullName,
     required String email,
     required String password,
+    String? confirmPassword,
     String? program,
   }) async {
     if (fullName.trim().isEmpty) return 'Full name is required.';
     final emailError = EmailValidator.validateForRegistration(email);
     if (emailError != null) return emailError;
-    if (password.length < 8) {
-      return 'Password must be at least 8 characters.';
+
+    // Checked here rather than only in the screen: the screen is one caller,
+    // and a rule that lives only in a widget is a rule the next screen
+    // forgets. [PasswordPolicy] is the single place these are decided.
+    final passwordError = PasswordPolicy.validate(password, email: email);
+    if (passwordError != null) return passwordError;
+
+    // Optional so existing callers and tests that predate the confirmation
+    // field keep working; when supplied it must match.
+    if (confirmPassword != null) {
+      final mismatch =
+          PasswordPolicy.validateConfirmation(password, confirmPassword);
+      if (mismatch != null) return mismatch;
     }
 
     final auth = _ref.read(authServiceProvider);
