@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -105,12 +107,24 @@ class _NominationInboxScreenState
       key: const Key('nominationInboxScreen'),
       appBar: AppBar(title: const Text('Nomination inbox')),
       body: pending.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) =>
-            const Center(child: Text('Could not load your nominations.')),
+        loading: () => const LoadingState(label: 'Loading your nominations…'),
+        // The error object is passed through rather than discarded: there
+        // are no server-side logs on Spark, so the code shown beside this
+        // message is the only way to tell a missing index from a rules
+        // refusal without attaching a debugger.
+        error: (e, _) => PageShell(children: [
+          ErrorState(error: e, message: 'Could not load your nominations.'),
+        ]),
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('No pending nominations.'));
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.drafts_outlined,
+                title: 'No nominations waiting',
+                message: 'When a group nominates you as their adviser or a '
+                    'panel member, the request appears here.',
+              ),
+            ]);
           }
           return ListView(
             padding: const EdgeInsets.all(16),
