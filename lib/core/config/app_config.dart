@@ -20,7 +20,7 @@ class AppConfig {
   /// While it is false, [InstitutionalDomainNotice] shows on the register
   /// screen, so the relaxation announces itself rather than being discovered
   /// during a demo.
-  static const bool enforceInstitutionalDomain = false;
+  static const bool enforceInstitutionalDomain = true;
   static const String institutionalDomain = 'isufst.edu.ph';
 
   static const String supabaseUrl = 'https://wevvsskextznmstjfmfo.supabase.co';
