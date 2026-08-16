@@ -181,6 +181,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/theses/$(thesisId)/nominations/$(uid)).data;
     }
 
+    // Single-value cross-check for the Dean's approval, the same technique
+    // already used for `adviserUid`: the approved candidate must be a real
+    // document on THIS thesis. Declared here rather than inline so the path
+    // stays on one line and parses.
+    function candidateTitleExists(thesisId, titleId) {
+      return exists(/databases/$(database)/documents/theses/$(thesisId)/candidateTitles/$(titleId));
+    }
+
     match /theses/{thesisId} {
       // Finding (h): a nominee who has been asked for their Conforme needs
       // the thesis title in their inbox, and `respondToNomination` reads the
@@ -371,6 +379,68 @@ service cloud.firestore {
                     && nominationData(thesisId, request.resource.data.adviserUid)
                        .conformeStatus == 'accepted';
 
+      // ---------------------------------------------------------------
+      // M1b — the title defence.
+      // ---------------------------------------------------------------
+
+      // The leader submits the candidate titles: this is the write that moves
+      // the thesis into the defence. `titleRejected` is a legal starting point
+      // too, so a rejected set can be resubmitted as a new round.
+      //
+      // The prior-status pin is what stops this being replayed: once the
+      // thesis is at `titlePendingDefence` the leader cannot re-run it, so
+      // they cannot swap the presentation (or bump the round, orphaning the
+      // candidates the panel is looking at) while the defence is under way.
+      // `titlesSubmittedAt` is pinned to `request.time` for the same reason
+      // every other timestamp in this file is: the client writes
+      // `FieldValue.serverTimestamp()`, so pinning costs nothing and makes
+      // the date unforgeable.
+      //
+      // `titleRound` is NOT constrained. It is written by the same batch that
+      // creates the candidates, and rules cannot count the candidates that
+      // batch creates; it is a history field the client derives, not a
+      // privilege one. See the limitation note in the report.
+      allow update: if verified()
+                    && isThesisLeader(thesisId)
+                    && resource.data.status in
+                       ['nominationApproved', 'titleRejected']
+                    && request.resource.data.status == 'titlePendingDefence'
+                    && onlyChanged(['status', 'titleRound',
+                                    'titlesSubmittedAt', 'presentationPath',
+                                    'presentationUrl'])
+                    && request.resource.data.titlesSubmittedAt == request.time;
+
+      // The Dean records the decision. Pinned to the prior status so it can
+      // neither be replayed (a decided thesis has left `titlePendingDefence`,
+      // so a second decision is refused) nor skipped (a thesis that never had
+      // a defence cannot be jumped straight to `titleApproved`).
+      //
+      // The two arms are exclusive on the outgoing status, and each names its
+      // own field set, so an approval cannot smuggle in a rejection remark
+      // and a rejection cannot smuggle in an `approvedTitleId`.
+      allow update: if verified()
+                    && isDean()
+                    && resource.data.status == 'titlePendingDefence'
+                    && (
+                      (request.resource.data.status == 'titleApproved'
+                       && onlyChanged(['status', 'approvedTitleId',
+                                       'titleDecidedAt', 'titleDecidedBy'])
+                       // The rules cannot iterate the candidate collection, so
+                       // the approved candidate is checked for existence on
+                       // this thesis but its `round` is not verified — see the
+                       // limitation in the report.
+                       && candidateTitleExists(thesisId,
+                            request.resource.data.approvedTitleId))
+                      ||
+                      (request.resource.data.status == 'titleRejected'
+                       && onlyChanged(['status', 'titleRejectionRemark',
+                                       'titleDecidedAt', 'titleDecidedBy'])
+                       && request.resource.data.titleRejectionRemark is string
+                       && request.resource.data.titleRejectionRemark.size() > 0)
+                    )
+                    && request.resource.data.titleDecidedBy == request.auth.uid
+                    && request.resource.data.titleDecidedAt == request.time;
+
       allow delete: if false;
 
       match /nominations/{nomineeUid} {
@@ -534,6 +604,114 @@ service cloud.firestore {
         allow delete: if isThesisLeader(thesisId)
                       && thesisData(thesisId).status == 'draft'
                       && resource.data.conformeStatus == 'declined';
+      }
+
+      // A panel member on this thesis: the adviser, anyone on panelistUids,
+      // or anyone holding a nomination — which covers the ex officio
+      // Coordinator and Dean, who never appear in panelistUids.
+      //
+      // Deliberately NOT gated on `conformeStatus`: by the time a defence
+      // happens the panel is fixed (the Dean's approval wrote
+      // `panelistUids`), and the ex officio pair never accept anything.
+      function isOnPanel() {
+        let t = thesisData(thesisId);
+        return signedIn() && (
+          t.adviserUid == request.auth.uid ||
+          request.auth.uid in t.panelistUids ||
+          hasNomination(thesisId, request.auth.uid)
+        );
+      }
+
+      // `.get(key, default)` rather than a bare read: a thesis that has never
+      // reached a decision has no `titleDecidedAt` key at all, and a bare
+      // read of a missing key errors, which denies — including for the panel
+      // arms that never needed this check.
+      function titleDecided() {
+        return thesisData(thesisId).get('titleDecidedAt', null) != null;
+      }
+
+      match /candidateTitles/{titleId} {
+        allow get, list: if isThesisLeader(thesisId) || isOnPanel()
+                         || isCoordinator() || isDean();
+
+        // Only while the thesis is at a status that permits a submission.
+        // Batched writes are evaluated against the state BEFORE the batch, so
+        // the thesis is still `nominationApproved` (or `titleRejected`) here
+        // even though the same batch moves it to `titlePendingDefence`.
+        // Probed against the emulator rather than assumed — see the two-sided
+        // "batch evaluation order" test in rules.test.js, which shows the
+        // batched form allowed and the same two writes issued SEQUENTIALLY
+        // denied, because by then the status has already moved.
+        //
+        // `round` is deliberately NOT validated: for the same reason, it
+        // would be compared against the previous round. It is a history
+        // field, not a security one.
+        allow create: if verified()
+                      && isThesisLeader(thesisId)
+                      && thesisData(thesisId).status in
+                         ['nominationApproved', 'titleRejected']
+                      && request.resource.data.keys().hasOnly(
+                           ['titleText', 'justificationPath',
+                            'justificationUrl', 'round', 'submittedAt'])
+                      && request.resource.data.titleText is string
+                      && request.resource.data.titleText.size() > 0
+                      && request.resource.data.submittedAt == request.time;
+
+        // Immutable once submitted: the panel must never be reading a title
+        // the student is still editing, and the Dean's `approvedTitleId`
+        // points at a document whose text must not change under it.
+        allow update, delete: if false;
+      }
+
+      match /titleComments/{commentId} {
+        // The panel reads at any time. The leader reads only once the Dean
+        // has recorded a decision — during the defence the students are in
+        // the room presenting, and the remarks are not theirs to watch.
+        allow get, list: if isOnPanel() || isCoordinator() || isDean()
+                         || (isThesisLeader(thesisId) && titleDecided());
+
+        // Only a panel member may remark, and only in their own name: without
+        // the `authorUid` pin a panelist could file a comment under the
+        // Dean's uid, and the student reads the author on every remark after
+        // the decision.
+        allow create: if verified()
+                      && isOnPanel()
+                      && request.resource.data.authorUid == request.auth.uid
+                      && request.resource.data.keys().hasOnly(
+                           ['candidateTitleId', 'authorUid', 'authorName',
+                            'authorRole', 'body', 'createdAt'])
+                      && request.resource.data.body is string
+                      && request.resource.data.body.size() > 0
+                      && request.resource.data.createdAt == request.time;
+
+        // Append-only, per parent design §6.4. A remark that could be edited
+        // afterwards is not a record of what was said.
+        allow update, delete: if false;
+      }
+
+      match /titleComposing/{uid} {
+        // Faculty only. The leader must NEVER see who is typing — not before
+        // the decision and not after it. The comments themselves are hidden
+        // from them until the decision, and an indicator would leak both that
+        // remarks exist and who is writing them.
+        allow get, list: if isOnPanel() || isCoordinator() || isDean();
+
+        // Your own marker only, so nobody can plant an indicator for someone
+        // else or clear one they do not own. The document id IS the uid, which
+        // is what makes that check possible.
+        allow create, update: if verified()
+                              && isOnPanel()
+                              && uid == request.auth.uid
+                              && request.resource.data.keys().hasOnly(
+                                   ['name', 'role', 'candidateTitleId',
+                                    'updatedAt'])
+                              && request.resource.data.updatedAt
+                                 == request.time;
+
+        // The one collection in this system where delete is permitted, and
+        // only of your own. Composing is transient by design: `clearComposing`
+        // runs on blur and on submit, and a double clear must not throw.
+        allow delete: if isOnPanel() && uid == request.auth.uid;
       }
     }
 
