@@ -47,6 +47,10 @@ class ThesisStatusScreen extends ConsumerWidget {
           'Waiting for the Research Coordinator',
         ThesisStatus.nominationPendingDean => 'Waiting for the Dean',
         ThesisStatus.nominationApproved => 'Nomination approved',
+        ThesisStatus.titlePendingDefence =>
+          'Candidate titles are with the panel',
+        ThesisStatus.titleApproved => 'Title approved',
+        ThesisStatus.titleRejected => 'Titles returned — resubmit',
       };
 
   Future<void> _download(

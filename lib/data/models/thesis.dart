@@ -19,6 +19,14 @@ class Thesis {
     this.deanApprovedAt,
     this.deanApprovedBy,
     this.nominationsSubmittedAt,
+    this.presentationPath,
+    this.presentationUrl,
+    this.titlesSubmittedAt,
+    this.titleRound = 0,
+    this.approvedTitleId,
+    this.titleDecidedAt,
+    this.titleDecidedBy,
+    this.titleRejectionRemark,
   });
 
   final String id;
@@ -38,6 +46,18 @@ class Thesis {
   final DateTime? deanApprovedAt;
   final String? deanApprovedBy;
   final DateTime? nominationsSubmittedAt;
+  final String? presentationPath;
+  final String? presentationUrl;
+  final DateTime? titlesSubmittedAt;
+
+  /// 1 for the first submission, incremented on each resubmission after a
+  /// rejection. Absent on theses created by M1a — read as 0.
+  final int titleRound;
+
+  final String? approvedTitleId;
+  final DateTime? titleDecidedAt;
+  final String? titleDecidedBy;
+  final String? titleRejectionRemark;
 
   factory Thesis.fromMap(String id, Map<String, dynamic> map) {
     return Thesis(
@@ -58,6 +78,14 @@ class Thesis {
       deanApprovedAt: map['deanApprovedAt'] as DateTime?,
       deanApprovedBy: map['deanApprovedBy'] as String?,
       nominationsSubmittedAt: map['nominationsSubmittedAt'] as DateTime?,
+      presentationPath: map['presentationPath'] as String?,
+      presentationUrl: map['presentationUrl'] as String?,
+      titlesSubmittedAt: map['titlesSubmittedAt'] as DateTime?,
+      titleRound: (map['titleRound'] as num?)?.toInt() ?? 0,
+      approvedTitleId: map['approvedTitleId'] as String?,
+      titleDecidedAt: map['titleDecidedAt'] as DateTime?,
+      titleDecidedBy: map['titleDecidedBy'] as String?,
+      titleRejectionRemark: map['titleRejectionRemark'] as String?,
     );
   }
 
