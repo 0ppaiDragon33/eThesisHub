@@ -131,3 +131,17 @@ entirely, which the verification record demonstrates.
 - **Nomination inbox: add `exOfficio == false` to the query** as defence in depth. The ex-officio exclusion currently rides on `conformeStatus == 'pending'`, which is sound only because the rules pin the two together at create.
 - **Form 1 PDF: embed a bundled serif Unicode font.** The `pdf` package built-in Helvetica silently drops em dashes, en dashes and curly quotes (proven by probe; middot and Latin-1 accents are fine). An em dash was hyphen-substituted as a point fix, but the next curly quote or accented-beyond-Latin-1 name is lost silently. An embedded font also matches the serif face of the layout approved with the owner.
 - **Stalled-thesis recovery (M1a Ruling 13).** A declined nomination stalls a thesis permanently; recovery is Console-only. Needs a coordinator "reopen" action: a rules branch letting a coordinator return a stalled thesis to `draft`, the UI for it, and a fix for `_nominationIds` being snapshotted outside the approval transaction (re-nomination adds/removes nomination docs, which breaks that assumption — store nomination ids on the thesis doc so `tx.get` can read them).
+
+## Deploying to another institution (not needed for the defence)
+
+Everything ISUFST-specific is a string or a list — no architecture change. Audited 2026-08-16:
+
+- `AppConfig.institutionalDomain` — `isufst.edu.ph`
+- `faculty_invites_screen.dart` — the `surname@isufst.edu.ph` hint, and `_colleges`
+- `create_thesis_screen.dart` — `kColleges` and `kPrograms`, both ISUFST's
+- `form1_pdf.dart` — the letterhead (university name, `RESEARCH AND DEVELOPMENT`, `Tiwi, Barotac Nuevo, Iloilo | research@isufst.edu.ph`), the `RD-30-06/24-04` form reference, the addressee block, and the `Integrity · Social Justice · Discipline · Academic Excellence` footer
+- `app_tokens.dart` — `seal` is ISUFST blue
+
+The right shape if it is ever wanted: move all of it into `AppConfig` as one `Institution` record (name, address, contact, form reference, motto, colleges, programs, accent colour), so a new institution is one file. The colleges and programs lists appearing twice each is the tell that they want a single home regardless.
+
+Not worth doing speculatively — the department has not said yes, and Form 1's layout was approved against ISUFST's actual form.
