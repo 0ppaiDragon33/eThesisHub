@@ -32,6 +32,18 @@ final myThesisProvider = StreamProvider<Thesis?>((ref) {
   return ref.watch(thesisRepositoryProvider).watchThesisForLeader(uid);
 });
 
+/// One thesis by id.
+///
+/// For screens that were handed an id — the nominate screen gets one from
+/// its route — rather than asking for "the signed-in leader's thesis" and
+/// hoping the two agree. It also keeps the loading state honest: a screen
+/// watching this is loading until the document actually arrives, whereas
+/// [myThesisProvider] resolves to `data(null)` the moment auth is unsettled.
+final thesisByIdProvider =
+    StreamProvider.family<Thesis?, String>((ref, thesisId) {
+  return ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
+});
+
 /// Every thesis currently sitting at one stage of the approval chain.
 ///
 /// Readable only by coordinators and the dean — the rules deny `list` on

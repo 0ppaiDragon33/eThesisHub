@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,7 +42,9 @@ Future<FakeFirebaseFirestore> seeded() async {
   return db;
 }
 
-Widget wrap(FakeFirebaseFirestore db) => ProviderScope(
+Widget wrap(FakeFirebaseFirestore db,
+        {List<Override> extraOverrides = const []}) =>
+    ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
@@ -49,6 +54,7 @@ Widget wrap(FakeFirebaseFirestore db) => ProviderScope(
               email: 'l@isufst.edu.ph',
               isEmailVerified: true),
         )),
+        ...extraOverrides,
       ],
       // A router rather than a bare home, because a successful submission
       // navigates to the thesis status screen. Staying put used to leave the
@@ -123,6 +129,44 @@ void main() {
     expect(values.length, 6);
     expect(values, contains('coord'));
     expect(values, contains('dean'));
+  });
+
+  testWidgets('shows the form on first arrival, not the draft-only refusal',
+      (tester) async {
+    // Reported from the running app: tapping "Nominate adviser and panel"
+    // showed the "only while this thesis is still a draft" message, and the
+    // form only appeared after a refresh.
+    //
+    // The screen watched `myThesisProvider`, which reads
+    // `authStateProvider.value?.uid` and returns `Stream.value(null)` when
+    // that is null — so while auth was still settling it resolved to
+    // `data(null)`, not loading, and the screen read a missing thesis as a
+    // thesis that had left draft. A refresh "fixed" it only because auth
+    // was warm the second time.
+    //
+    // Holding auth unsettled here reproduces that first arrival exactly.
+    useTallSurface(tester);
+    final db = await seeded();
+    final authController = StreamController<User?>();
+    addTearDown(authController.close);
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      authStateProvider.overrideWith((ref) => authController.stream),
+    ]));
+    await tester.pump();
+
+    // Auth has not emitted. The thesis is a draft, so the form must show —
+    // the screen was handed a thesis id and does not need to know who is
+    // signed in to render it.
+    expect(find.byKey(const Key('notDraft')), findsNothing,
+        reason: 'a still-settling auth stream is not a thesis that has '
+            'moved past draft');
+    expect(find.byKey(const Key('adviser')), findsOneWidget);
+
+    authController.add(MockUser(
+        uid: 'leader-1', email: 'l@isufst.edu.ph', isEmailVerified: true));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('adviser')), findsOneWidget);
   });
 
   testWidgets('a person chosen in one slot is not offered in the others',

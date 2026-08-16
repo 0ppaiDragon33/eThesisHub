@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -326,7 +328,14 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     // event (see create_thesis_screen.dart for the bug this avoids).
     final leaderUid = ref.watch(authStateProvider).valueOrNull?.uid;
     final directoryAsync = ref.watch(allDirectoryProvider);
-    final thesisAsync = ref.watch(myThesisProvider);
+    // The thesis this screen was actually given, not "the signed-in
+    // leader's thesis". `myThesisProvider` resolves to `data(null)` while
+    // auth is still settling — it reads `authStateProvider.value?.uid` and
+    // returns `Stream.value(null)` when that is null — so watching it here
+    // made `stillDraft` false on arrival and showed the "only while this
+    // thesis is still a draft" refusal instead of the form. A refresh
+    // appeared to fix it only because auth was warm the second time.
+    final thesisAsync = ref.watch(thesisByIdProvider(widget.thesisId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nominate adviser and panel')),
@@ -345,12 +354,34 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
               .where((f) => leaderUid == null || f.uid != leaderUid)
               .toList();
 
-          final thesis = thesisAsync.valueOrNull;
-          final stillDraft = thesis != null && thesis.status == ThesisStatus.draft;
-
+          // Three distinct outcomes, kept apart. Collapsing them is what
+          // produced the bug above: "still loading" was reported to the
+          // user as "this thesis has moved past draft".
           if (thesisAsync.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingState(label: 'Loading your thesis…');
           }
+          if (thesisAsync.hasError) {
+            return PageShell(children: [
+              ErrorState(
+                error: thesisAsync.error,
+                message: 'Could not load this thesis.',
+              ),
+            ]);
+          }
+
+          final thesis = thesisAsync.valueOrNull;
+          if (thesis == null) {
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.search_off,
+                title: 'Thesis not found',
+                message: 'This thesis no longer exists, or it belongs to '
+                    'another group.',
+              ),
+            ]);
+          }
+
+          final stillDraft = thesis.status == ThesisStatus.draft;
           if (!stillDraft) {
             return Center(
               child: Padding(
