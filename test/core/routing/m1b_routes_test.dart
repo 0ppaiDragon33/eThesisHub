@@ -89,6 +89,14 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // The dashboard defaults to the Home tab (nomination inbox); the
+    // defences list only renders once the Defences destination is selected
+    // — the two tabs genuinely swap content now, so it must be tapped
+    // before the defence button can be found.
+    expect(find.byKey(const Key('goToDefence-t1')), findsNothing);
+    await tester.tap(find.text('Defences'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToDefence-t1')));
     await tester.pumpAndSettle();

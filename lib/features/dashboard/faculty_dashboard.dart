@@ -73,65 +73,70 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
           ),
         const SignOutButton(),
       ],
-      // Both sections render regardless of which nav destination is
-      // selected — the two destinations exist so ResponsiveScaffold shows
-      // navigation at all (it hides itself below two), but there is nothing
-      // here yet that needs a full page swap to see. 'Defences' scrolls the
-      // rail/bar into the highlighted state; it does not hide the inbox.
-      body: PageShell(
-        title: mode == FacultyMode.adviser ? 'My advisees' : 'My panels',
-        // Says plainly that the list is not built rather than showing an
-        // empty area that reads as a failure to load. The mode switch above
-        // is real — it remembers your choice — but it has nothing to filter
-        // until faculty can list the theses they hold a position on, which
-        // needs a security-rules change.
-        subtitle: 'Coming with the documents module. For now, the nomination '
-            'inbox is where your Conforme requests arrive.',
-        children: [
-          pendingAsync.when(
-            loading: () => const LoadingState(),
-            error: (e, _) => ErrorState(
-              error: e,
-              message: 'Could not load your nominations.',
-            ),
-            data: (pending) => pending.isEmpty
-                ? const EmptyState(
-                    icon: Icons.drafts_outlined,
-                    title: 'No nominations waiting',
-                    message: 'When a group nominates you as their adviser or '
-                        'a panel member, the request appears here.',
-                  )
-                : EmptyState(
-                    icon: Icons.mark_email_unread_outlined,
-                    title: pending.length == 1
-                        ? '1 nomination waiting'
-                        : '${pending.length} nominations waiting',
-                    message: 'Each one needs your Conforme before the group '
-                        'can move forward.',
+      // The two nav destinations now genuinely swap the body — 'Home' (the
+      // default) shows the nomination inbox, 'Defences' shows the defences
+      // list. Rendering both regardless of selection (the previous shape)
+      // read as a broken tab rather than an unbuilt one, exactly the
+      // pattern the M1a design pass removed nine destinations to avoid.
+      body: _selectedIndex == 0
+          ? PageShell(
+              title: mode == FacultyMode.adviser ? 'My advisees' : 'My panels',
+              // Says plainly that the list is not built rather than showing an
+              // empty area that reads as a failure to load. The mode switch
+              // above is real — it remembers your choice — but it has nothing
+              // to filter until faculty can list the theses they hold a
+              // position on, which needs a security-rules change.
+              subtitle:
+                  'Coming with the documents module. For now, the nomination '
+                  'inbox is where your Conforme requests arrive.',
+              children: [
+                pendingAsync.when(
+                  loading: () => const LoadingState(),
+                  error: (e, _) => ErrorState(
+                    error: e,
+                    message: 'Could not load your nominations.',
                   ),
-          ),
-          const Gap.lg(),
-          // One button, always present, regardless of what the count says —
-          // two widgets sharing a Key across mutually exclusive branches is
-          // the kind of thing that works until a third branch appears.
-          FilledButton(
-            key: const Key('goToInbox'),
-            onPressed: () => context.go('/nominations'),
-            child: const Text('Open nomination inbox'),
-          ),
-          const Gap.lg(),
-          Text('Defences', style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          myThesisIdsAsync.when(
-            loading: () => const LoadingState(),
-            error: (e, _) => ErrorState(
-              error: e,
-              message: 'Could not load your defences.',
+                  data: (pending) => pending.isEmpty
+                      ? const EmptyState(
+                          icon: Icons.drafts_outlined,
+                          title: 'No nominations waiting',
+                          message:
+                              'When a group nominates you as their adviser or '
+                              'a panel member, the request appears here.',
+                        )
+                      : EmptyState(
+                          icon: Icons.mark_email_unread_outlined,
+                          title: pending.length == 1
+                              ? '1 nomination waiting'
+                              : '${pending.length} nominations waiting',
+                          message:
+                              'Each one needs your Conforme before the group '
+                              'can move forward.',
+                        ),
+                ),
+                const Gap.lg(),
+                FilledButton(
+                  key: const Key('goToInbox'),
+                  onPressed: () => context.go('/nominations'),
+                  child: const Text('Open nomination inbox'),
+                ),
+              ],
+            )
+          : PageShell(
+              title: 'Defences',
+              subtitle: 'Theses whose candidate titles are ready for you to '
+                  'review as a panel member.',
+              children: [
+                myThesisIdsAsync.when(
+                  loading: () => const LoadingState(),
+                  error: (e, _) => ErrorState(
+                    error: e,
+                    message: 'Could not load your defences.',
+                  ),
+                  data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
+                ),
+              ],
             ),
-            data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
-          ),
-        ],
-      ),
     );
   }
 }
