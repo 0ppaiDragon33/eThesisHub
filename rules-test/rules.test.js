@@ -2126,6 +2126,86 @@ test("M1b attack: a panel member may NOT plant or clear someone else's composing
   await assertSucceeds(deleteDoc(doc(panel, "theses/td1/titleComposing/pan-uid")));
 });
 
+// A nominee who explicitly declined to serve still had a nomination
+// DOCUMENT sitting there — undeletable once the thesis left `draft` — and
+// `isOnPanel()` used to grant access on mere existence via `hasNomination()`,
+// never checking `conformeStatus`. That let a declined nominee keep reading
+// the panel's private remarks, keep reading who was typing, and keep filing
+// comments into the official record under whatever `authorRole` they chose.
+// `declined-uid` is deliberately NOT in `panelistUids` (seedDefence only ever
+// puts "pan-uid" there), so these assertions exercise the nomination arm of
+// `isOnPanel()` in isolation — no other arm could be granting access.
+test("M1b attack: a nominee who DECLINED may NOT read comments, read composing, or comment", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "theses/td1/nominations/declined-uid"), {
+      nomineeUid: "declined-uid", nomineeName: "Dr. Declined", position: "panelist",
+      exOfficio: false, conformeStatus: "declined",
+    });
+    await setDoc(doc(db, "theses/td1/titleComposing/pan-uid"), {
+      name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  const declined = asDefenceUser("declined-uid", "declined@isufst.edu.ph");
+  await assertFails(getDocs(collection(declined, "theses/td1/titleComments")));
+  await assertFails(getDocs(collection(declined, "theses/td1/titleComposing")));
+  await assertFails(setDoc(doc(declined, "theses/td1/titleComments/byDeclined"), {
+    candidateTitleId: "ct1", authorUid: "declined-uid", authorName: "Dr. Declined",
+    authorRole: "Panel Member", body: "should not land", createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b allow: the SAME nominee, ACCEPTED instead of declined, on the same path, can do all three", async () => {
+  // The control for the test above: same thesis, same uid, same collections —
+  // only `conformeStatus` changes. Proves the denial above was the
+  // `conformeStatus` gate and not a wrong path or a missing prerequisite doc.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "theses/td1/nominations/declined-uid"), {
+      nomineeUid: "declined-uid", nomineeName: "Dr. Declined", position: "panelist",
+      exOfficio: false, conformeStatus: "accepted",
+    });
+    await setDoc(doc(db, "theses/td1/titleComposing/pan-uid"), {
+      name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  const accepted = asDefenceUser("declined-uid", "declined@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(accepted, "theses/td1/titleComments")));
+  await assertSucceeds(getDocs(collection(accepted, "theses/td1/titleComposing")));
+  await assertSucceeds(setDoc(doc(accepted, "theses/td1/titleComments/byAccepted"), {
+    candidateTitleId: "ct1", authorUid: "declined-uid", authorName: "Dr. Declined",
+    authorRole: "Panel Member", body: "now allowed", createdAt: serverTimestamp(),
+  }));
+});
+
+// The two people who chair the defence — Coordinator and Dean — sit on
+// every panel BY OFFICE and are never asked to accept, so their
+// `conformeStatus` is permanently "exOfficio". This is the case the fix
+// could most easily break: a gate on ['accepted'] alone would lock them out.
+// `exo-uid` is, like `declined-uid` above, deliberately absent from
+// `panelistUids`, so this exercises the nomination arm alone.
+test("M1b allow: an EX OFFICIO nominee (Coordinator/Dean) retains panel access", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "theses/td1/nominations/exo-uid"), {
+      nomineeUid: "exo-uid", nomineeName: "The Coordinator", position: "coordinator",
+      exOfficio: true, conformeStatus: "exOfficio",
+    });
+  });
+  const exo = asDefenceUser("exo-uid", "exo@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(exo, "theses/td1/titleComments")));
+  await assertSucceeds(getDocs(collection(exo, "theses/td1/titleComposing")));
+  await assertSucceeds(setDoc(doc(exo, "theses/td1/titleComments/byExo"), {
+    candidateTitleId: "ct1", authorUid: "exo-uid", authorName: "The Coordinator",
+    authorRole: "Coordinator", body: "chairing the defence", createdAt: serverTimestamp(),
+  }));
+});
+
 test("M1b attack: a candidate title may NOT be edited after submission", async () => {
   await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
   const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");

@@ -607,18 +607,27 @@ service cloud.firestore {
       }
 
       // A panel member on this thesis: the adviser, anyone on panelistUids,
-      // or anyone holding a nomination — which covers the ex officio
-      // Coordinator and Dean, who never appear in panelistUids.
+      // or anyone holding an accepted/ex-officio nomination — which covers
+      // the ex officio Coordinator and Dean, who never appear in
+      // panelistUids and whose `conformeStatus` is permanently `exOfficio`
+      // because they are never asked to accept.
       //
-      // Deliberately NOT gated on `conformeStatus`: by the time a defence
-      // happens the panel is fixed (the Dean's approval wrote
-      // `panelistUids`), and the ex officio pair never accept anything.
+      // Gated on `conformeStatus`: a nomination document can outlive a
+      // decline (it cannot be deleted once the thesis leaves `draft`), so
+      // checking mere existence via `hasNomination()` let a nominee who
+      // explicitly declined keep panel access — reading titleComments,
+      // reading titleComposing, and posting comments into the official
+      // record. `nominationData()` is reused here (rather than a second
+      // `get()`) because each `get()` counts against the per-evaluation
+      // limit.
       function isOnPanel() {
         let t = thesisData(thesisId);
         return signedIn() && (
           t.adviserUid == request.auth.uid ||
           request.auth.uid in t.panelistUids ||
-          hasNomination(thesisId, request.auth.uid)
+          (hasNomination(thesisId, request.auth.uid) &&
+           nominationData(thesisId, request.auth.uid).conformeStatus
+             in ['accepted', 'exOfficio'])
         );
       }
 
