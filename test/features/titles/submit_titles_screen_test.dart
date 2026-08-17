@@ -117,7 +117,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('title'));
+    // Full-string match: 'title' alone also appears in the next
+    // validation's message ('Attach a justification for every candidate
+    // title.'), so a substring check on 'title' would still pass with the
+    // blank-title check deleted entirely.
+    expect(error.data, 'Give every candidate a title.');
     expect((await db.collection('theses/t1/candidateTitles').get()).docs,
         isEmpty);
   });
