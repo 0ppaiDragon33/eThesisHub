@@ -25,6 +25,12 @@ class ThesisRepository {
     raw['coordinatorRecommendedAt'] = _date(raw['coordinatorRecommendedAt']);
     raw['deanApprovedAt'] = _date(raw['deanApprovedAt']);
     raw['nominationsSubmittedAt'] = _date(raw['nominationsSubmittedAt']);
+    raw['titlesSubmittedAt'] = _date(raw['titlesSubmittedAt']);
+    raw['titleDecidedAt'] = _date(raw['titleDecidedAt']);
+    // titleRound (num) and presentationPath/presentationUrl/titleDecidedBy/
+    // titleRejectionRemark/approvedTitleId (String) need no conversion —
+    // Thesis.fromMap reads them with plain num/String casts, and Firestore
+    // never wraps a number or string in a Timestamp.
     return Thesis.fromMap(id, raw);
   }
 

@@ -93,6 +93,45 @@ void main() {
     expect(thesis.nominationsSubmittedAt!.toUtc(), nominationsSubmittedAt);
   });
 
+  test(
+      'watchThesis converts titlesSubmittedAt and titleDecidedAt, seeded '
+      'exactly as approveTitle/rejectTitles write them', () async {
+    // Reproduces the shape production actually writes: real Firestore
+    // Timestamp values (not DateTime, which is what the earlier version of
+    // this test file — and Thesis.fromMap's bare `as DateTime?` cast — could
+    // both pass without ever exercising the conversion). Distinct values on
+    // both fields so a helper that reads the wrong key (e.g. assigning
+    // titlesSubmittedAt's value to titleDecidedAt) cannot hide behind a
+    // shared value.
+    final titlesSubmittedAt = DateTime.utc(2026, 5, 1, 10, 0, 0);
+    final titleDecidedAt = DateTime.utc(2026, 5, 20, 16, 45, 0);
+    final doc = db.collection('theses').doc();
+    await doc.set({
+      'leaderUid': 'leader-1',
+      'workingTitle': 'eThesisHub',
+      'memberNames': ['Bagsain, Karlo June'],
+      'college': 'CICT',
+      'program': 'BSIT',
+      'semester': 'First',
+      'academicYear': '2026-2027',
+      'status': ThesisStatus.titleRejected.value,
+      'adviserUid': 'adviser-1',
+      'panelistUids': <String>[],
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 1, 1)),
+      'titleRound': 1,
+      'titlesSubmittedAt': Timestamp.fromDate(titlesSubmittedAt),
+      'titleDecidedAt': Timestamp.fromDate(titleDecidedAt),
+      'titleDecidedBy': 'dean-1',
+      'titleRejectionRemark': 'Scope too broad.',
+    });
+
+    final thesis = await repo.watchThesis(doc.id).first;
+
+    expect(thesis, isNotNull);
+    expect(thesis!.titlesSubmittedAt!.toUtc(), titlesSubmittedAt);
+    expect(thesis.titleDecidedAt!.toUtc(), titleDecidedAt);
+  });
+
   test('watchNominations converts a non-null respondedAt', () async {
     final respondedAt = DateTime.utc(2026, 2, 10, 8, 15, 0);
     final thesisDoc = db.collection('theses').doc();
