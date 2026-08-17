@@ -14,15 +14,45 @@ import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
+/// Picks one document, or null if the user cancelled.
+typedef DocumentPicker = Future<PickedDocument?> Function({
+  required Set<String> allowed,
+});
+
+/// The real picker, backing [SubmitTitlesScreen.pickDocument] by default.
+/// `file_picker` has no test seam of its own, so this is the one call in the
+/// screen that a widget test cannot reach without injection.
+Future<PickedDocument?> _realPicker({required Set<String> allowed}) async {
+  final result = await FilePicker.platform.pickFiles(withData: true);
+  final picked = result?.files.single;
+  if (picked == null || picked.bytes == null) return null;
+  return PickedDocument(
+    name: picked.name,
+    bytes: picked.bytes!,
+    extension: (picked.extension ?? '').toLowerCase(),
+    contentType: 'application/octet-stream',
+  );
+}
+
 /// Lets the thesis leader submit three or more candidate titles, each with
 /// its own justification document, plus one presentation, moving the thesis
 /// into the title defence.
 ///
 /// Reached from the thesis status screen at `/thesis/titles?id=<thesisId>`.
 class SubmitTitlesScreen extends ConsumerStatefulWidget {
-  const SubmitTitlesScreen({super.key, required this.thesisId});
+  const SubmitTitlesScreen({
+    super.key,
+    required this.thesisId,
+    this.pickDocument,
+  });
 
   final String thesisId;
+
+  /// Injectable so a widget test can reach the success path — upload,
+  /// submit and navigate — without a platform file dialog. Defaults to the
+  /// real picker. `file_picker` has no test seam of its own, and the
+  /// success branch is the one this project has shipped broken twice.
+  final DocumentPicker? pickDocument;
 
   @override
   ConsumerState<SubmitTitlesScreen> createState() =>
@@ -57,15 +87,9 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
   }
 
   Future<void> _pickJustification(int index) async {
-    final result = await FilePicker.platform.pickFiles(withData: true);
-    final picked = result?.files.single;
-    if (picked == null || picked.bytes == null) return;
-    final doc = PickedDocument(
-      name: picked.name,
-      bytes: picked.bytes!,
-      extension: (picked.extension ?? '').toLowerCase(),
-      contentType: 'application/octet-stream',
-    );
+    final pick = widget.pickDocument ?? _realPicker;
+    final doc = await pick(allowed: kJustificationTypes);
+    if (doc == null) return;
     final validationError = validateDocument(doc,
         allowed: kJustificationTypes, maxBytes: kJustificationMaxBytes);
     if (validationError != null) {
@@ -79,15 +103,9 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
   }
 
   Future<void> _pickPresentation() async {
-    final result = await FilePicker.platform.pickFiles(withData: true);
-    final picked = result?.files.single;
-    if (picked == null || picked.bytes == null) return;
-    final doc = PickedDocument(
-      name: picked.name,
-      bytes: picked.bytes!,
-      extension: (picked.extension ?? '').toLowerCase(),
-      contentType: 'application/octet-stream',
-    );
+    final pick = widget.pickDocument ?? _realPicker;
+    final doc = await pick(allowed: kPresentationTypes);
+    if (doc == null) return;
     final validationError = validateDocument(doc,
         allowed: kPresentationTypes, maxBytes: kPresentationMaxBytes);
     if (validationError != null) {
