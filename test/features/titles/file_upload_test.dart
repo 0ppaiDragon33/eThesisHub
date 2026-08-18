@@ -76,4 +76,19 @@ void main() {
             'it must not carry the original filename');
     expect(stored.url, contains(stored.path));
   });
+
+  test('the content type is derived from the extension, not hardcoded', () {
+    // Everything used to upload as application/octet-stream, so a public
+    // bucket URL forced a save dialog rather than previewing the PDF a
+    // panel member is trying to read mid-defence.
+    expect(contentTypeFor('pdf'), 'application/pdf');
+    expect(contentTypeFor('PDF'), 'application/pdf',
+        reason: 'file_picker reports the extension in whatever case the OS did');
+    expect(contentTypeFor('doc'), 'application/msword');
+    expect(contentTypeFor('docx'), contains('wordprocessingml'));
+    expect(contentTypeFor('ppt'), 'application/vnd.ms-powerpoint');
+    expect(contentTypeFor('pptx'), contains('presentationml'));
+    expect(contentTypeFor('zip'), 'application/octet-stream',
+        reason: 'octet-stream stays the honest answer for an unknown type');
+  });
 }

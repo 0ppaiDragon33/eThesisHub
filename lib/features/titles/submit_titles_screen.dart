@@ -23,14 +23,23 @@ typedef DocumentPicker = Future<PickedDocument?> Function({
 /// `file_picker` has no test seam of its own, so this is the one call in the
 /// screen that a widget test cannot reach without injection.
 Future<PickedDocument?> _realPicker({required Set<String> allowed}) async {
-  final result = await FilePicker.platform.pickFiles(withData: true);
+  // `allowed` used to be accepted and dropped on the floor, so the OS dialog
+  // offered every file on the machine and the student learned their .zip was
+  // wrong only after picking it. `validateDocument` still runs afterwards —
+  // this narrows the dialog, it does not replace the check.
+  final result = await FilePicker.platform.pickFiles(
+    withData: true,
+    type: FileType.custom,
+    allowedExtensions: allowed.toList(),
+  );
   final picked = result?.files.single;
   if (picked == null || picked.bytes == null) return null;
+  final extension = (picked.extension ?? '').toLowerCase();
   return PickedDocument(
     name: picked.name,
     bytes: picked.bytes!,
-    extension: (picked.extension ?? '').toLowerCase(),
-    contentType: 'application/octet-stream',
+    extension: extension,
+    contentType: contentTypeFor(extension),
   );
 }
 

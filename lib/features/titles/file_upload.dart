@@ -26,6 +26,27 @@ const kJustificationMaxBytes = 10 * 1024 * 1024;
 const kPresentationTypes = {'pptx', 'ppt', 'pdf'};
 const kPresentationMaxBytes = 25 * 1024 * 1024;
 
+/// The MIME type a stored object should carry, from its extension.
+///
+/// Everything used to be uploaded as `application/octet-stream`, which tells
+/// a browser only "unknown binary" — so the download links on the title
+/// defence screen would force a save dialog instead of opening the PDF the
+/// panel is trying to read mid-defence. `octet-stream` remains the fallback
+/// for anything unrecognised, which is the honest answer for a file whose
+/// type we do not know.
+String contentTypeFor(String extension) {
+  return switch (extension.toLowerCase()) {
+    'pdf' => 'application/pdf',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'ppt' => 'application/vnd.ms-powerpoint',
+    'pptx' =>
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    _ => 'application/octet-stream',
+  };
+}
+
 /// Returns an error message, or null when the file may be uploaded.
 ///
 /// Enforced here because the Supabase bucket is public and enforces nothing:
