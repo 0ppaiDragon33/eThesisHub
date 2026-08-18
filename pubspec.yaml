@@ -45,6 +45,10 @@ dependencies:
   pdf: ^3.13.0
   printing: ^5.15.0
   file_picker: ^8.1.4
+  # Already resolved at 6.3.2 as a transitive dependency of `printing`;
+  # declared directly only so `lib/` may import it without tripping
+  # depend_on_referenced_packages. No version moves — see pubspec.lock.
+  url_launcher: 6.3.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

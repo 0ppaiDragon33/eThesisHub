@@ -7,7 +7,15 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
-Future<FakeFirebaseFirestore> seeded({String viewerRole = 'faculty'}) async {
+/// [withPreviousRound] seeds a SUPERSEDED candidate from the round before,
+/// which is the only way the screen's round filter can be tested at all.
+/// Without it the fixture held one round on a `titleRound: 1` thesis, so
+/// deleting the filter outright left all nine tests green.
+Future<FakeFirebaseFirestore> seeded({
+  String viewerRole = 'faculty',
+  bool withPreviousRound = false,
+}) async {
+  final round = withPreviousRound ? 2 : 1;
   final db = FakeFirebaseFirestore();
   await db.collection('users').doc('viewer').set({
     'fullName': 'Dr. Viewer', 'email': 'v@isufst.edu.ph',
@@ -18,18 +26,26 @@ Future<FakeFirebaseFirestore> seeded({String viewerRole = 'faculty'}) async {
     'panelistUids': <String>['viewer'], 'adviserUid': 'a1',
     'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
     'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
-    'titleRound': 1,
+    'titleRound': round,
+    'presentationPath': 'theses/t1/presentation/uuid.pptx',
+    'presentationUrl': 'https://example.test/presentation.pptx',
   });
+  if (withPreviousRound) {
+    await db.collection('theses/t1/candidateTitles').doc('old1').set({
+      'titleText': 'Candidate old1', 'justificationPath': 'p',
+      'justificationUrl': 'https://example.test/old1.pdf', 'round': 1,
+    });
+  }
   for (final id in ['ct1', 'ct2', 'ct3']) {
     await db.collection('theses/t1/candidateTitles').doc(id).set({
       'titleText': 'Candidate $id', 'justificationPath': 'p',
-      'justificationUrl': 'https://example.test/$id.pdf', 'round': 1,
+      'justificationUrl': 'https://example.test/$id.pdf', 'round': round,
     });
   }
   return db;
 }
 
-Widget wrap(FakeFirebaseFirestore db) => ProviderScope(
+Widget wrap(FakeFirebaseFirestore db, {UrlOpener? openUrl}) => ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
@@ -45,7 +61,8 @@ Widget wrap(FakeFirebaseFirestore db) => ProviderScope(
           routes: [
             GoRoute(
               path: '/defence',
-              builder: (_, _) => const TitleDefenceScreen(thesisId: 't1'),
+              builder: (_, _) =>
+                  TitleDefenceScreen(thesisId: 't1', openUrl: openUrl),
             ),
             GoRoute(
               path: '/faculty',
@@ -65,14 +82,74 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('shows every candidate of the current round', (tester) async {
+  testWidgets('shows every candidate of the current round, and only those',
+      (tester) async {
+    // Two rounds on the record. The previous round's candidate is history
+    // the panel must not be asked to judge — and it is the only thing that
+    // makes this test about the ROUND. With a single-round fixture the
+    // round filter could be deleted outright and all nine tests still
+    // passed; this seeds the superseded candidate and asserts its absence.
     useTallSurface(tester);
-    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpWidget(wrap(await seeded(withPreviousRound: true)));
     await tester.pumpAndSettle();
 
     expect(find.text('Candidate ct1'), findsOneWidget);
     expect(find.text('Candidate ct2'), findsOneWidget);
     expect(find.text('Candidate ct3'), findsOneWidget);
+    expect(find.text('Candidate old1'), findsNothing,
+        reason: 'round 1 was superseded by the resubmission');
+    // Its comment box would be a way to remark on a withdrawn title.
+    expect(find.byKey(const Key('commentBox-old1')), findsNothing);
+  });
+
+  testWidgets('the panel can open a candidate justification', (tester) async {
+    // The URLs were written on submission and rendered nowhere: the panel
+    // saw three title strings and could not read a single justification.
+    useTallSurface(tester);
+    final opened = <Uri>[];
+    await tester.pumpWidget(wrap(await seeded(), openUrl: (uri) async {
+      opened.add(uri);
+      return true;
+    }));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openJustification-ct2')));
+    await tester.pumpAndSettle();
+
+    expect(opened.map((u) => u.toString()),
+        ['https://example.test/ct2.pdf'],
+        reason: 'the link must open THAT candidate, not the first one');
+  });
+
+  testWidgets('the panel can open the presentation', (tester) async {
+    useTallSurface(tester);
+    final opened = <Uri>[];
+    await tester.pumpWidget(wrap(await seeded(), openUrl: (uri) async {
+      opened.add(uri);
+      return true;
+    }));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openPresentation')));
+    await tester.pumpAndSettle();
+
+    expect(opened.map((u) => u.toString()),
+        ['https://example.test/presentation.pptx']);
+  });
+
+  testWidgets('a document that will not open says so rather than failing '
+      'silently', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(
+        wrap(await seeded(), openUrl: (_) async => false));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openJustification-ct1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('error')), findsOneWidget);
+    expect(find.textContaining('Could not open the justification'),
+        findsOneWidget);
   });
 
   testWidgets('a panel member can post a comment on one candidate',

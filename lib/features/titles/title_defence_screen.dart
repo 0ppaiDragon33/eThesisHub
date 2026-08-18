@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -15,6 +16,17 @@ import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
+
+/// Opens an uploaded document. Injectable so a widget test can assert the
+/// panel really can reach a justification without a platform browser.
+typedef UrlOpener = Future<bool> Function(Uri url);
+
+/// `url_launcher` rather than `dart:io`: this app ships to Web as well as
+/// Android, and `dart:io` does not exist there. `externalApplication` opens
+/// a new tab on Web and the system viewer on Android, so a PDF or a PPTX
+/// is handed to something that can actually display it.
+Future<bool> _realOpener(Uri url) =>
+    launchUrl(url, mode: LaunchMode.externalApplication);
 
 /// The position this person holds on THIS thesis, which is what a comment
 /// records. Not their account role: a coordinator sitting as a nominated
@@ -37,11 +49,19 @@ String _roleOnThisThesis(Thesis thesis, AppUser me) {
 /// addition rather than a separate screen: buttons to approve one candidate
 /// or reject the whole set with a required remark.
 ///
-/// Reached at `/defence?id=<thesisId>` (routing wired elsewhere).
+/// Reached at `/defence/:thesisId` from the faculty, Dean and Coordinator
+/// dashboards.
 class TitleDefenceScreen extends ConsumerStatefulWidget {
-  const TitleDefenceScreen({super.key, required this.thesisId});
+  const TitleDefenceScreen({
+    super.key,
+    required this.thesisId,
+    this.openUrl,
+  });
 
   final String thesisId;
+
+  /// Defaults to the real launcher. See [UrlOpener].
+  final UrlOpener? openUrl;
 
   @override
   ConsumerState<TitleDefenceScreen> createState() =>
@@ -114,6 +134,30 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     ref
         .read(titleDefenceRepositoryProvider)
         .clearComposing(thesisId: widget.thesisId, uid: me.uid);
+  }
+
+  /// The uploaded documents were written on submission and rendered
+  /// nowhere: the panel could see three title strings and had no way to
+  /// read a single justification, let alone the presentation.
+  Future<void> _open(String? url, String what) async {
+    if (url == null || url.isEmpty) {
+      setState(() => _error = 'No $what was uploaded for this thesis.');
+      return;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      setState(() => _error = 'That $what link is not a valid address.');
+      return;
+    }
+    setState(() => _error = null);
+    try {
+      final opened = await (widget.openUrl ?? _realOpener)(uri);
+      if (!opened && mounted) {
+        setState(() => _error = 'Could not open the $what.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open the $what.');
+    }
   }
 
   Future<void> _postComment(
@@ -342,6 +386,19 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // One presentation for the whole defence, so it sits
+                  // above the candidates rather than inside each card.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      key: const Key('openPresentation'),
+                      icon: const Icon(Icons.slideshow_outlined),
+                      onPressed: () => _open(
+                          thesis.presentationUrl, 'presentation'),
+                      label: const Text('Open the presentation'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   if (active.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -361,11 +418,14 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
                         ),
                       ),
                     ),
-                  for (final candidate in candidates)
+                  for (final (index, candidate) in candidates.indexed)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24),
                       child: _CandidateCard(
                         candidate: candidate,
+                        ordinal: index + 1,
+                        onOpenJustification: () => _open(
+                            candidate.justificationUrl, 'justification'),
                         comments: comments
                             .where((c) => c.candidateTitleId == candidate.id)
                             .toList(),
@@ -446,6 +506,8 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
 class _CandidateCard extends StatelessWidget {
   const _CandidateCard({
     required this.candidate,
+    required this.ordinal,
+    required this.onOpenJustification,
     required this.comments,
     required this.controller,
     required this.focusNode,
@@ -457,6 +519,8 @@ class _CandidateCard extends StatelessWidget {
   });
 
   final CandidateTitle candidate;
+  final int ordinal;
+  final VoidCallback onOpenJustification;
   final List<TitleComment> comments;
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -474,17 +538,53 @@ class _CandidateCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Each candidate is numbered and its own remarks are boxed
+            // beneath it, so a panel scrolling a ten-candidate defence can
+            // tell where one ends and the next begins. Previously every
+            // title, comment and box ran together in one column.
+            Text('Candidate $ordinal',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    )),
+            const SizedBox(height: 4),
             Text(candidate.titleText,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            for (final comment in comments)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  '${comment.authorName} — ${comment.authorRole}: '
-                  '${comment.body}',
-                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: Key('openJustification-${candidate.id}'),
+                icon: const Icon(Icons.description_outlined, size: 18),
+                onPressed: onOpenJustification,
+                label: const Text('Open the justification'),
               ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (comments.isEmpty)
+                    Text('No remarks on this candidate yet.',
+                        style: Theme.of(context).textTheme.bodySmall)
+                  else
+                    for (final comment in comments)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '${comment.authorName} — ${comment.authorRole}: '
+                          '${comment.body}',
+                        ),
+                      ),
+                ],
+              ),
+            ),
             const SizedBox(height: 8),
             TextField(
               key: Key('commentBox-${candidate.id}'),
