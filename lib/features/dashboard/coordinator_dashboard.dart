@@ -8,6 +8,7 @@ import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/defence_queue.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 class CoordinatorDashboard extends ConsumerWidget {
@@ -78,6 +79,22 @@ class CoordinatorDashboard extends ConsumerWidget {
             onPressed: () => context.go('/invites'),
             child: const Text('Invite faculty'),
           ),
+          const Gap.lg(),
+          // The title defence was reachable only from the faculty
+          // dashboard, which the router forbids this role — so the one
+          // actor who records the decision could not open the screen.
+          // Placed below the nomination actions rather than above them,
+          // so the queue this dashboard was built around keeps the top
+          // of the page.
+          Text('Title defences',
+              style: Theme.of(context).textTheme.titleMedium),
+          const Gap.sm(),
+          Text(
+            'Groups presenting their candidate titles. You sit on every panel ex officio and may comment on any candidate.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const Gap.sm(),
+          const DefenceQueue(),
         ],
       ),
     );

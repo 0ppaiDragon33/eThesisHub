@@ -104,4 +104,48 @@ void main() {
     expect(find.byKey(const Key('titleDefenceScreen')), findsOneWidget);
     expect(find.byKey(const Key('goToDefence-t1')), findsNothing);
   });
+
+  // C2 of the final branch review: the Dean is the only actor who can end a
+  // title defence and the Coordinator sits on every panel ex officio, yet
+  // neither could reach `/defence/:thesisId`. `homeRouteFor` lands them on
+  // their own dashboard and the router forbids them `/faculty`, which held
+  // the only link in `lib/`. One test per role, because reachability is a
+  // per-role property and the faculty test above proved nothing about them.
+  Future<void> reachesDefence(WidgetTester tester, String role) async {
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'l1', 'status': 'titlePendingDefence',
+      'panelistUids': <String>['p1'], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
+      'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
+      'titleRound': 1,
+    });
+    final c = await containerFor(role, 'u3', db);
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget,
+        reason: 'the $role dashboard must offer a way into the defence');
+    await tester.tap(find.byKey(const Key('goToDefence-t1')));
+    await tester.pumpAndSettle();
+
+    // The destination's own Key — never a heading both screens share, which
+    // is how four navigation tests on this project passed without
+    // navigating — plus the origin control being gone.
+    expect(find.byKey(const Key('titleDefenceScreen')), findsOneWidget);
+    expect(find.byKey(const Key('goToDefence-t1')), findsNothing);
+  }
+
+  testWidgets('the Dean reaches a defence from their dashboard',
+      (tester) => reachesDefence(tester, 'dean'));
+
+  testWidgets('the Coordinator reaches a defence from their dashboard',
+      (tester) => reachesDefence(tester, 'coordinator'));
 }
