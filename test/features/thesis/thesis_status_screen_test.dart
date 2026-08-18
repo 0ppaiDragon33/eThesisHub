@@ -221,7 +221,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('consolidatedComments')), findsOneWidget);
-    expect(find.text('Current round title'), findsOneWidget);
+    // Scoped to the comments block: the approved-title banner above now
+    // names the same title, so a bare find.text would match twice.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('consolidatedComments')),
+        matching: find.text('Current round title'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('[Dr. Noel A. Armada — Adviser]'), findsOneWidget);
     expect(find.text('[Dr. Test Panelist — Panel Member]'), findsOneWidget);
     expect(find.text('Narrow the respondents to one college.'), findsOneWidget);
@@ -231,5 +239,67 @@ void main() {
     expect(find.text('Old round title'), findsNothing);
     expect(find.text('This should never render.'), findsNothing);
     expect(find.textContaining('Old Round Commenter'), findsNothing);
+  });
+
+  testWidgets('an approved thesis names the title the Dean approved',
+      (tester) async {
+    // approvedTitleId was written by approveTitle and rendered by no screen,
+    // so the group was never told which of their candidates won.
+    final db = await seeded('titleApproved', extraFields: {
+      'titleDecidedAt': Timestamp.fromDate(DateTime.utc(2026, 5, 1)),
+      'titleDecidedBy': 'dean-1',
+      'approvedTitleId': 'ct-winner',
+      'titleRound': 1,
+    });
+    final candidates =
+        db.collection('theses').doc('t1').collection('candidateTitles');
+    await candidates.doc('ct-winner').set({
+      'titleText': 'The one the panel chose',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+    await candidates.doc('ct-loser').set({
+      'titleText': 'The one they did not',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final banner = find.byKey(const Key('approvedTitle'));
+    expect(banner, findsOneWidget);
+    // The winner's own text inside the banner, not merely somewhere on the
+    // screen — the consolidated comments below list every candidate.
+    expect(
+      find.descendant(
+          of: banner, matching: find.text('The one the panel chose')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+          of: banner, matching: find.text('The one they did not')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a thesis still at defence names no approved title',
+      (tester) async {
+    // The control for the test above, same screen, one status apart: nothing
+    // may announce a winner before the Dean has picked one.
+    final db = await seeded('titlePendingDefence',
+        extraFields: {'titleRound': 1});
+    await db
+        .collection('theses')
+        .doc('t1')
+        .collection('candidateTitles')
+        .doc('ct-winner')
+        .set({
+      'titleText': 'The one the panel chose',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('approvedTitle')), findsNothing);
   });
 }

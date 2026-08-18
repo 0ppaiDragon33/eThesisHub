@@ -173,6 +173,20 @@ class ThesisStatusScreen extends ConsumerWidget {
                             '${thesis.titleRejectionRemark}',
                       ),
                     ),
+                  // The single decision this whole milestone exists to
+                  // record was invisible to the group it was made about:
+                  // `approvedTitleId` was written and rendered nowhere, so an
+                  // approved thesis showed a generic chip and the comment
+                  // blocks for every candidate, with no mark on the winner.
+                  if (thesis.status == ThesisStatus.titleApproved &&
+                      thesis.approvedTitleId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _ApprovedTitle(
+                        thesisId: thesis.id,
+                        approvedTitleId: thesis.approvedTitleId!,
+                      ),
+                    ),
                   if (thesis.titleDecidedAt != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 20),
@@ -216,6 +230,64 @@ class ThesisStatusScreen extends ConsumerWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+/// Names the title the Dean approved.
+///
+/// Resolved through `candidateTitlesProvider` rather than stored on the
+/// thesis: `candidateTitles` are immutable once submitted, so the text the
+/// student reads here is exactly the text the panel judged.
+class _ApprovedTitle extends ConsumerWidget {
+  const _ApprovedTitle({required this.thesisId, required this.approvedTitleId});
+
+  final String thesisId;
+  final String approvedTitleId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final candidatesAsync = ref.watch(candidateTitlesProvider(thesisId));
+    final candidates = candidatesAsync.valueOrNull;
+
+    // Loading and "the document is gone" are kept apart, the same way every
+    // other branch on this screen is: telling a student their approved title
+    // no longer exists while it is still loading is the M1a bug.
+    if (candidatesAsync.isLoading) {
+      return const LoadingState(label: 'Loading your approved title…');
+    }
+    final approved = candidates
+        ?.where((c) => c.id == approvedTitleId)
+        .map((c) => c.titleText)
+        .firstOrNull;
+
+    return Container(
+      key: const Key('approvedTitle'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_outlined, size: 20),
+              const SizedBox(width: 8),
+              Text('Approved title',
+                  style: Theme.of(context).textTheme.titleSmall),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            approved ?? 'The approved title could not be found.',
+            key: const Key('approvedTitleText'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ],
       ),
     );
   }
