@@ -407,8 +407,26 @@ service cloud.firestore {
                     && request.resource.data.status == 'titlePendingDefence'
                     && onlyChanged(['status', 'titleRound',
                                     'titlesSubmittedAt', 'presentationPath',
-                                    'presentationUrl'])
-                    && request.resource.data.titlesSubmittedAt == request.time;
+                                    'presentationUrl',
+                                    'titleDecidedAt', 'titleDecidedBy',
+                                    'titleRejectionRemark'])
+                    && request.resource.data.titlesSubmittedAt == request.time
+                    // The previous round's decision must be CLEARED by the
+                    // same write that opens the new one. Without this the
+                    // three fields survived the resubmission, `titleDecided()`
+                    // stayed true forever, and from round 2 onward the leader
+                    // read the panel's remarks live, mid-defence — the one
+                    // guarantee this milestone exists to keep. Pinned to null
+                    // rather than merely permitted: widening `onlyChanged`
+                    // alone would let a leader FORGE a decision (set
+                    // `titleDecidedAt` themselves) and unlock the comments on
+                    // their own defence. `.get(k, null)` covers both the
+                    // `FieldValue.delete()` the client sends and a first
+                    // submission where the keys never existed.
+                    && request.resource.data.get('titleDecidedAt', null) == null
+                    && request.resource.data.get('titleDecidedBy', null) == null
+                    && request.resource.data
+                         .get('titleRejectionRemark', null) == null;
 
       // The Dean records the decision. Pinned to the prior status so it can
       // neither be replayed (a decided thesis has left `titlePendingDefence`,

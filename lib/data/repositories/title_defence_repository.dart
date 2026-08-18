@@ -101,6 +101,15 @@ class TitleDefenceRepository {
       'titlesSubmittedAt': FieldValue.serverTimestamp(),
       'presentationPath': presentationPath,
       'presentationUrl': presentationUrl,
+      // The previous round's decision is erased by the same write that opens
+      // the new one. Leaving it behind kept `titleDecided()` true in
+      // `firestore.rules` for the rest of the thesis's life, so from round 2
+      // onward the leader could read the panel's remarks live during their
+      // own defence. A no-op on a first submission, where the keys have
+      // never existed.
+      'titleDecidedAt': FieldValue.delete(),
+      'titleDecidedBy': FieldValue.delete(),
+      'titleRejectionRemark': FieldValue.delete(),
     });
     await batch.commit();
   }

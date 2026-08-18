@@ -19,6 +19,7 @@ import {
   deleteDoc,
   serverTimestamp,
   writeBatch,
+  deleteField,
   runTransaction,
   Timestamp,
 } from "firebase/firestore";
@@ -2027,6 +2028,104 @@ test("M1b allow: the leader MAY read comments once the Dean has decided", async 
     seedDefence(ctx.firestore(), { status: "titleApproved", decided: Timestamp.now() }));
   const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
   await assertSucceeds(getDocs(collection(leader, "theses/td1/titleComments")));
+});
+
+// Regression for the round-2 comment leak (final-branch-review C1).
+//
+// Nothing used to clear `titleDecidedAt` / `titleDecidedBy` /
+// `titleRejectionRemark` when a rejected set was resubmitted, so
+// `titleDecided()` stayed true for the rest of the thesis's life and the
+// leader read the panel's round-2 remarks live, mid-defence. Reproduced on
+// the emulator before the fix: LEAKED: [ 'ROUND TWO REMARK, MID-DEFENCE' ].
+//
+// The state under test only exists across a task seam — pending defence WITH
+// a prior decision on the record — which is why no per-task test seeded it.
+// The resubmission below is the real client batch, field deletes included.
+async function resubmitIntoRoundTwo(leader, thesisId) {
+  const batch = writeBatch(leader);
+  batch.set(doc(leader, `theses/${thesisId}/candidateTitles/r2a`), {
+    titleText: "Round two candidate", justificationPath: "p",
+    justificationUrl: "u", round: 2, submittedAt: serverTimestamp(),
+  });
+  batch.update(doc(leader, `theses/${thesisId}`), {
+    status: "titlePendingDefence", titleRound: 2,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp2", presentationUrl: "pu2",
+    titleDecidedAt: deleteField(),
+    titleDecidedBy: deleteField(),
+    titleRejectionRemark: deleteField(),
+  });
+  return batch.commit();
+}
+
+test("M1b attack: after a resubmission the leader may NOT read the new round's comments", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/tdr2"), defenceThesis("titleRejected", {
+      titleDecidedAt: Timestamp.now(),
+      titleDecidedBy: "dean-uid",
+      titleRejectionRemark: "Too broad.",
+    }));
+    await setDoc(doc(db, "theses/tdr2/nominations/pan-uid"), {
+      nomineeUid: "pan-uid", nomineeName: "Dr. Panel", position: "panelist",
+      exOfficio: false, conformeStatus: "accepted",
+    });
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertSucceeds(resubmitIntoRoundTwo(leader, "tdr2"));
+
+  // The panel remarks while round 2 is under way.
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(panel, "theses/tdr2/titleComments/r2c"), {
+    candidateTitleId: "r2a", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "ROUND TWO REMARK, MID-DEFENCE",
+    createdAt: serverTimestamp(),
+  }));
+
+  // THE DENIAL: the defence is live again, so the leader is shut out again.
+  await assertFails(getDocs(collection(leader, "theses/tdr2/titleComments")));
+
+  // ALLOW CONTROL on the very same path, same user, same documents: the Dean
+  // decides round 2 and the remarks open up. Without it the denial above
+  // could be a broken seed rather than a working rule.
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(dean, "theses/tdr2"), {
+    status: "titleApproved", approvedTitleId: "r2a",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  const opened = await assertSucceeds(
+    getDocs(collection(leader, "theses/tdr2/titleComments")));
+  assert.deepEqual(opened.docs.map((d) => d.data().body),
+    ["ROUND TWO REMARK, MID-DEFENCE"]);
+});
+
+test("M1b attack: a resubmission may NOT forge a decision instead of clearing one", async () => {
+  // The other half of the fix. Widening `onlyChanged` to admit the three
+  // decision fields, without pinning them to null, would hand the leader a
+  // way to SET `titleDecidedAt` on their own thesis and unlock the comments
+  // on a defence nobody has decided.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/tdr3"),
+      defenceThesis("nominationApproved", { titleRound: 0 }));
+  });
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(updateDoc(doc(leader, "theses/tdr3"), {
+    status: "titlePendingDefence", titleRound: 1,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp", presentationUrl: "pu",
+    titleDecidedAt: serverTimestamp(), titleDecidedBy: "leader-uid",
+  }));
+  // Control: the identical write with the fields cleared instead of forged.
+  await assertSucceeds(updateDoc(doc(leader, "theses/tdr3"), {
+    status: "titlePendingDefence", titleRound: 1,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp", presentationUrl: "pu",
+    titleDecidedAt: deleteField(), titleDecidedBy: deleteField(),
+    titleRejectionRemark: deleteField(),
+  }));
 });
 
 test("M1b attack: the leader may NEVER read composing indicators", async () => {

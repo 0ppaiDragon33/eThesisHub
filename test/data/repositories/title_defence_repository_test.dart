@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -70,6 +71,37 @@ void main() {
     expect(all, hasLength(4), reason: 'the rejected candidate is still there');
     expect(all.where((t) => t.round == 2), hasLength(3));
     expect(all.where((t) => t.round == 1), hasLength(1));
+  });
+
+test('a resubmission clears the previous round\'s decision', () async {
+    // The whole reason the leader is locked out of the panel's remarks is
+    // `titleDecidedAt` being null while a defence is under way. Leaving the
+    // previous round's decision on the document kept `titleDecided()` true in
+    // firestore.rules for the rest of the thesis's life, and from round 2
+    // onward the student read every comment live, mid-defence. The rules now
+    // REQUIRE these three to arrive null on this transition, so a client that
+    // forgets the deletes is denied outright.
+    final db = await seed(status: 'titleRejected', titleRound: 1);
+    await db.collection('theses').doc('t1').update({
+      'titleDecidedAt': Timestamp.fromDate(DateTime.utc(2026, 8, 1)),
+      'titleDecidedBy': 'dean-uid',
+      'titleRejectionRemark': 'Too broad.',
+    });
+    final repo = TitleDefenceRepository(db);
+
+    await repo.submitCandidateTitles(
+      thesisId: 't1', titles: drafts(3),
+      presentationPath: 'p2', presentationUrl: 'u2',
+    );
+
+    final thesis = (await db.collection('theses').doc('t1').get()).data()!;
+    expect(thesis['titleDecidedAt'], isNull);
+    expect(thesis['titleDecidedBy'], isNull);
+    expect(thesis['titleRejectionRemark'], isNull);
+    // ...and the thesis really is back at a live defence, so those nulls are
+    // exactly what shuts the student out again.
+    expect(thesis['status'], ThesisStatus.titlePendingDefence.value);
+    expect(thesis['titleRound'], 2);
   });
 
   test('fewer than three candidates is refused', () async {
