@@ -3,13 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
+import 'package:ethesishub/features/titles/consolidated_comments.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
+import 'package:ethesishub/providers/title_providers.dart';
 
 /// Shows the student leader where their thesis nomination stands: the
 /// current stage, each nominee's Conforme state, and — once approved — a
@@ -39,15 +43,10 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 class ThesisStatusScreen extends ConsumerWidget {
   const ThesisStatusScreen({super.key});
 
-  static String label(ThesisStatus s) => switch (s) {
-        ThesisStatus.draft => 'Draft — nominate your adviser and panel',
-        ThesisStatus.nominationPendingConforme =>
-          'Waiting for nominees to accept',
-        ThesisStatus.nominationPendingCoordinator =>
-          'Waiting for the Research Coordinator',
-        ThesisStatus.nominationPendingDean => 'Waiting for the Dean',
-        ThesisStatus.nominationApproved => 'Nomination approved',
-      };
+  /// Delegates to [StatusChip], the single shared status vocabulary — a
+  /// second switch here previously drifted from it ("Waiting for the Dean"
+  /// against "With the Dean", "Nomination approved" against "Approved").
+  static String label(ThesisStatus s) => StatusChip.labelFor(s);
 
   Future<void> _download(
       WidgetRef ref, Thesis thesis, List<Nomination> nominations) async {
@@ -163,6 +162,39 @@ class ThesisStatusScreen extends ConsumerWidget {
                             TextStyle(color: Theme.of(context).colorScheme.error),
                       ),
                     ),
+                  // The student cannot fix what they cannot read, so the
+                  // remark comes before the resubmit action below.
+                  if (thesis.status == ThesisStatus.titleRejected &&
+                      (thesis.titleRejectionRemark ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: ErrorState(
+                        message: 'This set was rejected: '
+                            '${thesis.titleRejectionRemark}',
+                      ),
+                    ),
+                  // The single decision this whole milestone exists to
+                  // record was invisible to the group it was made about:
+                  // `approvedTitleId` was written and rendered nowhere, so an
+                  // approved thesis showed a generic chip and the comment
+                  // blocks for every candidate, with no mark on the winner.
+                  if (thesis.status == ThesisStatus.titleApproved &&
+                      thesis.approvedTitleId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _ApprovedTitle(
+                        thesisId: thesis.id,
+                        approvedTitleId: thesis.approvedTitleId!,
+                      ),
+                    ),
+                  if (thesis.titleDecidedAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: _ConsolidatedComments(
+                        thesisId: thesis.id,
+                        round: thesis.titleRound,
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   if (thesis.status == ThesisStatus.draft)
                     FilledButton.icon(
@@ -179,12 +211,163 @@ class ThesisStatusScreen extends ConsumerWidget {
                       label: const Text('Download Form 1'),
                       onPressed: () => _download(ref, thesis, nominations),
                     ),
+                  if (thesis.status == ThesisStatus.nominationApproved ||
+                      thesis.status == ThesisStatus.titleRejected)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: FilledButton.icon(
+                        key: const Key('goToSubmitTitles'),
+                        icon: const Icon(Icons.edit_document),
+                        label: Text(thesis.status == ThesisStatus.titleRejected
+                            ? 'Resubmit candidate titles'
+                            : 'Submit candidate titles'),
+                        onPressed: () =>
+                            context.go('/thesis/titles?id=${thesis.id}'),
+                      ),
+                    ),
                 ],
               );
             },
           );
         },
       ),
+    );
+  }
+}
+
+/// Names the title the Dean approved.
+///
+/// Resolved through `candidateTitlesProvider` rather than stored on the
+/// thesis: `candidateTitles` are immutable once submitted, so the text the
+/// student reads here is exactly the text the panel judged.
+class _ApprovedTitle extends ConsumerWidget {
+  const _ApprovedTitle({required this.thesisId, required this.approvedTitleId});
+
+  final String thesisId;
+  final String approvedTitleId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final candidatesAsync = ref.watch(candidateTitlesProvider(thesisId));
+    final candidates = candidatesAsync.valueOrNull;
+
+    // Loading and "the document is gone" are kept apart, the same way every
+    // other branch on this screen is: telling a student their approved title
+    // no longer exists while it is still loading is the M1a bug.
+    if (candidatesAsync.isLoading) {
+      return const LoadingState(label: 'Loading your approved title…');
+    }
+    final approved = candidates
+        ?.where((c) => c.id == approvedTitleId)
+        .map((c) => c.titleText)
+        .firstOrNull;
+
+    return Container(
+      key: const Key('approvedTitle'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_outlined, size: 20),
+              const SizedBox(width: 8),
+              Text('Approved title',
+                  style: Theme.of(context).textTheme.titleSmall),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            approved ?? 'The approved title could not be found.',
+            key: const Key('approvedTitleText'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The panel's remarks, consolidated per commenter under each candidate —
+/// what the student reads once the Dean has recorded a decision. Shown as a
+/// separate widget because it needs its own two live streams
+/// (`candidateTitlesProvider`, `titleCommentsProvider`), watched only once a
+/// decision exists — most statuses never render this at all.
+class _ConsolidatedComments extends ConsumerWidget {
+  const _ConsolidatedComments({required this.thesisId, required this.round});
+
+  final String thesisId;
+  final int round;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final candidatesAsync = ref.watch(candidateTitlesProvider(thesisId));
+    final commentsAsync = ref.watch(titleCommentsProvider(thesisId));
+
+    if (candidatesAsync.isLoading || commentsAsync.isLoading) {
+      return const LoadingState(label: 'Loading panel comments…');
+    }
+    if (candidatesAsync.hasError) {
+      return ErrorState(
+        error: candidatesAsync.error,
+        message: 'Could not load the candidate titles.',
+      );
+    }
+    if (commentsAsync.hasError) {
+      return ErrorState(
+        error: commentsAsync.error,
+        message: 'Could not load the panel comments.',
+      );
+    }
+
+    final consolidated = consolidate(
+      candidates: candidatesAsync.valueOrNull ?? const [],
+      comments: commentsAsync.valueOrNull ?? const [],
+      round: round,
+    );
+
+    return Column(
+      key: const Key('consolidatedComments'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Panel comments',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        for (final candidate in consolidated)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(candidate.candidate.titleText,
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                for (final block in candidate.blocks)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(block.header,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold)),
+                        for (final body in block.bodies)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16, top: 2),
+                            child: Text(body),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

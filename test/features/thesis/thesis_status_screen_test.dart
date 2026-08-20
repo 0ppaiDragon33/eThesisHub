@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 Future<FakeFirebaseFirestore> seeded(
   String status, {
   bool declined = false,
+  Map<String, dynamic> extraFields = const {},
 }) async {
   final db = FakeFirebaseFirestore();
   await db.collection('users').doc('leader-1').set({
@@ -21,6 +23,7 @@ Future<FakeFirebaseFirestore> seeded(
     'adviserUid': 'a1', 'memberNames': ['Bagsain, Karlo June'],
     'workingTitle': 'eThesisHub', 'college': 'CICT', 'program': 'BSIT',
     'semester': 'First', 'academicYear': '2026-2027',
+    ...extraFields,
   });
   final noms = db.collection('theses').doc('t1').collection('nominations');
   if (declined) {
@@ -136,5 +139,167 @@ void main() {
     expect(find.byKey(const Key('nominateAction')), findsNothing);
     expect(find.byKey(const Key('reNominationGap')), findsOneWidget);
     expect(find.textContaining('Research Coordinator'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a rejected title set offers resubmit, and the remark reads before it '
+      'so the student knows what to fix', (tester) async {
+    await tester.pumpWidget(wrap(await seeded('titleRejected', extraFields: {
+      'titleRejectionRemark': 'Scope is too broad for one semester.',
+      'titleDecidedAt': Timestamp.fromDate(DateTime.utc(2026, 5, 1)),
+      'titleDecidedBy': 'dean-1',
+      'titleRound': 1,
+    })));
+    await tester.pumpAndSettle();
+
+    final resubmit = find.byKey(const Key('goToSubmitTitles'));
+    expect(resubmit, findsOneWidget);
+    expect(find.text('Resubmit candidate titles'), findsOneWidget);
+
+    final remark = find.textContaining('Scope is too broad for one semester.');
+    expect(remark, findsOneWidget);
+
+    // The remark must read above the resubmit action in the same scrolling
+    // list — a lower y-position means it appears first.
+    final remarkY = tester.getTopLeft(remark).dy;
+    final resubmitY = tester.getTopLeft(resubmit).dy;
+    expect(remarkY, lessThan(resubmitY));
+  });
+
+  testWidgets(
+      'consolidated panel comments appear once titleDecidedAt is set, '
+      'grouped per commenter under each candidate, filtered to the current '
+      'round', (tester) async {
+    final db = await seeded('titleApproved', extraFields: {
+      'titleDecidedAt': Timestamp.fromDate(DateTime.utc(2026, 5, 1)),
+      'titleDecidedBy': 'dean-1',
+      'approvedTitleId': 'ct-round2',
+      'titleRound': 2,
+    });
+
+    final theses = db.collection('theses').doc('t1');
+    // Round 1 (superseded) candidate + comment — must not appear.
+    await theses.collection('candidateTitles').doc('ct-round1').set({
+      'titleText': 'Old round title',
+      'justificationPath': 'p1',
+      'justificationUrl': 'u1',
+      'round': 1,
+    });
+    await theses.collection('titleComments').add({
+      'candidateTitleId': 'ct-round1',
+      'authorUid': 'p1',
+      'authorName': 'Old Round Commenter',
+      'authorRole': 'Panel Member',
+      'body': 'This should never render.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 4, 1)),
+    });
+    // Round 2 (current) candidate + two comments from two authors.
+    await theses.collection('candidateTitles').doc('ct-round2').set({
+      'titleText': 'Current round title',
+      'justificationPath': 'p2',
+      'justificationUrl': 'u2',
+      'round': 2,
+    });
+    await theses.collection('titleComments').add({
+      'candidateTitleId': 'ct-round2',
+      'authorUid': 'a1',
+      'authorName': 'Dr. Noel A. Armada',
+      'authorRole': 'Adviser',
+      'body': 'Narrow the respondents to one college.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 4, 20)),
+    });
+    await theses.collection('titleComments').add({
+      'candidateTitleId': 'ct-round2',
+      'authorUid': 'p1',
+      'authorName': 'Dr. Test Panelist',
+      'authorRole': 'Panel Member',
+      'body': 'Good direction overall.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 4, 21)),
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('consolidatedComments')), findsOneWidget);
+    // Scoped to the comments block: the approved-title banner above now
+    // names the same title, so a bare find.text would match twice.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('consolidatedComments')),
+        matching: find.text('Current round title'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('[Dr. Noel A. Armada — Adviser]'), findsOneWidget);
+    expect(find.text('[Dr. Test Panelist — Panel Member]'), findsOneWidget);
+    expect(find.text('Narrow the respondents to one college.'), findsOneWidget);
+    expect(find.text('Good direction overall.'), findsOneWidget);
+
+    // Filtered out: the superseded round's title and its comment.
+    expect(find.text('Old round title'), findsNothing);
+    expect(find.text('This should never render.'), findsNothing);
+    expect(find.textContaining('Old Round Commenter'), findsNothing);
+  });
+
+  testWidgets('an approved thesis names the title the Dean approved',
+      (tester) async {
+    // approvedTitleId was written by approveTitle and rendered by no screen,
+    // so the group was never told which of their candidates won.
+    final db = await seeded('titleApproved', extraFields: {
+      'titleDecidedAt': Timestamp.fromDate(DateTime.utc(2026, 5, 1)),
+      'titleDecidedBy': 'dean-1',
+      'approvedTitleId': 'ct-winner',
+      'titleRound': 1,
+    });
+    final candidates =
+        db.collection('theses').doc('t1').collection('candidateTitles');
+    await candidates.doc('ct-winner').set({
+      'titleText': 'The one the panel chose',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+    await candidates.doc('ct-loser').set({
+      'titleText': 'The one they did not',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final banner = find.byKey(const Key('approvedTitle'));
+    expect(banner, findsOneWidget);
+    // The winner's own text inside the banner, not merely somewhere on the
+    // screen — the consolidated comments below list every candidate.
+    expect(
+      find.descendant(
+          of: banner, matching: find.text('The one the panel chose')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+          of: banner, matching: find.text('The one they did not')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a thesis still at defence names no approved title',
+      (tester) async {
+    // The control for the test above, same screen, one status apart: nothing
+    // may announce a winner before the Dean has picked one.
+    final db = await seeded('titlePendingDefence',
+        extraFields: {'titleRound': 1});
+    await db
+        .collection('theses')
+        .doc('t1')
+        .collection('candidateTitles')
+        .doc('ct-winner')
+        .set({
+      'titleText': 'The one the panel chose',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('approvedTitle')), findsNothing);
   });
 }

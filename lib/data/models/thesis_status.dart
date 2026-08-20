@@ -3,7 +3,12 @@ enum ThesisStatus {
   nominationPendingConforme,
   nominationPendingCoordinator,
   nominationPendingDean,
-  nominationApproved;
+  nominationApproved,
+  // M1b. `titleApproved` is this milestone's terminal state; the move to
+  // in_progress belongs to the documents module.
+  titlePendingDefence,
+  titleApproved,
+  titleRejected;
 
   String get value => name;
 

@@ -17,6 +17,8 @@ import 'package:ethesishub/features/nomination/review_queue_screen.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/features/thesis/thesis_status_screen.dart';
+import 'package:ethesishub/features/titles/submit_titles_screen.dart';
+import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -105,7 +107,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // This is a UX guard only — the real authorization boundary is
               // firestore.rules, which every screen's writes and reads still
               // go through regardless of what the client permits.
-              const studentOnly = ['/thesis', '/thesis/create', '/thesis/nominate'];
+              const studentOnly = [
+                '/thesis',
+                '/thesis/create',
+                '/thesis/nominate',
+                '/thesis/titles',
+              ];
               if (studentOnly.any(location.startsWith) &&
                   profile.role != UserRole.student) {
                 return home;
@@ -122,14 +129,24 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.dean) {
                 return home;
               }
+              // The title defence panel is faculty, coordinators and the
+              // dean — never the student whose titles are being judged.
+              if (location.startsWith('/defence/') &&
+                  profile.role == UserRole.student) {
+                return home;
+              }
 
-              // '/thesis/nominate' reads its thesis id from a required
-              // query parameter. A bare visit (typed directly, or reached
-              // with no thesis context) falls back to the signed-in
-              // leader's own thesis rather than crashing on the route
-              // builder's null-check; a leader with no thesis yet is sent
-              // to create one first.
-              if (location.startsWith('/thesis/nominate') &&
+              // '/thesis/nominate' and '/thesis/titles' both read their
+              // thesis id from a required query parameter. A bare visit
+              // (typed directly, or reached with no thesis context) falls
+              // back to the signed-in leader's own thesis rather than
+              // crashing on the route builder's null-check; a leader with no
+              // thesis yet is sent to create one first.
+              const bareVisitFallbackPaths = [
+                '/thesis/nominate',
+                '/thesis/titles',
+              ];
+              if (bareVisitFallbackPaths.contains(location) &&
                   state.uri.queryParameters['id'] == null) {
                 // Distinguish "still loading" from "has no thesis" — reading
                 // `.valueOrNull` here would treat an unsettled stream the
@@ -147,7 +164,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 return myThesisAsync.when(
                   data: (myThesis) => myThesis == null
                       ? '/thesis/create'
-                      : '/thesis/nominate?id=${myThesis.id}',
+                      : '$location?id=${myThesis.id}',
                   loading: () => null,
                   error: (_, _) => '/thesis/create',
                 );
@@ -203,6 +220,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           }
           return NominateScreen(thesisId: id);
         },
+      ),
+      GoRoute(
+        path: '/thesis/titles',
+        builder: (context, state) {
+          // Same bare-visit fallback as /thesis/nominate: fall back to the
+          // leader's own thesis rather than null-checking a missing query
+          // parameter, and distinguish loading from absent while doing it.
+          final id = state.uri.queryParameters['id'];
+          if (id == null) {
+            return const Scaffold(
+              key: Key('submitTitlesBareVisitLoading'),
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return SubmitTitlesScreen(thesisId: id);
+        },
+      ),
+      GoRoute(
+        path: '/defence/:thesisId',
+        builder: (context, state) => TitleDefenceScreen(
+            thesisId: state.pathParameters['thesisId']!),
       ),
       GoRoute(
         path: '/nominations',

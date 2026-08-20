@@ -19,6 +19,7 @@ import {
   deleteDoc,
   serverTimestamp,
   writeBatch,
+  deleteField,
   runTransaction,
   Timestamp,
 } from "firebase/firestore";
@@ -1944,6 +1945,589 @@ test("END TO END: create -> submit -> four conformes -> recommend -> approve, un
     assert.equal(byId[uid].exOfficio, true);
     assert.ok(!finalThesis.data().panelistUids.includes(uid));
   }
+});
+
+// --- M1b title defence ------------------------------------------------
+
+// Memoised, unlike `asUser` above: these tests reach for the same uid more
+// than once (a deny and its allow control are often two different people, and
+// the same person recurs across tests). Re-deriving a Firestore instance for a
+// uid that has already issued a request throws "Firestore has already been
+// started and its settings can no longer be changed" — a harness error that
+// would masquerade as a rules failure, and worse, would satisfy an
+// `assertFails` for entirely the wrong reason.
+const defenceDbs = new Map();
+function asDefenceUser(uid, email) {
+  if (!defenceDbs.has(uid)) {
+    defenceDbs.set(
+      uid,
+      env.authenticatedContext(uid, { email, email_verified: true }).firestore()
+    );
+  }
+  return defenceDbs.get(uid);
+}
+
+function defenceThesis(status, extra = {}) {
+  return {
+    leaderUid: "leader-uid",
+    status,
+    panelistUids: ["pan-uid"],
+    adviserUid: "adv-uid",
+    memberNames: [],
+    workingTitle: "T",
+    college: "CICT",
+    program: "BSIT",
+    semester: "First",
+    academicYear: "2026-2027",
+    titleRound: 1,
+    ...extra,
+  };
+}
+
+// Takes the Firestore handle, NOT the context. `ctx.firestore()` may only be
+// called ONCE per context — a second call throws "Firestore has already been
+// started", which `assertFails` would happily swallow as though it were a
+// rules denial, and every deny test in this block would pass for the wrong
+// reason. Observed: eight of these tests "passed their denial" that way before
+// the seed was reshaped to take a single handle.
+async function seedDefence(db, { status = "titlePendingDefence", decided = null } = {}) {
+  await setDoc(
+    doc(db, "theses/td1"),
+    defenceThesis(status, decided ? { titleDecidedAt: decided } : {})
+  );
+  await setDoc(doc(db, "theses/td1/candidateTitles/ct1"), {
+    titleText: "Candidate one", justificationPath: "p",
+    justificationUrl: "u", round: 1,
+  });
+  await setDoc(doc(db, "theses/td1/titleComments/cm1"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid",
+    authorName: "Dr. Panel", authorRole: "Panel Member",
+    body: "Too broad.", createdAt: Timestamp.now(),
+  });
+  await setDoc(doc(db, "theses/td1/nominations/pan-uid"), {
+    nomineeUid: "pan-uid", nomineeName: "Dr. Panel", position: "panelist",
+    exOfficio: false, conformeStatus: "accepted",
+  });
+}
+
+test("M1b allow: a panel member MAY read comments during the defence", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComments")));
+});
+
+test("M1b attack: the leader may NOT read comments before the decision", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(getDocs(collection(leader, "theses/td1/titleComments")));
+});
+
+test("M1b allow: the leader MAY read comments once the Dean has decided", async () => {
+  // The control for the test above: same path, same user, one field changed.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedDefence(ctx.firestore(), { status: "titleApproved", decided: Timestamp.now() }));
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(leader, "theses/td1/titleComments")));
+});
+
+// Regression for the round-2 comment leak (final-branch-review C1).
+//
+// Nothing used to clear `titleDecidedAt` / `titleDecidedBy` /
+// `titleRejectionRemark` when a rejected set was resubmitted, so
+// `titleDecided()` stayed true for the rest of the thesis's life and the
+// leader read the panel's round-2 remarks live, mid-defence. Reproduced on
+// the emulator before the fix: LEAKED: [ 'ROUND TWO REMARK, MID-DEFENCE' ].
+//
+// The state under test only exists across a task seam — pending defence WITH
+// a prior decision on the record — which is why no per-task test seeded it.
+// The resubmission below is the real client batch, field deletes included.
+async function resubmitIntoRoundTwo(leader, thesisId) {
+  const batch = writeBatch(leader);
+  batch.set(doc(leader, `theses/${thesisId}/candidateTitles/r2a`), {
+    titleText: "Round two candidate", justificationPath: "p",
+    justificationUrl: "u", round: 2, submittedAt: serverTimestamp(),
+  });
+  batch.update(doc(leader, `theses/${thesisId}`), {
+    status: "titlePendingDefence", titleRound: 2,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp2", presentationUrl: "pu2",
+    titleDecidedAt: deleteField(),
+    titleDecidedBy: deleteField(),
+    titleRejectionRemark: deleteField(),
+  });
+  return batch.commit();
+}
+
+test("M1b attack: after a resubmission the leader may NOT read the new round's comments", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/tdr2"), defenceThesis("titleRejected", {
+      titleDecidedAt: Timestamp.now(),
+      titleDecidedBy: "dean-uid",
+      titleRejectionRemark: "Too broad.",
+    }));
+    await setDoc(doc(db, "theses/tdr2/nominations/pan-uid"), {
+      nomineeUid: "pan-uid", nomineeName: "Dr. Panel", position: "panelist",
+      exOfficio: false, conformeStatus: "accepted",
+    });
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertSucceeds(resubmitIntoRoundTwo(leader, "tdr2"));
+
+  // The panel remarks while round 2 is under way.
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(panel, "theses/tdr2/titleComments/r2c"), {
+    candidateTitleId: "r2a", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "ROUND TWO REMARK, MID-DEFENCE",
+    createdAt: serverTimestamp(),
+  }));
+
+  // THE DENIAL: the defence is live again, so the leader is shut out again.
+  await assertFails(getDocs(collection(leader, "theses/tdr2/titleComments")));
+
+  // ALLOW CONTROL on the very same path, same user, same documents: the Dean
+  // decides round 2 and the remarks open up. Without it the denial above
+  // could be a broken seed rather than a working rule.
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(dean, "theses/tdr2"), {
+    status: "titleApproved", approvedTitleId: "r2a",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  const opened = await assertSucceeds(
+    getDocs(collection(leader, "theses/tdr2/titleComments")));
+  assert.deepEqual(opened.docs.map((d) => d.data().body),
+    ["ROUND TWO REMARK, MID-DEFENCE"]);
+});
+
+test("M1b attack: a resubmission may NOT forge a decision instead of clearing one", async () => {
+  // The other half of the fix. Widening `onlyChanged` to admit the three
+  // decision fields, without pinning them to null, would hand the leader a
+  // way to SET `titleDecidedAt` on their own thesis and unlock the comments
+  // on a defence nobody has decided.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/tdr3"),
+      defenceThesis("nominationApproved", { titleRound: 0 }));
+  });
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(updateDoc(doc(leader, "theses/tdr3"), {
+    status: "titlePendingDefence", titleRound: 1,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp", presentationUrl: "pu",
+    titleDecidedAt: serverTimestamp(), titleDecidedBy: "leader-uid",
+  }));
+  // Control: the identical write with the fields cleared instead of forged.
+  await assertSucceeds(updateDoc(doc(leader, "theses/tdr3"), {
+    status: "titlePendingDefence", titleRound: 1,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp", presentationUrl: "pu",
+    titleDecidedAt: deleteField(), titleDecidedBy: deleteField(),
+    titleRejectionRemark: deleteField(),
+  }));
+});
+
+test("M1b attack: the leader may NEVER read composing indicators", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db, { status: "titleApproved", decided: Timestamp.now() });
+    await setDoc(doc(db, "theses/td1/titleComposing/pan-uid"), {
+      name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  // Decided, so comments are readable — composing still is not.
+  await assertSucceeds(getDocs(collection(leader, "theses/td1/titleComments")));
+  await assertFails(getDocs(collection(leader, "theses/td1/titleComposing")));
+  // Control on the very same path: the panel member reads it fine.
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComposing")));
+});
+
+test("M1b attack: a comment may NOT be edited or deleted", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertFails(updateDoc(doc(panel, "theses/td1/titleComments/cm1"),
+    { body: "rewritten" }));
+  await assertFails(deleteDoc(doc(panel, "theses/td1/titleComments/cm1")));
+  // Control: the same author on the same collection MAY still append.
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/appended"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "a new remark", createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a panel member may NOT author a comment as someone else", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertFails(setDoc(doc(panel, "theses/td1/titleComments/forged"), {
+    candidateTitleId: "ct1", authorUid: "adv-uid", authorName: "Dr. Adviser",
+    authorRole: "Adviser", body: "not mine", createdAt: serverTimestamp(),
+  }));
+  // Control: the same write with their own uid is accepted.
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/mine"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "mine", createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: the leader may NOT comment on their own defence", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, "theses/td1/titleComments/byleader"), {
+    candidateTitleId: "ct1", authorUid: "leader-uid", authorName: "The Leader",
+    authorRole: "Student", body: "we think it is fine", createdAt: serverTimestamp(),
+  }));
+  // Control: a panel member writing the same shape on the same path succeeds.
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/bypanel"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "we think it is fine",
+    createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: an outsider may read NOTHING of another group's defence", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db, { status: "titleApproved", decided: Timestamp.now() });
+    await setDoc(doc(db, "theses/td1/titleComposing/pan-uid"), {
+      name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  const outsider = asDefenceUser("outsider-uid", "outsider@isufst.edu.ph");
+  await assertFails(getDocs(collection(outsider, "theses/td1/candidateTitles")));
+  await assertFails(getDocs(collection(outsider, "theses/td1/titleComments")));
+  await assertFails(getDocs(collection(outsider, "theses/td1/titleComposing")));
+  // Control: the panel member on this thesis reads all three.
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(panel, "theses/td1/candidateTitles")));
+  await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComments")));
+  await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComposing")));
+});
+
+test("M1b attack: a panel member may NOT plant or clear someone else's composing marker", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertFails(setDoc(doc(panel, "theses/td1/titleComposing/adv-uid"), {
+    name: "Dr. Adviser", role: "Adviser", candidateTitleId: "ct1",
+    updatedAt: serverTimestamp(),
+  }));
+  // Control: their own marker, same shape, same collection.
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComposing/pan-uid"), {
+    name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(deleteDoc(doc(panel, "theses/td1/titleComposing/adv-uid")));
+  await assertSucceeds(deleteDoc(doc(panel, "theses/td1/titleComposing/pan-uid")));
+});
+
+// A nominee who explicitly declined to serve still had a nomination
+// DOCUMENT sitting there — undeletable once the thesis left `draft` — and
+// `isOnPanel()` used to grant access on mere existence via `hasNomination()`,
+// never checking `conformeStatus`. That let a declined nominee keep reading
+// the panel's private remarks, keep reading who was typing, and keep filing
+// comments into the official record under whatever `authorRole` they chose.
+// `declined-uid` is deliberately NOT in `panelistUids` (seedDefence only ever
+// puts "pan-uid" there), so these assertions exercise the nomination arm of
+// `isOnPanel()` in isolation — no other arm could be granting access.
+test("M1b attack: a nominee who DECLINED may NOT read comments, read composing, or comment", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "theses/td1/nominations/declined-uid"), {
+      nomineeUid: "declined-uid", nomineeName: "Dr. Declined", position: "panelist",
+      exOfficio: false, conformeStatus: "declined",
+    });
+    await setDoc(doc(db, "theses/td1/titleComposing/pan-uid"), {
+      name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  const declined = asDefenceUser("declined-uid", "declined@isufst.edu.ph");
+  await assertFails(getDocs(collection(declined, "theses/td1/titleComments")));
+  await assertFails(getDocs(collection(declined, "theses/td1/titleComposing")));
+  await assertFails(setDoc(doc(declined, "theses/td1/titleComments/byDeclined"), {
+    candidateTitleId: "ct1", authorUid: "declined-uid", authorName: "Dr. Declined",
+    authorRole: "Panel Member", body: "should not land", createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b allow: the SAME nominee, ACCEPTED instead of declined, on the same path, can do all three", async () => {
+  // The control for the test above: same thesis, same uid, same collections —
+  // only `conformeStatus` changes. Proves the denial above was the
+  // `conformeStatus` gate and not a wrong path or a missing prerequisite doc.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "theses/td1/nominations/declined-uid"), {
+      nomineeUid: "declined-uid", nomineeName: "Dr. Declined", position: "panelist",
+      exOfficio: false, conformeStatus: "accepted",
+    });
+    await setDoc(doc(db, "theses/td1/titleComposing/pan-uid"), {
+      name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  const accepted = asDefenceUser("declined-uid", "declined@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(accepted, "theses/td1/titleComments")));
+  await assertSucceeds(getDocs(collection(accepted, "theses/td1/titleComposing")));
+  await assertSucceeds(setDoc(doc(accepted, "theses/td1/titleComments/byAccepted"), {
+    candidateTitleId: "ct1", authorUid: "declined-uid", authorName: "Dr. Declined",
+    authorRole: "Panel Member", body: "now allowed", createdAt: serverTimestamp(),
+  }));
+});
+
+// The two people who chair the defence — Coordinator and Dean — sit on
+// every panel BY OFFICE and are never asked to accept, so their
+// `conformeStatus` is permanently "exOfficio". This is the case the fix
+// could most easily break: a gate on ['accepted'] alone would lock them out.
+// `exo-uid` is, like `declined-uid` above, deliberately absent from
+// `panelistUids`, so this exercises the nomination arm alone.
+test("M1b allow: an EX OFFICIO nominee (Coordinator/Dean) retains panel access", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "theses/td1/nominations/exo-uid"), {
+      nomineeUid: "exo-uid", nomineeName: "The Coordinator", position: "coordinator",
+      exOfficio: true, conformeStatus: "exOfficio",
+    });
+  });
+  const exo = asDefenceUser("exo-uid", "exo@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(exo, "theses/td1/titleComments")));
+  await assertSucceeds(getDocs(collection(exo, "theses/td1/titleComposing")));
+  await assertSucceeds(setDoc(doc(exo, "theses/td1/titleComments/byExo"), {
+    candidateTitleId: "ct1", authorUid: "exo-uid", authorName: "The Coordinator",
+    authorRole: "Coordinator", body: "chairing the defence", createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a candidate title may NOT be edited after submission", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(updateDoc(doc(leader, "theses/td1/candidateTitles/ct1"),
+    { titleText: "changed after they read it" }));
+  await assertFails(deleteDoc(doc(leader, "theses/td1/candidateTitles/ct1")));
+  // Control: the leader may still READ it on the same path.
+  await assertSucceeds(getDocs(collection(leader, "theses/td1/candidateTitles")));
+});
+
+// The submit batch: candidates + the thesis flip, committed together.
+//
+// This pair is the emulator probe the rule depends on. Firestore evaluates
+// every write in a batch against the state BEFORE the batch, so a candidate
+// `create` is judged while the thesis is still `nominationApproved` — which is
+// why the create rule names the PRE-submission statuses and not
+// `titlePendingDefence`. The second test is the two-sided half: the identical
+// writes issued sequentially are denied, because by then the status has moved.
+test("M1b allow: the leader MAY submit candidates and flip the thesis in ONE batch", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/tdb1"),
+      defenceThesis("nominationApproved", { titleRound: 0 }));
+  });
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  const batch = writeBatch(leader);
+  for (const id of ["b1", "b2", "b3"]) {
+    batch.set(doc(leader, `theses/tdb1/candidateTitles/${id}`), {
+      titleText: `Candidate ${id}`, justificationPath: "p",
+      justificationUrl: "u", round: 1, submittedAt: serverTimestamp(),
+    });
+  }
+  batch.update(doc(leader, "theses/tdb1"), {
+    status: "titlePendingDefence", titleRound: 1,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp", presentationUrl: "pu",
+  });
+  await assertSucceeds(batch.commit());
+});
+
+test("M1b probe: batched writes are evaluated against the state BEFORE the batch", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/tdb2"),
+      defenceThesis("nominationApproved", { titleRound: 0 }));
+  });
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  // Sequentially: the flip commits first...
+  await assertSucceeds(updateDoc(doc(leader, "theses/tdb2"), {
+    status: "titlePendingDefence", titleRound: 1,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "pp", presentationUrl: "pu",
+  }));
+  // ...and now the very same candidate create is DENIED, because the thesis
+  // has already left the submission statuses. Batched, it was allowed.
+  await assertFails(setDoc(doc(leader, "theses/tdb2/candidateTitles/b1"), {
+    titleText: "Candidate b1", justificationPath: "p",
+    justificationUrl: "u", round: 1, submittedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a stranger may NOT submit candidates to another group's thesis", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/tdb3"),
+      defenceThesis("nominationApproved", { titleRound: 0 }));
+  });
+  const outsider = asDefenceUser("outsider-uid", "outsider@isufst.edu.ph");
+  await assertFails(setDoc(doc(outsider, "theses/tdb3/candidateTitles/x1"), {
+    titleText: "Not mine", justificationPath: "p", justificationUrl: "u",
+    round: 1, submittedAt: serverTimestamp(),
+  }));
+  // Control: the real leader, same path, same payload.
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(leader, "theses/tdb3/candidateTitles/x1"), {
+    titleText: "Not mine", justificationPath: "p", justificationUrl: "u",
+    round: 1, submittedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a candidate may NOT carry unknown keys or an empty title", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/tdb4"),
+      defenceThesis("nominationApproved", { titleRound: 0 }));
+  });
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/junk"), {
+    titleText: "Fine", justificationPath: "p", justificationUrl: "u",
+    round: 1, submittedAt: serverTimestamp(), approvedBy: "dean-uid",
+  }));
+  await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/empty"), {
+    titleText: "", justificationPath: "p", justificationUrl: "u",
+    round: 1, submittedAt: serverTimestamp(),
+  }));
+  // Control: the same write, whitelisted keys, non-empty title.
+  await assertSucceeds(setDoc(doc(leader, "theses/tdb4/candidateTitles/ok"), {
+    titleText: "Fine", justificationPath: "p", justificationUrl: "u",
+    round: 1, submittedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: the leader may NOT edit the thesis once the defence is under way", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
+  // Replaying the submit would swap the presentation mid-defence.
+  await assertFails(updateDoc(doc(leader, "theses/td1"), {
+    status: "titlePendingDefence", titleRound: 2,
+    titlesSubmittedAt: serverTimestamp(),
+    presentationPath: "swapped", presentationUrl: "swapped",
+  }));
+  // And they certainly may not decide their own defence.
+  await assertFails(updateDoc(doc(leader, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "leader-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: the Dean may NOT approve a candidate from another thesis", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "not-on-this-thesis",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  // Control: the real candidate is accepted.
+  await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a coordinator may NOT record the Dean's decision", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "users/coord-uid"), {
+      ...studentProfile("coord@isufst.edu.ph"), role: "coordinator" });
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const coord = asDefenceUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "coord-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  // Control: the Dean, same write, same path.
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: the Dean may NOT record the decision under someone else's name", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "someone-else", titleDecidedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: the Dean may NOT reject without a remark", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleRejected", titleRejectionRemark: "",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleRejected", titleRejectionRemark: "All three are too broad.",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a decision may NOT be replayed once made", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db, { status: "titleApproved", decided: Timestamp.now() });
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleRejected", titleRejectionRemark: "changed my mind",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: the Dean may NOT skip the defence entirely", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db, { status: "nominationApproved" });
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  // Control: once the thesis IS at titlePendingDefence, the same write lands.
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
 });
 
 test.after(async () => {

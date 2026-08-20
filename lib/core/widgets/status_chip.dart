@@ -29,6 +29,9 @@ class StatusChip extends StatelessWidget {
         ThesisStatus.nominationPendingCoordinator => 'With the Coordinator',
         ThesisStatus.nominationPendingDean => 'With the Dean',
         ThesisStatus.nominationApproved => 'Approved',
+        ThesisStatus.titlePendingDefence => 'Title defence',
+        ThesisStatus.titleApproved => 'Title approved',
+        ThesisStatus.titleRejected => 'Titles returned',
       };
 
   /// One sentence saying what happens next, for the screens that have room.
@@ -44,6 +47,13 @@ class StatusChip extends StatelessWidget {
           'The Dean is reviewing the nomination.',
         ThesisStatus.nominationApproved =>
           'Form 1 is ready to download.',
+        ThesisStatus.titlePendingDefence =>
+          'Your candidate titles are with the panel.',
+        ThesisStatus.titleApproved =>
+          'Your title is approved. Work begins on the chapters.',
+        ThesisStatus.titleRejected =>
+          'The panel returned your candidates. Read the remark and submit a '
+          'new set.',
       };
 
   static Color _colorFor(ThesisStatus status, Brightness brightness) {
@@ -55,10 +65,13 @@ class StatusChip extends StatelessWidget {
         light ? AppTokens.inkMuted : AppTokens.inkMutedDark,
       ThesisStatus.nominationPendingConforme ||
       ThesisStatus.nominationPendingCoordinator ||
-      ThesisStatus.nominationPendingDean =>
+      ThesisStatus.nominationPendingDean ||
+      ThesisStatus.titlePendingDefence =>
         light ? AppTokens.awaiting : AppTokens.awaitingDark,
-      ThesisStatus.nominationApproved =>
+      ThesisStatus.nominationApproved || ThesisStatus.titleApproved =>
         light ? AppTokens.endorsed : AppTokens.endorsedDark,
+      ThesisStatus.titleRejected =>
+        light ? AppTokens.returned : AppTokens.returnedDark,
     };
   }
 
