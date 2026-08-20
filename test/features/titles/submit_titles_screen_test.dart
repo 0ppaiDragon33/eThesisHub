@@ -173,6 +173,11 @@ void main() {
 
     expect(find.byKey(const Key('notReady')), findsOneWidget);
     expect(find.byKey(const Key('submitTitles')), findsNothing);
+
+    // And it must be escapable. This refusal used to render a bare PageShell
+    // with no Scaffold, so there was no app bar and no back button: the only
+    // way out of a thesis that was not ready was to reload the app.
+    expect(find.byType(AppBar), findsOneWidget);
   });
 
   testWidgets(
