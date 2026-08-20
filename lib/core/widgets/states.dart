@@ -115,8 +115,20 @@ class ErrorState extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_hintFor(error) ?? message,
+                // Message first, then hint: they answer different questions
+                // and the caller's is the one that cannot be reconstructed.
+                // The hint used to REPLACE the message, so every
+                // permission-denied on a screen with four streams rendered
+                // an identical box and there was no way to tell which read
+                // had failed -- which is exactly the situation this project
+                // hit in the field, with no server-side logs to fall back on.
+                Text(message,
                     style: text.bodyMedium?.copyWith(color: scheme.error)),
+                if (_hintFor(error) != null) ...[
+                  const SizedBox(height: AppTokens.xs),
+                  Text(_hintFor(error)!,
+                      style: text.bodySmall?.copyWith(color: scheme.error)),
+                ],
                 if (error is FirebaseException) ...[
                   const SizedBox(height: AppTokens.xs),
                   Text(
