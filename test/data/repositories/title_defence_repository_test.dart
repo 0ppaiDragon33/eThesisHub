@@ -141,4 +141,84 @@ test('a resubmission clears the previous round\'s decision', () async {
       throwsStateError,
     );
   });
+
+  test('submitting records the order the group typed the titles in', () async {
+    final db = await seed();
+    final repo = TitleDefenceRepository(db);
+
+    await repo.submitCandidateTitles(
+      thesisId: 't1',
+      titles: drafts(5),
+      presentationPath: 'theses/t1/pres/uuid.pptx',
+      presentationUrl: 'https://example.test/pres.pptx',
+    );
+
+    final docs = await db.collection('theses').doc('t1')
+        .collection('candidateTitles').get();
+    final byText = {
+      for (final d in docs.docs)
+        d.data()['titleText'] as String: d.data()['position'] as int,
+    };
+    expect(byText, {
+      'Candidate 0': 0, 'Candidate 1': 1, 'Candidate 2': 2,
+      'Candidate 3': 3, 'Candidate 4': 4,
+    });
+  });
+
+  test('candidates are listed by position, not by document id', () async {
+    // Seeded deliberately AGAINST the id order, because that is the bug: the
+    // read had no ordering at all, so Firestore returned them by document
+    // id, which is auto-generated and random -- the panel was shown the
+    // group's titles shuffled, and the first one typed appeared third.
+    // orderBy('submittedAt') would not have helped either: one batch writes
+    // all of them, so the timestamps are identical and ties fall straight
+    // back to that same random id.
+    final db = await seed();
+    final candidates =
+        db.collection('theses').doc('t1').collection('candidateTitles');
+    await candidates.doc('aaa').set({
+      'titleText': 'Typed third', 'justificationPath': 'p',
+      'justificationUrl': 'u', 'round': 1, 'position': 2,
+    });
+    await candidates.doc('bbb').set({
+      'titleText': 'Typed first', 'justificationPath': 'p',
+      'justificationUrl': 'u', 'round': 1, 'position': 0,
+    });
+    await candidates.doc('ccc').set({
+      'titleText': 'Typed second', 'justificationPath': 'p',
+      'justificationUrl': 'u', 'round': 1, 'position': 1,
+    });
+
+    final titles =
+        await TitleDefenceRepository(db).watchCandidateTitles('t1').first;
+    expect(titles.map((c) => c.titleText),
+        ['Typed first', 'Typed second', 'Typed third']);
+  });
+
+  test('a resubmission is listed after the round it replaced', () async {
+    // Rejected sets are kept, not deleted, so both rounds are in the same
+    // collection. Round order comes first, and position orders within it.
+    final db = await seed();
+    final repo = TitleDefenceRepository(db);
+
+    await repo.submitCandidateTitles(
+      thesisId: 't1',
+      titles: drafts(3),
+      presentationPath: 'p',
+      presentationUrl: 'u',
+    );
+    await db.collection('theses').doc('t1').update({
+      'status': ThesisStatus.titleRejected.value,
+    });
+    await repo.submitCandidateTitles(
+      thesisId: 't1',
+      titles: drafts(3),
+      presentationPath: 'p',
+      presentationUrl: 'u',
+    );
+
+    final titles = await repo.watchCandidateTitles('t1').first;
+    expect(titles.map((c) => c.round), [1, 1, 1, 2, 2, 2]);
+    expect(titles.map((c) => c.position), [0, 1, 2, 0, 1, 2]);
+  });
 }

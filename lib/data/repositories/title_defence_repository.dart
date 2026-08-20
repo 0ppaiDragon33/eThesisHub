@@ -44,9 +44,28 @@ class TitleDefenceRepository {
     });
   }
 
+  /// Every candidate title on a thesis, in the order the group submitted
+  /// them, oldest round first.
+  ///
+  /// Sorted here rather than with `orderBy('position')` for two reasons: a
+  /// document written before positions existed carries no such field and an
+  /// ordered query would drop it from the list entirely, and the set is
+  /// capped at [maxCandidates], so ordering it in Dart costs nothing and
+  /// needs no Firestore index. The id is the last tie-break, so the order is
+  /// total and cannot flicker between snapshots.
   Stream<List<CandidateTitle>> watchCandidateTitles(String thesisId) {
-    return _candidates(thesisId).snapshots().map(
-        (s) => s.docs.map((d) => _toCandidate(d.id, d.data())).toList());
+    return _candidates(thesisId).snapshots().map((s) {
+      final candidates =
+          s.docs.map((d) => _toCandidate(d.id, d.data())).toList();
+      candidates.sort((a, b) {
+        final byRound = a.round.compareTo(b.round);
+        if (byRound != 0) return byRound;
+        final byPosition = a.position.compareTo(b.position);
+        if (byPosition != 0) return byPosition;
+        return a.id.compareTo(b.id);
+      });
+      return candidates;
+    });
   }
 
   /// Writes the candidates and moves the thesis to `titlePendingDefence`, in
@@ -86,12 +105,16 @@ class TitleDefenceRepository {
     final nextRound = ((data['titleRound'] as num?)?.toInt() ?? 0) + 1;
 
     final batch = _db.batch();
-    for (final t in titles) {
+    for (var i = 0; i < titles.length; i++) {
+      final t = titles[i];
       batch.set(_candidates(thesisId).doc(), {
         'titleText': t.titleText.trim(),
         'justificationPath': t.justificationPath,
         'justificationUrl': t.justificationUrl,
         'round': nextRound,
+        // The order the group typed them in. Without it the panel sees the
+        // set shuffled: ids are random and one batch shares one timestamp.
+        'position': i,
         'submittedAt': FieldValue.serverTimestamp(),
       });
     }

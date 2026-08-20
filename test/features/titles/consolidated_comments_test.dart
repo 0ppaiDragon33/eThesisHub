@@ -3,10 +3,11 @@ import 'package:ethesishub/data/models/candidate_title.dart';
 import 'package:ethesishub/data/models/title_comment.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
 
-CandidateTitle candidate(String id, String text, {int round = 1}) =>
+CandidateTitle candidate(String id, String text,
+        {int round = 1, int position = 0}) =>
     CandidateTitle(
       id: id, titleText: text, justificationPath: 'p',
-      justificationUrl: 'u', round: round,
+      justificationUrl: 'u', round: round, position: position,
     );
 
 TitleComment comment(String id, String titleId, String uid, String name,
