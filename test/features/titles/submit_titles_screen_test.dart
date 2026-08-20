@@ -278,4 +278,65 @@ void main() {
     expect(storage.uploads, isEmpty,
         reason: 'validation must run before any upload is attempted');
   });
+
+  testWidgets('a storage outage says so, instead of "please try again"',
+      (tester) async {
+    // This happened for real: the Supabase project's hostname stopped
+    // resolving, the browser threw an XMLHttpRequest error, and the generic
+    // handler told the student to retry — for a condition retrying could
+    // never fix. The failure now names storage and carries its code, since
+    // there are no server-side logs for anyone to consult instead.
+    useTallSurface(tester);
+    final db = await seeded();
+
+    await tester.pumpWidget(wrap(
+      db,
+      storage: _UnreachableStorage(),
+      pickDocument: ({required allowed}) async => _validDoc(),
+    ));
+    await tester.pumpAndSettle();
+
+    for (var i = 0; i < 3; i++) {
+      await tester.enterText(find.byKey(Key('titleText$i')), 'Candidate $i');
+      await tester.tap(find.byKey(Key('pickJustification$i')));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.byKey(const Key('pickPresentation')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('submitTitles')));
+    await tester.pumpAndSettle();
+
+    final error = tester.widget<Text>(find.byKey(const Key('error')));
+    expect(error.data, contains('Could not reach file storage'));
+    expect(error.data, contains('storage-unreachable'),
+        reason: 'the code is the only diagnostic that reaches anyone');
+    expect(error.data, isNot(contains('try again')),
+        reason: 'retrying cannot fix an unreachable host, and saying so '
+            'sends the student chasing their own connection');
+
+    // Uploads precede the batch, so a storage failure must leave Firestore
+    // untouched rather than half-written.
+    expect((await db.collection('theses/t1/candidateTitles').get()).docs,
+        isEmpty);
+    final thesis = (await db.collection('theses').doc('t1').get()).data()!;
+    expect(thesis['status'], 'nominationApproved',
+        reason: 'the thesis must not move into the defence');
+  });
+}
+
+/// Fails the way a paused or deleted Supabase project does.
+class _UnreachableStorage implements StorageService {
+  @override
+  Future<StoredFile> upload({
+    required List<int> bytes,
+    required String path,
+    required String contentType,
+  }) async {
+    throw classifyStorageError(
+        Exception('ClientException: XMLHttpRequest error.'));
+  }
+
+  @override
+  Future<void> delete(String path) async {}
 }

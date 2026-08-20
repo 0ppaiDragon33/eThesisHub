@@ -8,6 +8,7 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/title_defence_repository.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
@@ -193,6 +194,13 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
       if (mounted) {
         setState(() => _error =
             'This thesis is no longer accepting candidate titles.');
+      }
+    } on StorageFailure catch (e) {
+      // Before the generic catch: a storage outage is not "try again".
+      // Nothing was written to Firestore, because every upload precedes
+      // the batch, so the group's titles are simply not submitted.
+      if (mounted) {
+        setState(() => _error = '${e.message} [${e.code}]');
       }
     } on FirebaseException catch (e) {
       if (mounted) {
