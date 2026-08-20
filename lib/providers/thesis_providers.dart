@@ -18,6 +18,8 @@ final facultyDirectoryRepositoryProvider =
 /// dean as ordinary nominees "for the sake of records" even though they also
 /// get an automatic ex-officio seat that nobody picks and nobody accepts.
 final allDirectoryProvider = StreamProvider<List<FacultyDirectoryEntry>>((ref) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
   return ref.watch(facultyDirectoryRepositoryProvider).watchAllDirectory();
 });
 
@@ -41,6 +43,8 @@ final myThesisProvider = StreamProvider<Thesis?>((ref) {
 /// [myThesisProvider] resolves to `data(null)` the moment auth is unsettled.
 final thesisByIdProvider =
     StreamProvider.family<Thesis?, String>((ref, thesisId) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
   return ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
 });
 
@@ -52,6 +56,8 @@ final thesisByIdProvider =
 /// say so instead of implying the queue is empty.
 final thesesByStatusProvider =
     StreamProvider.family<List<Thesis>, ThesisStatus>((ref, status) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
   return ref.watch(thesisRepositoryProvider).watchByStatus(status);
 });
 

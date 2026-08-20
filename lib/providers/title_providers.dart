@@ -13,6 +13,8 @@ final titleDefenceRepositoryProvider = Provider<TitleDefenceRepository>(
 /// The candidate titles on one thesis, every round.
 final candidateTitlesProvider =
     StreamProvider.family<List<CandidateTitle>, String>((ref, thesisId) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
   return ref.watch(titleDefenceRepositoryProvider)
       .watchCandidateTitles(thesisId);
 });
@@ -22,6 +24,8 @@ final candidateTitlesProvider =
 /// written — the point being that nobody repeats a point already made.
 final titleCommentsProvider =
     StreamProvider.family<List<TitleComment>, String>((ref, thesisId) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
   return ref.watch(titleDefenceRepositoryProvider).watchComments(thesisId);
 });
 
@@ -29,6 +33,8 @@ final titleCommentsProvider =
 /// `isStaleAt(DateTime.now())` at the point of display.
 final composingProvider =
     StreamProvider.family<List<ComposingIndicator>, String>((ref, thesisId) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
   return ref.watch(titleDefenceRepositoryProvider).watchComposing(thesisId);
 });
 
