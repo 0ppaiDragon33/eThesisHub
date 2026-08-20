@@ -92,8 +92,15 @@ StorageFailure classifyStorageError(Object error) {
     );
   }
 
-  return const StorageFailure(
-    'File storage could not accept the upload.',
+  // Unrecognised. Carry the service's own words through rather than replacing
+  // them with a friendlier sentence that says less: an unclassified failure is
+  // precisely the one nobody can diagnose without them, and this project has
+  // no server-side logs to consult instead. Trimmed and collapsed, because a
+  // raw stack trace on a student's screen helps nobody either.
+  final detail = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return StorageFailure(
+    'File storage could not accept the upload. It said: '
+    '${detail.length > 200 ? '${detail.substring(0, 200)}…' : detail}',
     code: 'storage-failed',
   );
 }

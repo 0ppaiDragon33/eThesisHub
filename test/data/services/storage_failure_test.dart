@@ -42,6 +42,11 @@ void main() {
     final other = classifyStorageError(const _Thrown('something odd'));
     expect(other.code, 'storage-failed');
     expect(other.message.toLowerCase(), contains('storage'));
+
+    // And it must carry the service's own words. Without them an
+    // unclassified failure is undiagnosable: there are no server-side logs,
+    // so the screen is the only place the cause can ever appear.
+    expect(other.message, contains('something odd'));
   });
 
   test('every classification carries a code and a non-empty message', () {
