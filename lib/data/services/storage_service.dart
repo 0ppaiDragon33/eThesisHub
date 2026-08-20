@@ -85,6 +85,21 @@ StorageFailure classifyStorageError(Object error) {
       code: 'storage-missing-bucket',
     );
   }
+  // A bucket-level MIME allow-list. `validateDocument` already restricts the
+  // extension, so reaching here means the bucket disagrees with the app about
+  // what a thesis document is — configuration, not a bad file, and no amount
+  // of choosing a different file will help.
+  if (text.contains('415') ||
+      text.contains('invalid_mime_type') ||
+      text.contains('mime type')) {
+    return const StorageFailure(
+      'File storage rejected this file type. The bucket has a MIME allow-list '
+      'that does not include it — this needs fixing in Supabase, not by '
+      'choosing another file.',
+      code: 'storage-wrong-type',
+    );
+  }
+
   if (text.contains('413') || text.contains('too large')) {
     return const StorageFailure(
       'File storage rejected the file as too large.',

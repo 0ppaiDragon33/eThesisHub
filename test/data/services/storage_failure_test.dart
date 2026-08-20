@@ -36,6 +36,18 @@ void main() {
         'storage-missing-bucket');
   });
 
+  test('a bucket MIME allow-list is named as configuration, not a bad file', () {
+    // The exact string Supabase threw in the field. Telling a student to
+    // "choose another file" here is a dead end: every allowed extension the
+    // app offers is refused until the bucket is changed.
+    final f = classifyStorageError(const _Thrown(
+        'StorageException(message: mime type application/vnd.openxmlformats-'
+        'officedocument.presentationml.presentation is not supported, '
+        'statusCode: 415, error: invalid_mime_type)'));
+    expect(f.code, 'storage-wrong-type');
+    expect(f.message, contains('Supabase'));
+  });
+
   test('an unrecognised failure still names storage, not the network', () {
     // The fallback must not blame the connection. "Check your connection"
     // once sent someone hunting a network fault that did not exist.
