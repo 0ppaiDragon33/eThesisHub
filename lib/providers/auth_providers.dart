@@ -25,12 +25,30 @@ final authStateProvider = StreamProvider<User?>(
   (ref) => ref.watch(authServiceProvider).authStateChanges(),
 );
 
+/// The signed-in uid alone, and nothing else about the user.
+///
+/// Every stream whose permission depends on WHO is asking must depend on
+/// this. A plain [StreamProvider] is built once and lives for the whole life
+/// of the container, so a Firestore listener denied under one account stayed
+/// in `AsyncError` forever: signing out and back in as somebody else did not
+/// rebuild it, and the only thing that ever cleared the refusal was reloading
+/// the page. Watching the uid rather than the whole auth state means a token
+/// refresh -- which fires `authStateChanges` without changing who you are --
+/// does not tear every listener down and build it again for nothing.
+final signedInUidProvider = Provider<String?>(
+  (ref) => ref.watch(authStateProvider).valueOrNull?.uid,
+);
+
 /// Every faculty invite, open and consumed. Only coordinators may read this —
 /// the security rules deny `list` to everyone else — so the stream surfaces
 /// an error rather than an empty list for any other role, and the screen says
 /// so instead of implying there are none.
 final facultyInvitesProvider = StreamProvider<List<FacultyInvite>>(
-  (ref) => ref.watch(userRepositoryProvider).watchInvites(),
+  (ref) {
+    // Rebuilt on a change of user: see [signedInUidProvider].
+    ref.watch(signedInUidProvider);
+    return ref.watch(userRepositoryProvider).watchInvites();
+  },
 );
 
 /// The signed-in user's profile, or null when signed out.

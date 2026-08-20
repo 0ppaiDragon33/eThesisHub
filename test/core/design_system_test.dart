@@ -156,8 +156,11 @@ void main() {
       expect(find.textContaining('needs a Firestore index'), findsOneWidget);
       expect(find.byKey(const Key('errorCode')), findsOneWidget);
       expect(find.text('[failed-precondition]'), findsOneWidget);
-      // The generic copy must give way to the specific cause.
-      expect(find.text('Could not load your nominations.'), findsNothing);
+      // Both, not one. The hint says WHY the read failed; the caller's
+      // message says WHICH read failed, and on a screen with four streams
+      // that is the only thing distinguishing them. Dropping it left every
+      // permission-denied looking identical in the field.
+      expect(find.text('Could not load your nominations.'), findsOneWidget);
     });
 
     testWidgets('an unrecognised failure keeps the caller message',

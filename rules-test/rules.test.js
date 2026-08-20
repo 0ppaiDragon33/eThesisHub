@@ -2045,7 +2045,7 @@ async function resubmitIntoRoundTwo(leader, thesisId) {
   const batch = writeBatch(leader);
   batch.set(doc(leader, `theses/${thesisId}/candidateTitles/r2a`), {
     titleText: "Round two candidate", justificationPath: "p",
-    justificationUrl: "u", round: 2, submittedAt: serverTimestamp(),
+    justificationUrl: "u", round: 2, position: 0, submittedAt: serverTimestamp(),
   });
   batch.update(doc(leader, `theses/${thesisId}`), {
     status: "titlePendingDefence", titleRound: 2,
@@ -2333,7 +2333,7 @@ test("M1b allow: the leader MAY submit candidates and flip the thesis in ONE bat
   for (const id of ["b1", "b2", "b3"]) {
     batch.set(doc(leader, `theses/tdb1/candidateTitles/${id}`), {
       titleText: `Candidate ${id}`, justificationPath: "p",
-      justificationUrl: "u", round: 1, submittedAt: serverTimestamp(),
+      justificationUrl: "u", round: 1, position: 0, submittedAt: serverTimestamp(),
     });
   }
   batch.update(doc(leader, "theses/tdb1"), {
@@ -2360,7 +2360,7 @@ test("M1b probe: batched writes are evaluated against the state BEFORE the batch
   // has already left the submission statuses. Batched, it was allowed.
   await assertFails(setDoc(doc(leader, "theses/tdb2/candidateTitles/b1"), {
     titleText: "Candidate b1", justificationPath: "p",
-    justificationUrl: "u", round: 1, submittedAt: serverTimestamp(),
+    justificationUrl: "u", round: 1, position: 0, submittedAt: serverTimestamp(),
   }));
 });
 
@@ -2372,13 +2372,13 @@ test("M1b attack: a stranger may NOT submit candidates to another group's thesis
   const outsider = asDefenceUser("outsider-uid", "outsider@isufst.edu.ph");
   await assertFails(setDoc(doc(outsider, "theses/tdb3/candidateTitles/x1"), {
     titleText: "Not mine", justificationPath: "p", justificationUrl: "u",
-    round: 1, submittedAt: serverTimestamp(),
+    round: 1, position: 0, submittedAt: serverTimestamp(),
   }));
   // Control: the real leader, same path, same payload.
   const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
   await assertSucceeds(setDoc(doc(leader, "theses/tdb3/candidateTitles/x1"), {
     titleText: "Not mine", justificationPath: "p", justificationUrl: "u",
-    round: 1, submittedAt: serverTimestamp(),
+    round: 1, position: 0, submittedAt: serverTimestamp(),
   }));
 });
 
@@ -2390,16 +2390,31 @@ test("M1b attack: a candidate may NOT carry unknown keys or an empty title", asy
   const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
   await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/junk"), {
     titleText: "Fine", justificationPath: "p", justificationUrl: "u",
-    round: 1, submittedAt: serverTimestamp(), approvedBy: "dean-uid",
+    round: 1, position: 0, submittedAt: serverTimestamp(), approvedBy: "dean-uid",
   }));
   await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/empty"), {
     titleText: "", justificationPath: "p", justificationUrl: "u",
+    round: 1, position: 0, submittedAt: serverTimestamp(),
+  }));
+  // A missing or nonsense position. Order is what the panel reads the set
+  // in, and a candidate that carries no position -- or a forged one -- puts
+  // the group's titles in front of the Dean in an order they did not choose.
+  await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/nopos"), {
+    titleText: "Fine", justificationPath: "p", justificationUrl: "u",
     round: 1, submittedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/negpos"), {
+    titleText: "Fine", justificationPath: "p", justificationUrl: "u",
+    round: 1, position: -1, submittedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/strpos"), {
+    titleText: "Fine", justificationPath: "p", justificationUrl: "u",
+    round: 1, position: "first", submittedAt: serverTimestamp(),
   }));
   // Control: the same write, whitelisted keys, non-empty title.
   await assertSucceeds(setDoc(doc(leader, "theses/tdb4/candidateTitles/ok"), {
     titleText: "Fine", justificationPath: "p", justificationUrl: "u",
-    round: 1, submittedAt: serverTimestamp(),
+    round: 1, position: 0, submittedAt: serverTimestamp(),
   }));
 });
 

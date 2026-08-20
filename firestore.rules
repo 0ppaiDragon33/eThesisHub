@@ -679,7 +679,10 @@ service cloud.firestore {
                          ['nominationApproved', 'titleRejected']
                       && request.resource.data.keys().hasOnly(
                            ['titleText', 'justificationPath',
-                            'justificationUrl', 'round', 'submittedAt'])
+                            'justificationUrl', 'round', 'position',
+                            'submittedAt'])
+                      && request.resource.data.position is int
+                      && request.resource.data.position >= 0
                       && request.resource.data.titleText is string
                       && request.resource.data.titleText.size() > 0
                       && request.resource.data.submittedAt == request.time;

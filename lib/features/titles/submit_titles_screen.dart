@@ -8,6 +8,7 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/title_defence_repository.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
@@ -194,6 +195,13 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
         setState(() => _error =
             'This thesis is no longer accepting candidate titles.');
       }
+    } on StorageFailure catch (e) {
+      // Before the generic catch: a storage outage is not "try again".
+      // Nothing was written to Firestore, because every upload precedes
+      // the batch, so the group's titles are simply not submitted.
+      if (mounted) {
+        setState(() => _error = '${e.message} [${e.code}]');
+      }
     } on FirebaseException catch (e) {
       if (mounted) {
         setState(() => _error = e.code == 'permission-denied'
@@ -209,6 +217,20 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
     }
   }
 
+  /// Wraps a state that is not the form in the same frame the form uses.
+  ///
+  /// Every early return here used to render a bare [PageShell], which is
+  /// layout only — no Scaffold and so no app bar. A student whose thesis was
+  /// not yet ready for candidate titles landed on a white page with no back
+  /// button and no navigation, and had to reload the whole app to escape it.
+  /// Whatever the screen has to say, it says it somewhere you can leave.
+  Widget _framed(List<Widget> children) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Candidate titles')),
+      body: PageShell(children: children),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watched, not read lazily inside the submit handler — see
@@ -222,10 +244,10 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
     // ready" is exactly the bug M1a shipped: a student was told "this
     // thesis has moved past draft" while it was still loading.
     if (thesisAsync.isLoading) {
-      return const LoadingState(label: 'Loading your thesis…');
+      return _framed(const [LoadingState(label: 'Loading your thesis…')]);
     }
     if (thesisAsync.hasError) {
-      return PageShell(children: [
+      return _framed([
         ErrorState(
           error: thesisAsync.error,
           message: 'Could not load this thesis.',
@@ -235,7 +257,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
 
     final thesis = thesisAsync.valueOrNull;
     if (thesis == null) {
-      return const PageShell(children: [
+      return _framed(const [
         EmptyState(
           icon: Icons.search_off,
           title: 'Thesis not found',
@@ -248,7 +270,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
     final canSubmit = thesis.status == ThesisStatus.nominationApproved ||
         thesis.status == ThesisStatus.titleRejected;
     if (!canSubmit) {
-      return const PageShell(children: [
+      return _framed(const [
         EmptyState(
           key: Key('notReady'),
           icon: Icons.hourglass_empty,
