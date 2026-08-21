@@ -69,3 +69,10 @@ final myPendingNominationsProvider =
   if (uid == null) return Stream.value(const []);
   return ref.watch(thesisRepositoryProvider).watchMyPendingNominations(uid);
 });
+
+/// The theses the signed-in faculty member advises.
+final myAdviseesProvider = StreamProvider<List<Thesis>>((ref) {
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return Stream.value(const []);
+  return ref.watch(thesisRepositoryProvider).watchAdvisedTheses(uid);
+});

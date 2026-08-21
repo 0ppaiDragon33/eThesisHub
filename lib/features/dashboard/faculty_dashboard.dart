@@ -20,11 +20,9 @@ class FacultyDashboard extends ConsumerStatefulWidget {
 }
 
 class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
-  // Which of the two nav destinations is showing. 'Groups' still needs a
-  // query the rules do not yet permit (a faculty member cannot list theses
-  // they advise), so only 'Home' and 'Defences' are declared here — the
-  // first time this dashboard has had two, so ResponsiveScaffold shows its
-  // navigation for the first time.
+  // Which of the two nav destinations is showing. Only 'Home' and 'Defences'
+  // are declared here — the first time this dashboard has had two, so
+  // ResponsiveScaffold shows its navigation for the first time.
   int _selectedIndex = 0;
 
   @override
@@ -34,6 +32,7 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
     final pendingElsewhere = ref.watch(pendingInOtherModeProvider);
     final pendingAsync = ref.watch(myPendingNominationsProvider);
     final myThesisIdsAsync = ref.watch(myThesisIdsProvider);
+    final adviseesAsync = ref.watch(myAdviseesProvider);
 
     return ResponsiveScaffold(
       // Identifies this dashboard for routing tests. Asserting on heading
@@ -81,15 +80,58 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
       body: _selectedIndex == 0
           ? PageShell(
               title: mode == FacultyMode.adviser ? 'My advisees' : 'My panels',
-              // Says plainly that the list is not built rather than showing an
-              // empty area that reads as a failure to load. The mode switch
-              // above is real — it remembers your choice — but it has nothing
-              // to filter until faculty can list the theses they hold a
-              // position on, which needs a security-rules change.
-              subtitle:
-                  'Coming with the documents module. For now, the nomination '
-                  'inbox is where your Conforme requests arrive.',
+              // The adviser arm on `allow list` (theses) landed in M2 Task 3,
+              // which is what makes a real query possible here at all — see
+              // watchAdvisedTheses. Panel listing has no equivalent rule yet,
+              // so panelist mode still falls back to the nomination inbox
+              // summary below rather than claiming a list it cannot show.
+              subtitle: mode == FacultyMode.adviser
+                  ? 'Chapters I–V for each thesis you advise.'
+                  : 'Panel listings are not built yet. Your Conforme '
+                      'requests still arrive in the nomination inbox below.',
               children: [
+                if (mode == FacultyMode.adviser) ...[
+                  // Its own loading/error handling, kept separate from
+                  // pendingAsync below: collapsing this into `data(const [])`
+                  // while the query is still in flight would render an empty
+                  // state indistinguishable from "no advisees", which this
+                  // project has already shipped as a bug four times.
+                  adviseesAsync.when(
+                    loading: () => const LoadingState(),
+                    error: (e, _) => ErrorState(
+                      error: e,
+                      message: 'Could not load your advisees.',
+                    ),
+                    data: (advisees) => advisees.isEmpty
+                        ? const EmptyState(
+                            icon: Icons.school_outlined,
+                            title: 'No advisees yet',
+                            message: 'Once a group nominates you as adviser '
+                                'and the Dean approves, their thesis appears '
+                                'here.',
+                          )
+                        : Column(
+                            children: [
+                              for (final thesis in advisees)
+                                Card(
+                                  child: ListTile(
+                                    key: Key('advisee-${thesis.id}'),
+                                    title: Text(thesis.workingTitle),
+                                    subtitle: Text(
+                                        '${thesis.college} • ${thesis.program}'),
+                                    trailing: FilledButton(
+                                      key: Key('openChapters-${thesis.id}'),
+                                      onPressed: () => context.go(
+                                          '/thesis/chapters?id=${thesis.id}'),
+                                      child: const Text('Open'),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                  ),
+                  const Gap.lg(),
+                ],
                 pendingAsync.when(
                   loading: () => const LoadingState(),
                   error: (e, _) => ErrorState(
