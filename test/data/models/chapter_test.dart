@@ -38,6 +38,17 @@ void main() {
     expect(c.updatedAt, DateTime.utc(2026, 8, 21));
   });
 
+  test('an unknown chapter id throws rather than becoming Chapter I', () {
+    // The failure this prevents is silent: a mislabelled chapter would
+    // write one chapter's record over another's and look correct.
+    expect(
+      () => ThesisChapter.fromMap('chapterIX', {
+        'type': 'chapterIX', 'currentVersion': 1, 'status': 'submitted',
+      }),
+      throwsArgumentError,
+    );
+  });
+
   test('an unknown status reads as submitted, never as approved', () {
     // The safe default is the one that grants nothing. Defaulting to
     // approved would let corrupt data unlock a defence.

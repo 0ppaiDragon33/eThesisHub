@@ -67,8 +67,16 @@ class ThesisChapter {
   final DateTime? updatedAt;
 
   factory ThesisChapter.fromMap(String id, Map<String, dynamic> map) {
+    final chapterId = ChapterId.fromString(id);
+    // Throws rather than defaulting. A silent fallback to chapterI would
+    // relabel a corrupt or mistyped id as Chapter I and write one chapter's
+    // record over another's, looking correct the entire time. A caller that
+    // may see unknown ids filters them with ChapterId.fromString first.
+    if (chapterId == null) {
+      throw ArgumentError.value(id, 'id', 'Not one of the five chapters');
+    }
     return ThesisChapter(
-      id: ChapterId.fromString(id) ?? ChapterId.chapterI,
+      id: chapterId,
       currentVersion: (map['currentVersion'] as num?)?.toInt() ?? 1,
       status: ChapterStatus.fromString(map['status'] as String?),
       updatedAt: map['updatedAt'] as DateTime?,
