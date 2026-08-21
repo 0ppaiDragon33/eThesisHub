@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -53,13 +54,14 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     final invalid = validateDocument(file,
         allowed: kChapterTypes, maxBytes: kChapterMaxBytes);
     if (invalid != null) {
-      setState(() => _error = invalid);
+      if (mounted) setState(() => _error = invalid);
       return;
     }
 
     final uid = ref.read(authStateProvider).valueOrNull?.uid;
     if (uid == null) return;
 
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -85,6 +87,19 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
           );
     } on StorageFailure catch (e) {
       if (mounted) setState(() => _error = '${e.message} [${e.code}]');
+    } on FirebaseException catch (e) {
+      // A denied write leaves the file uploaded and unreferenced, exactly as
+      // any other post-upload failure does, so the cleanup runs here too.
+      if (stored != null) {
+        try {
+          await storage.delete(stored.path);
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() => _error = e.code == 'permission-denied'
+            ? 'You do not have permission to upload to this chapter.'
+            : 'Could not upload this version.');
+      }
     } catch (e) {
       // The file is already in a public bucket but the record that would
       // reference it was never written. Remove the orphan, best-effort:

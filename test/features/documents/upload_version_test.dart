@@ -1,16 +1,40 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/repositories/document_repository.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+
+/// Fails only the write [addVersion] makes, while every read (chapters,
+/// versions, feedback streams) still goes through the real repository so
+/// the rest of the screen renders normally around the failure.
+class _FailingWriteRepository extends DocumentRepository {
+  _FailingWriteRepository(super.db);
+
+  @override
+  Future<void> addVersion({
+    required String thesisId,
+    required ChapterId chapter,
+    required String storagePath,
+    required String fileUrl,
+    required String mimeType,
+    required int sizeBytes,
+    required String uploadedBy,
+  }) {
+    throw FirebaseException(
+        plugin: 'cloud_firestore', code: 'permission-denied');
+  }
+}
 
 class _FakeStorage implements StorageService {
   _FakeStorage({this.failWith});
@@ -57,7 +81,9 @@ Future<FakeFirebaseFirestore> seed({String status = 'titleApproved'}) async {
 // upload would never even start. Every other screen that reads a uid off
 // `authStateProvider` for a write (e.g. submit_titles_screen_test.dart)
 // overrides this the same way.
-Widget _wrap(FakeFirebaseFirestore db, _FakeStorage storage) => ProviderScope(
+Widget _wrap(FakeFirebaseFirestore db, _FakeStorage storage,
+        {DocumentRepository? repository}) =>
+    ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
         storageServiceProvider.overrideWithValue(storage),
@@ -66,6 +92,8 @@ Widget _wrap(FakeFirebaseFirestore db, _FakeStorage storage) => ProviderScope(
           mockUser: MockUser(
               uid: 'l1', email: 'l@isufst.edu.ph', isEmailVerified: true),
         )),
+        if (repository != null)
+          documentRepositoryProvider.overrideWithValue(repository),
       ],
       child: MaterialApp(
         home: ChapterDetailScreen(
@@ -123,5 +151,22 @@ void main() {
         reason: 'the uploaded object must not be left behind');
     expect(find.textContaining('approved'), findsWidgets,
         reason: 'the original failure is reported, not the cleanup');
+  });
+
+  testWidgets(
+      'a permission-denied write shows a specific message and deletes the '
+      'orphaned file', (tester) async {
+    final db = await seed();
+    final storage = _FakeStorage();
+    await tester.pumpWidget(
+        _wrap(db, storage, repository: _FailingWriteRepository(db)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('uploadVersion')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('You do not have permission'), findsOneWidget);
+    expect(storage.deleted, hasLength(1),
+        reason: 'the uploaded object must not be left behind');
   });
 }
