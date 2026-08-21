@@ -2545,6 +2545,274 @@ test("M1b attack: the Dean may NOT skip the defence entirely", async () => {
   }));
 });
 
+// ---------- M2: documents, versions and feedback ----------
+
+function docThesis(status = "titleApproved", extra = {}) {
+  return {
+    leaderUid: "leader-uid", adviserUid: "adviser-uid",
+    panelistUids: ["pan-uid"], memberNames: [], workingTitle: "T",
+    college: "CICT", program: "BSIT", semester: "First",
+    academicYear: "2026-2027", status, ...extra,
+  };
+}
+
+function asDocUser(uid, email) {
+  return env.authenticatedContext(uid, { email, email_verified: true })
+    .firestore();
+}
+
+async function seedChapters(db) {
+  await setDoc(doc(db, "theses/m2"), docThesis());
+  await setDoc(doc(db, "theses/m2/documents/chapterI"), {
+    type: "chapterI", currentVersion: 1, status: "submitted",
+    updatedAt: Timestamp.now(),
+  });
+  await setDoc(doc(db, "theses/m2/documents/chapterI/versions/1"), {
+    version: 1, storagePath: "p", fileUrl: "u", uploadedBy: "leader-uid",
+    uploadedAt: Timestamp.now(), mimeType: "application/pdf",
+    sizeBytes: 100,
+  });
+}
+
+test("M2: the leader, adviser, coordinator and dean read a chapter", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedChapters(db);
+    await setDoc(doc(db, "users/coord-uid"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+  });
+  for (const uid of ["leader-uid", "adviser-uid", "coord-uid", "dean-uid"]) {
+    await assertSucceeds(
+      getDoc(doc(asDocUser(uid, `${uid}@isufst.edu.ph`),
+        "theses/m2/documents/chapterI")));
+  }
+});
+
+test("M2: a panelist may NOT read a chapter, its versions or its feedback",
+  async () => {
+    // The panel meets the document at the pre-oral defence, which is M3.
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
+    await assertFails(getDoc(doc(pan, "theses/m2/documents/chapterI")));
+    await assertFails(
+      getDoc(doc(pan, "theses/m2/documents/chapterI/versions/1")));
+    // Control: the adviser, same paths.
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+    await assertSucceeds(getDoc(doc(adv, "theses/m2/documents/chapterI")));
+    await assertSucceeds(
+      getDoc(doc(adv, "theses/m2/documents/chapterI/versions/1")));
+  });
+
+test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedChapters(db);
+      await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    });
+    const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
+    await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
+    await assertFails(
+      getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+  });
+
+test("M2: chapters may NOT be created before the title is approved",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "theses/m2b"),
+        docThesis("titlePendingDefence")));
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    await assertFails(setDoc(doc(leader, "theses/m2b/documents/chapterI"), {
+      type: "chapterI", currentVersion: 1, status: "submitted",
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+test("M2: only the five chapter ids exist", async () => {
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "theses/m2c"), docThesis()));
+  const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, "theses/m2c/documents/chapterVI"), {
+    type: "chapterVI", currentVersion: 1, status: "submitted",
+    updatedAt: serverTimestamp(),
+  }));
+  // Control: a real chapter id, same payload shape.
+  await assertSucceeds(setDoc(doc(leader, "theses/m2c/documents/chapterV"), {
+    type: "chapterV", currentVersion: 1, status: "submitted",
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test("M2: a student may NOT write approved, and an adviser may NOT fake a submission",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    // The student cannot approve their own chapter.
+    await assertFails(updateDoc(doc(leader, "theses/m2/documents/chapterI"),
+      { status: "approved", updatedAt: serverTimestamp() }));
+
+    // The adviser cannot bump the version to fabricate a submission.
+    await assertFails(updateDoc(doc(adv, "theses/m2/documents/chapterI"),
+      { status: "submitted", currentVersion: 2,
+        updatedAt: serverTimestamp() }));
+
+    // Controls: each doing their own half.
+    await assertSucceeds(updateDoc(doc(adv, "theses/m2/documents/chapterI"),
+      { status: "revise", updatedAt: serverTimestamp() }));
+  });
+
+test("M2: an approved chapter is locked to the student and reopenable by the adviser",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/m2d"), docThesis());
+      await setDoc(doc(db, "theses/m2d/documents/chapterI"), {
+        type: "chapterI", currentVersion: 1, status: "approved",
+        updatedAt: Timestamp.now(),
+      });
+    });
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    await assertFails(updateDoc(doc(leader, "theses/m2d/documents/chapterI"),
+      { currentVersion: 2, status: "submitted",
+        updatedAt: serverTimestamp() }));
+    // Control: the adviser reopens it, and then the student may upload.
+    await assertSucceeds(updateDoc(doc(adv, "theses/m2d/documents/chapterI"),
+      { status: "revise", updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(leader, "theses/m2d/documents/chapterI"),
+      { currentVersion: 2, status: "submitted",
+        updatedAt: serverTimestamp() }));
+  });
+
+test("M2 batch evaluation: a version and its parent bump are judged PRE-batch",
+  async () => {
+    // Two-sided. The batched form must be ALLOWED and the identical writes
+    // issued SEQUENTIALLY must be DENIED -- by then the parent has already
+    // moved and the version number no longer matches. This is a probe of
+    // Firestore's behaviour, not an assumption about it.
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+
+    const batch = writeBatch(leader);
+    batch.set(doc(leader, "theses/m2/documents/chapterI/versions/2"), {
+      version: 2, storagePath: "p2", fileUrl: "u2",
+      uploadedBy: "leader-uid", uploadedAt: serverTimestamp(),
+      mimeType: "application/pdf", sizeBytes: 200,
+    });
+    batch.update(doc(leader, "theses/m2/documents/chapterI"),
+      { currentVersion: 2, status: "submitted",
+        updatedAt: serverTimestamp() });
+    await assertSucceeds(batch.commit());
+
+    // Sequentially: the parent is now at 2, so writing version 2 again is
+    // no longer currentVersion + 1.
+    await assertFails(
+      setDoc(doc(leader, "theses/m2/documents/chapterI/versions/2"), {
+        version: 2, storagePath: "p2", fileUrl: "u2",
+        uploadedBy: "leader-uid", uploadedAt: serverTimestamp(),
+        mimeType: "application/pdf", sizeBytes: 200,
+      }));
+  });
+
+test("M2 batch: a group's FIRST upload creates the chapter and version 1 together",
+  async () => {
+    // The chapter does not exist before this batch, so a rule that reads
+    // the parent's currentVersion unconditionally denies every group's
+    // first upload -- while every Dart test still passes, because
+    // fake_cloud_firestore does not enforce rules.
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "theses/m2first"), docThesis()));
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+
+    const batch = writeBatch(leader);
+    batch.set(doc(leader, "theses/m2first/documents/chapterI"), {
+      type: "chapterI", currentVersion: 1, status: "submitted",
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(doc(leader, "theses/m2first/documents/chapterI/versions/1"), {
+      version: 1, storagePath: "p", fileUrl: "u", uploadedBy: "leader-uid",
+      uploadedAt: serverTimestamp(), mimeType: "application/pdf",
+      sizeBytes: 100,
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+test("M2: a version is immutable once written", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+  const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+  await assertFails(
+    updateDoc(doc(leader, "theses/m2/documents/chapterI/versions/1"),
+      { fileUrl: "swapped" }));
+  await assertFails(
+    deleteDoc(doc(leader, "theses/m2/documents/chapterI/versions/1")));
+});
+
+test("M2: only the adviser writes feedback, in their own name, append-only",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    // A student may not write feedback at all.
+    await assertFails(
+      setDoc(doc(leader, "theses/m2/documents/chapterI/feedback/f1"), {
+        version: 1, reviewerUid: "leader-uid", reviewerName: "Me",
+        reviewerRole: "Adviser", body: "Looks great",
+        createdAt: serverTimestamp(),
+      }));
+
+    // The adviser may not file feedback under someone else's uid.
+    await assertFails(
+      setDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f2"), {
+        version: 1, reviewerUid: "dean-uid", reviewerName: "Dean",
+        reviewerRole: "Dean", body: "Not mine",
+        createdAt: serverTimestamp(),
+      }));
+
+    // A version that does not exist yet cannot be commented on.
+    await assertFails(
+      setDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f3"), {
+        version: 9, reviewerUid: "adviser-uid", reviewerName: "Dr. A",
+        reviewerRole: "Adviser", body: "On a future version",
+        createdAt: serverTimestamp(),
+      }));
+
+    // Control: the adviser, own uid, an existing version.
+    await assertSucceeds(
+      setDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f4"), {
+        version: 1, reviewerUid: "adviser-uid", reviewerName: "Dr. A",
+        reviewerRole: "Adviser", body: "Tighten the problem statement.",
+        createdAt: serverTimestamp(),
+      }));
+
+    // Append-only.
+    await assertFails(
+      updateDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f4"),
+        { body: "Actually it is fine" }));
+    await assertFails(
+      deleteDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f4")));
+  });
+
+test("M2: the student reads their feedback immediately", async () => {
+  // Unlike M1b defence comments, this feedback exists to be acted on.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedChapters(db);
+    await setDoc(doc(db, "theses/m2/documents/chapterI/feedback/f1"), {
+      version: 1, reviewerUid: "adviser-uid", reviewerName: "Dr. A",
+      reviewerRole: "Adviser", body: "Tighten it.",
+      createdAt: Timestamp.now(),
+    });
+  });
+  const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+  await assertSucceeds(
+    getDoc(doc(leader, "theses/m2/documents/chapterI/feedback/f1")));
+});
+
 test.after(async () => {
   await env.cleanup();
 });
