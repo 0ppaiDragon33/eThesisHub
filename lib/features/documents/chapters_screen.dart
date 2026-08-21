@@ -64,10 +64,29 @@ class ChaptersScreen extends ConsumerWidget {
       ]);
     }
 
+    // Checked separately from the thesis stream: while chapters are still
+    // loading, `valueOrNull ?? []` used to read as "nothing uploaded yet",
+    // which is indistinguishable from a group that genuinely has not
+    // started. On error, the same fallback drew all five rows "Not started"
+    // directly beneath a banner saying the chapters could not be loaded —
+    // two contradictory claims on screen at once.
+    if (chaptersAsync.isLoading) {
+      return _framed(const [LoadingState(label: 'Loading your chapters…')]);
+    }
+    if (chaptersAsync.hasError) {
+      return _framed([
+        ErrorState(
+          error: chaptersAsync.error,
+          message: 'Could not load your chapters.',
+        ),
+      ]);
+    }
+
     final uploaded = {
       for (final c in chaptersAsync.valueOrNull ?? const <ThesisChapter>[])
         c.id: c,
     };
+    final brightness = Theme.of(context).brightness;
 
     return Scaffold(
       key: const Key('chaptersScreen'),
@@ -77,14 +96,6 @@ class ChaptersScreen extends ConsumerWidget {
         subtitle: 'Upload each chapter for your adviser to review. Every '
             'upload is kept, so nothing is ever overwritten.',
         children: [
-          if (chaptersAsync.hasError)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: ErrorState(
-                error: chaptersAsync.error,
-                message: 'Could not load your chapters.',
-              ),
-            ),
           for (final id in ChapterId.values)
             Card(
               key: Key('chapterRow-${id.value}'),
@@ -94,6 +105,11 @@ class ChaptersScreen extends ConsumerWidget {
                     ? 'Not started'
                     : '${ChapterStatusWords.labelFor(uploaded[id]!.status)}'
                         ' · Version ${uploaded[id]!.currentVersion}'),
+                subtitleTextStyle: uploaded[id] == null
+                    ? null
+                    : Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: ChapterStatusWords.colorFor(
+                            uploaded[id]!.status, brightness)),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.go(
                     '/thesis/chapters/${id.value}?id=$thesisId'),

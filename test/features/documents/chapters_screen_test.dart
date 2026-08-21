@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/document_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 Future<FakeFirebaseFirestore> seed({
   String status = 'titleApproved',
@@ -23,8 +29,12 @@ Future<FakeFirebaseFirestore> seed({
   return db;
 }
 
-Widget wrap(FakeFirebaseFirestore db) => ProviderScope(
-      overrides: [firestoreProvider.overrideWithValue(db)],
+Widget wrap(FakeFirebaseFirestore db, {List<Override> overrides = const []}) =>
+    ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        ...overrides,
+      ],
       child: const MaterialApp(home: ChaptersScreen(thesisId: 't1')),
     );
 
@@ -62,6 +72,86 @@ void main() {
     expect(find.byKey(const Key('notUnlocked')), findsOneWidget);
     expect(find.byKey(const Key('chapterRow-chapterI')), findsNothing);
     // A refusal with no app bar strands the user: they must reload the app.
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets('the thesis stream loading is shown, not collapsed into absent',
+      (tester) async {
+    // A stream that never emits: the widget stays in the loading state for
+    // as long as the test looks at it, without pumpAndSettle racing past it.
+    final neverThesis = StreamController<Thesis?>();
+    addTearDown(neverThesis.close);
+
+    await tester.pumpWidget(wrap(
+      await seed(),
+      overrides: [
+        thesisByIdProvider('t1').overrideWith((ref) => neverThesis.stream),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.text('Loading your thesis…'), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets('a thesis stream error is shown, framed', (tester) async {
+    await tester.pumpWidget(wrap(
+      await seed(),
+      overrides: [
+        thesisByIdProvider('t1')
+            .overrideWith((ref) => Stream<Thesis?>.error(Exception('boom'))),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not load this thesis.'), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets('a thesis that does not exist says so, framed', (tester) async {
+    // No thesis doc is ever written: the stream resolves to data(null)
+    // rather than loading or erroring.
+    final db = FakeFirebaseFirestore();
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thesis not found'), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets(
+      'the chapters stream loading is shown, not collapsed into "Not started"',
+      (tester) async {
+    final neverChapters = StreamController<List<ThesisChapter>>();
+    addTearDown(neverChapters.close);
+
+    await tester.pumpWidget(wrap(
+      await seed(),
+      overrides: [
+        chaptersProvider('t1').overrideWith((ref) => neverChapters.stream),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.text('Loading your chapters…'), findsOneWidget);
+    expect(find.textContaining('Not started'), findsNothing);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets(
+      'a chapters stream error is shown alone, not alongside contradictory rows',
+      (tester) async {
+    await tester.pumpWidget(wrap(
+      await seed(),
+      overrides: [
+        chaptersProvider('t1').overrideWith(
+            (ref) => Stream<List<ThesisChapter>>.error(Exception('boom'))),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not load your chapters.'), findsOneWidget);
+    expect(find.textContaining('Not started'), findsNothing);
     expect(find.byType(AppBar), findsOneWidget);
   });
 }

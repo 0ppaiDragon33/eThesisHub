@@ -120,4 +120,18 @@ class ChapterStatusWords {
         ChapterStatus.approved =>
           'Locked. Only your adviser can reopen it.',
       };
+
+  /// The same palette [StatusChip] uses, so a chapter waiting on someone
+  /// reads as the same kind of state as a thesis waiting on someone.
+  static Color colorFor(ChapterStatus status, Brightness brightness) {
+    final light = brightness == Brightness.light;
+    return switch (status) {
+      ChapterStatus.submitted =>
+        light ? AppTokens.awaiting : AppTokens.awaitingDark,
+      ChapterStatus.revise =>
+        light ? AppTokens.returned : AppTokens.returnedDark,
+      ChapterStatus.approved =>
+        light ? AppTokens.endorsed : AppTokens.endorsedDark,
+    };
+  }
 }
