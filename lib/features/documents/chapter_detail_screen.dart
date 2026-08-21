@@ -12,6 +12,7 @@ import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// One chapter's full history: every version uploaded and every remark an
 /// adviser or panelist has left on it.
@@ -44,6 +45,13 @@ class ChapterDetailScreen extends ConsumerStatefulWidget {
 class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   bool _busy = false;
   String? _error;
+
+  final _feedbackController = TextEditingController();
+  bool _feedbackBusy = false;
+  String? _feedbackError;
+
+  bool _statusBusy = false;
+  String? _statusError;
 
   Future<void> _upload() async {
     if (_busy) return;
@@ -118,6 +126,99 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     }
   }
 
+  /// Posts one remark against the version the adviser is looking at right
+  /// now. `currentVersion` is passed in by the caller rather than read off
+  /// `_upload`'s state, because the reviewer and the uploader are different
+  /// people acting at different times -- the version to attach a remark to
+  /// is whatever the chapter's stream says is current at the moment of
+  /// posting, not anything this screen instance remembers.
+  Future<void> _postFeedback({
+    required String thesisId,
+    required ChapterId chapter,
+    required int currentVersion,
+    required String reviewerUid,
+    required String reviewerName,
+  }) async {
+    if (_feedbackBusy) return;
+    setState(() {
+      _feedbackBusy = true;
+      _feedbackError = null;
+    });
+
+    try {
+      await ref.read(documentRepositoryProvider).addFeedback(
+            thesisId: thesisId,
+            chapter: chapter,
+            version: currentVersion,
+            reviewerUid: reviewerUid,
+            reviewerName: reviewerName,
+            reviewerRole: 'Adviser',
+            body: _feedbackController.text,
+          );
+      _feedbackController.clear();
+    } on ArgumentError catch (e) {
+      // The repository already refuses an empty/whitespace body with a
+      // specific message ("Write something first."); surface that message
+      // rather than a generic failure so a blank submit reads as a nudge,
+      // not an error.
+      if (mounted) setState(() => _feedbackError = e.message.toString());
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() => _feedbackError = e.code == 'permission-denied'
+            ? 'You do not have permission to leave feedback on this '
+                'chapter.'
+            : 'Could not post this feedback.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _feedbackError = 'Could not post this feedback.');
+    } finally {
+      if (mounted) setState(() => _feedbackBusy = false);
+    }
+  }
+
+  /// The adviser's half of chapter status: `revise` sends it back, `approved`
+  /// locks it. Both go through [DocumentRepository.setChapterStatus], which
+  /// itself refuses `submitted` -- that value can only be written by an
+  /// upload.
+  Future<void> _setStatus({
+    required String thesisId,
+    required ChapterId chapter,
+    required ChapterStatus status,
+  }) async {
+    if (_statusBusy) return;
+    setState(() {
+      _statusBusy = true;
+      _statusError = null;
+    });
+
+    try {
+      await ref.read(documentRepositoryProvider).setChapterStatus(
+            thesisId: thesisId,
+            chapter: chapter,
+            status: status,
+          );
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() => _statusError = e.code == 'permission-denied'
+            ? 'You do not have permission to change this chapter\'s status.'
+            : 'Could not update this chapter\'s status.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+            () => _statusError = 'Could not update this chapter\'s status.');
+      }
+    } finally {
+      if (mounted) setState(() => _statusBusy = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
   /// A short, human date for a version or a remark. `intl` is not a
   /// dependency of this project, so this stays a plain manual format rather
   /// than pulling one in for a single label.
@@ -182,10 +283,128 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     );
   }
 
+  /// Feedback and status controls, shown only to the thesis's adviser. A
+  /// student and a panelist both read the same chapter stream, so the guard
+  /// that keeps this section adviser-only lives in the caller, not here.
+  Widget _reviewSection({
+    required String thesisId,
+    required ChapterId chapter,
+    required int currentVersion,
+    required String reviewerUid,
+    required String reviewerName,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Gap.lg(),
+        const Divider(),
+        const Gap.sm(),
+        Text('Adviser review',
+            style: Theme.of(context).textTheme.titleMedium),
+        const Gap.sm(),
+        TextField(
+          key: const Key('feedbackBody'),
+          controller: _feedbackController,
+          decoration: InputDecoration(
+            labelText: 'Leave feedback on version $currentVersion',
+          ),
+          minLines: 2,
+          maxLines: 4,
+        ),
+        const SizedBox(height: 8),
+        FilledButton(
+          key: const Key('postFeedback'),
+          onPressed: _feedbackBusy
+              ? null
+              : () => _postFeedback(
+                    thesisId: thesisId,
+                    chapter: chapter,
+                    currentVersion: currentVersion,
+                    reviewerUid: reviewerUid,
+                    reviewerName: reviewerName,
+                  ),
+          child: Text(_feedbackBusy ? 'Posting…' : 'Post feedback'),
+        ),
+        if (_feedbackError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _feedbackError!,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        const Gap.sm(),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                key: const Key('markRevise'),
+                onPressed: _statusBusy
+                    ? null
+                    : () => _setStatus(
+                          thesisId: thesisId,
+                          chapter: chapter,
+                          status: ChapterStatus.revise,
+                        ),
+                child: const Text('Send back for revision'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                key: const Key('markApproved'),
+                onPressed: _statusBusy
+                    ? null
+                    : () => _setStatus(
+                          thesisId: thesisId,
+                          chapter: chapter,
+                          status: ChapterStatus.approved,
+                        ),
+                child: const Text('Approve this chapter'),
+              ),
+            ),
+          ],
+        ),
+        if (_statusError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _statusError!,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chapterRef =
         (thesisId: widget.thesisId, chapter: widget.chapter);
+
+    // Read only to decide whether the review section renders, and to supply
+    // `reviewerName` on a posted remark -- NOT gated on with a full-page
+    // loading/error branch the way the three streams below are. Those three
+    // are this screen's primary content: collapsing their loading state into
+    // absence has shipped real bugs here before. The adviser section is
+    // additive on top of that content, gated by an identity check, so
+    // treating "still loading" or "failed to load" as "not proven to be the
+    // adviser" (via valueOrNull) is the same fail-closed default the
+    // security rules themselves apply, not a regression of that lesson. It
+    // also means a caller need not stand up a signed-in `FirebaseAuth`
+    // mock just to view chapter content, matching every render path before
+    // this task.
+    final thesis = ref.watch(thesisByIdProvider(widget.thesisId)).valueOrNull;
+    final me = ref.watch(currentUserProvider).valueOrNull;
+    final isAdviser =
+        thesis != null && me != null && thesis.adviserUid == me.uid;
+
     final chaptersAsync = ref.watch(chaptersProvider(widget.thesisId));
 
     // Each of the three streams below is checked on its own for loading and
@@ -331,6 +550,19 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
             disabledReason: 'This chapter is approved. Ask your adviser to '
                 'reopen it before uploading again.',
           ),
+          // Adviser-only. The rules deny a non-adviser's write on `status`
+          // and `feedback` regardless, but a control that is visible and
+          // always fails is worse than no control at all -- a student would
+          // tap it, watch it silently do nothing (or surface a raw
+          // permission error), and have no way to tell the two apart.
+          if (isAdviser)
+            _reviewSection(
+              thesisId: widget.thesisId,
+              chapter: widget.chapter,
+              currentVersion: thisChapter.currentVersion,
+              reviewerUid: me.uid,
+              reviewerName: me.fullName,
+            ),
         ],
       ),
     );
