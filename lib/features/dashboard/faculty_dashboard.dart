@@ -6,8 +6,11 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
@@ -113,20 +116,7 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
                         : Column(
                             children: [
                               for (final thesis in advisees)
-                                Card(
-                                  child: ListTile(
-                                    key: Key('advisee-${thesis.id}'),
-                                    title: Text(thesis.workingTitle),
-                                    subtitle: Text(
-                                        '${thesis.college} • ${thesis.program}'),
-                                    trailing: FilledButton(
-                                      key: Key('openChapters-${thesis.id}'),
-                                      onPressed: () => context.go(
-                                          '/thesis/chapters?id=${thesis.id}'),
-                                      child: const Text('Open'),
-                                    ),
-                                  ),
-                                ),
+                                _AdviseeCard(thesis: thesis),
                             ],
                           ),
                   ),
@@ -236,5 +226,64 @@ class _DefencesList extends ConsumerWidget {
     }
 
     return Column(children: rows);
+  }
+}
+
+/// One advisee's row, with a count of chapters `submitted` -- uploaded by
+/// the student, not yet responded to by the adviser.
+///
+/// Spec §7 requires this count ("advised theses with a count of chapters
+/// awaiting review") so an adviser with several advisees can tell which
+/// groups have work waiting without opening every one and clicking through
+/// every chapter. A separate widget, same shape as `_DefencesList` above:
+/// a dynamic number of `chaptersProvider` family instances cannot be
+/// looped over with `ref.watch` inside the parent's single build.
+class _AdviseeCard extends ConsumerWidget {
+  const _AdviseeCard({required this.thesis});
+
+  final Thesis thesis;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final chaptersAsync = ref.watch(chaptersProvider(thesis.id));
+
+    return Card(
+      child: ListTile(
+        key: Key('advisee-${thesis.id}'),
+        title: Text(thesis.workingTitle),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${thesis.college} • ${thesis.program}'),
+            // While the stream is still loading, this must NOT read "0
+            // awaiting" -- that is indistinguishable from nothing actually
+            // waiting, the single most repeated bug in this codebase (see
+            // `_ReadinessRow` in defence_readiness.dart and `_DefencesList`
+            // above, which apply the same rule).
+            chaptersAsync.when(
+              loading: () => const Text('Awaiting review: still loading…'),
+              error: (e, _) =>
+                  const Text('Could not load this thesis\'s chapters.'),
+              data: (chapters) {
+                final awaiting = chapters
+                    .where((c) => c.status == ChapterStatus.submitted)
+                    .length;
+                return Text(awaiting == 0
+                    ? 'Nothing awaiting review'
+                    : awaiting == 1
+                        ? '1 chapter awaiting review'
+                        : '$awaiting chapters awaiting review');
+              },
+            ),
+          ],
+        ),
+        trailing: FilledButton(
+          key: Key('openChapters-${thesis.id}'),
+          onPressed: () => context.go('/thesis/chapters?id=${thesis.id}'),
+          child: const Text('Open'),
+        ),
+      ),
+    );
   }
 }

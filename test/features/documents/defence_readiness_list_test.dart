@@ -3,6 +3,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -124,5 +125,57 @@ void main() {
 
     expect(find.text('Chapters still loading…'), findsOneWidget);
     expect(find.text('0 of 5 chapters approved'), findsNothing);
+  });
+
+  testWidgets('tapping a readiness row navigates to that thesis\'s chapters',
+      (tester) async {
+    // Spec §7 names the coordinator and dean as audience for the chapter
+    // screens, and the rules already grant them read there -- but nothing
+    // in `lib/` ever linked a coordinator or dean there before this row's
+    // `onTap`. This is the door being connected.
+    final db = FakeFirebaseFirestore();
+    await _seedThesis(db, 't1', workingTitle: 'Tappable Thesis', chapters: {
+      'chapterI': 'approved',
+    });
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(
+              uid: 'dean1',
+              email: 'dean1@isufst.edu.ph',
+              isEmailVerified: true),
+        )),
+      ],
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/defences',
+          routes: [
+            GoRoute(
+              path: '/defences',
+              builder: (_, _) => const Scaffold(
+                body: SingleChildScrollView(child: DefenceReadinessList()),
+              ),
+            ),
+            GoRoute(
+              path: '/thesis/chapters',
+              builder: (context, state) => Scaffold(
+                appBar: AppBar(
+                  title: Text('Chapters for ${state.uri.queryParameters['id']}'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('readiness-t1')));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Chapters for t1'), findsOneWidget);
   });
 }

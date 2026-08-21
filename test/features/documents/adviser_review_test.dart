@@ -22,6 +22,14 @@ Future<FakeFirebaseFirestore> seed() async {
     'fullName': 'Dr. Adviser', 'email': 'a@isufst.edu.ph',
     'role': 'faculty', 'active': true,
   });
+  // The upload control is gated on `thesis.leaderUid == me.uid`, and `me`
+  // comes from the leader's own `users/l1` profile document -- needed for
+  // the leader-view portion of "marking approved locks the upload control
+  // for the leader" below.
+  await db.collection('users').doc('l1').set({
+    'fullName': 'Leader One', 'email': 'l1@isufst.edu.ph',
+    'role': 'student', 'active': true,
+  });
   await db.collection('theses/t1/documents').doc('chapterI').set({
     'type': 'chapterI', 'currentVersion': 1, 'status': 'submitted',
   });
@@ -129,13 +137,33 @@ void main() {
         isEmpty);
   });
 
-  testWidgets('marking approved locks the upload control', (tester) async {
+  testWidgets('the adviser does NOT see an upload control', (tester) async {
+    // Gated the same way the review section is gated on `isAdviser`: the
+    // upload write is only ever valid from the thesis's leader, so a
+    // control the adviser could tap and have denied is worse than none.
+    _useTallSurface(tester);
+    final db = await seed();
+    await tester.pumpWidget(_wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('uploadVersion')), findsNothing);
+  });
+
+  testWidgets('marking approved locks the upload control for the leader',
+      (tester) async {
+    // The adviser has no upload control at all (see the test above), so
+    // this now signs in as the leader -- the one actor who ever sees the
+    // button -- to keep testing the behaviour it guards: an approved
+    // chapter is locked to the student, and only the adviser can reopen it.
     _useTallSurface(tester);
     final db = await seed();
     await tester.pumpWidget(_wrap(db, uid: 'a1'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('markApproved')));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(_wrap(db, uid: 'l1'));
     await tester.pumpAndSettle();
 
     final uploadButton =

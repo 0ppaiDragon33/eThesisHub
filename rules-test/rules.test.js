@@ -2650,6 +2650,16 @@ test("M2: chapters may NOT be created before the title is approved",
       type: "chapterI", currentVersion: 1, status: "submitted",
       updatedAt: serverTimestamp(),
     }));
+    // Control: the identical write succeeds once the thesis actually is
+    // titleApproved, proving the failure above is the status gate at work
+    // and not a malformed path or a missing fixture.
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "theses/m2b-ctrl"), docThesis()));
+    await assertSucceeds(
+      setDoc(doc(leader, "theses/m2b-ctrl/documents/chapterI"), {
+        type: "chapterI", currentVersion: 1, status: "submitted",
+        updatedAt: serverTimestamp(),
+      }));
   });
 
 test("M2: only the five chapter ids exist", async () => {
@@ -2804,13 +2814,22 @@ test("M2 batch: a group's FIRST upload creates the chapter and version 1 togethe
   });
 
 test("M2: a version is immutable once written", async () => {
-  await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+  // A dedicated thesis id ("m2imm"), not the shared "m2" fixture other
+  // tests in this file mutate -- so the control below cannot be thrown off
+  // by a currentVersion some earlier test already bumped.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedChapters(ctx.firestore(), "m2imm"));
   const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
   await assertFails(
-    updateDoc(doc(leader, "theses/m2/documents/chapterI/versions/1"),
+    updateDoc(doc(leader, "theses/m2imm/documents/chapterI/versions/1"),
       { fileUrl: "swapped" }));
   await assertFails(
-    deleteDoc(doc(leader, "theses/m2/documents/chapterI/versions/1")));
+    deleteDoc(doc(leader, "theses/m2imm/documents/chapterI/versions/1")));
+  // Control: the same document is still readable, proving the path and
+  // fixture are correct and the two failures above are the immutability
+  // rule at work, not a malformed path or a missing document.
+  await assertSucceeds(
+    getDoc(doc(leader, "theses/m2imm/documents/chapterI/versions/1")));
 });
 
 test("M2: only the adviser writes feedback, in their own name, append-only",

@@ -104,4 +104,48 @@ void main() {
     expect(find.text('My Advised Thesis'), findsNothing);
     expect(find.text('No advisees yet'), findsNothing);
   });
+
+  testWidgets('an advisee row shows a count of chapters awaiting review',
+      (tester) async {
+    final db = await _seed();
+    await db
+        .collection('theses/mine/documents')
+        .doc('chapterI')
+        .set({'currentVersion': 1, 'status': 'submitted'});
+    await db
+        .collection('theses/mine/documents')
+        .doc('chapterII')
+        .set({'currentVersion': 1, 'status': 'submitted'});
+    await db
+        .collection('theses/mine/documents')
+        .doc('chapterIII')
+        .set({'currentVersion': 1, 'status': 'approved'});
+
+    await tester.pumpWidget(await _wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 chapters awaiting review'), findsOneWidget);
+  });
+
+  testWidgets(
+      'the awaiting-review count is NOT shown as "0" while its stream is '
+      'still loading', (tester) async {
+    // Deliberately bare pump()s, never pumpAndSettle: this must observe
+    // the chapter stream's loading branch, not its settled state. "0
+    // awaiting" and "still loading" are indistinguishable to a reader, and
+    // collapsing the two is the single most repeated bug in this codebase.
+    // Two pumps, same reasoning as the analogous case in
+    // defence_readiness_list_test.dart: the first resolves the outer
+    // myAdviseesProvider stream (mounting the advisee's own card), the
+    // second lets that card's chaptersProvider start -- but its stream has
+    // not emitted yet, so the card's own loading branch is what should show.
+    final db = await _seed();
+    await tester.pumpWidget(await _wrap(db, uid: 'a1'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Awaiting review: still loading…'), findsOneWidget);
+    expect(find.textContaining('0 chapters awaiting review'), findsNothing);
+    expect(find.text('Nothing awaiting review'), findsNothing);
+  });
 }

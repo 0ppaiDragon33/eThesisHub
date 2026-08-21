@@ -72,6 +72,14 @@ Future<FakeFirebaseFirestore> seed({String status = 'titleApproved'}) async {
     'workingTitle': 'T', 'college': 'CICT', 'program': 'BSIT',
     'semester': 'First', 'academicYear': '2026-2027',
   });
+  // The upload control is now gated on `thesis.leaderUid == me.uid`, and
+  // `me` comes from the leader's own `users/l1` profile document -- without
+  // it, currentUserProvider yields null forever and the button this whole
+  // file taps would never render.
+  await db.collection('users').doc('l1').set({
+    'fullName': 'Leader One', 'email': 'l1@isufst.edu.ph',
+    'role': 'student', 'active': true,
+  });
   return db;
 }
 
@@ -149,7 +157,10 @@ void main() {
     expect(storage.uploads, 1);
     expect(storage.deleted, hasLength(1),
         reason: 'the uploaded object must not be left behind');
-    expect(find.textContaining('approved'), findsWidgets,
+    expect(
+        find.text(
+            'Chapters can be uploaded once the title has been approved.'),
+        findsOneWidget,
         reason: 'the original failure is reported, not the cleanup');
   });
 

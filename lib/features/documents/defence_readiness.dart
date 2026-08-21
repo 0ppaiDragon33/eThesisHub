@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
@@ -100,6 +101,13 @@ class _ReadinessRow extends ConsumerWidget {
     return Card(
       child: ListTile(
         key: Key('readiness-${thesis.id}'),
+        // Spec §7 names the coordinator (and the dean, who reaches this
+        // list too) as audience for the chapter screens, and the rules
+        // already grant them read on `documents`/`versions`/`feedback` --
+        // but until this tap, nothing in `lib/` ever linked here. The
+        // router's `isChapterRoute` exemption already lets a non-student
+        // through to this route.
+        onTap: () => context.go('/thesis/chapters?id=${thesis.id}'),
         title: Text(thesis.workingTitle),
         subtitle: chaptersAsync.when(
           loading: () => const Text('Chapters still loading…'),

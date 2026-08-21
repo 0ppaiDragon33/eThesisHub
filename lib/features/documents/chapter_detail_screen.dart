@@ -67,7 +67,17 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     }
 
     final uid = ref.read(authStateProvider).valueOrNull?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      // The user has already picked a file by this point. A silent return
+      // here means they choose a file and nothing happens at all -- no
+      // spinner, no message -- and on a project with no server-side logs
+      // this screen is the only place the cause could ever surface.
+      if (mounted) {
+        setState(() =>
+            _error = 'You appear to be signed out. Sign in again and retry.');
+      }
+      return;
+    }
 
     if (!mounted) return;
     setState(() {
@@ -404,6 +414,13 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     final me = ref.watch(currentUserProvider).valueOrNull;
     final isAdviser =
         thesis != null && me != null && thesis.adviserUid == me.uid;
+    // Same fail-closed reasoning as `isAdviser` above, applied to the
+    // upload control: an adviser, coordinator or dean who is shown "Upload
+    // new version" will tap it, have the write denied by the rules, and
+    // watch the orphaned file get deleted again -- a control that is
+    // visible and always fails is worse than no control at all.
+    final isLeader =
+        thesis != null && me != null && thesis.leaderUid == me.uid;
 
     final chaptersAsync = ref.watch(chaptersProvider(widget.thesisId));
 
@@ -468,7 +485,10 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
           message: 'Upload your first version to begin.',
         ),
         const Gap.lg(),
-        _uploadControl(disabled: false),
+        // Leader-only, mirroring `isAdviser` below: only the thesis's own
+        // leader can ever write a version, so anyone else sees no control
+        // to tap and have denied.
+        if (isLeader) _uploadControl(disabled: false),
       ]);
     }
 
@@ -545,11 +565,16 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                 ),
               ),
           const Gap.lg(),
-          _uploadControl(
-            disabled: status == ChapterStatus.approved,
-            disabledReason: 'This chapter is approved. Ask your adviser to '
-                'reopen it before uploading again.',
-          ),
+          // Leader-only, for the same reason `isAdviser` gates the review
+          // section below: the rules deny anyone else's write on `versions`
+          // regardless, but a control that is visible and always fails is
+          // worse than no control at all.
+          if (isLeader)
+            _uploadControl(
+              disabled: status == ChapterStatus.approved,
+              disabledReason: 'This chapter is approved. Ask your adviser '
+                  'to reopen it before uploading again.',
+            ),
           // Adviser-only. The rules deny a non-adviser's write on `status`
           // and `feedback` regardless, but a control that is visible and
           // always fails is worse than no control at all -- a student would
