@@ -20,10 +20,9 @@ class DocumentRepository {
 
   /// The chapters that exist, in reading order.
   ///
-  /// Sorted in Dart on the enum's index, not by document id: `chapterII`
-  /// sorts before `chapterIII` lexically but `chapterIV` and `chapterV` do
-  /// not reliably follow, and the set is five documents so ordering it
-  /// costs nothing and needs no index.
+  /// Sorted on the enum's index rather than left to Firestore's default
+  /// document-id order. The two happen to agree today, but the ordering the
+  /// reader sees should not depend on the ids continuing to sort that way.
   Stream<List<ThesisChapter>> watchChapters(String thesisId) {
     return _documents(thesisId).snapshots().map((s) {
       final chapters = s.docs
@@ -67,21 +66,21 @@ class DocumentRepository {
                   'createdAt': (d.data()['createdAt'] as Timestamp?)?.toDate(),
                 }))
             .toList();
-        // Tie-break on snapshot order, not document id. Two calls close
-        // enough together can land on the same millisecond -- clock
-        // resolution, not a race -- and Firestore's auto-ids are random, so
-        // breaking ties by id would shuffle same-millisecond feedback into
-        // an order no one typed it in. The snapshot itself preserves write
-        // order, so indexing into it before sorting keeps that order stable.
-        final order = List<int>.generate(items.length, (i) => i)
-          ..sort((ia, ib) {
-            final at = items[ia].createdAt;
-            final bt = items[ib].createdAt;
-            if (at == null || bt == null) return ia.compareTo(ib);
-            final byTime = at.compareTo(bt);
-            return byTime != 0 ? byTime : ia.compareTo(ib);
-          });
-        return [for (final i in order) items[i]];
+        // Oldest first, by the server's clock. A tie -- two remarks landing
+        // on the same millisecond -- falls back to the document id, which is
+        // random, so such a pair is ordered arbitrarily. That is acceptable
+        // here and was NOT acceptable for candidate titles: those are written
+        // in one batch and therefore ALL share a timestamp by construction,
+        // whereas feedback is appended one remark at a time and a collision
+        // needs two posts inside the same millisecond.
+        items.sort((a, b) {
+          final at = a.createdAt;
+          final bt = b.createdAt;
+          if (at == null || bt == null) return a.id.compareTo(b.id);
+          final byTime = at.compareTo(bt);
+          return byTime != 0 ? byTime : a.id.compareTo(b.id);
+        });
+        return items;
       },
     );
   }

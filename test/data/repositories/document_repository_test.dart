@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/chapter.dart';
@@ -120,7 +121,31 @@ void main() {
         [ChapterId.chapterII, ChapterId.chapterIV, ChapterId.chapterV]);
   });
 
-  test('feedback is listed oldest first and carries its version', () async {
+  test('feedback is listed oldest first, whatever order it arrives in',
+      () async {
+    // Seeded newest-first on purpose: fake_cloud_firestore returns documents
+    // in insertion order, so a test that inserts them already-sorted would
+    // pass with the sort deleted.
+    final db = await seed();
+    final feedback = db.collection('theses').doc('t1')
+        .collection('documents').doc('chapterI').collection('feedback');
+    await feedback.doc('b').set({
+      'version': 1, 'reviewerUid': 'a1', 'reviewerName': 'Dr. A',
+      'reviewerRole': 'Adviser', 'body': 'Second point.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 8, 21, 10, 5)),
+    });
+    await feedback.doc('a').set({
+      'version': 1, 'reviewerUid': 'a1', 'reviewerName': 'Dr. A',
+      'reviewerRole': 'Adviser', 'body': 'First point.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 8, 21, 10, 0)),
+    });
+
+    final items = await DocumentRepository(db)
+        .watchFeedback('t1', ChapterId.chapterI).first;
+    expect(items.map((f) => f.body), ['First point.', 'Second point.']);
+  });
+
+  test('addFeedback writes the fields it was given', () async {
     final db = await seed();
     final repo = DocumentRepository(db);
     await repo.addVersion(
@@ -133,15 +158,13 @@ void main() {
       reviewerUid: 'a1', reviewerName: 'Dr. A', reviewerRole: 'Adviser',
       body: 'First point.',
     );
-    await repo.addFeedback(
-      thesisId: 't1', chapter: ChapterId.chapterI, version: 1,
-      reviewerUid: 'a1', reviewerName: 'Dr. A', reviewerRole: 'Adviser',
-      body: 'Second point.',
-    );
     final feedback =
         await repo.watchFeedback('t1', ChapterId.chapterI).first;
-    expect(feedback.map((f) => f.body), ['First point.', 'Second point.']);
-    expect(feedback.every((f) => f.version == 1), isTrue);
+    expect(feedback.single.version, 1);
+    expect(feedback.single.reviewerUid, 'a1');
+    expect(feedback.single.reviewerName, 'Dr. A');
+    expect(feedback.single.reviewerRole, 'Adviser');
+    expect(feedback.single.body, 'First point.');
   });
 
   test('empty feedback is refused', () async {
