@@ -419,8 +419,16 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     // new version" will tap it, have the write denied by the rules, and
     // watch the orphaned file get deleted again -- a control that is
     // visible and always fails is worse than no control at all.
+    //
+    // The uid from auth, NOT from currentUserProvider. That provider chains
+    // into a second Firestore stream on users/{uid}, and a missing profile
+    // document resolves to null forever rather than erroring -- which would
+    // silently and permanently hide the upload control from the one person
+    // who must have it. leaderUid is a plain uid, so the profile read buys
+    // nothing here.
+    final myUid = ref.watch(authStateProvider).valueOrNull?.uid;
     final isLeader =
-        thesis != null && me != null && thesis.leaderUid == me.uid;
+        thesis != null && myUid != null && thesis.leaderUid == myUid;
 
     final chaptersAsync = ref.watch(chaptersProvider(widget.thesisId));
 

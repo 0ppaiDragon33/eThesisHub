@@ -180,4 +180,26 @@ void main() {
     expect(storage.deleted, hasLength(1),
         reason: 'the uploaded object must not be left behind');
   });
+
+  testWidgets(
+      'the leader still sees the upload control when their users/{uid} '
+      'profile document does not exist', (tester) async {
+    // No `users/l1` doc is seeded here, unlike `seed()` above. A leader can
+    // reach this screen with no profile document at all -- a failed
+    // signup, a migration gap, manual data entry -- and `leaderUid` is a
+    // plain uid on the thesis itself, so the control must not depend on a
+    // second Firestore read that this leader may never have a document for.
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'l1', 'adviserUid': 'a1', 'status': 'titleApproved',
+      'panelistUids': <String>[], 'memberNames': <String>[],
+      'workingTitle': 'T', 'college': 'CICT', 'program': 'BSIT',
+      'semester': 'First', 'academicYear': '2026-2027',
+    });
+    final storage = _FakeStorage();
+    await tester.pumpWidget(_wrap(db, storage));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('uploadVersion')), findsOneWidget);
+  });
 }
