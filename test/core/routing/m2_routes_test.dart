@@ -32,10 +32,15 @@ void main() {
   // A student is the actor these routes exist for: they're the ones who
   // upload chapters. 't1' is titleApproved -- the status the chapters
   // screen itself requires before it will show anything but a locked
-  // message -- and 'u1' both leads it and is signed in, so the studentOnly
-  // redirect guard in app_router.dart's redirect callback does not bounce
-  // them back to their dashboard before the route builder ever runs.
-  Future<ProviderContainer> setUpApprovedThesis(WidgetTester tester) async {
+  // message. Parameterised over role/uid so the same fixture can stand in
+  // as either the student leader ('u1', the default) or the thesis's own
+  // adviser -- the redirect guard in app_router.dart's redirect callback
+  // must let both through before the route builder ever runs.
+  Future<ProviderContainer> setUpApprovedThesis(
+    WidgetTester tester, {
+    String role = 'student',
+    String uid = 'u1',
+  }) async {
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -47,7 +52,7 @@ void main() {
       'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
       'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
     });
-    final c = await containerFor('student', 'u1', db);
+    final c = await containerFor(role, uid, db);
     addTearDown(c.dispose);
 
     await tester.pumpWidget(
@@ -107,5 +112,22 @@ void main() {
     expect(find.byKey(const Key('chaptersScreen')), findsNothing);
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.text('No thesis given'), findsOneWidget);
+  });
+
+  // The scenario the studentOnly-guard exemption in app_router.dart's
+  // redirect callback exists for. Every test above signs in as the student
+  // leader, so none of them would notice if that exemption were ever
+  // dropped -- the redirect would silently bounce the adviser back to
+  // '/faculty' before ChaptersScreen ever built, and this suite would still
+  // report green. Signed in as 'a1', which the fixture's thesis 't1' already
+  // names as `adviserUid` -- the real actor this route is for, not an
+  // arbitrary faculty account with no relationship to the thesis.
+  testWidgets('a faculty adviser reaches the chapters screen', (tester) async {
+    final c = await setUpApprovedThesis(tester, role: 'faculty', uid: 'a1');
+
+    c.read(goRouterProvider).go('/thesis/chapters?id=t1');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
   });
 }

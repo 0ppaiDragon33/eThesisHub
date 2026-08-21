@@ -113,15 +113,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // firestore.rules, which every screen's writes and reads still
               // go through regardless of what the client permits.
               //
-              // '/thesis/chapters' is deliberately NOT in this list, even
-              // though it starts with '/thesis': chapters are reviewed by
-              // the adviser, not just uploaded by the student, and
+              // '/thesis/chapters' is deliberately exempt from this list,
+              // even though it starts with '/thesis': chapters are reviewed
+              // by the adviser, not just uploaded by the student, and
               // faculty_dashboard.dart's own link into
               // '/thesis/chapters?id=...' would otherwise bounce every
               // adviser straight back to their dashboard before
               // ChaptersScreen ever built — the same class of "the link
               // exists but the route refuses the very role that needs it"
               // failure this whole task exists to close.
+              //
+              // Exempt exactly the chapter routes, not everything sharing
+              // the prefix: a future '/thesis/chaptersArchive' must not
+              // inherit this exemption by accident. Chapters are the one
+              // branch under /thesis that faculty need, because an adviser
+              // reviews them. No query-string clause here: `location` above
+              // is `state.matchedLocation`, which is the matched path only
+              // — go_router strips the query string before this callback
+              // ever sees it — so a clause checking for '/thesis/chapters?'
+              // could never fire.
+              final isChapterRoute = location == '/thesis/chapters' ||
+                  location.startsWith('/thesis/chapters/');
               const studentOnly = [
                 '/thesis',
                 '/thesis/create',
@@ -129,7 +141,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 '/thesis/titles',
               ];
               if (studentOnly.any(location.startsWith) &&
-                  !location.startsWith('/thesis/chapters') &&
+                  !isChapterRoute &&
                   profile.role != UserRole.student) {
                 return home;
               }
