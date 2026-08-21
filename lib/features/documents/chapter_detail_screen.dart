@@ -6,8 +6,11 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
+import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 /// One chapter's full history: every version uploaded and every remark an
 /// adviser or panelist has left on it.
@@ -38,10 +41,67 @@ class ChapterDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
-  /// Placeholder for the next task's upload flow. Present now so the button
-  /// below has something to call; it does nothing until that task wires it
-  /// to `widget.pickDocument` and `DocumentRepository.addVersion`.
-  void _uploadVersion() {}
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _upload() async {
+    if (_busy) return;
+    final pick = widget.pickDocument ?? realPicker;
+    final file = await pick(allowed: kChapterTypes);
+    if (file == null) return;
+
+    final invalid = validateDocument(file,
+        allowed: kChapterTypes, maxBytes: kChapterMaxBytes);
+    if (invalid != null) {
+      setState(() => _error = invalid);
+      return;
+    }
+
+    final uid = ref.read(authStateProvider).valueOrNull?.uid;
+    if (uid == null) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final storage = ref.read(storageServiceProvider);
+    StoredFile? stored;
+    try {
+      stored = await uploadDocument(
+        storage: storage,
+        file: file,
+        thesisId: widget.thesisId,
+        documentId: widget.chapter.value,
+      );
+      await ref.read(documentRepositoryProvider).addVersion(
+            thesisId: widget.thesisId,
+            chapter: widget.chapter,
+            storagePath: stored.path,
+            fileUrl: stored.url,
+            mimeType: file.contentType,
+            sizeBytes: file.bytes.length,
+            uploadedBy: uid,
+          );
+    } on StorageFailure catch (e) {
+      if (mounted) setState(() => _error = '${e.message} [${e.code}]');
+    } catch (e) {
+      // The file is already in a public bucket but the record that would
+      // reference it was never written. Remove the orphan, best-effort:
+      // a failed cleanup must never replace the real failure.
+      if (stored != null) {
+        try {
+          await storage.delete(stored.path);
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() => _error =
+            e is StateError ? e.message : 'Could not upload this version.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   /// A short, human date for a version or a remark. `intl` is not a
   /// dependency of this project, so this stays a plain manual format rather
@@ -75,8 +135,14 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
       children: [
         FilledButton(
           key: const Key('uploadVersion'),
-          onPressed: disabled ? null : _uploadVersion,
-          child: const Text('Upload new version'),
+          onPressed: disabled || _busy ? null : _upload,
+          child: _busy
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Upload new version'),
         ),
         if (disabled && disabledReason != null)
           Padding(
@@ -84,6 +150,17 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
             child: Text(
               disabledReason,
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _error!,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
             ),
           ),
       ],

@@ -60,6 +60,11 @@ const kJustificationMaxBytes = 10 * 1024 * 1024;
 const kPresentationTypes = {'pptx', 'ppt', 'pdf'};
 const kPresentationMaxBytes = 25 * 1024 * 1024;
 
+/// A chapter carries figures and tables, so the cap is above M1b's 10 MB
+/// justification limit and below the bucket's 50 MB ceiling.
+const kChapterTypes = {'pdf', 'doc', 'docx'};
+const kChapterMaxBytes = 15 * 1024 * 1024;
+
 /// The MIME type a stored object should carry, from its extension.
 ///
 /// Everything used to be uploaded as `application/octet-stream`, which tells
