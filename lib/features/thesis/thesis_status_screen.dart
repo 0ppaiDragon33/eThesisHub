@@ -225,6 +225,21 @@ class ThesisStatusScreen extends ConsumerWidget {
                             context.go('/thesis/titles?id=${thesis.id}'),
                       ),
                     ),
+                  // The Dean's approval is the event that unlocks chapter
+                  // uploads (ChaptersScreen itself refuses any status other
+                  // than titleApproved), so this is the one status that
+                  // gets an entry point into them from here.
+                  if (thesis.status == ThesisStatus.titleApproved)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: FilledButton.icon(
+                        key: const Key('goToChapters'),
+                        icon: const Icon(Icons.menu_book_outlined),
+                        label: const Text('Go to chapters'),
+                        onPressed: () =>
+                            context.go('/thesis/chapters?id=${thesis.id}'),
+                      ),
+                    ),
                 ],
               );
             },
