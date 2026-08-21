@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,35 +13,6 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
-
-/// Picks one document, or null if the user cancelled.
-typedef DocumentPicker = Future<PickedDocument?> Function({
-  required Set<String> allowed,
-});
-
-/// The real picker, backing [SubmitTitlesScreen.pickDocument] by default.
-/// `file_picker` has no test seam of its own, so this is the one call in the
-/// screen that a widget test cannot reach without injection.
-Future<PickedDocument?> _realPicker({required Set<String> allowed}) async {
-  // `allowed` used to be accepted and dropped on the floor, so the OS dialog
-  // offered every file on the machine and the student learned their .zip was
-  // wrong only after picking it. `validateDocument` still runs afterwards —
-  // this narrows the dialog, it does not replace the check.
-  final result = await FilePicker.platform.pickFiles(
-    withData: true,
-    type: FileType.custom,
-    allowedExtensions: allowed.toList(),
-  );
-  final picked = result?.files.single;
-  if (picked == null || picked.bytes == null) return null;
-  final extension = (picked.extension ?? '').toLowerCase();
-  return PickedDocument(
-    name: picked.name,
-    bytes: picked.bytes!,
-    extension: extension,
-    contentType: contentTypeFor(extension),
-  );
-}
 
 /// Lets the thesis leader submit three or more candidate titles, each with
 /// its own justification document, plus one presentation, moving the thesis
@@ -97,7 +67,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
   }
 
   Future<void> _pickJustification(int index) async {
-    final pick = widget.pickDocument ?? _realPicker;
+    final pick = widget.pickDocument ?? realPicker;
     final doc = await pick(allowed: kJustificationTypes);
     if (doc == null) return;
     final validationError = validateDocument(doc,
@@ -113,7 +83,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
   }
 
   Future<void> _pickPresentation() async {
-    final pick = widget.pickDocument ?? _realPicker;
+    final pick = widget.pickDocument ?? realPicker;
     final doc = await pick(allowed: kPresentationTypes);
     if (doc == null) return;
     final validationError = validateDocument(doc,
