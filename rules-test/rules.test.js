@@ -2875,6 +2875,24 @@ test("M2: the student reads their feedback immediately", async () => {
     getDoc(doc(leader, "theses/m2/documents/chapterI/feedback/f1")));
 });
 
+test("M2: an adviser lists the theses they advise, and only those",
+  async () => {
+    // Until now `allow list` on theses was coordinator/dean/own-leader only,
+    // which is why the faculty dashboard's "My advisees" was a placeholder.
+    // M2 breaks on it: an adviser has no way to find the chapters waiting.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/adv1"), docThesis());
+      await setDoc(doc(db, "theses/adv2"),
+        docThesis("titleApproved", { adviserUid: "someone-else" }));
+    });
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+    await assertSucceeds(getDocs(query(collection(adv, "theses"),
+      where("adviserUid", "==", "adviser-uid"))));
+    // Control: the same adviser may NOT list the whole collection.
+    await assertFails(getDocs(collection(adv, "theses")));
+  });
+
 test.after(async () => {
   await env.cleanup();
 });

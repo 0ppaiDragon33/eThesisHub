@@ -213,7 +213,12 @@ service cloud.firestore {
       // student dashboard was denied outright. The leader arm is evaluated
       // per returned document and is checked first so a student never pays
       // for the `users` read that isCoordinator()/isDean() cost.
+      // Finding (b) gave the leader arm. M2 adds the adviser arm: an
+      // adviser must be able to find the theses whose chapters they review.
+      // Narrow by construction -- the arm is evaluated per returned
+      // document, so it can only ever return theses naming this adviser.
       allow list: if (signedIn() && resource.data.leaderUid == request.auth.uid)
+                  || (signedIn() && resource.data.adviserUid == request.auth.uid)
                   || isCoordinator() || isDean();
 
       // A leader creates their own thesis, always as a draft with an empty
