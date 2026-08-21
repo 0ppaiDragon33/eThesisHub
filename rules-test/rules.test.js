@@ -2561,13 +2561,13 @@ function asDocUser(uid, email) {
     .firestore();
 }
 
-async function seedChapters(db) {
-  await setDoc(doc(db, "theses/m2"), docThesis());
-  await setDoc(doc(db, "theses/m2/documents/chapterI"), {
+async function seedChapters(db, thesisId = "m2") {
+  await setDoc(doc(db, `theses/${thesisId}`), docThesis());
+  await setDoc(doc(db, `theses/${thesisId}/documents/chapterI`), {
     type: "chapterI", currentVersion: 1, status: "submitted",
     updatedAt: Timestamp.now(),
   });
-  await setDoc(doc(db, "theses/m2/documents/chapterI/versions/1"), {
+  await setDoc(doc(db, `theses/${thesisId}/documents/chapterI/versions/1`), {
     version: 1, storagePath: "p", fileUrl: "u", uploadedBy: "leader-uid",
     uploadedAt: Timestamp.now(), mimeType: "application/pdf",
     sizeBytes: 100,
@@ -2592,16 +2592,28 @@ test("M2: the leader, adviser, coordinator and dean read a chapter", async () =>
 test("M2: a panelist may NOT read a chapter, its versions or its feedback",
   async () => {
     // The panel meets the document at the pre-oral defence, which is M3.
-    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedChapters(db);
+      await setDoc(doc(db, "theses/m2/documents/chapterI/feedback/f1"), {
+        version: 1, reviewerUid: "adviser-uid", reviewerName: "Dr. A",
+        reviewerRole: "Adviser", body: "Tighten it.",
+        createdAt: Timestamp.now(),
+      });
+    });
     const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
     await assertFails(getDoc(doc(pan, "theses/m2/documents/chapterI")));
     await assertFails(
       getDoc(doc(pan, "theses/m2/documents/chapterI/versions/1")));
+    await assertFails(
+      getDoc(doc(pan, "theses/m2/documents/chapterI/feedback/f1")));
     // Control: the adviser, same paths.
     const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(adv, "theses/m2/documents/chapterI")));
     await assertSucceeds(
       getDoc(doc(adv, "theses/m2/documents/chapterI/versions/1")));
+    await assertSucceeds(
+      getDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f1")));
   });
 
 test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
@@ -2610,11 +2622,22 @@ test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
       const db = ctx.firestore();
       await seedChapters(db);
       await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+      await setDoc(doc(db, "theses/m2/documents/chapterI/feedback/f1"), {
+        version: 1, reviewerUid: "adviser-uid", reviewerName: "Dr. A",
+        reviewerRole: "Adviser", body: "Tighten it.",
+        createdAt: Timestamp.now(),
+      });
     });
     const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
     await assertFails(
       getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+    await assertFails(
+      getDoc(doc(dean, "theses/m2/documents/chapterI/feedback/f1")));
+    // Control: the adviser reads the feedback the dean was denied.
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+    await assertSucceeds(
+      getDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f1")));
   });
 
 test("M2: chapters may NOT be created before the title is approved",
@@ -2688,6 +2711,16 @@ test("M2: an approved chapter is locked to the student and reopenable by the adv
         updatedAt: serverTimestamp() }));
   });
 
+test("M2: a chapter update may NOT smuggle in unlisted keys", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+  const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertFails(updateDoc(doc(adv, "theses/m2/documents/chapterI"),
+    { status: "revise", updatedAt: serverTimestamp(), grade: "A" }));
+  // Control: the same update without the extra key.
+  await assertSucceeds(updateDoc(doc(adv, "theses/m2/documents/chapterI"),
+    { status: "revise", updatedAt: serverTimestamp() }));
+});
+
 test("M2 batch evaluation: a version and its parent bump are judged PRE-batch",
   async () => {
     // Two-sided. The batched form must be ALLOWED and the identical writes
@@ -2708,13 +2741,42 @@ test("M2 batch evaluation: a version and its parent bump are judged PRE-batch",
         updatedAt: serverTimestamp() });
     await assertSucceeds(batch.commit());
 
-    // Sequentially: the parent is now at 2, so writing version 2 again is
-    // no longer currentVersion + 1.
+    // Sequentially: versions/2 already exists after the batch above, so
+    // this second write is an UPDATE, not a create -- it is denied by
+    // `allow update, delete: if false` before the create rule's version
+    // logic is ever reached. This re-tests immutability (see "a version is
+    // immutable once written" below), not the version-number check itself.
     await assertFails(
       setDoc(doc(leader, "theses/m2/documents/chapterI/versions/2"), {
         version: 2, storagePath: "p2", fileUrl: "u2",
         uploadedBy: "leader-uid", uploadedAt: serverTimestamp(),
         mimeType: "application/pdf", sizeBytes: 200,
+      }));
+  });
+
+test("M2: a version number that is not currentVersion + 1 is refused",
+  async () => {
+    // A fresh document id, so this is a CREATE and the create rule's
+    // version logic actually runs -- rather than being denied earlier as
+    // an update to an existing version. A fresh thesis id too: "m2" has
+    // already been advanced to currentVersion 2 by an earlier test in this
+    // file (versions/2 already exists there), so this test seeds its own
+    // fixture to guarantee the parent's currentVersion is still 1 and
+    // versions/2 does not yet exist.
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore(), "m2e"));
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    await assertFails(
+      setDoc(doc(leader, "theses/m2e/documents/chapterI/versions/5"), {
+        version: 5, storagePath: "p", fileUrl: "u",
+        uploadedBy: "leader-uid", uploadedAt: serverTimestamp(),
+        mimeType: "application/pdf", sizeBytes: 100,
+      }));
+    // Control: the correct next number, same shape.
+    await assertSucceeds(
+      setDoc(doc(leader, "theses/m2e/documents/chapterI/versions/2"), {
+        version: 2, storagePath: "p", fileUrl: "u",
+        uploadedBy: "leader-uid", uploadedAt: serverTimestamp(),
+        mimeType: "application/pdf", sizeBytes: 100,
       }));
   });
 

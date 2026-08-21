@@ -781,6 +781,8 @@ service cloud.firestore {
         allow update: if verified()
                       && isThesisLeader(thesisId)
                       && resource.data.status in ['submitted', 'revise']
+                      && request.resource.data.keys().hasOnly(
+                           ['type', 'currentVersion', 'status', 'updatedAt'])
                       && request.resource.data.currentVersion
                          == resource.data.currentVersion + 1
                       && request.resource.data.status == 'submitted'
@@ -790,6 +792,8 @@ service cloud.firestore {
         // Adviser: a decision, never a version bump.
         allow update: if verified()
                       && isAdviser(thesisId)
+                      && request.resource.data.keys().hasOnly(
+                           ['type', 'currentVersion', 'status', 'updatedAt'])
                       && request.resource.data.status in ['revise', 'approved']
                       && request.resource.data.currentVersion
                          == resource.data.currentVersion
