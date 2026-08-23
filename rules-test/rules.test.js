@@ -3121,6 +3121,102 @@ test("M3: each role lists only the defences they belong to", async () => {
   } catch (e) { console.log("DEBUG coord-unfiltered", e.message); throw e; }
 });
 
+// ---------- M3: defence comments ----------
+
+test("M3: comments may be written ONLY while the defence is in progress",
+  async () => {
+    // This is what makes the log a record of the room rather than a
+    // document anyone can append to days later.
+    await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    const remark = {
+      authorUid: "pan-uid", authorName: "Dr. Panel",
+      authorPosition: "Panel Member", body: "Justify the respondents.",
+      createdAt: serverTimestamp(),
+    };
+
+    // scheduled -- not open yet.
+    await assertFails(
+      setDoc(doc(pan, "defenses/df1/comments/c1"), remark));
+
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+    // Control: the identical write, once open.
+    await assertSucceeds(
+      setDoc(doc(pan, "defenses/df1/comments/c1"), remark));
+
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    // completed -- the log is frozen.
+    await assertFails(
+      setDoc(doc(pan, "defenses/df1/comments/c2"), remark));
+  });
+
+test("M3: the group may NOT read comments until the adviser releases them",
+  async () => {
+    // Guidelines §4d: the adviser consolidates and furnishes the copy. A
+    // half-finished remark, or one the panel withdrew, is not the record.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedM3Defence(db, { status: "completed" });
+      await setDoc(doc(db, "defenses/df1/comments/c1"), {
+        authorUid: "pan-uid", authorName: "Dr. Panel",
+        authorPosition: "Panel Member", body: "Justify the respondents.",
+        createdAt: Timestamp.now(),
+      });
+    });
+    const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    await assertFails(getDoc(doc(leader, "defenses/df1/comments/c1")));
+    // Control: the adviser reads it throughout.
+    await assertSucceeds(getDoc(doc(adv, "defenses/df1/comments/c1")));
+
+    await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    // Released -- now the group reads it.
+    await assertSucceeds(getDoc(doc(leader, "defenses/df1/comments/c1")));
+  });
+
+test("M3: a comment is filed in its author's own name, and never edited",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+
+    // Not under someone else's uid.
+    await assertFails(setDoc(doc(pan, "defenses/df1/comments/x1"), {
+      authorUid: "adviser-uid", authorName: "Dr. Adviser",
+      authorPosition: "Adviser", body: "Not mine.",
+      createdAt: serverTimestamp(),
+    }));
+    // The group presents; it does not comment on its own defence.
+    await assertFails(setDoc(doc(leader, "defenses/df1/comments/x2"), {
+      authorUid: "leader-uid", authorName: "Student",
+      authorPosition: "Panel Member", body: "We agree.",
+      createdAt: serverTimestamp(),
+    }));
+    // An empty remark is not a remark.
+    await assertFails(setDoc(doc(pan, "defenses/df1/comments/x3"), {
+      authorUid: "pan-uid", authorName: "Dr. Panel",
+      authorPosition: "Panel Member", body: "",
+      createdAt: serverTimestamp(),
+    }));
+    // Control.
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/comments/x4"), {
+      authorUid: "pan-uid", authorName: "Dr. Panel",
+      authorPosition: "Panel Member", body: "A real remark.",
+      createdAt: serverTimestamp(),
+    }));
+    // Append-only: the record is evidence.
+    await assertFails(updateDoc(doc(pan, "defenses/df1/comments/x4"),
+      { body: "Actually, never mind." }));
+    await assertFails(deleteDoc(doc(pan, "defenses/df1/comments/x4")));
+  });
+
 test.after(async () => {
   await env.cleanup();
 });

@@ -961,6 +961,46 @@ service cloud.firestore {
 
       // The defence record is evidence.
       allow delete: if false;
+
+      match /comments/{commentId} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        function mayComment() {
+          let d = parent();
+          return signedIn() && (
+            d.adviserUid == request.auth.uid ||
+            request.auth.uid in d.panelUids
+          );
+        }
+
+        // The panel reads throughout. The group reads only once the adviser
+        // has released the consolidation -- Guidelines §4d. The leader
+        // check uses `leaderUid`, the snapshot field on the defence itself
+        // (see the note above `defence()`), not a second read of the
+        // thesis -- one `get` on `parent()` covers both `mayComment()` and
+        // this arm.
+        allow get, list: if mayComment() || isCoordinator() || isDean()
+                         || (signedIn()
+                             && 'consolidatedAt' in parent()
+                             && parent().leaderUid == request.auth.uid);
+
+        // Only while the defence is open, and only in your own name.
+        allow create: if verified()
+                      && (mayComment() || isCoordinator() || isDean())
+                      && parent().status == 'inProgress'
+                      && request.resource.data.keys().hasOnly(
+                           ['authorUid', 'authorName', 'authorPosition',
+                            'body', 'createdAt'])
+                      && request.resource.data.authorUid == request.auth.uid
+                      && request.resource.data.body is string
+                      && request.resource.data.body.size() > 0
+                      && request.resource.data.createdAt == request.time;
+
+        // Append-only, per D10: the defence record is evidence, and
+        // editable remarks make consolidated feedback worthless.
+        allow update, delete: if false;
+      }
     }
 
     // The faculty inbox queries nominations across all theses.
