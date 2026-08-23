@@ -112,20 +112,28 @@ Widget _wrap(
 
 void main() {
   testWidgets('the log is live for the panel', (tester) async {
-    final db = await seed(comments: [
-      {
-        'authorUid': 'a1',
-        'authorName': 'Dr. Adviser',
-        'authorPosition': 'Adviser',
-        'body': 'Please tighten chapter two.',
-      },
-      {
-        'authorUid': 'p1',
-        'authorName': 'Panelist One',
-        'authorPosition': 'Panel Member',
-        'body': 'Methodology looks solid.',
-      },
-    ]);
+    final db = await seed();
+    final comments = db.collection('defenses/d1/comments');
+
+    // Seeded newest-first on purpose. fake_cloud_firestore returns
+    // documents in insertion order, so a fixture inserted already-sorted
+    // would pass with the repository's sort deleted, proving nothing: this
+    // order forces the screen (via the repository's chronological sort) to
+    // actually reorder them to prove it works.
+    await comments.doc('cm1').set({
+      'authorUid': 'p1',
+      'authorName': 'Panelist One',
+      'authorPosition': 'Panel Member',
+      'body': 'Methodology looks solid.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 9, 1, 9, 20)),
+    });
+    await comments.doc('cm0').set({
+      'authorUid': 'a1',
+      'authorName': 'Dr. Adviser',
+      'authorPosition': 'Adviser',
+      'body': 'Please tighten chapter two.',
+      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 9, 1, 9, 10)),
+    });
 
     await tester.pumpWidget(_wrap(db, uid: 'p2'));
     await tester.pumpAndSettle();
@@ -135,13 +143,28 @@ void main() {
     expect(row0, findsOneWidget);
     expect(row1, findsOneWidget);
 
-    // Oldest first, by widget position: cm0 sits above cm1 in the log.
+    // Oldest first, by widget position: cm0 (9:10) sits above cm1 (9:20)
+    // even though cm1 was inserted first.
     final y0 = tester.getTopLeft(row0).dy;
     final y1 = tester.getTopLeft(row1).dy;
-    expect(y0, lessThan(y1));
+    expect(y0, lessThan(y1),
+        reason: 'cm0 (created 9:10) must render above cm1 (created 9:20), '
+            'oldest first, regardless of insertion order');
 
-    expect(find.textContaining('Please tighten chapter two.'), findsOneWidget);
-    expect(find.textContaining('Dr. Adviser — Adviser'), findsOneWidget);
+    // Body order, not just position: names what went wrong if the log ever
+    // renders in insertion order instead of chronological order.
+    final bodies = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((w) => w.data ?? '')
+        .toList();
+    final adviserIndex =
+        bodies.indexWhere((t) => t.contains('Please tighten chapter two.'));
+    final panelIndex =
+        bodies.indexWhere((t) => t.contains('Methodology looks solid.'));
+    expect(adviserIndex, greaterThanOrEqualTo(0));
+    expect(panelIndex, greaterThanOrEqualTo(0));
+    expect(adviserIndex, lessThan(panelIndex),
+        reason: 'the 9:10 comment must be laid out before the 9:20 comment');
   });
 
   testWidgets('the comment box is absent while the defence is scheduled',
@@ -220,6 +243,31 @@ void main() {
     expect(data['authorPosition'], 'Panel Member');
     expect(data['authorName'], 'Panelist One');
     expect(data['body'], 'Great defence overall.');
+  });
+
+  testWidgets(
+      'the thesis leader never sees the comment box, even in progress',
+      (tester) async {
+    // inProgress is the one status where every other role (panelist,
+    // adviser, coordinator, dean) DOES get the box -- see the test above.
+    // The leader is not the adviser and not in panelUids, so
+    // _authorPositionFor returns null and the box must stay hidden: the
+    // rules deny a leader commenting on their own defence, and a control
+    // that is visible and always fails is worse than none.
+    final db = await seed(status: 'inProgress');
+    await db.collection('users').doc('l1').set({
+      'fullName': 'Leader One',
+      'email': 'l1@isufst.edu.ph',
+      'role': 'student',
+      'active': true,
+    });
+
+    await tester.pumpWidget(_wrap(db, uid: 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('commentBody')), findsNothing);
+    expect(find.byKey(const Key('postComment')), findsNothing);
+    expect(find.byKey(const Key('commentReason')), findsOneWidget);
   });
 
   testWidgets('the defence stream loading is shown, not collapsed into absent',
