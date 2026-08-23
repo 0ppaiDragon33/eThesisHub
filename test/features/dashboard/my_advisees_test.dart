@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -5,7 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
+import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/faculty_mode_provider.dart';
+import 'package:ethesishub/providers/document_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
 /// Seeds two theses: one advised by `a1`, one advised by `other`. Each has
@@ -34,7 +42,11 @@ Future<FakeFirebaseFirestore> _seed() async {
 /// adviser_review_test.dart's `_wrap` for the same pattern. sharedPrefsProvider
 /// must also be overridden -- facultyModeProvider reads it on every build,
 /// and it throws UnimplementedError unless a value is supplied.
-Future<Widget> _wrap(FakeFirebaseFirestore db, {required String uid}) async {
+Future<Widget> _wrap(
+  FakeFirebaseFirestore db, {
+  required String uid,
+  List<Override> overrides = const [],
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   return ProviderScope(
@@ -46,6 +58,7 @@ Future<Widget> _wrap(FakeFirebaseFirestore db, {required String uid}) async {
         mockUser: MockUser(
             uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
       )),
+      ...overrides,
     ],
     child: const MaterialApp(home: FacultyDashboard()),
   );
@@ -73,22 +86,36 @@ void main() {
         findsNothing);
   });
 
-  testWidgets('an adviser with no advisees sees an empty state, not an error',
-      (tester) async {
-    // No theses at all are seeded for 'lonely' -- an empty query result,
-    // not a permission refusal.
+  testWidgets('a member with no positions lands on Panels, not an empty '
+      'Advisees list', (tester) async {
+    // The reported failure: FacultyMode.fromString(null) resolves to
+    // adviser, so a newly invited faculty member landed on an empty
+    // Advisees list -- and could not leave, because the mode switch hides
+    // itself precisely when you hold no adviser position. The effective
+    // mode is now clamped to the positions actually held.
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(await _wrap(db, uid: 'lonely'));
     await tester.pumpAndSettle();
 
-    expect(find.text('No advisees yet'), findsOneWidget);
+    expect(find.text('My panels'), findsOneWidget);
+    expect(find.text('My advisees'), findsNothing);
     expect(find.byType(ErrorWidget), findsNothing);
   });
 
   testWidgets('the advisee list is loading before the first snapshot arrives',
       (tester) async {
     final db = await _seed();
-    await tester.pumpWidget(await _wrap(db, uid: 'a1'));
+    // The mode is resolved up front so this test isolates the stream it is
+    // actually about. Without it the dashboard-level mode gate renders its
+    // own spinner first and the assertion would target the wrong one.
+    await tester.pumpWidget(await _wrap(db, uid: 'a1', overrides: [
+      effectiveFacultyModeProvider
+          .overrideWith((ref) async => FacultyMode.adviser),
+      // A stream that never emits, so the loading branch is genuinely
+      // observable. fake_cloud_firestore resolves inside a single pump, so
+      // a real query cannot hold this frame open long enough to assert on.
+      myAdviseesProvider.overrideWith((ref) => StreamController<List<Thesis>>().stream),
+    ]));
     // Deliberately NOT pumpAndSettle: asserts the loading branch renders
     // before the stream's first snapshot, rather than the empty-list
     // branch. Collapsing loading into an empty data(const []) list would
@@ -97,10 +124,11 @@ void main() {
     // adviseesAsync.when in faculty_dashboard.dart).
     await tester.pump();
 
-    // Both the advisee list and the nomination summary are loading at
-    // once, so two spinners are expected -- what matters is that neither
-    // has resolved to data or to the empty state yet.
-    expect(find.byType(CircularProgressIndicator), findsNWidgets(2));
+    // The whole dashboard waits on the effective mode, because the mode
+    // decides which destinations exist -- defaulting while it resolves
+    // would show a panelist the Advisees tab and swap it out from under
+    // them on every launch. So one spinner, and no resolved content.
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
     expect(find.text('My Advised Thesis'), findsNothing);
     expect(find.text('No advisees yet'), findsNothing);
   });
@@ -140,7 +168,18 @@ void main() {
     // second lets that card's chaptersProvider start -- but its stream has
     // not emitted yet, so the card's own loading branch is what should show.
     final db = await _seed();
-    await tester.pumpWidget(await _wrap(db, uid: 'a1'));
+    // The mode is resolved up front so this test isolates the stream it is
+    // actually about. Without it the dashboard-level mode gate renders its
+    // own spinner first and the assertion would target the wrong one.
+    await tester.pumpWidget(await _wrap(db, uid: 'a1', overrides: [
+      effectiveFacultyModeProvider
+          .overrideWith((ref) async => FacultyMode.adviser),
+      // A chapter stream that never emits, so the card's own loading branch
+      // is genuinely observable -- fake_cloud_firestore settles inside a
+      // pump, which is why the previous two-pump timing no longer holds.
+      chaptersProvider('mine')
+          .overrideWith((ref) => StreamController<List<ThesisChapter>>().stream),
+    ]));
     await tester.pump();
     await tester.pump();
 

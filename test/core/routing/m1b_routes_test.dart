@@ -89,14 +89,13 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
-    // The dashboard defaults to the Home tab (nomination inbox); the
-    // defences list only renders once the Defences destination is selected
-    // — the two tabs genuinely swap content now, so it must be tapped
-    // before the defence button can be found.
-    expect(find.byKey(const Key('goToDefence-t1')), findsNothing);
-    await tester.tap(find.text('Defences'));
-    await tester.pumpAndSettle();
-
+    // u2 holds a panel seat and advises nothing, so the effective mode is
+    // clamped to panelist and 'Panels' IS the first destination -- no tab
+    // hop. Before the clamp, a panelist landed in adviser mode on an empty
+    // Advisees list and could not leave, because the mode switch hides
+    // itself precisely when you hold no adviser position.
+    expect(find.text('Panels'), findsWidgets,
+        reason: 'a panelist-only member must not land in adviser mode');
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToDefence-t1')));
     await tester.pumpAndSettle();
@@ -129,6 +128,12 @@ void main() {
 
     await tester.pumpWidget(
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await tester.pumpAndSettle();
+
+    // The dean and coordinator dashboards used to stack approvals, the
+    // defence queue and readiness on one scrolling page. Each is its own
+    // destination now, so the queue has to be selected first.
+    await tester.tap(find.text('Defences'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget,

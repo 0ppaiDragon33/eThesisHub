@@ -12,11 +12,18 @@ import 'package:ethesishub/features/dashboard/defence_queue.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-class DeanDashboard extends ConsumerWidget {
+class DeanDashboard extends ConsumerStatefulWidget {
   const DeanDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DeanDashboard> createState() => _DeanDashboardState();
+}
+
+class _DeanDashboardState extends ConsumerState<DeanDashboard> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final queueAsync =
         ref.watch(thesesByStatusProvider(ThesisStatus.nominationPendingDean));
 
@@ -25,14 +32,35 @@ class DeanDashboard extends ConsumerWidget {
       // copy instead ties every routing test to wording that changes.
       key: const Key('deanDashboard'),
       title: 'eThesisHub',
-      selectedIndex: 0,
-      onDestinationSelected: (_) {},
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (i) => setState(() => _selectedIndex = i),
       // Only approvals resolve today; 'Overview' was a label for the screen
       // you are already on, and defences and reports belong to unbuilt
       // modules.
-      destinations: const [],
+      // Three sections that were stacked on one scrolling page, each now
+      // its own destination. They answer different questions on different
+      // days -- who needs a decision, who is defending, who is ready to be
+      // scheduled -- and stacking them made the newest the least visible.
+      destinations: const [
+        NavDestination(label: 'Approvals', icon: Icons.gavel_outlined),
+        NavDestination(label: 'Defences', icon: Icons.forum_outlined),
+        NavDestination(label: 'Readiness', icon: Icons.checklist_outlined),
+      ],
       actions: const [SignOutButton()],
-      body: PageShell(
+      body: switch (_selectedIndex) {
+        1 => const PageShell(
+            title: 'Title defences',
+            subtitle: 'Groups presenting their candidate titles. You are the '
+                'only person who can approve one or reject the set.',
+            children: [DefenceQueue()],
+          ),
+        2 => const PageShell(
+            title: 'Defence readiness',
+            subtitle: 'Theses whose chapters have cleared the gate for a '
+                'pre-oral or final defence.',
+            children: [DefenceReadinessList()],
+          ),
+        _ => PageShell(
         title: 'Nomination approvals',
         subtitle: 'Theses the Coordinator has recommended, waiting on you.',
         children: [
@@ -69,40 +97,9 @@ class DeanDashboard extends ConsumerWidget {
             onPressed: () => context.go('/review'),
             child: const Text('Open approval queue'),
           ),
-          const Gap.lg(),
-          // The title defence was reachable only from the faculty
-          // dashboard, which the router forbids this role — so the one
-          // actor who records the decision could not open the screen.
-          // Placed below the nomination actions rather than above them,
-          // so the queue this dashboard was built around keeps the top
-          // of the page.
-          Text('Title defences',
-              style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          Text(
-            'Groups presenting their candidate titles. You are the only person who can approve one or reject the set.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Gap.sm(),
-          const DefenceQueue(),
-          const Gap.lg(),
-          // Which theses have become ready for a pre-oral or final defence,
-          // derived from their chapters rather than a stored flag -- see
-          // the comment on readinessOf. Placed below the title-defence
-          // queue this dashboard already had, for the same reason: it is
-          // the newer section.
-          Text('Defence readiness',
-              style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          Text(
-            'Theses whose chapters have cleared the gate for a pre-oral or '
-            'final defence.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Gap.sm(),
-          const DefenceReadinessList(),
         ],
-      ),
+          ),
+      },
     );
   }
 }

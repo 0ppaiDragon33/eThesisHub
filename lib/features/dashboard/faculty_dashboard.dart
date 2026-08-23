@@ -8,6 +8,7 @@ import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/document_providers.dart';
@@ -23,19 +24,42 @@ class FacultyDashboard extends ConsumerStatefulWidget {
 }
 
 class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
-  // Which of the two nav destinations is showing. Only 'Home' and 'Defences'
-  // are declared here — the first time this dashboard has had two, so
-  // ResponsiveScaffold shows its navigation for the first time.
+  // Which destination is showing. Both modes declare two — the work of the
+  // mode you are in, then Nominations — so the index never has to be clamped
+  // when the mode changes under it.
   int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final mode = ref.watch(facultyModeProvider);
-    final holdsAdviserPositions = ref.watch(adviserPositionCountProvider) > 0;
-    final pendingElsewhere = ref.watch(pendingInOtherModeProvider);
+    final modeAsync = ref.watch(effectiveFacultyModeProvider);
+    final holdsAdviserPositions =
+        (ref.watch(adviserPositionCountProvider).valueOrNull ?? 0) > 0;
+    final pendingElsewhere =
+        ref.watch(pendingInOtherModeProvider).valueOrNull ?? 0;
     final pendingAsync = ref.watch(myPendingNominationsProvider);
     final myThesisIdsAsync = ref.watch(myThesisIdsProvider);
     final adviseesAsync = ref.watch(myAdviseesProvider);
+
+    // The mode decides which destinations exist, so nothing can be drawn
+    // until it resolves. Defaulting while it loads would show a panelist the
+    // Advisees tab and then swap it out from under them on every launch.
+    if (modeAsync.isLoading) {
+      return const Scaffold(
+        body: LoadingState(label: 'Loading your dashboard…'),
+      );
+    }
+    if (modeAsync.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('eThesisHub')),
+        body: PageShell(children: [
+          ErrorState(
+            error: modeAsync.error,
+            message: 'Could not work out which positions you hold.',
+          ),
+        ]),
+      );
+    }
+    final mode = modeAsync.requireValue;
 
     return ResponsiveScaffold(
       // Identifies this dashboard for routing tests. Asserting on heading
@@ -44,9 +68,19 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
       title: 'eThesisHub',
       selectedIndex: _selectedIndex,
       onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-      destinations: const [
-        NavDestination(label: 'Home', icon: Icons.home_outlined),
-        NavDestination(label: 'Defences', icon: Icons.forum_outlined),
+      // Destinations sit INSIDE the mode, per design decision D5: the switch
+      // is the primary axis and each mode is its own clean dashboard. The
+      // first destination is whatever that mode is for; Nominations appears
+      // in both, because a Conforme request is role-neutral — it is how you
+      // acquire either position in the first place.
+      destinations: [
+        mode == FacultyMode.adviser
+            ? const NavDestination(
+                label: 'Advisees', icon: Icons.school_outlined)
+            : const NavDestination(
+                label: 'Panels', icon: Icons.forum_outlined),
+        const NavDestination(
+            label: 'Nominations', icon: Icons.drafts_outlined),
       ],
       actions: [
         if (holdsAdviserPositions)
@@ -75,100 +109,110 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
           ),
         const SignOutButton(),
       ],
-      // The two nav destinations now genuinely swap the body — 'Home' (the
-      // default) shows the nomination inbox, 'Defences' shows the defences
-      // list. Rendering both regardless of selection (the previous shape)
-      // read as a broken tab rather than an unbuilt one, exactly the
-      // pattern the M1a design pass removed nine destinations to avoid.
+      // Destination 0 is the work of the mode you are in; destination 1 is
+      // the Conforme inbox, which belongs to neither. Rendering both at once
+      // (the previous shape) read as a broken tab rather than an unbuilt one.
       body: _selectedIndex == 0
-          ? PageShell(
-              title: mode == FacultyMode.adviser ? 'My advisees' : 'My panels',
-              // The adviser arm on `allow list` (theses) landed in M2 Task 3,
-              // which is what makes a real query possible here at all — see
-              // watchAdvisedTheses. Panel listing has no equivalent rule yet,
-              // so panelist mode still falls back to the nomination inbox
-              // summary below rather than claiming a list it cannot show.
-              subtitle: mode == FacultyMode.adviser
-                  ? 'Chapters I–V for each thesis you advise.'
-                  : 'Panel listings are not built yet. Your Conforme '
-                      'requests still arrive in the nomination inbox below.',
-              children: [
-                if (mode == FacultyMode.adviser) ...[
-                  // Its own loading/error handling, kept separate from
-                  // pendingAsync below: collapsing this into `data(const [])`
-                  // while the query is still in flight would render an empty
-                  // state indistinguishable from "no advisees", which this
-                  // project has already shipped as a bug four times.
-                  adviseesAsync.when(
-                    loading: () => const LoadingState(),
-                    error: (e, _) => ErrorState(
-                      error: e,
-                      message: 'Could not load your advisees.',
-                    ),
-                    data: (advisees) => advisees.isEmpty
-                        ? const EmptyState(
-                            icon: Icons.school_outlined,
-                            title: 'No advisees yet',
-                            message: 'Once a group nominates you as adviser '
-                                'and the Dean approves, their thesis appears '
-                                'here.',
-                          )
-                        : Column(
-                            children: [
-                              for (final thesis in advisees)
-                                _AdviseeCard(thesis: thesis),
-                            ],
-                          ),
-                  ),
-                  const Gap.lg(),
-                ],
-                pendingAsync.when(
-                  loading: () => const LoadingState(),
-                  error: (e, _) => ErrorState(
-                    error: e,
-                    message: 'Could not load your nominations.',
-                  ),
-                  data: (pending) => pending.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.drafts_outlined,
-                          title: 'No nominations waiting',
-                          message:
-                              'When a group nominates you as their adviser or '
-                              'a panel member, the request appears here.',
-                        )
-                      : EmptyState(
-                          icon: Icons.mark_email_unread_outlined,
-                          title: pending.length == 1
-                              ? '1 nomination waiting'
-                              : '${pending.length} nominations waiting',
-                          message:
-                              'Each one needs your Conforme before the group '
-                              'can move forward.',
-                        ),
-                ),
-                const Gap.lg(),
-                FilledButton(
-                  key: const Key('goToInbox'),
-                  onPressed: () => context.go('/nominations'),
-                  child: const Text('Open nomination inbox'),
-                ),
-              ],
-            )
-          : PageShell(
-              title: 'Defences',
-              subtitle: 'Theses whose candidate titles are ready for you to '
-                  'review as a panel member.',
-              children: [
-                myThesisIdsAsync.when(
-                  loading: () => const LoadingState(),
-                  error: (e, _) => ErrorState(
-                    error: e,
-                    message: 'Could not load your defences.',
-                  ),
-                  data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
-                ),
-              ],
+          ? _modeBody(mode, adviseesAsync, myThesisIdsAsync)
+          : _nominationsBody(pendingAsync),
+    );
+  }
+
+  /// Whatever the current mode is for: the theses you advise, or the panels
+  /// you sit on.
+  Widget _modeBody(
+    FacultyMode mode,
+    AsyncValue<List<Thesis>> adviseesAsync,
+    AsyncValue<List<String>> myThesisIdsAsync,
+  ) {
+    if (mode == FacultyMode.adviser) {
+      return PageShell(
+        title: 'My advisees',
+        subtitle: 'Chapters I–V for each thesis you advise.',
+        children: [
+          // Its own loading and error handling. Collapsing this into
+          // `data(const [])` while the query is in flight renders an empty
+          // state indistinguishable from "no advisees" — a bug this project
+          // has shipped four times.
+          adviseesAsync.when(
+            loading: () => const LoadingState(),
+            error: (e, _) => ErrorState(
+              error: e,
+              message: 'Could not load your advisees.',
             ),
+            data: (advisees) => advisees.isEmpty
+                ? const EmptyState(
+                    icon: Icons.school_outlined,
+                    title: 'No advisees yet',
+                    message: 'Once a group nominates you as adviser and the '
+                        'Dean approves, their thesis appears here.',
+                  )
+                : Column(
+                    children: [
+                      for (final thesis in advisees)
+                        _AdviseeCard(thesis: thesis),
+                    ],
+                  ),
+          ),
+        ],
+      );
+    }
+
+    return PageShell(
+      title: 'My panels',
+      subtitle: 'Theses whose candidate titles are ready for you to review '
+          'as a panel member.',
+      children: [
+        myThesisIdsAsync.when(
+          loading: () => const LoadingState(),
+          error: (e, _) => ErrorState(
+            error: e,
+            message: 'Could not load your panels.',
+          ),
+          data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
+        ),
+      ],
+    );
+  }
+
+  /// The Conforme inbox, which belongs to neither mode — a nomination is how
+  /// you acquire a position in the first place.
+  Widget _nominationsBody(
+    AsyncValue<List<({String thesisId, Nomination nomination})>> pendingAsync,
+  ) {
+    return PageShell(
+      title: 'Nominations',
+      subtitle: 'Requests waiting on your Conforme.',
+      children: [
+        pendingAsync.when(
+          loading: () => const LoadingState(),
+          error: (e, _) => ErrorState(
+            error: e,
+            message: 'Could not load your nominations.',
+          ),
+          data: (pending) => pending.isEmpty
+              ? const EmptyState(
+                  icon: Icons.drafts_outlined,
+                  title: 'No nominations waiting',
+                  message: 'When a group nominates you as their adviser or a '
+                      'panel member, the request appears here.',
+                )
+              : EmptyState(
+                  icon: Icons.mark_email_unread_outlined,
+                  title: pending.length == 1
+                      ? '1 nomination waiting'
+                      : '${pending.length} nominations waiting',
+                  message: 'Each one needs your Conforme before the group '
+                      'can move forward.',
+                ),
+        ),
+        const Gap.lg(),
+        FilledButton(
+          key: const Key('goToInbox'),
+          onPressed: () => context.go('/nominations'),
+          child: const Text('Open nomination inbox'),
+        ),
+      ],
     );
   }
 }

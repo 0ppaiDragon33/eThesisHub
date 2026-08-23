@@ -116,10 +116,13 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // The Conforme inbox is its own destination now, in both faculty
+    // modes -- a nomination belongs to neither role, it is how you acquire
+    // one. So the button is one tab across rather than below the advisees.
+    await tester.tap(find.text('Nominations'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToInbox')), findsOneWidget);
-    // The advisee list (Task 9) now renders above this button, so on the
-    // default 800x600 test surface it sits below the fold; PageShell
-    // scrolls, but tester.tap() does not auto-scroll a target into view.
     await tester.ensureVisible(find.byKey(const Key('goToInbox')));
     await tester.tap(find.byKey(const Key('goToInbox')));
     await tester.pumpAndSettle();
@@ -166,6 +169,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToFaculty')), findsOneWidget);
+    // Four destinations now, so the bar takes height the button used to
+    // have; PageShell scrolls but tester.tap() does not scroll for you.
+    await tester.ensureVisible(find.byKey(const Key('goToFaculty')));
     await tester.tap(find.byKey(const Key('goToFaculty')));
     await tester.pumpAndSettle();
 

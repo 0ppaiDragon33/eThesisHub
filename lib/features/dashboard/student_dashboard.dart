@@ -8,28 +8,52 @@ import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
+import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-class StudentDashboard extends ConsumerWidget {
+class StudentDashboard extends ConsumerStatefulWidget {
   const StudentDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudentDashboard> createState() => _StudentDashboardState();
+}
+
+class _StudentDashboardState extends ConsumerState<StudentDashboard> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final thesisAsync = ref.watch(myThesisProvider);
+    final thesis = thesisAsync.valueOrNull;
+
+    // Chapters is declared only once the Dean has approved a title, because
+    // that is when the screen behind it stops refusing. A destination that
+    // leads to "Chapters are not open yet" is the control-that-does-nothing
+    // this scaffold hides its bar to avoid.
+    final chaptersUnlocked =
+        thesis != null && thesis.status == ThesisStatus.titleApproved;
 
     return ResponsiveScaffold(
       // Identifies this dashboard for routing tests. Asserting on heading
       // copy instead ties every routing test to wording that changes.
       key: const Key('studentDashboard'),
       title: 'eThesisHub',
-      selectedIndex: 0,
-      onDestinationSelected: (_) {},
-      // Only 'Thesis' resolves today. 'Archive' and 'Defenses' belong to
-      // modules that do not exist, so they are not declared — the nav bar
-      // hides itself below two destinations and returns when they land.
-      destinations: const [],
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+      // 'Archive' belongs to a module that does not exist, so it is not
+      // declared — the bar hides itself below two destinations and returns
+      // as they land. Chapters is the first to land, in M2.
+      destinations: [
+        const NavDestination(label: 'Thesis', icon: Icons.home_outlined),
+        if (chaptersUnlocked)
+          const NavDestination(
+              label: 'Chapters', icon: Icons.menu_book_outlined),
+      ],
       actions: const [SignOutButton()],
-      body: thesisAsync.when(
+      body: (_selectedIndex == 1 && chaptersUnlocked)
+          ? ChaptersScreen(thesisId: thesis.id, embedded: true)
+          : thesisAsync.when(
         loading: () => const LoadingState(label: 'Loading your thesis…'),
         error: (e, _) => PageShell(children: [
           ErrorState(

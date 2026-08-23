@@ -12,11 +12,19 @@ import 'package:ethesishub/features/dashboard/defence_queue.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-class CoordinatorDashboard extends ConsumerWidget {
+class CoordinatorDashboard extends ConsumerStatefulWidget {
   const CoordinatorDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CoordinatorDashboard> createState() =>
+      _CoordinatorDashboardState();
+}
+
+class _CoordinatorDashboardState extends ConsumerState<CoordinatorDashboard> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final queueAsync = ref.watch(
         thesesByStatusProvider(ThesisStatus.nominationPendingCoordinator));
 
@@ -25,19 +33,41 @@ class CoordinatorDashboard extends ConsumerWidget {
       // copy instead ties every routing test to wording that changes.
       key: const Key('coordinatorDashboard'),
       title: 'eThesisHub',
-      selectedIndex: 0,
-      // The coordinator is the one role with two real places to be, so this
-      // is the only dashboard whose navigation shows. 'Defenses' and
-      // 'Reports' arrive with their modules.
+      selectedIndex: _selectedIndex,
+      // Three sections that were stacked on one scrolling page, each now
+      // its own destination -- they answer different questions on different
+      // days, and stacking them made the newest the least visible. Faculty
+      // stays a jump to its own screen rather than a panel here, because
+      // invites are a different job from reviewing theses.
       onDestinationSelected: (i) {
-        if (i == 1) context.go('/invites');
+        if (i == 3) {
+          context.go('/invites');
+          return;
+        }
+        setState(() => _selectedIndex = i);
       },
       destinations: const [
-        NavDestination(label: 'Theses', icon: Icons.folder_outlined),
+        NavDestination(
+            label: 'Recommendations', icon: Icons.fact_check_outlined),
+        NavDestination(label: 'Defences', icon: Icons.forum_outlined),
+        NavDestination(label: 'Readiness', icon: Icons.checklist_outlined),
         NavDestination(label: 'Faculty', icon: Icons.badge_outlined),
       ],
       actions: const [SignOutButton()],
-      body: PageShell(
+      body: switch (_selectedIndex) {
+        1 => const PageShell(
+            title: 'Title defences',
+            subtitle: 'Groups presenting their candidate titles to the '
+                'panel you sit on ex officio.',
+            children: [DefenceQueue()],
+          ),
+        2 => const PageShell(
+            title: 'Defence readiness',
+            subtitle: 'Theses whose chapters have cleared the gate for a '
+                'pre-oral or final defence.',
+            children: [DefenceReadinessList()],
+          ),
+        _ => PageShell(
         title: 'Nomination recommendations',
         subtitle: 'Theses whose nominees have all accepted, waiting on you.',
         children: [
@@ -80,40 +110,9 @@ class CoordinatorDashboard extends ConsumerWidget {
             onPressed: () => context.go('/invites'),
             child: const Text('Invite faculty'),
           ),
-          const Gap.lg(),
-          // The title defence was reachable only from the faculty
-          // dashboard, which the router forbids this role — so the one
-          // actor who records the decision could not open the screen.
-          // Placed below the nomination actions rather than above them,
-          // so the queue this dashboard was built around keeps the top
-          // of the page.
-          Text('Title defences',
-              style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          Text(
-            'Groups presenting their candidate titles. You sit on every panel ex officio and may comment on any candidate.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Gap.sm(),
-          const DefenceQueue(),
-          const Gap.lg(),
-          // Which theses have become ready for a pre-oral or final defence,
-          // derived from their chapters rather than a stored flag -- see
-          // the comment on readinessOf. Placed below the title-defence
-          // queue this dashboard already had, for the same reason: it is
-          // the newer section.
-          Text('Defence readiness',
-              style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          Text(
-            'Theses whose chapters have cleared the gate for a pre-oral or '
-            'final defence.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Gap.sm(),
-          const DefenceReadinessList(),
         ],
-      ),
+          ),
+      },
     );
   }
 }

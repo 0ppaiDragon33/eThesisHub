@@ -12,13 +12,24 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Chapters I–V for one thesis, whether or not any have been uploaded.
 class ChaptersScreen extends ConsumerWidget {
-  const ChaptersScreen({super.key, required this.thesisId});
+  const ChaptersScreen({
+    super.key,
+    required this.thesisId,
+    this.embedded = false,
+  });
 
   final String thesisId;
+
+  /// True when a dashboard is hosting this as a nav destination and already
+  /// supplies the Scaffold and app bar. Nesting a second Scaffold inside one
+  /// stacks two app bars and gives the inner one a back button that goes
+  /// nowhere.
+  final bool embedded;
 
   /// Every state renders inside this frame. A bare [PageShell] has no
   /// Scaffold, so a refusal had no app bar and no way back at all.
   Widget _framed(List<Widget> children) {
+    if (embedded) return PageShell(children: children);
     return Scaffold(
       appBar: AppBar(title: const Text('Chapters')),
       body: PageShell(children: children),
@@ -88,10 +99,8 @@ class ChaptersScreen extends ConsumerWidget {
     };
     final brightness = Theme.of(context).brightness;
 
-    return Scaffold(
+    final page = PageShell(
       key: const Key('chaptersScreen'),
-      appBar: AppBar(title: const Text('Chapters')),
-      body: PageShell(
         title: 'Chapters',
         subtitle: 'Upload each chapter for your adviser to review. Every '
             'upload is kept, so nothing is ever overwritten.',
@@ -116,7 +125,12 @@ class ChaptersScreen extends ConsumerWidget {
               ),
             ),
         ],
-      ),
+    );
+
+    if (embedded) return page;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chapters')),
+      body: page,
     );
   }
 }
