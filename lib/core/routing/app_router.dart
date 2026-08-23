@@ -15,6 +15,9 @@ import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
 import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
 import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
 import 'package:ethesishub/features/dashboard/student_dashboard.dart';
+import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
+import 'package:ethesishub/features/defence/defence_room_screen.dart';
+import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
@@ -159,7 +162,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               }
               // The title defence panel is faculty, coordinators and the
               // dean — never the student whose titles are being judged.
+              //
+              // '/defence/room/...' is deliberately exempt, even though it
+              // starts with '/defence/': DefencesList is shared by all four
+              // dashboards (see its own doc comment), including the
+              // student's, and its "Open" button sends the leader straight
+              // into '/defence/room/${d.id}' to watch the log and, once the
+              // adviser releases it, read the consolidated comments at
+              // '/defence/room/${d.id}/consolidated' — ConsolidatedDefenceScreen
+              // has its own isLeader-gated branch for exactly that reader.
+              // A blanket prefix match here would bounce that same student
+              // straight back home before either screen ever built — the
+              // same class of "the link exists but the route refuses the
+              // very role that needs it" failure the '/thesis/chapters'
+              // exemption above already closed once for advisers.
+              final isDefenceRoomRoute = location.startsWith('/defence/room/');
               if (location.startsWith('/defence/') &&
+                  !isDefenceRoomRoute &&
                   profile.role == UserRole.student) {
                 return home;
               }
@@ -264,6 +283,60 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           }
           return SubmitTitlesScreen(thesisId: id);
         },
+      ),
+      // The three routes below are registered BEFORE '/defence/:thesisId'
+      // on purpose. go_router matches a static segment before a dynamic one
+      // at the same level, but this project has already lost a screen to a
+      // route collision -- '/faculty' registered twice left the invites
+      // screen unreachable, caught only because m2_routes_test.dart drove
+      // the router rather than pumping the screen directly (see '/invites'
+      // below). '/defence/schedule' is the one genuine collision risk here:
+      // it has the same segment count as '/defence/:thesisId', so
+      // 'schedule' would be swallowed as a thesisId if this route were
+      // ever moved below it. m3_routes_test.dart's falsification test
+      // proves this ordering is load-bearing, not merely conventional.
+      GoRoute(
+        path: '/defence/schedule',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          // No force-unwrap: a bare visit (typed directly, or a stale link)
+          // must not crash into a blank screen with no way back -- same
+          // failure mode '/thesis/chapters' avoids for a missing thesis id.
+          if (id == null || id.isEmpty) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Schedule a defence')),
+              body: const PageShell(children: [
+                EmptyState(
+                  icon: Icons.link_off,
+                  title: 'No thesis given',
+                  message: 'Open scheduling from a thesis you coordinate.',
+                ),
+              ]),
+            );
+          }
+          return ScheduleDefenceScreen(thesisId: id);
+        },
+      ),
+      // '/defence/room/:defenceId' is registered before
+      // '/defence/room/:defenceId/consolidated' only because that is
+      // source order here, not because order matters between them: a
+      // static 'consolidated' segment at position 3 can never be swallowed
+      // by ':defenceId' at position 2 -- the segment counts differ, so
+      // go_router never even considers the shorter route for the longer
+      // path. DefenceRoomScreen and ConsolidatedDefenceScreen each render
+      // their own "not found" state inside a Scaffold + AppBar (see
+      // `_framed` in both files), so no wrapper is needed here the way one
+      // is for the missing-id case above -- an unknown defenceId never
+      // strands the user on a bare page.
+      GoRoute(
+        path: '/defence/room/:defenceId',
+        builder: (context, state) => DefenceRoomScreen(
+            defenceId: state.pathParameters['defenceId']!),
+      ),
+      GoRoute(
+        path: '/defence/room/:defenceId/consolidated',
+        builder: (context, state) => ConsolidatedDefenceScreen(
+            defenceId: state.pathParameters['defenceId']!),
       ),
       GoRoute(
         path: '/defence/:thesisId',
