@@ -2589,9 +2589,10 @@ test("M2: the leader, adviser, coordinator and dean read a chapter", async () =>
   }
 });
 
-test("M2: a panelist may NOT read a chapter, its versions or its feedback",
+test("M2: an outsider may NOT read a chapter, its versions or its feedback",
   async () => {
-    // The panel meets the document at the pre-oral defence, which is M3.
+    // Anyone not on the thesis (leader, adviser, coordinator, dean, or panel)
+    // is denied. The panel's access comes later in M3.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -2601,12 +2602,12 @@ test("M2: a panelist may NOT read a chapter, its versions or its feedback",
         createdAt: Timestamp.now(),
       });
     });
-    const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
-    await assertFails(getDoc(doc(pan, "theses/m2/documents/chapterI")));
+    const outsider = asDocUser("outsider-uid", "outsider@isufst.edu.ph");
+    await assertFails(getDoc(doc(outsider, "theses/m2/documents/chapterI")));
     await assertFails(
-      getDoc(doc(pan, "theses/m2/documents/chapterI/versions/1")));
+      getDoc(doc(outsider, "theses/m2/documents/chapterI/versions/1")));
     await assertFails(
-      getDoc(doc(pan, "theses/m2/documents/chapterI/feedback/f1")));
+      getDoc(doc(outsider, "theses/m2/documents/chapterI/feedback/f1")));
     // Control: the adviser, same paths.
     const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(adv, "theses/m2/documents/chapterI")));
@@ -2910,6 +2911,40 @@ test("M2: an adviser lists the theses they advise, and only those",
       where("adviserUid", "==", "adviser-uid"))));
     // Control: the same adviser may NOT list the whole collection.
     await assertFails(getDocs(collection(adv, "theses")));
+  });
+
+test("M3: a panelist reads the chapters they are about to hear defended",
+  async () => {
+    // M2 deferred this deliberately. Widening is one arm; the dean's split
+    // -- status but not contents -- is unchanged.
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
+
+    await assertSucceeds(getDoc(doc(pan, "theses/m2/documents/chapterI")));
+    await assertSucceeds(
+      getDoc(doc(pan, "theses/m2/documents/chapterI/versions/1")));
+
+    // Reading is not writing: a panelist does not upload or mark a chapter.
+    await assertFails(updateDoc(doc(pan, "theses/m2/documents/chapterI"),
+      { status: "approved", updatedAt: serverTimestamp() }));
+    // Control: the adviser may.
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+    await assertSucceeds(updateDoc(doc(adv, "theses/m2/documents/chapterI"),
+      { status: "approved", updatedAt: serverTimestamp() }));
+  });
+
+test("M3: the dean still reads chapter STATUS but not its versions",
+  async () => {
+    // Widening for the panel must not widen for the dean -- M2-8.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedChapters(db);
+      await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    });
+    const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
+    await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
+    await assertFails(
+      getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
   });
 
 // ---------- M3: defence scheduling ----------

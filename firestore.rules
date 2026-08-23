@@ -763,7 +763,7 @@ service cloud.firestore {
         // college-wide progress visibility, not chapter review. The split
         // falls on the collection boundary, so no field filtering is needed.
         allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                         || isCoordinator() || isDean();
+                         || isOnPanel() || isCoordinator() || isDean();
 
         allow create: if verified()
                       && isThesisLeader(thesisId)
@@ -810,7 +810,7 @@ service cloud.firestore {
         match /versions/{versionNo} {
           // No dean: they see that a chapter is approved, never its files.
           allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                           || isCoordinator();
+                           || isOnPanel() || isCoordinator();
 
           // Written in the SAME batch as the parent's version bump, and a
           // batch is evaluated against the state BEFORE it -- so the parent
@@ -848,7 +848,7 @@ service cloud.firestore {
 
         match /feedback/{feedbackId} {
           allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                           || isCoordinator();
+                           || isOnPanel() || isCoordinator();
 
           allow create: if verified()
                         && isAdviser(thesisId)
