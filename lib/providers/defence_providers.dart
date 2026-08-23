@@ -48,7 +48,21 @@ final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
     yield* repo.watchForLeader(uid);
     return;
   }
-  // Faculty hold either position, and the two queries are separate arms —
-  // there is no single query that returns both, so they are merged here.
-  yield* repo.watchForAdviser(uid);
+  // A faculty member advises one group and sits on other panels, and the
+  // two are separate `allow list` arms — there is no single query that
+  // returns both, so they are merged here. Without the merge an adviser who
+  // also sits on panels silently loses half their schedule.
+  await for (final mine in repo.watchForAdviser(uid)) {
+    final panels = await repo.watchForPanelist(uid).first;
+    final byId = {for (final d in [...mine, ...panels]) d.id: d};
+    final merged = byId.values.toList()
+      ..sort((a, b) {
+        final at = a.scheduledAt;
+        final bt = b.scheduledAt;
+        if (at == null || bt == null) return a.id.compareTo(b.id);
+        final byTime = at.compareTo(bt);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
+    yield merged;
+  }
 });

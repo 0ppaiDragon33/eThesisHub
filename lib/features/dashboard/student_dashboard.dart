@@ -9,6 +9,7 @@ import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -97,6 +98,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 child: const Text('Open thesis'),
               ),
               const SizedBox(height: AppTokens.sm),
+              const Gap.xl(),
+              Text('My defences', style: Theme.of(context).textTheme.titleMedium),
+              const Gap.sm(),
+              const DefencesList(),
             ],
           );
         },

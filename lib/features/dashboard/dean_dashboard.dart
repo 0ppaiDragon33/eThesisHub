@@ -9,6 +9,7 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/defence_queue.dart';
+import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -52,7 +53,11 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
             title: 'Title defences',
             subtitle: 'Groups presenting their candidate titles. You are the '
                 'only person who can approve one or reject the set.',
-            children: [DefenceQueue()],
+            children: [
+              DefenceQueue(),
+              Gap.xl(),
+              DefencesList(),
+            ],
           ),
         2 => const PageShell(
             title: 'Defence readiness',

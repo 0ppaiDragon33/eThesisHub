@@ -11,6 +11,7 @@ import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -171,6 +172,14 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
           ),
           data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
         ),
+        const Gap.xl(),
+        Text('My upcoming defences', style: Theme.of(context).textTheme.titleMedium),
+        const Gap.sm(),
+        // Both positions merged, not just the adviser one -- see
+        // myDefencesProvider's own doc comment. This is the panel section:
+        // a faculty member who advises one group and panels others must see
+        // both here, not only the theses whose titles are still pending.
+        const DefencesList(),
       ],
     );
   }
