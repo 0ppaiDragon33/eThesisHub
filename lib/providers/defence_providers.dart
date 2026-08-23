@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/defence.dart';
@@ -48,13 +50,23 @@ final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
     yield* repo.watchForLeader(uid);
     return;
   }
-  // A faculty member advises one group and sits on other panels, and the
-  // two are separate `allow list` arms — there is no single query that
-  // returns both, so they are merged here. Without the merge an adviser who
-  // also sits on panels silently loses half their schedule.
-  await for (final mine in repo.watchForAdviser(uid)) {
-    final panels = await repo.watchForPanelist(uid).first;
-    final byId = {for (final d in [...mine, ...panels]) d.id: d};
+  // A faculty member advises one group and sits on other panels, and those
+  // are separate `allow list` arms -- no single query returns both. This is
+  // a genuine fan-in, not a sample: an earlier shape advanced only when the
+  // ADVISER stream emitted and re-read the panel side with `.first`, so a
+  // defence that added this member to a panel and touched nothing else
+  // never arrived at all.
+  final controller = StreamController<List<Defence>>();
+  List<Defence> advised = const [];
+  List<Defence> panelled = const [];
+  var sawAdvised = false;
+  var sawPanelled = false;
+
+  void emit() {
+    // Wait for one snapshot from each before emitting, so the list never
+    // renders half the schedule as if it were the whole of it.
+    if (!sawAdvised || !sawPanelled) return;
+    final byId = {for (final d in [...advised, ...panelled]) d.id: d};
     final merged = byId.values.toList()
       ..sort((a, b) {
         final at = a.scheduledAt;
@@ -63,6 +75,26 @@ final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
         final byTime = at.compareTo(bt);
         return byTime != 0 ? byTime : a.id.compareTo(b.id);
       });
-    yield merged;
+    controller.add(merged);
   }
+
+  final subs = [
+    repo.watchForAdviser(uid).listen((v) {
+      advised = v;
+      sawAdvised = true;
+      emit();
+    }, onError: controller.addError),
+    repo.watchForPanelist(uid).listen((v) {
+      panelled = v;
+      sawPanelled = true;
+      emit();
+    }, onError: controller.addError),
+  ];
+  ref.onDispose(() {
+    for (final s in subs) {
+      s.cancel();
+    }
+    controller.close();
+  });
+  yield* controller.stream;
 });

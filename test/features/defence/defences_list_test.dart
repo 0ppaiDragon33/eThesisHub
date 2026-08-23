@@ -70,12 +70,16 @@ Widget _wrap(
     );
 
 void main() {
-  testWidgets('a faculty member sees defences from BOTH positions',
-      (tester) async {
+  testWidgets(
+      'a faculty member sees defences from BOTH positions, including one '
+      'added to the panel side alone after mount', (tester) async {
     final db = await _seedUser('f1');
-    // One where f1 is the adviser, one where f1 is only a panelist. Without
-    // the merge in myDefencesProvider, only the adviser query runs and the
-    // panel defence would silently be missing.
+    // Only the adviser-side defence exists at mount. A snapshot-once merge
+    // (read the panelist side once with `.first`, re-run only when the
+    // adviser stream ticks) would pass this alone -- the whole point of this
+    // shape is that it stays live, so the assertion that actually catches
+    // that is below: adding a PANEL-only defence after the widget has
+    // already settled, with nothing on the adviser side changing.
     await _seedDefence(
       db,
       id: 'advised',
@@ -83,6 +87,17 @@ void main() {
       panelUids: const ['other'],
       scheduledAt: DateTime(2026, 9, 1, 9),
     );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceRow-advised')), findsOneWidget);
+    expect(find.byKey(const Key('defenceRow-paneled')), findsNothing);
+
+    // Nothing about f1's adviser query changes here -- this write only
+    // touches panelUids on a new document. A fan-in that only advances on
+    // the adviser stream's own emissions would never see this and the
+    // widget would stay stuck on just 'advised' forever.
     await _seedDefence(
       db,
       id: 'paneled',
@@ -90,8 +105,6 @@ void main() {
       panelUids: const ['f1', 'p2'],
       scheduledAt: DateTime(2026, 9, 5, 9),
     );
-
-    await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defenceRow-advised')), findsOneWidget);
