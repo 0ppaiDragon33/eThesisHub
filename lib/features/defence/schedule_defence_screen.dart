@@ -18,12 +18,17 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 ///
 /// Reads the thesis to snapshot `panelUids`, `adviserUid` and `leaderUid` at
 /// the moment of scheduling -- see [Defence]'s own doc comment for why these
-/// are snapshots rather than a live reference. The security rule validating
-/// the create is an array-equality check that includes ORDER:
-/// `incoming().panelUids == thesisOf(incoming().thesisId).panelistUids`.
-/// So `thesis.panelistUids` is passed straight through below, never sorted,
-/// de-duplicated or rebuilt -- any reordering here passes every Dart test
-/// (fake_cloud_firestore enforces no rules) and is denied in production.
+/// are snapshots rather than a live reference. `panelUids` and `leaderUid`
+/// are passed straight through below, never sorted, de-duplicated or
+/// rebuilt: the security rule validating the create is an array-equality
+/// check that includes ORDER --
+/// `incoming().panelUids == thesisOf(incoming().thesisId).panelistUids` --
+/// so any reordering here passes every Dart test (fake_cloud_firestore
+/// enforces no rules) and is denied in production. `adviserUid` gets one
+/// exception: a null value is refused client-side before the write (see
+/// `_schedule`), rather than sent through as `''`, because the create rule
+/// would deny `''` against a stored `null` and blame the coordinator's
+/// permissions for what is actually missing data.
 class ScheduleDefenceScreen extends ConsumerStatefulWidget {
   const ScheduleDefenceScreen({super.key, required this.thesisId});
 
@@ -94,6 +99,22 @@ class _ScheduleDefenceScreenState
     required String coordinatorUid,
   }) async {
     if (_busy) return;
+
+    final adviserUid = thesis.adviserUid;
+    // Unreachable through the app: a thesis only reaches titleApproved after
+    // nomination completes, and that write sets adviserUid atomically. But if
+    // it ever IS null, the create rule compares '' against null, denies the
+    // write, and the screen would blame the coordinator's permissions for a
+    // data problem they cannot act on.
+    if (adviserUid == null || adviserUid.isEmpty) {
+      if (mounted) {
+        setState(() => _error =
+            'This thesis has no adviser on record, so a defence cannot be '
+            'scheduled for it yet.');
+      }
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -107,11 +128,15 @@ class _ScheduleDefenceScreenState
             venue: _venueController.text,
             // Snapshots, verbatim -- see the class doc comment above.
             panelUids: thesis.panelistUids,
-            adviserUid: thesis.adviserUid ?? '',
+            adviserUid: adviserUid,
             leaderUid: thesis.leaderUid,
             createdBy: coordinatorUid,
           );
-      if (mounted) context.go('/defenses/$id');
+      // '/defence/room/:defenceId' is the path Task 11 registers for the
+      // defence room (Task 8). Matching it exactly here, before either
+      // exists, means the moment they land this link is live rather than a
+      // 404 nobody's test would have caught.
+      if (mounted) context.go('/defence/room/$id');
     } on ArgumentError catch (e) {
       // The one failure a coordinator can act on directly: fill in the
       // venue and try again. Its message comes straight from the
