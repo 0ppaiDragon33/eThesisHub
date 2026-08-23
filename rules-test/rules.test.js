@@ -2912,6 +2912,215 @@ test("M2: an adviser lists the theses they advise, and only those",
     await assertFails(getDocs(collection(adv, "theses")));
   });
 
+// ---------- M3: defence scheduling ----------
+
+function defThesis(extra = {}) {
+  return {
+    leaderUid: "leader-uid", adviserUid: "adviser-uid",
+    panelistUids: ["pan-uid", "pan2-uid"], memberNames: [],
+    workingTitle: "T", college: "CICT", program: "BSIT",
+    semester: "First", academicYear: "2026-2027",
+    status: "titleApproved", ...extra,
+  };
+}
+
+function defDoc(extra = {}) {
+  return {
+    thesisId: "dt1", type: "preOral", scheduledAt: Timestamp.now(),
+    venue: "CICT AVR", panelUids: ["pan-uid", "pan2-uid"],
+    adviserUid: "adviser-uid", leaderUid: "leader-uid", status: "scheduled",
+    createdBy: "coord-uid",
+    // `serverTimestamp()`, not `Timestamp.now()`: the `create` rule pins
+    // `createdAt == request.time`, and a client-clock `Timestamp.now()`
+    // is never exactly equal to the server's commit time -- the mismatch
+    // is usually too small to see, which is what makes it dangerous: it
+    // surfaces as an intermittent, load-dependent denial of the very
+    // control case a test relies on to prove the deny arms are denying
+    // for the right reason, not a coincidence.
+    createdAt: serverTimestamp(), ...extra,
+  };
+}
+
+// Memoised for the same reason `asDefenceUser` above is: re-deriving a
+// Firestore instance for a uid that already issued a request throws
+// "Firestore has already been started and its settings can no longer be
+// changed" -- a harness error, not a rules denial, that `assertFails` would
+// otherwise swallow as though it were one.
+const m3DefDbs = new Map();
+function asDefUser(uid, email) {
+  if (!m3DefDbs.has(uid)) {
+    m3DefDbs.set(
+      uid,
+      env.authenticatedContext(uid, { email, email_verified: true }).firestore()
+    );
+  }
+  return m3DefDbs.get(uid);
+}
+
+async function seedM3Defence(db, extra = {}) {
+  await setDoc(doc(db, "theses/dt1"), defThesis());
+  await setDoc(doc(db, "users/coord-uid"),
+    { role: "coordinator", active: true });
+  await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+  await setDoc(doc(db, "defenses/df1"), defDoc(extra));
+}
+
+test("M3: everyone on the thesis reads the defence", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  for (const uid of ["leader-uid", "adviser-uid", "pan-uid", "coord-uid",
+                     "dean-uid"]) {
+    await assertSucceeds(
+      getDoc(doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/df1")));
+  }
+});
+
+test("M3: an outsider may NOT read the defence", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  const outsider = asDefUser("outsider-uid", "out@isufst.edu.ph");
+  await assertFails(getDoc(doc(outsider, "defenses/df1")));
+  // Control: the adviser, same path.
+  await assertSucceeds(
+    getDoc(doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+      "defenses/df1")));
+});
+
+test("M3: only the coordinator schedules, and only as 'scheduled'",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    await assertFails(setDoc(doc(adv, "defenses/dfA"),
+      defDoc({ createdBy: "adviser-uid" })));
+    // Already open at creation would skip the lifecycle entirely.
+    await assertFails(setDoc(doc(coord, "defenses/dfB"),
+      defDoc({ status: "inProgress" })));
+    // Releasing at creation would open the log before anyone spoke.
+    await assertFails(setDoc(doc(coord, "defenses/dfC"),
+      defDoc({ consolidatedAt: Timestamp.now() })));
+    // Control.
+    await assertSucceeds(setDoc(doc(coord, "defenses/dfD"), defDoc()));
+  });
+
+test("M3: the panel snapshot must match the thesis at scheduling",
+  async () => {
+    // A forged snapshot would grant comment rights to someone the group
+    // never nominated, and the defence record is the historical evidence
+    // of who sat.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    await assertFails(setDoc(doc(coord, "defenses/dfE"),
+      defDoc({ panelUids: ["pan-uid", "smuggled-uid"] })));
+    await assertFails(setDoc(doc(coord, "defenses/dfF"),
+      defDoc({ adviserUid: "smuggled-uid" })));
+    await assertFails(setDoc(doc(coord, "defenses/dfH"),
+      defDoc({ leaderUid: "smuggled-uid" })));
+    // Control: the real panel and adviser.
+    await assertSucceeds(setDoc(doc(coord, "defenses/dfG"), defDoc()));
+  });
+
+test("M3: the lifecycle moves forward only, and only by the coordinator",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    // Nobody else drives it.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { status: "inProgress" }));
+    // No skipping.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    // Control: the legal step.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+    // And no going back.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { status: "scheduled" }));
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+  });
+
+test("M3: only the adviser releases, only once, only when completed",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    // Not while it is still running.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    // Not the coordinator -- §4d makes this the adviser's act.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    // Control.
+    await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    // Releasing twice would let a re-release hide comments the group read.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+  });
+
+test("M3: a defence may never be deleted", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(deleteDoc(doc(coord, "defenses/df1")));
+});
+
+test("M3: each role lists only the defences they belong to", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedM3Defence(db);
+    await setDoc(doc(db, "theses/dt2"),
+      defThesis({ leaderUid: "other-leader", adviserUid: "other-adviser",
+                  panelistUids: ["other-pan"] }));
+    await setDoc(doc(db, "defenses/df2"),
+      defDoc({ thesisId: "dt2", adviserUid: "other-adviser",
+               leaderUid: "other-leader", panelUids: ["other-pan"] }));
+  });
+
+  const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(getDocs(query(collection(adv, "defenses"),
+    where("adviserUid", "==", "adviser-uid"))));
+  await assertFails(getDocs(collection(adv, "defenses")));
+
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(getDocs(query(collection(pan, "defenses"),
+    where("panelUids", "array-contains", "pan-uid"))));
+  await assertFails(getDocs(collection(pan, "defenses")));
+
+  const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+  // Filtered on `leaderUid`, the exact field the leader arm of `allow list`
+  // checks -- not on `thesisId`. Firestore can only serve a `list` request
+  // it can PROVE is safe from the query's own constraints; a filter on an
+  // unrelated field (even one that happens to correlate 1:1 with thesisId
+  // here) is not enough; probed against the emulator, where such a query
+  // is denied outright regardless of the documents' actual content.
+  await assertSucceeds(getDocs(query(collection(leader, "defenses"),
+    where("leaderUid", "==", "leader-uid"))));
+
+  // The coordinator and dean monitor college-wide, so an unfiltered list
+  // is theirs by design.
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  try {
+    await assertSucceeds(getDocs(collection(coord, "defenses")));
+  } catch (e) { console.log("DEBUG coord-unfiltered", e.message); throw e; }
+});
+
 test.after(async () => {
   await env.cleanup();
 });

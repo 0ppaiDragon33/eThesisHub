@@ -872,6 +872,97 @@ service cloud.firestore {
       }
     }
 
+    match /defenses/{defenseId} {
+      // `defenses` is top level, so the thesis is reached through the id
+      // stored on the defence rather than through the path. The helpers
+      // inside `match /theses/{thesisId}` are not in scope here.
+      //
+      // `leaderUid` is a snapshot field on the defence document itself
+      // (validated against the live thesis at `create`, below), not a
+      // live cross-document read: `onThisDefence()` and the leader arm of
+      // `allow list` would otherwise call `thesisOf()` once per document
+      // evaluated, and Firestore caps the number of document accesses a
+      // single rule evaluation may make -- a `list` over many defences
+      // would blow that budget.
+      function defence() {
+        return resource.data;
+      }
+      function incoming() {
+        return request.resource.data;
+      }
+      function thesisOf(thesisId) {
+        return get(/databases/$(database)/documents/theses/$(thesisId)).data;
+      }
+
+      function onThisDefence() {
+        let d = defence();
+        return signedIn() && (
+          d.adviserUid == request.auth.uid ||
+          request.auth.uid in d.panelUids ||
+          d.leaderUid == request.auth.uid
+        );
+      }
+
+      allow get: if onThisDefence() || isCoordinator() || isDean();
+
+      // One arm per role, each evaluated per returned document, so none can
+      // return a defence the caller does not belong to. The coordinator and
+      // dean monitor college-wide, so their arm is unfiltered by design.
+      allow list: if (signedIn()
+                      && resource.data.adviserUid == request.auth.uid)
+                  || (signedIn()
+                      && request.auth.uid in resource.data.panelUids)
+                  || (signedIn()
+                      && resource.data.leaderUid == request.auth.uid)
+                  || isCoordinator() || isDean();
+
+      allow create: if verified()
+                    && isCoordinator()
+                    && incoming().keys().hasOnly(
+                         ['thesisId', 'type', 'scheduledAt', 'venue',
+                          'panelUids', 'adviserUid', 'leaderUid', 'status',
+                          'createdBy', 'createdAt'])
+                    && incoming().type in ['preOral', 'final']
+                    && incoming().status == 'scheduled'
+                    && incoming().createdBy == request.auth.uid
+                    && incoming().createdAt == request.time
+                    // Snapshots, not claims: a forged panel would grant
+                    // comment rights to someone the group never nominated.
+                    && incoming().panelUids
+                       == thesisOf(incoming().thesisId).panelistUids
+                    && incoming().adviserUid
+                       == thesisOf(incoming().thesisId).adviserUid
+                    && incoming().leaderUid
+                       == thesisOf(incoming().thesisId).leaderUid;
+
+      // Coordinator arm: the lifecycle, forward only, one step at a time.
+      // Backwards would let a closed defence reopen for comments after the
+      // record was consolidated.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['status'])
+                    && (
+                      (defence().status == 'scheduled'
+                       && incoming().status == 'inProgress') ||
+                      (defence().status == 'inProgress'
+                       && incoming().status == 'completed')
+                    );
+
+      // Adviser arm: the release, once, and only after it is closed.
+      // Guidelines §4d makes consolidation the adviser's act.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && defence().status == 'completed'
+                    && !('consolidatedAt' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['consolidatedAt'])
+                    && incoming().consolidatedAt == request.time;
+
+      // The defence record is evidence.
+      allow delete: if false;
+    }
+
     // The faculty inbox queries nominations across all theses.
     //
     // This authorises on the `nomineeUid` FIELD, not on the {nomineeUid}
