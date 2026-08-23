@@ -9,6 +9,7 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/defence_queue.dart';
+import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 class DeanDashboard extends ConsumerWidget {
@@ -84,6 +85,22 @@ class DeanDashboard extends ConsumerWidget {
           ),
           const Gap.sm(),
           const DefenceQueue(),
+          const Gap.lg(),
+          // Which theses have become ready for a pre-oral or final defence,
+          // derived from their chapters rather than a stored flag -- see
+          // the comment on readinessOf. Placed below the title-defence
+          // queue this dashboard already had, for the same reason: it is
+          // the newer section.
+          Text('Defence readiness',
+              style: Theme.of(context).textTheme.titleMedium),
+          const Gap.sm(),
+          Text(
+            'Theses whose chapters have cleared the gate for a pre-oral or '
+            'final defence.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const Gap.sm(),
+          const DefenceReadinessList(),
         ],
       ),
     );

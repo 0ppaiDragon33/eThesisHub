@@ -476,6 +476,8 @@ Changes required in `Revised- eThesisHub Capstonemain 1-4.docx`, parked by decis
 - Use Case narrative: rewrite for five actors
 - **Activity Diagram narrative** currently routes approval to "final endorsement by the administrator" — that step dissolves under D1; approval routes coordinator → Dean. The same narrative also places title approval before nomination; the Guidelines run nomination first (§4.1)
 - Database Design: comments collection, nomination fields, generatedForms, auditLogs
+- **Database Design: `documents/revisions` becomes `documents/versions` plus `documents/feedback`** (M2, decision M2-1). One version has many reviewers; the bundled shape duplicated the file across rows with nothing marking the authoritative copy
+- **Database Design: `candidateTitles` carries an explicit `position`** (M1b). Firestore returns an unordered collection sorted by random auto-generated id, and a single batch write gives every candidate the identical `submittedAt`, so nothing else records the order the group chose
 - Prototype: "Adviser and Panelist Assignment Module" → "Adviser and Panel Nomination Module"; add Defense Comment Module and Form Generation Module
 
 ---

@@ -6,8 +6,11 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
@@ -20,11 +23,9 @@ class FacultyDashboard extends ConsumerStatefulWidget {
 }
 
 class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
-  // Which of the two nav destinations is showing. 'Groups' still needs a
-  // query the rules do not yet permit (a faculty member cannot list theses
-  // they advise), so only 'Home' and 'Defences' are declared here — the
-  // first time this dashboard has had two, so ResponsiveScaffold shows its
-  // navigation for the first time.
+  // Which of the two nav destinations is showing. Only 'Home' and 'Defences'
+  // are declared here — the first time this dashboard has had two, so
+  // ResponsiveScaffold shows its navigation for the first time.
   int _selectedIndex = 0;
 
   @override
@@ -34,6 +35,7 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
     final pendingElsewhere = ref.watch(pendingInOtherModeProvider);
     final pendingAsync = ref.watch(myPendingNominationsProvider);
     final myThesisIdsAsync = ref.watch(myThesisIdsProvider);
+    final adviseesAsync = ref.watch(myAdviseesProvider);
 
     return ResponsiveScaffold(
       // Identifies this dashboard for routing tests. Asserting on heading
@@ -81,15 +83,45 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
       body: _selectedIndex == 0
           ? PageShell(
               title: mode == FacultyMode.adviser ? 'My advisees' : 'My panels',
-              // Says plainly that the list is not built rather than showing an
-              // empty area that reads as a failure to load. The mode switch
-              // above is real — it remembers your choice — but it has nothing
-              // to filter until faculty can list the theses they hold a
-              // position on, which needs a security-rules change.
-              subtitle:
-                  'Coming with the documents module. For now, the nomination '
-                  'inbox is where your Conforme requests arrive.',
+              // The adviser arm on `allow list` (theses) landed in M2 Task 3,
+              // which is what makes a real query possible here at all — see
+              // watchAdvisedTheses. Panel listing has no equivalent rule yet,
+              // so panelist mode still falls back to the nomination inbox
+              // summary below rather than claiming a list it cannot show.
+              subtitle: mode == FacultyMode.adviser
+                  ? 'Chapters I–V for each thesis you advise.'
+                  : 'Panel listings are not built yet. Your Conforme '
+                      'requests still arrive in the nomination inbox below.',
               children: [
+                if (mode == FacultyMode.adviser) ...[
+                  // Its own loading/error handling, kept separate from
+                  // pendingAsync below: collapsing this into `data(const [])`
+                  // while the query is still in flight would render an empty
+                  // state indistinguishable from "no advisees", which this
+                  // project has already shipped as a bug four times.
+                  adviseesAsync.when(
+                    loading: () => const LoadingState(),
+                    error: (e, _) => ErrorState(
+                      error: e,
+                      message: 'Could not load your advisees.',
+                    ),
+                    data: (advisees) => advisees.isEmpty
+                        ? const EmptyState(
+                            icon: Icons.school_outlined,
+                            title: 'No advisees yet',
+                            message: 'Once a group nominates you as adviser '
+                                'and the Dean approves, their thesis appears '
+                                'here.',
+                          )
+                        : Column(
+                            children: [
+                              for (final thesis in advisees)
+                                _AdviseeCard(thesis: thesis),
+                            ],
+                          ),
+                  ),
+                  const Gap.lg(),
+                ],
                 pendingAsync.when(
                   loading: () => const LoadingState(),
                   error: (e, _) => ErrorState(
@@ -194,5 +226,64 @@ class _DefencesList extends ConsumerWidget {
     }
 
     return Column(children: rows);
+  }
+}
+
+/// One advisee's row, with a count of chapters `submitted` -- uploaded by
+/// the student, not yet responded to by the adviser.
+///
+/// Spec §7 requires this count ("advised theses with a count of chapters
+/// awaiting review") so an adviser with several advisees can tell which
+/// groups have work waiting without opening every one and clicking through
+/// every chapter. A separate widget, same shape as `_DefencesList` above:
+/// a dynamic number of `chaptersProvider` family instances cannot be
+/// looped over with `ref.watch` inside the parent's single build.
+class _AdviseeCard extends ConsumerWidget {
+  const _AdviseeCard({required this.thesis});
+
+  final Thesis thesis;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final chaptersAsync = ref.watch(chaptersProvider(thesis.id));
+
+    return Card(
+      child: ListTile(
+        key: Key('advisee-${thesis.id}'),
+        title: Text(thesis.workingTitle),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${thesis.college} • ${thesis.program}'),
+            // While the stream is still loading, this must NOT read "0
+            // awaiting" -- that is indistinguishable from nothing actually
+            // waiting, the single most repeated bug in this codebase (see
+            // `_ReadinessRow` in defence_readiness.dart and `_DefencesList`
+            // above, which apply the same rule).
+            chaptersAsync.when(
+              loading: () => const Text('Awaiting review: still loading…'),
+              error: (e, _) =>
+                  const Text('Could not load this thesis\'s chapters.'),
+              data: (chapters) {
+                final awaiting = chapters
+                    .where((c) => c.status == ChapterStatus.submitted)
+                    .length;
+                return Text(awaiting == 0
+                    ? 'Nothing awaiting review'
+                    : awaiting == 1
+                        ? '1 chapter awaiting review'
+                        : '$awaiting chapters awaiting review');
+              },
+            ),
+          ],
+        ),
+        trailing: FilledButton(
+          key: Key('openChapters-${thesis.id}'),
+          onPressed: () => context.go('/thesis/chapters?id=${thesis.id}'),
+          child: const Text('Open'),
+        ),
+      ),
+    );
   }
 }

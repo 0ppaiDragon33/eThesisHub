@@ -217,6 +217,18 @@ class ThesisRepository {
         .map((s) => s.docs.map((d) => _toThesis(d.id, d.data())).toList());
   }
 
+  /// Theses this faculty member advises.
+  ///
+  /// Needs the adviser arm on `allow list` added in M2 — before it, this
+  /// query was denied outright, which is why the faculty dashboard carried
+  /// a placeholder for two milestones.
+  Stream<List<Thesis>> watchAdvisedTheses(String uid) {
+    return _theses
+        .where('adviserUid', isEqualTo: uid)
+        .snapshots()
+        .map((s) => s.docs.map((d) => _toThesis(d.id, d.data())).toList());
+  }
+
   /// The current set of nomination doc ids for a thesis. Nominations are
   /// created exactly once, atomically, by `submitNominations`' batch and are
   /// never added to or removed afterward — only their fields (conformeStatus

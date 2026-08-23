@@ -1,6 +1,40 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
+
 import 'package:ethesishub/data/services/storage_service.dart';
+
+/// Picks one document, or null if the user cancelled.
+typedef DocumentPicker = Future<PickedDocument?> Function({
+  required Set<String> allowed,
+});
+
+/// The real picker, backing a screen's own `pickDocument` by default.
+/// `file_picker` has no test seam of its own, so this is the one call a
+/// screen makes that a widget test cannot reach without injection.
+///
+/// Was private and duplicated per screen; moved here so the titles and
+/// documents features share one definition instead of two copies drifting.
+Future<PickedDocument?> realPicker({required Set<String> allowed}) async {
+  // `allowed` used to be accepted and dropped on the floor, so the OS dialog
+  // offered every file on the machine and the student learned their .zip was
+  // wrong only after picking it. `validateDocument` still runs afterwards --
+  // this narrows the dialog, it does not replace the check.
+  final result = await FilePicker.platform.pickFiles(
+    withData: true,
+    type: FileType.custom,
+    allowedExtensions: allowed.toList(),
+  );
+  final picked = result?.files.single;
+  if (picked == null || picked.bytes == null) return null;
+  final extension = (picked.extension ?? '').toLowerCase();
+  return PickedDocument(
+    name: picked.name,
+    bytes: picked.bytes!,
+    extension: extension,
+    contentType: contentTypeFor(extension),
+  );
+}
 
 /// A file the user chose, held in memory.
 ///
@@ -25,6 +59,11 @@ const kJustificationMaxBytes = 10 * 1024 * 1024;
 
 const kPresentationTypes = {'pptx', 'ppt', 'pdf'};
 const kPresentationMaxBytes = 25 * 1024 * 1024;
+
+/// A chapter carries figures and tables, so the cap is above M1b's 10 MB
+/// justification limit and below the bucket's 50 MB ceiling.
+const kChapterTypes = {'pdf', 'doc', 'docx'};
+const kChapterMaxBytes = 15 * 1024 * 1024;
 
 /// The MIME type a stored object should carry, from its extension.
 ///

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 
 /// Where a thesis currently sits, named by the desk it is sitting on.
@@ -98,5 +99,39 @@ class StatusChip extends StatelessWidget {
         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
       ),
     );
+  }
+}
+
+/// The single vocabulary for chapter states, alongside [StatusChip]'s
+/// thesis vocabulary. Kept here so the words a student reads are decided
+/// in one place rather than per screen.
+class ChapterStatusWords {
+  static String labelFor(ChapterStatus status) => switch (status) {
+        ChapterStatus.submitted => 'With your adviser',
+        ChapterStatus.revise => 'Needs revision',
+        ChapterStatus.approved => 'Approved',
+      };
+
+  static String detailFor(ChapterStatus status) => switch (status) {
+        ChapterStatus.submitted =>
+          'Your adviser has this version and has not responded yet.',
+        ChapterStatus.revise =>
+          'Read the feedback, then upload the next version.',
+        ChapterStatus.approved =>
+          'Locked. Only your adviser can reopen it.',
+      };
+
+  /// The same palette [StatusChip] uses, so a chapter waiting on someone
+  /// reads as the same kind of state as a thesis waiting on someone.
+  static Color colorFor(ChapterStatus status, Brightness brightness) {
+    final light = brightness == Brightness.light;
+    return switch (status) {
+      ChapterStatus.submitted =>
+        light ? AppTokens.awaiting : AppTokens.awaitingDark,
+      ChapterStatus.revise =>
+        light ? AppTokens.returned : AppTokens.returnedDark,
+      ChapterStatus.approved =>
+        light ? AppTokens.endorsed : AppTokens.endorsedDark,
+    };
   }
 }

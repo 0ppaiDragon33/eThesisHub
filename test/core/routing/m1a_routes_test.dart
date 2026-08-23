@@ -117,6 +117,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToInbox')), findsOneWidget);
+    // The advisee list (Task 9) now renders above this button, so on the
+    // default 800x600 test surface it sits below the fold; PageShell
+    // scrolls, but tester.tap() does not auto-scroll a target into view.
+    await tester.ensureVisible(find.byKey(const Key('goToInbox')));
     await tester.tap(find.byKey(const Key('goToInbox')));
     await tester.pumpAndSettle();
 

@@ -213,7 +213,12 @@ service cloud.firestore {
       // student dashboard was denied outright. The leader arm is evaluated
       // per returned document and is checked first so a student never pays
       // for the `users` read that isCoordinator()/isDean() cost.
+      // Finding (b) gave the leader arm. M2 adds the adviser arm: an
+      // adviser must be able to find the theses whose chapters they review.
+      // Narrow by construction -- the arm is evaluated per returned
+      // document, so it can only ever return theses naming this adviser.
       allow list: if (signedIn() && resource.data.leaderUid == request.auth.uid)
+                  || (signedIn() && resource.data.adviserUid == request.auth.uid)
                   || isCoordinator() || isDean();
 
       // A leader creates their own thesis, always as a draft with an empty
@@ -742,6 +747,128 @@ service cloud.firestore {
         // only of your own. Composing is transient by design: `clearComposing`
         // runs on blur and on submit, and a double clear must not throw.
         allow delete: if isOnPanel() && uid == request.auth.uid;
+      }
+
+      function isAdviser(thesisId) {
+        return signedIn() && thesisData(thesisId).adviserUid == request.auth.uid;
+      }
+
+      function chapterIds() {
+        return ['chapterI', 'chapterII', 'chapterIII', 'chapterIV',
+                'chapterV'];
+      }
+
+      match /documents/{chapterId} {
+        // The dean reads STATUS here and nothing below it: §3.1 gives them
+        // college-wide progress visibility, not chapter review. The split
+        // falls on the collection boundary, so no field filtering is needed.
+        allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
+                         || isCoordinator() || isDean();
+
+        allow create: if verified()
+                      && isThesisLeader(thesisId)
+                      && thesisData(thesisId).status == 'titleApproved'
+                      && chapterId in chapterIds()
+                      && request.resource.data.keys().hasOnly(
+                           ['type', 'currentVersion', 'status', 'updatedAt'])
+                      && request.resource.data.type == chapterId
+                      && request.resource.data.currentVersion == 1
+                      && request.resource.data.status == 'submitted'
+                      && request.resource.data.updatedAt == request.time;
+
+        // Two disjoint arms, OR'd. The student reaches `submitted` only by
+        // adding a version; the adviser writes only a decision. Neither can
+        // perform the other's half, which is what makes the status
+        // trustworthy without a server.
+
+        // Student: a new version. Blocked once approved -- only the adviser
+        // reopens, so a group cannot swap an approved chapter unseen.
+        allow update: if verified()
+                      && isThesisLeader(thesisId)
+                      && resource.data.status in ['submitted', 'revise']
+                      && request.resource.data.keys().hasOnly(
+                           ['type', 'currentVersion', 'status', 'updatedAt'])
+                      && request.resource.data.currentVersion
+                         == resource.data.currentVersion + 1
+                      && request.resource.data.status == 'submitted'
+                      && request.resource.data.type == resource.data.type
+                      && request.resource.data.updatedAt == request.time;
+
+        // Adviser: a decision, never a version bump.
+        allow update: if verified()
+                      && isAdviser(thesisId)
+                      && request.resource.data.keys().hasOnly(
+                           ['type', 'currentVersion', 'status', 'updatedAt'])
+                      && request.resource.data.status in ['revise', 'approved']
+                      && request.resource.data.currentVersion
+                         == resource.data.currentVersion
+                      && request.resource.data.type == resource.data.type
+                      && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+
+        match /versions/{versionNo} {
+          // No dean: they see that a chapter is approved, never its files.
+          allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
+                           || isCoordinator();
+
+          // Written in the SAME batch as the parent's version bump, and a
+          // batch is evaluated against the state BEFORE it -- so the parent
+          // still reads its old currentVersion here. The rule is therefore
+          // written as "+ 1", never "==". Probed in rules.test.js with a
+          // two-sided test, not assumed.
+          //
+          // On a group's FIRST upload the chapter document does not exist
+          // yet at the time this rule evaluates (it is created in the SAME
+          // batch) -- get() on a nonexistent document returns a snapshot
+          // whose .data() is null, and `.data.currentVersion` on that
+          // throws, denying the write outright. The existence branch below
+          // is required, not optional: without it every group's first
+          // upload is denied. Falsified in rules.test.js.
+          allow create: if verified()
+                        && isThesisLeader(thesisId)
+                        && request.resource.data.keys().hasOnly(
+                             ['version', 'storagePath', 'fileUrl',
+                              'uploadedBy', 'uploadedAt', 'mimeType',
+                              'sizeBytes'])
+                        && request.resource.data.uploadedBy == request.auth.uid
+                        && request.resource.data.uploadedAt == request.time
+                        && request.resource.data.version is int
+                        && string(request.resource.data.version) == versionNo
+                        && (
+                             !exists(/databases/$(database)/documents/theses/$(thesisId)/documents/$(chapterId))
+                               ? request.resource.data.version == 1
+                               : request.resource.data.version == get(/databases/$(database)/documents/theses/$(thesisId)/documents/$(chapterId)).data.currentVersion + 1
+                           );
+
+          // Nothing is ever overwritten: the history is a record, not a
+          // snapshot.
+          allow update, delete: if false;
+        }
+
+        match /feedback/{feedbackId} {
+          allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
+                           || isCoordinator();
+
+          allow create: if verified()
+                        && isAdviser(thesisId)
+                        && request.resource.data.keys().hasOnly(
+                             ['version', 'reviewerUid', 'reviewerName',
+                              'reviewerRole', 'body', 'createdAt'])
+                        && request.resource.data.reviewerUid
+                           == request.auth.uid
+                        && request.resource.data.body is string
+                        && request.resource.data.body.size() > 0
+                        && request.resource.data.createdAt == request.time
+                        && request.resource.data.version is int
+                        && request.resource.data.version >= 1
+                        && request.resource.data.version
+                           <= get(/databases/$(database)/documents/theses/$(thesisId)/documents/$(chapterId)).data.currentVersion;
+
+          // Append-only, per parent design §6.4. The student may already
+          // have acted on the original wording.
+          allow update, delete: if false;
+        }
       }
     }
 

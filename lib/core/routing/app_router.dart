@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
@@ -12,6 +15,8 @@ import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
 import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
 import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
 import 'package:ethesishub/features/dashboard/student_dashboard.dart';
+import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
+import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
@@ -107,6 +112,28 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // This is a UX guard only — the real authorization boundary is
               // firestore.rules, which every screen's writes and reads still
               // go through regardless of what the client permits.
+              //
+              // '/thesis/chapters' is deliberately exempt from this list,
+              // even though it starts with '/thesis': chapters are reviewed
+              // by the adviser, not just uploaded by the student, and
+              // faculty_dashboard.dart's own link into
+              // '/thesis/chapters?id=...' would otherwise bounce every
+              // adviser straight back to their dashboard before
+              // ChaptersScreen ever built — the same class of "the link
+              // exists but the route refuses the very role that needs it"
+              // failure this whole task exists to close.
+              //
+              // Exempt exactly the chapter routes, not everything sharing
+              // the prefix: a future '/thesis/chaptersArchive' must not
+              // inherit this exemption by accident. Chapters are the one
+              // branch under /thesis that faculty need, because an adviser
+              // reviews them. No query-string clause here: `location` above
+              // is `state.matchedLocation`, which is the matched path only
+              // — go_router strips the query string before this callback
+              // ever sees it — so a clause checking for '/thesis/chapters?'
+              // could never fire.
+              final isChapterRoute = location == '/thesis/chapters' ||
+                  location.startsWith('/thesis/chapters/');
               const studentOnly = [
                 '/thesis',
                 '/thesis/create',
@@ -114,6 +141,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 '/thesis/titles',
               ];
               if (studentOnly.any(location.startsWith) &&
+                  !isChapterRoute &&
                   profile.role != UserRole.student) {
                 return home;
               }
@@ -271,6 +299,67 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/invites',
         builder: (_, _) => const FacultyInvitesScreen(),
+      ),
+      // '/thesis/chapters' (the list) is registered before
+      // '/thesis/chapters/:chapterId' (one chapter's detail) only because
+      // that is source order here, not because order matters between them:
+      // go_router matches a static segment against a static path and a
+      // dynamic ':chapterId' segment against everything else, so the two
+      // can never shadow one another the way '/faculty' and '/invites'
+      // once did. Tests m2_routes_test.dart 1 and 2 exercise both paths to
+      // prove that in practice, not just by reading the matcher's rules.
+      GoRoute(
+        path: '/thesis/chapters',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          // No force-unwrap: a bare visit (typed directly, or a stale link
+          // after a thesis id changes) must not crash into a blank screen
+          // with no way back -- the same failure mode the chapter-detail
+          // route below avoids for an unknown chapter id.
+          if (id == null || id.isEmpty) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Chapters')),
+              body: const PageShell(children: [
+                EmptyState(
+                  icon: Icons.link_off,
+                  title: 'No thesis given',
+                  message: 'Open your chapters from your thesis status page.',
+                ),
+              ]),
+            );
+          }
+          return ChaptersScreen(thesisId: id);
+        },
+      ),
+      GoRoute(
+        path: '/thesis/chapters/:chapterId',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          final chapter =
+              ChapterId.fromString(state.pathParameters['chapterId']);
+          // ChapterId.fromString returns null by design for an id that is
+          // not one of the five chapters (see chapter.dart) rather than
+          // defaulting to chapterI, so a route that force-unwrapped it here
+          // would throw during build and hand the user a white error
+          // screen with no AppBar and no way back. Both this and the
+          // missing-id case share one refusal, framed the same as the list
+          // route's, rather than `appBar: null`, which is exactly the
+          // "stranded with no way back" bug this project already shipped
+          // once (see the redirect callback's own history above).
+          if (id == null || id.isEmpty || chapter == null) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Chapter')),
+              body: const PageShell(children: [
+                EmptyState(
+                  icon: Icons.search_off,
+                  title: 'No such chapter',
+                  message: 'There are five chapters, I through V.',
+                ),
+              ]),
+            );
+          }
+          return ChapterDetailScreen(thesisId: id, chapter: chapter);
+        },
       ),
     ],
   );
