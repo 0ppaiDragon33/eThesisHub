@@ -130,14 +130,62 @@ class DefenceRepository {
     final legal = (current == DefenceStatus.scheduled &&
             status == DefenceStatus.inProgress) ||
         (current == DefenceStatus.inProgress &&
-            status == DefenceStatus.completed);
+            status == DefenceStatus.completed) ||
+        (current == DefenceStatus.scheduled &&
+            status == DefenceStatus.cancelled);
     if (!legal) {
       throw StateError(
-          'A defence goes scheduled, then in progress, then completed. It '
-          'cannot skip a step or go back.');
+          'A defence goes scheduled, then in progress, then completed, and '
+          'can only be cancelled while it is still scheduled. It cannot '
+          'skip a step or go back.');
+    }
+
+    // Opening early is what this guards. A defence opened by accident and
+    // closed cannot be reopened -- the lifecycle is forward-only -- so the
+    // log would be frozen empty and the record permanent. The rules carry
+    // the same window; this check exists because fake_cloud_firestore
+    // enforces no rules, so without it every test would pass against a
+    // transition no real user could make.
+    if (status == DefenceStatus.inProgress) {
+      final scheduledAt = (snap.data()!['scheduledAt'] as Timestamp?)?.toDate();
+      if (scheduledAt == null) {
+        throw StateError('This defence has no scheduled time.');
+      }
+      final opensAt = scheduledAt.subtract(defenceOpenGrace);
+      if (DateTime.now().isBefore(opensAt)) {
+        throw StateError(
+            'This defence cannot be opened yet. It opens 30 minutes before '
+            'its scheduled time.');
+      }
     }
 
     await _defence(defenceId).update({'status': status.value});
+  }
+
+  /// Moves the date, time or venue of a defence that has not started.
+  ///
+  /// Without this the schedule was frozen at creation: a coordinator who
+  /// picked the wrong date could neither fix it nor remove the defence,
+  /// and the only way forward was opening it anyway.
+  Future<void> reschedule({
+    required String defenceId,
+    required DateTime scheduledAt,
+    required String venue,
+  }) async {
+    if (venue.trim().isEmpty) throw ArgumentError('Give the defence a venue.');
+
+    final snap = await _defence(defenceId).get();
+    if (!snap.exists) throw StateError('That defence no longer exists.');
+    final current = DefenceStatus.fromString(snap.data()!['status'] as String?);
+    if (!current.isEditable) {
+      throw StateError(
+          'Only a defence that has not started can be rescheduled.');
+    }
+
+    await _defence(defenceId).update({
+      'scheduledAt': Timestamp.fromDate(scheduledAt),
+      'venue': venue.trim(),
+    });
   }
 
   Future<void> addComment({

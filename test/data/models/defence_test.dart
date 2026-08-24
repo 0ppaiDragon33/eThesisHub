@@ -91,4 +91,25 @@ void main() {
     expect(c.authorPosition, 'Panel Member');
     expect(c.body, 'Justify the choice of respondents.');
   });
+
+  test('a cancelled defence is terminal and accepts no comments', () {
+    // Cancelled rather than deleted: the defence record is evidence, and a
+    // hard delete leaves nothing to explain a gap in the history.
+    expect(DefenceStatus.cancelled.acceptsComments, isFalse);
+    expect(DefenceStatus.cancelled.isTerminal, isTrue);
+    expect(DefenceStatus.cancelled.isEditable, isFalse);
+    expect(DefenceStatus.fromString('cancelled'), DefenceStatus.cancelled);
+  });
+
+  test('only a scheduled defence is editable', () {
+    expect(DefenceStatus.scheduled.isEditable, isTrue);
+    expect(DefenceStatus.inProgress.isEditable, isFalse);
+    expect(DefenceStatus.completed.isEditable, isFalse);
+  });
+
+  test('the open grace window is 30 minutes', () {
+    // Pinned because firestore.rules carries the same number as a literal.
+    // If the two disagree the button looks enabled and the write is denied.
+    expect(defenceOpenGrace, const Duration(minutes: 30));
+  });
 }

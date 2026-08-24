@@ -935,19 +935,57 @@ service cloud.firestore {
                     && incoming().leaderUid
                        == thesisOf(incoming().thesisId).leaderUid;
 
-      // Coordinator arm: the lifecycle, forward only, one step at a time.
-      // Backwards would let a closed defence reopen for comments after the
-      // record was consolidated.
+      // Coordinator arm 1 -- OPEN. Forward only, and not before the window.
+      //
+      // The 30 minutes is the same number as `defenceOpenGrace` in
+      // lib/data/models/defence.dart, which cannot be imported here. If the
+      // two ever disagree the button looks enabled and this denies the
+      // write, so rules.test.js pins the boundary at 29 and 31 minutes.
+      //
+      // Why gate it at all: the lifecycle is forward-only and a defence has
+      // no delete, so opening one by accident and closing it freezes an
+      // empty log into the permanent record.
       allow update: if verified()
                     && isCoordinator()
                     && incoming().diff(defence()).affectedKeys()
                        .hasOnly(['status'])
-                    && (
-                      (defence().status == 'scheduled'
-                       && incoming().status == 'inProgress') ||
-                      (defence().status == 'inProgress'
-                       && incoming().status == 'completed')
-                    );
+                    && defence().status == 'scheduled'
+                    && incoming().status == 'inProgress'
+                    && request.time >= defence().scheduledAt
+                                       - duration.value(30, 'm');
+
+      // Coordinator arm 2 -- CLOSE. No window: a defence ends when it ends.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['status'])
+                    && defence().status == 'inProgress'
+                    && incoming().status == 'completed';
+
+      // Coordinator arm 3 -- CANCEL, for a defence created by mistake.
+      // Only while it is still scheduled: one under way is closed instead,
+      // so its log stays a record of what was said. Cancelled rather than
+      // deleted, because the record is evidence.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['status'])
+                    && defence().status == 'scheduled'
+                    && incoming().status == 'cancelled';
+
+      // Coordinator arm 4 -- EDIT the date, time or venue.
+      //
+      // Without this the schedule was frozen at creation: a coordinator who
+      // picked the wrong day could neither fix it nor remove the defence,
+      // and the only way forward was opening it anyway. The status is NOT
+      // in the key set, so an edit can never double as a transition.
+      allow update: if verified()
+                    && isCoordinator()
+                    && defence().status == 'scheduled'
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['scheduledAt', 'venue'])
+                    && incoming().venue is string
+                    && incoming().venue.size() > 0;
 
       // Adviser arm: the release, once, and only after it is closed.
       // Guidelines §4d makes consolidation the adviser's act.

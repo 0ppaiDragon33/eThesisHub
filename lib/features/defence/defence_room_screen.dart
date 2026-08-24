@@ -73,7 +73,129 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       case DefenceStatus.inProgress:
         return 'Only the adviser, the panel, the coordinator, or the dean '
             'may comment here.';
+      case DefenceStatus.cancelled:
+        return 'This defence was cancelled, so it has no comment log.';
     }
+  }
+
+  /// A date and time a coordinator can read at a glance.
+  String _formatDateTime(DateTime t) {
+    final local = t.toLocal();
+    final h = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final m = local.minute.toString().padLeft(2, '0');
+    final ampm = local.hour < 12 ? 'am' : 'pm';
+    return '${local.day}/${local.month}/${local.year} at $h:$m$ampm';
+  }
+
+  /// Moves the date, time or venue of a defence that has not started.
+  ///
+  /// Before this existed the schedule was frozen at creation, so a
+  /// coordinator who picked the wrong day could neither fix it nor remove
+  /// the defence -- the only way forward was opening it anyway.
+  Future<void> _editSchedule(Defence defence) async {
+    final venue = TextEditingController(text: defence.venue);
+    var when = defence.scheduledAt ?? DateTime.now();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Edit schedule'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                key: const Key('editVenue'),
+                controller: venue,
+                decoration: const InputDecoration(labelText: 'Venue'),
+              ),
+              const Gap.md(),
+              OutlinedButton(
+                key: const Key('editDate'),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: when,
+                    firstDate: DateTime.now()
+                        .subtract(const Duration(days: 1)),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (picked == null) return;
+                  setInner(() => when = DateTime(picked.year, picked.month,
+                      picked.day, when.hour, when.minute));
+                },
+                child: Text(_formatDateTime(when)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep as is'),
+            ),
+            FilledButton(
+              key: const Key('saveSchedule'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true) return;
+    if (!mounted) return;
+    setState(() {
+      _statusBusy = true;
+      _statusError = null;
+    });
+    try {
+      await ref.read(defenceRepositoryProvider).reschedule(
+            defenceId: widget.defenceId,
+            scheduledAt: when,
+            venue: venue.text,
+          );
+    } on ArgumentError catch (e) {
+      if (mounted) setState(() => _statusError = e.message.toString());
+    } on StateError catch (e) {
+      if (mounted) setState(() => _statusError = e.message);
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() => _statusError = e.code == 'permission-denied'
+            ? 'You do not have permission to change this schedule.'
+            : 'Could not save the schedule.');
+      }
+    } finally {
+      if (mounted) setState(() => _statusBusy = false);
+    }
+  }
+
+  /// Calls off a defence created by mistake. Confirmed, because it is
+  /// terminal: a cancelled defence cannot be walked back into the
+  /// lifecycle, only replaced by scheduling a new one.
+  Future<void> _confirmCancel() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel this defence?'),
+        content: const Text(
+            'It stays in the record as cancelled rather than disappearing, '
+            'and it cannot be reopened. Schedule a new one instead.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const Key('confirmCancel'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cancel the defence'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    await _setStatus(DefenceStatus.cancelled);
   }
 
   Future<void> _postComment({
@@ -373,13 +495,53 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
           // Hidden rather than merely disabled for anyone but the
           // coordinator: the rules deny the write either way, but a button
           // that always fails is worse than no button at all.
-          if (isCoordinator && defence.status == DefenceStatus.scheduled)
-            FilledButton(
-              key: const Key('openDefence'),
+          if (isCoordinator && defence.status == DefenceStatus.scheduled) ...[
+            Builder(builder: (context) {
+              final opensAt = defence.scheduledAt?.subtract(defenceOpenGrace);
+              final tooEarly =
+                  opensAt != null && DateTime.now().isBefore(opensAt);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton(
+                    key: const Key('openDefence'),
+                    onPressed: _statusBusy || tooEarly
+                        ? null
+                        : () => _setStatus(DefenceStatus.inProgress),
+                    child: Text(_statusBusy ? 'Opening…' : 'Open defence'),
+                  ),
+                  // Say WHEN, not just no. A dead button with no reason
+                  // reads as a broken app; the coordinator needs to know
+                  // whether to wait or to move the schedule.
+                  if (tooEarly) ...[
+                    const Gap.sm(),
+                    Text(
+                      'Opens ${_formatDateTime(opensAt)}, 30 minutes '
+                          'before the scheduled time.',
+                      key: const Key('openNotYet'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              );
+            }),
+            const Gap.sm(),
+            OutlinedButton(
+              key: const Key('editSchedule'),
               onPressed:
-                  _statusBusy ? null : () => _setStatus(DefenceStatus.inProgress),
-              child: Text(_statusBusy ? 'Opening…' : 'Open defence'),
+                  _statusBusy ? null : () => _editSchedule(defence),
+              child: const Text('Edit schedule'),
             ),
+            const Gap.sm(),
+            // Cancelling is for a defence created by mistake -- wrong
+            // thesis, duplicate, abandoned. One that actually happened is
+            // closed instead, so its log stays a record of what was said.
+            TextButton(
+              key: const Key('cancelDefence'),
+              onPressed: _statusBusy ? null : _confirmCancel,
+              child: const Text('Cancel this defence'),
+            ),
+          ],
           if (isCoordinator && defence.status == DefenceStatus.inProgress)
             FilledButton(
               key: const Key('closeDefence'),

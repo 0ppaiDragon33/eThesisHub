@@ -3250,6 +3250,96 @@ test("M3: a comment is filed in its author's own name, and never edited",
     await assertFails(deleteDoc(doc(pan, "defenses/df1/comments/x4")));
   });
 
+
+// ---------- M3: the open window, cancel, and editing the schedule ----------
+
+/// Minutes from now, as a Firestore Timestamp.
+function inMinutes(m) {
+  return Timestamp.fromMillis(Date.now() + m * 60 * 1000);
+}
+
+test("M3: a defence may NOT be opened before its window", async () => {
+  // The accident this prevents: the lifecycle is forward-only and a defence
+  // has no delete, so opening one early and closing it freezes an empty log
+  // into the permanent record.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { scheduledAt: inMinutes(31) }));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "defenses/df1"),
+    { status: "inProgress" }));
+});
+
+test("M3: a defence opens inside the 30-minute grace window", async () => {
+  // The control for the test above, and the pin on the boundary: 31 minutes
+  // out is refused, 29 is allowed. The same 30 lives in defence.dart as
+  // `defenceOpenGrace`, which the rules cannot import -- if the two drift,
+  // one of these two tests fails.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { scheduledAt: inMinutes(29) }));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "inProgress" }));
+});
+
+test("M3: a scheduled defence may be cancelled, an open one may not",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore()));
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    // Not the adviser's call.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { status: "cancelled" }));
+    // Control: the coordinator, same write.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "cancelled" }));
+    // Cancelled is terminal -- it cannot be walked back into the lifecycle.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+  });
+
+test("M3: a defence under way is closed, never cancelled", async () => {
+  // Cancelling is for mistakes. One that actually happened is closed, so its
+  // log stays a record of what was said in the room.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "defenses/df1"),
+    { status: "cancelled" }));
+  // Control: the legal close.
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "completed" }));
+});
+
+test("M3: the schedule may be edited while scheduled, and never after",
+  async () => {
+    // Before this the date and venue were frozen at creation: a coordinator
+    // who picked the wrong day could neither fix it nor remove the defence.
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore()));
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "Board Room" }));
+    // An empty venue is not a venue.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "" }));
+    // An edit must never double as a transition.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "Board Room",
+        status: "inProgress" }));
+    // Control.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(-5), venue: "Board Room" }));
+
+    // Once it starts, the schedule is history.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "Somewhere else" }));
+  });
 test.after(async () => {
   await env.cleanup();
 });

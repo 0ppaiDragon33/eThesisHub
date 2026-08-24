@@ -21,10 +21,27 @@ enum DefenceType {
   }
 }
 
+/// How early a defence may be opened, relative to its scheduled time.
+///
+/// Panels gather before the hour and rooms run late, so an exact-moment
+/// gate would refuse a defence convening five minutes ahead of schedule.
+///
+/// THIS NUMBER EXISTS TWICE. `firestore.rules` carries the same 30 minutes
+/// as a literal, because rules cannot import Dart. If the two ever
+/// disagree, the button looks enabled and the write is denied -- so the
+/// rules suite pins the exact boundary in minutes, and changing one
+/// without the other fails there.
+const defenceOpenGrace = Duration(minutes: 30);
+
 enum DefenceStatus {
   scheduled,
   inProgress,
-  completed;
+  completed,
+  /// A defence created by mistake -- wrong thesis, duplicate, or simply
+  /// abandoned. Cancelled rather than deleted: the defence record is
+  /// evidence, and a hard delete leaves nothing to explain a gap in the
+  /// history to a panel later.
+  cancelled;
 
   String get value => name;
 
@@ -32,6 +49,13 @@ enum DefenceStatus {
   /// makes the log a record of what was said in the room rather than a
   /// document anyone can append to days later.
   bool get acceptsComments => this == DefenceStatus.inProgress;
+
+  /// Nothing further happens to a defence in a terminal state.
+  bool get isTerminal =>
+      this == DefenceStatus.completed || this == DefenceStatus.cancelled;
+
+  /// Only a scheduled defence can still be edited or called off.
+  bool get isEditable => this == DefenceStatus.scheduled;
 
   /// Defaults to `scheduled` — the status that grants nothing. Defaulting
   /// to `inProgress` would let corrupt data open a defence for comments.

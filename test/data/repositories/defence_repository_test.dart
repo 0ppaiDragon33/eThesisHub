@@ -21,7 +21,10 @@ Future<String> scheduleOne(DefenceRepository repo,
   return repo.schedule(
     thesisId: 't1',
     type: type,
-    scheduledAt: DateTime.utc(2026, 9, 1, 9),
+    // An hour ago, so the open window is already past. Fixing an absolute
+    // date here would make every lifecycle test start failing once that date
+    // arrived -- or never pass before it.
+    scheduledAt: DateTime.now().subtract(const Duration(hours: 1)),
     venue: 'CICT AVR',
     panelUids: const ['p1', 'p2', 'p3'],
     adviserUid: 'a1',
@@ -176,5 +179,111 @@ void main() {
     expect(await repo.watchForPanelist('p1').first, hasLength(1));
     expect(await repo.watchForLeader('l1').first, hasLength(1));
     expect(await repo.watchAll().first, hasLength(2));
+  });
+
+  test('a defence cannot be opened before its window', () async {
+    // The accident this prevents: opening early and closing freezes an empty
+    // log permanently, because the lifecycle is forward-only.
+    final db = await seed();
+    final repo = DefenceRepository(db);
+    final id = await repo.schedule(
+      thesisId: 't1',
+      type: DefenceType.preOral,
+      scheduledAt: DateTime.now().add(const Duration(hours: 2)),
+      venue: 'CICT AVR',
+      panelUids: const ['p1', 'p2', 'p3'],
+      adviserUid: 'a1',
+      leaderUid: 'l1',
+      createdBy: 'c1',
+    );
+
+    await expectLater(
+      repo.setStatus(defenceId: id, status: DefenceStatus.inProgress),
+      throwsStateError,
+    );
+  });
+
+  test('a defence opens inside the grace window, before its scheduled time',
+      () async {
+    // Panels gather early and rooms run late, so the gate is a window rather
+    // than an exact moment. 29 minutes out is inside the 30-minute grace.
+    final db = await seed();
+    final repo = DefenceRepository(db);
+    final id = await repo.schedule(
+      thesisId: 't1',
+      type: DefenceType.preOral,
+      scheduledAt: DateTime.now().add(const Duration(minutes: 29)),
+      venue: 'CICT AVR',
+      panelUids: const ['p1', 'p2', 'p3'],
+      adviserUid: 'a1',
+      leaderUid: 'l1',
+      createdBy: 'c1',
+    );
+
+    await repo.setStatus(defenceId: id, status: DefenceStatus.inProgress);
+    expect((await repo.watchDefence(id).first)!.status,
+        DefenceStatus.inProgress);
+  });
+
+  test('a scheduled defence can be cancelled, an open one cannot', () async {
+    final db = await seed();
+    final repo = DefenceRepository(db);
+    final id = await scheduleOne(repo);
+
+    await repo.setStatus(defenceId: id, status: DefenceStatus.cancelled);
+    expect((await repo.watchDefence(id).first)!.status,
+        DefenceStatus.cancelled);
+
+    // Cancelling is for mistakes, not for abandoning a defence under way --
+    // that one is closed, so the log stays a record of what was said.
+    final other = await scheduleOne(repo);
+    await repo.setStatus(defenceId: other, status: DefenceStatus.inProgress);
+    await expectLater(
+      repo.setStatus(defenceId: other, status: DefenceStatus.cancelled),
+      throwsStateError,
+    );
+  });
+
+  test('the schedule can be moved while scheduled, never after', () async {
+    // Before this, the date and venue were frozen at creation: a coordinator
+    // who picked the wrong day could neither fix it nor remove the defence.
+    final db = await seed();
+    final repo = DefenceRepository(db);
+    final id = await scheduleOne(repo);
+
+    final moved = DateTime.now().add(const Duration(days: 3));
+    await repo.reschedule(
+        defenceId: id, scheduledAt: moved, venue: 'Board Room');
+
+    final after = await repo.watchDefence(id).first;
+    expect(after!.venue, 'Board Room');
+    expect(after.scheduledAt!.difference(moved).inSeconds.abs(), lessThan(2));
+
+    // Move it back inside the open window before starting it -- the point
+    // being tested here is that rescheduling stops once it starts, not the
+    // window, which has its own tests above.
+    await repo.reschedule(
+      defenceId: id,
+      scheduledAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      venue: 'Board Room',
+    );
+    await repo.setStatus(defenceId: id, status: DefenceStatus.inProgress);
+    await expectLater(
+      repo.reschedule(
+          defenceId: id, scheduledAt: moved, venue: 'Somewhere else'),
+      throwsStateError,
+    );
+  });
+
+  test('rescheduling to an empty venue is refused', () async {
+    final db = await seed();
+    final repo = DefenceRepository(db);
+    final id = await scheduleOne(repo);
+
+    await expectLater(
+      repo.reschedule(
+          defenceId: id, scheduledAt: DateTime.now(), venue: '   '),
+      throwsArgumentError,
+    );
   });
 }

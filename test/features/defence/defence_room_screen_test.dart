@@ -21,6 +21,7 @@ import 'package:ethesishub/providers/defence_providers.dart';
 Future<FakeFirebaseFirestore> seed({
   String status = 'inProgress',
   List<Map<String, String>> comments = const [],
+  DateTime? scheduledAt,
 }) async {
   final db = FakeFirebaseFirestore();
   await db.collection('theses').doc('t1').set({
@@ -38,7 +39,11 @@ Future<FakeFirebaseFirestore> seed({
   await db.collection('defenses').doc('d1').set({
     'thesisId': 't1',
     'type': 'preOral',
-    'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 1, 9)),
+    // Default is well in the future, so the open window is shut unless a
+    // test says otherwise -- that is the state most tests want, and the
+    // window tests pass their own time relative to now.
+    'scheduledAt': Timestamp.fromDate(
+        scheduledAt ?? DateTime.now().add(const Duration(days: 7))),
     'venue': 'Room 301',
     'panelUids': <String>['p1', 'p2'],
     'adviserUid': 'a1',
@@ -423,5 +428,93 @@ void main() {
     expect(find.byKey(const Key('goToConsolidated')), findsOneWidget);
     expect(find.byKey(const Key('commentRow-cm0')), findsNothing);
     expect(find.textContaining('Tighten chapter two.'), findsNothing);
+  });
+
+  testWidgets('Open is disabled before the window, and says when it opens',
+      (tester) async {
+    // The accident this prevents: the lifecycle is forward-only and a defence
+    // has no delete, so opening one early and closing it freezes an empty log
+    // into the permanent record. A dead button with no reason reads as a
+    // broken app, so the screen says WHEN rather than just no.
+    final db = await seed(
+      status: 'scheduled',
+      scheduledAt: DateTime.now().add(const Duration(hours: 3)),
+    );
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    final open =
+        tester.widget<FilledButton>(find.byKey(const Key('openDefence')));
+    expect(open.onPressed, isNull);
+    expect(find.byKey(const Key('openNotYet')), findsOneWidget);
+  });
+
+  testWidgets('Open is enabled inside the 30-minute grace window',
+      (tester) async {
+    // The control for the test above. Panels gather early and rooms run late,
+    // so the gate is a window rather than an exact moment.
+    final db = await seed(
+      status: 'scheduled',
+      scheduledAt: DateTime.now().add(const Duration(minutes: 20)),
+    );
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    final open =
+        tester.widget<FilledButton>(find.byKey(const Key('openDefence')));
+    expect(open.onPressed, isNotNull);
+    expect(find.byKey(const Key('openNotYet')), findsNothing);
+  });
+
+  testWidgets('the coordinator can move the venue of a scheduled defence',
+      (tester) async {
+    // Before this the schedule was frozen at creation: a coordinator who
+    // picked the wrong day could neither fix it nor remove the defence.
+    final db = await seed(status: 'scheduled');
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('editSchedule')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('editVenue')), 'Board Room');
+    await tester.tap(find.byKey(const Key('saveSchedule')));
+    await tester.pumpAndSettle();
+
+    final saved = await db.collection('defenses').doc('d1').get();
+    expect(saved.data()!['venue'], 'Board Room');
+  });
+
+  testWidgets('a panelist sees neither the edit nor the cancel control',
+      (tester) async {
+    // The rules deny them either way, but a control that always fails is
+    // worse than no control at all.
+    final db = await seed(status: 'scheduled');
+    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('editSchedule')), findsNothing);
+    expect(find.byKey(const Key('cancelDefence')), findsNothing);
+  });
+
+  testWidgets('cancelling a scheduled defence records it as cancelled',
+      (tester) async {
+    // Cancelled rather than deleted: the defence record is evidence, and a
+    // hard delete leaves nothing to explain a gap in the history.
+    final db = await seed(status: 'scheduled');
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    // The three coordinator controls stack below the log, so on the default
+    // 800x600 surface this sits under the fold. PageShell scrolls; tap does
+    // not scroll for you.
+    await tester.ensureVisible(find.byKey(const Key('cancelDefence')));
+    await tester.tap(find.byKey(const Key('cancelDefence')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmCancel')));
+    await tester.pumpAndSettle();
+
+    final saved = await db.collection('defenses').doc('d1').get();
+    expect(saved.data()!['status'], 'cancelled');
   });
 }

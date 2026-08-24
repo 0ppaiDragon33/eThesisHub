@@ -21,6 +21,7 @@ class DefencesList extends ConsumerWidget {
         DefenceStatus.scheduled => 'Scheduled',
         DefenceStatus.inProgress => 'In progress',
         DefenceStatus.completed => 'Completed',
+        DefenceStatus.cancelled => 'Cancelled',
       };
 
   static Color _statusColor(DefenceStatus status, Brightness brightness) {
@@ -31,6 +32,11 @@ class DefencesList extends ConsumerWidget {
       DefenceStatus.inProgress =>
         light ? AppTokens.endorsed : AppTokens.endorsedDark,
       DefenceStatus.completed =>
+        light ? AppTokens.inkMuted : AppTokens.inkMutedDark,
+      // Same muted ink as completed: neither is waiting on anyone. Kept
+      // visible rather than hidden so a coordinator can see what became of
+      // the one they called off.
+      DefenceStatus.cancelled =>
         light ? AppTokens.inkMuted : AppTokens.inkMutedDark,
     };
   }
