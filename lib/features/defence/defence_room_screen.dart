@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -194,6 +195,36 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       ]);
     }
 
+    // The group reads the adviser's consolidation, never this raw log --
+    // M3-2 forbids it, because the log may hold half-finished remarks and
+    // ones the panel withdrew. Decided from `defence` alone, before the
+    // comments stream is even consulted: once released, the rules DO permit
+    // a leader to read `comments`, so waiting on that stream here would let
+    // it resolve and render every raw remark to the one reader who must
+    // never see them.
+    final isLeader = uid != null && uid == defence.leaderUid;
+    if (isLeader) {
+      return _framed(
+        [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'The group reads the adviser\'s consolidated comments for '
+              'this defence, not the live log.',
+              key: Key('leaderRefusal'),
+            ),
+          ),
+          FilledButton(
+            key: const Key('goToConsolidated'),
+            onPressed: () => context
+                .go('/defence/room/${widget.defenceId}/consolidated'),
+            child: const Text('View consolidated comments'),
+          ),
+        ],
+        title: defence.type.label,
+      );
+    }
+
     if (commentsAsync.isLoading) {
       return _framed(
         const [LoadingState(label: 'Loading comments…')],
@@ -246,7 +277,23 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
 
     return Scaffold(
       key: const Key('defenceRoom'),
-      appBar: AppBar(title: Text(defence.type.label)),
+      appBar: AppBar(
+        title: Text(defence.type.label),
+        actions: [
+          // The room has no other route to the consolidated view once the
+          // coordinator closes it -- grep for 'consolidated' across lib/
+          // found it nowhere else before this. Visible to everyone who can
+          // already see the room; the leader never reaches this branch at
+          // all (see the isLeader gate above), so this is not their door.
+          IconButton(
+            key: const Key('goToConsolidated'),
+            icon: const Icon(Icons.summarize_outlined),
+            tooltip: 'Consolidated comments',
+            onPressed: () => context
+                .go('/defence/room/${widget.defenceId}/consolidated'),
+          ),
+        ],
+      ),
       body: PageShell(
         title: defence.type.label,
         subtitle: thesisTitle,

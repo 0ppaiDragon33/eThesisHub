@@ -308,4 +308,45 @@ void main() {
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.byKey(const Key('releaseComments')), findsNothing);
   });
+
+  testWidgets(
+      'an unreleased leader sees the not-released reason even when the '
+      'comments stream errors with permission-denied', (tester) async {
+    // FIX 3: `firestore.rules` denies a leader ANY read of `comments`
+    // until `consolidatedAt` exists, so in production this is exactly what
+    // `commentsAsync` does for an unreleased leader -- `fake_cloud_firestore`
+    // enforces no rules, so every other test in this file is green
+    // regardless of branch order. Overriding the stream with the real
+    // failure shape is what makes this test model production instead of
+    // the fake, and it is what catches the bug the final review found: the
+    // old branch order let this error reach `commentsAsync.hasError` FIRST
+    // and render "Could not load the comment log." instead of
+    // `notReleasedReason`.
+    final db = await seed(status: 'completed', comments: [
+      {
+        'authorUid': 'a1',
+        'authorName': 'Dr. Zamora',
+        'authorPosition': 'Adviser',
+        'body': 'Tighten chapter two.',
+      },
+    ]);
+
+    await tester.pumpWidget(_wrap(
+      db,
+      uid: 'l1',
+      overrides: [
+        defenceCommentsProvider('d1').overrideWith((ref) => Stream.error(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'permission-denied',
+              ),
+            )),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('notReleasedReason')), findsOneWidget);
+    expect(find.text('Could not load the comment log.'), findsNothing);
+    expect(find.byKey(const Key('blockFor-a1')), findsNothing);
+  });
 }

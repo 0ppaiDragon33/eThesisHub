@@ -6,6 +6,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -179,5 +180,68 @@ void main() {
     expect(find.text('Loading your defences…'), findsOneWidget);
     expect(find.byKey(const Key('noDefences')), findsNothing);
     expect(find.text('No defences scheduled'), findsNothing);
+  });
+
+  testWidgets(
+      'the leader\'s Open button goes to the consolidated route, not the '
+      'raw room', (tester) async {
+    // FIX 4: every role, students included, used to route into
+    // `/defence/room/${d.id}` -- the raw live log. M3-2 forbids the group
+    // from ever reading it; the group reads the adviser's consolidation.
+    // `_seedDefence` snapshots `leaderUid: 'l1'`, so signing in as l1 is
+    // what makes this the leader's own row.
+    final db = await _seedUser('l1', role: 'student');
+    await _seedDefence(
+      db,
+      id: 'd1',
+      adviserUid: 'a1',
+      panelUids: const ['p1'],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+    );
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(
+              uid: 'l1', email: 'l1@isufst.edu.ph', isEmailVerified: true),
+        )),
+      ],
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/defences',
+          routes: [
+            GoRoute(
+              path: '/defences',
+              builder: (_, _) => const Scaffold(body: DefencesList()),
+            ),
+            GoRoute(
+              path: '/defence/room/:defenceId',
+              builder: (context, state) => Scaffold(
+                appBar: AppBar(
+                  title: Text('Room ${state.pathParameters['defenceId']}'),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/defence/room/:defenceId/consolidated',
+              builder: (context, state) => Scaffold(
+                appBar: AppBar(
+                  title: Text(
+                      'Consolidated ${state.pathParameters['defenceId']}'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('goToDefence-d1')));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Consolidated d1'), findsOneWidget);
   });
 }

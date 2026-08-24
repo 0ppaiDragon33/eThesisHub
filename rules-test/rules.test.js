@@ -3151,9 +3151,7 @@ test("M3: each role lists only the defences they belong to", async () => {
   // The coordinator and dean monitor college-wide, so an unfiltered list
   // is theirs by design.
   const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
-  try {
-    await assertSucceeds(getDocs(collection(coord, "defenses")));
-  } catch (e) { console.log("DEBUG coord-unfiltered", e.message); throw e; }
+  await assertSucceeds(getDocs(collection(coord, "defenses")));
 });
 
 // ---------- M3: defence comments ----------

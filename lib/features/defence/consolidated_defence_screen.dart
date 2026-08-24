@@ -114,6 +114,31 @@ class _ConsolidatedDefenceScreenState
       ]);
     }
 
+    // The leader's not-released gate is decided from `defence` alone,
+    // BEFORE the comments stream is even consulted. `firestore.rules`
+    // denies a leader ANY read of `comments` until `consolidatedAt` exists,
+    // so a real leader's `commentsAsync` reaches `hasError` here with a
+    // permission-denied `FirebaseException` -- and checking that branch
+    // first would show "Could not load the comment log." in place of the
+    // actual reason: `fake_cloud_firestore` enforces no rules, so that
+    // failure is invisible in this suite unless the comments stream is
+    // deliberately overridden with an error (see the falsification test).
+    final isLeader = uid != null && uid == defence.leaderUid;
+    if (isLeader && !defence.isReleased) {
+      return _framed(
+        [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'The adviser has not released these comments yet.',
+              key: Key('notReleasedReason'),
+            ),
+          ),
+        ],
+        title: defence.type.label,
+      );
+    }
+
     if (commentsAsync.isLoading) {
       return _framed(
         const [LoadingState(label: 'Loading comments…')],
@@ -152,10 +177,11 @@ class _ConsolidatedDefenceScreenState
     }
 
     final isAdviser = uid != null && uid == defence.adviserUid;
-    final isLeader = uid != null && uid == defence.leaderUid;
 
     // The group's gate: everyone who was actually in the room already heard
     // these remarks live, so only the leader is held back until release.
+    // `isLeader` itself was already decided above, before the comments
+    // stream was consulted -- an unreleased leader never reaches this line.
     final canSeeBlocks = defence.isReleased || !isLeader;
 
     // blocksFor groups by authorUid+authorRole and returns CommentBlocks that

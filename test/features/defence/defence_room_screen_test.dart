@@ -6,6 +6,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
@@ -250,10 +251,10 @@ void main() {
       (tester) async {
     // inProgress is the one status where every other role (panelist,
     // adviser, coordinator, dean) DOES get the box -- see the test above.
-    // The leader is not the adviser and not in panelUids, so
-    // _authorPositionFor returns null and the box must stay hidden: the
-    // rules deny a leader commenting on their own defence, and a control
-    // that is visible and always fails is worse than none.
+    // FIX 4 goes further than merely hiding the box: the leader is now
+    // refused the room entirely (see the dedicated refusal test below), so
+    // this asserts the box and its reason are BOTH absent -- the leader
+    // never reaches the branch that renders either.
     final db = await seed(status: 'inProgress');
     await db.collection('users').doc('l1').set({
       'fullName': 'Leader One',
@@ -267,7 +268,8 @@ void main() {
 
     expect(find.byKey(const Key('commentBody')), findsNothing);
     expect(find.byKey(const Key('postComment')), findsNothing);
-    expect(find.byKey(const Key('commentReason')), findsOneWidget);
+    expect(find.byKey(const Key('commentReason')), findsNothing);
+    expect(find.byKey(const Key('leaderRefusal')), findsOneWidget);
   });
 
   testWidgets('the defence stream loading is shown, not collapsed into absent',
@@ -346,5 +348,80 @@ void main() {
     expect(find.byKey(const Key('commentBody')), findsNothing);
     expect(find.byKey(const Key('openDefence')), findsNothing);
     expect(find.byKey(const Key('closeDefence')), findsNothing);
+  });
+
+  testWidgets(
+      'tapping the consolidated link from the room reaches the consolidated '
+      'screen', (tester) async {
+    // FIX 2: '/defence/room/:defenceId/consolidated' was reachable only by
+    // typed URL before this -- grep for 'consolidated' across `lib/` found
+    // it in the router and nowhere else, so the adviser closing a completed
+    // defence had no way back to release it.
+    final db = await seed(status: 'completed');
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser:
+              MockUser(uid: 'a1', email: 'a1@isufst.edu.ph', isEmailVerified: true),
+        )),
+      ],
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/defence/room/d1',
+          routes: [
+            GoRoute(
+              path: '/defence/room/:defenceId',
+              builder: (context, state) => DefenceRoomScreen(
+                  defenceId: state.pathParameters['defenceId']!),
+            ),
+            GoRoute(
+              path: '/defence/room/:defenceId/consolidated',
+              builder: (_, _) =>
+                  const Scaffold(key: Key('consolidated')),
+            ),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('goToConsolidated')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('consolidated')), findsOneWidget);
+  });
+
+  testWidgets(
+      'the thesis leader sees a refusal in the room, not the comment log',
+      (tester) async {
+    // FIX 4: every role, students included, used to route straight into the
+    // raw live log. M3-2 forbids the group from ever reading it -- the log
+    // may hold half-finished remarks and ones the panel withdrew.
+    final db = await seed(status: 'completed', comments: [
+      {
+        'authorUid': 'a1',
+        'authorName': 'Dr. Adviser',
+        'authorPosition': 'Adviser',
+        'body': 'Tighten chapter two.',
+      },
+    ]);
+    await db.collection('users').doc('l1').set({
+      'fullName': 'Leader One',
+      'email': 'l1@isufst.edu.ph',
+      'role': 'student',
+      'active': true,
+    });
+
+    await tester.pumpWidget(_wrap(db, uid: 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
+    expect(find.byKey(const Key('leaderRefusal')), findsOneWidget);
+    expect(find.byKey(const Key('goToConsolidated')), findsOneWidget);
+    expect(find.byKey(const Key('commentRow-cm0')), findsNothing);
+    expect(find.textContaining('Tighten chapter two.'), findsNothing);
   });
 }

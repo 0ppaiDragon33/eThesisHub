@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 
 /// Every defence the signed-in user belongs to, soonest first.
@@ -50,6 +51,7 @@ class DefencesList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final defencesAsync = ref.watch(myDefencesProvider);
     final brightness = Theme.of(context).brightness;
+    final uid = ref.watch(authStateProvider).valueOrNull?.uid;
 
     // Its own loading/error/empty branches, kept apart from whatever else
     // shares the page: a schedule that is merely still connecting must
@@ -112,7 +114,17 @@ class DefencesList extends ConsumerWidget {
                       const SizedBox(width: AppTokens.sm),
                       FilledButton(
                         key: Key('goToDefence-${d.id}'),
-                        onPressed: () => context.go('/defence/room/${d.id}'),
+                        // The group reads the adviser's consolidation, never
+                        // the raw live log -- M3-2 forbids it, because the
+                        // log may hold half-finished remarks and ones the
+                        // panel withdrew. DefenceRoomScreen refuses a leader
+                        // outright too, so this is belt-and-suspenders, but
+                        // sending the leader straight to the door they are
+                        // actually meant to use is the honest UX.
+                        onPressed: () => context.go(uid != null &&
+                                uid == d.leaderUid
+                            ? '/defence/room/${d.id}/consolidated'
+                            : '/defence/room/${d.id}'),
                         child: const Text('Open'),
                       ),
                     ],

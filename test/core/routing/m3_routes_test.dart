@@ -159,4 +159,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('scheduleDefenceScreen')), findsNothing);
   });
+
+  // FIX 6: the sibling test above only proves '/defence/room/df1' itself
+  // survives the studentOnly redirect. After FIX 4, the consolidated route
+  // is the student leader's PRIMARY destination -- DefencesList's Open
+  // button now sends them straight there -- so it needs its own guard
+  // rather than inheriting the room route's prefix exemption by assumption:
+  // `isDefenceRoomRoute` in app_router.dart uses `startsWith('/defence/room/')`,
+  // which happens to also cover this longer path, but nothing proved that
+  // until now.
+  testWidgets(
+      'the student leader also reaches the consolidated route directly',
+      (tester) async {
+    final c = await setUpFixture(tester, role: 'student', uid: 'u1');
+
+    c.read(goRouterProvider).go('/defence/room/df1/consolidated');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('consolidated')), findsOneWidget);
+  });
 }
