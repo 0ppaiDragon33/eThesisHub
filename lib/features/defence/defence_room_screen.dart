@@ -124,7 +124,26 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                   setInner(() => when = DateTime(picked.year, picked.month,
                       picked.day, when.hour, when.minute));
                 },
-                child: Text(_formatDateTime(when)),
+                child: Text(
+                    'Date: ${when.day}/${when.month}/${when.year}'),
+              ),
+              const Gap.sm(),
+              // The time needs its own control. A date picker alone carries
+              // the original hour and minute forward, so a defence booked
+              // for the wrong time could have its day corrected and never
+              // its hour -- which is the half more likely to be wrong.
+              OutlinedButton(
+                key: const Key('editTime'),
+                onPressed: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(when),
+                  );
+                  if (picked == null) return;
+                  setInner(() => when = DateTime(when.year, when.month,
+                      when.day, picked.hour, picked.minute));
+                },
+                child: Text('Time: ${TimeOfDay.fromDateTime(when).format(context)}'),
               ),
             ],
           ),

@@ -485,6 +485,48 @@ void main() {
     expect(saved.data()!['venue'], 'Board Room');
   });
 
+  testWidgets('the coordinator can move the TIME, not only the date',
+      (tester) async {
+    // Reported from the field: the dialog had a date picker only, and it
+    // carried the original hour and minute forward -- so a defence booked
+    // for the wrong time could have its day corrected and never its hour,
+    // which is the half more likely to be wrong.
+    final db = await seed(
+      status: 'scheduled',
+      scheduledAt: DateTime(2026, 12, 1, 9, 0),
+    );
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('editSchedule')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('editTime')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('editTime')));
+    await tester.pumpAndSettle();
+    // The picker opens in dial mode, where the hour is dragged rather than
+    // typed and there are no text fields at all. Its one IconButton is the
+    // keypad toggle; entry fields appear only after it.
+    await tester.tap(find.byTooltip('Switch to text input mode'));
+    await tester.pumpAndSettle();
+    // Three fields, not two: the venue field from the dialog underneath is
+    // still in the tree. The picker's hour and minute are the last two.
+    expect(find.byType(TextField), findsNWidgets(3));
+    await tester.enterText(find.byType(TextField).at(1), '2');
+    await tester.enterText(find.byType(TextField).at(2), '30');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('saveSchedule')));
+    await tester.pumpAndSettle();
+
+    final saved = await db.collection('defenses').doc('d1').get();
+    final when = (saved.data()!['scheduledAt'] as Timestamp).toDate();
+    expect(when.hour, isNot(9), reason: 'the hour must actually have moved');
+    expect(when.minute, 30);
+  });
+
   testWidgets('a panelist sees neither the edit nor the cancel control',
       (tester) async {
     // The rules deny them either way, but a control that always fails is
