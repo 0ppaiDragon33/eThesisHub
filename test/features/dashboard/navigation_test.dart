@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -182,6 +183,55 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Defence readiness'), findsOneWidget);
       expect(find.text('Nomination recommendations'), findsNothing);
+    });
+  });
+
+  group('adviser attending a defence', () {
+    testWidgets('an adviser in adviser mode can reach their advisee\'s defence',
+        (tester) async {
+      // The gap this closes: DefencesList lived only in the panelist-mode
+      // body, so a faculty member who advises a group and sits on no panels
+      // was clamped to adviser mode and had NO route to any defence -- not
+      // even the ones they advise, where they are the only person who can
+      // release the consolidation to the group.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
+      await db.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'preOral',
+        'scheduledAt': Timestamp.fromDate(
+            DateTime.now().add(const Duration(days: 2))),
+        'venue': 'CICT AVR',
+        'panelUids': <String>[],
+        'adviserUid': 'a1',
+        'leaderUid': 'l1',
+        'status': 'scheduled',
+        'createdBy': 'c1',
+      });
+
+      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
+          uid: 'a1', role: 'faculty'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('My advisees'), findsOneWidget);
+      expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
+    });
+
+    testWidgets('the adviser attends only — no coordinator controls',
+        (tester) async {
+      // Scheduling and driving the lifecycle stay with the coordinator, of
+      // whom there are two, so one is always present. A control that is
+      // visible and always denied is worse than no control.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
+
+      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
+          uid: 'a1', role: 'faculty'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('scheduleDefence')), findsNothing);
+      expect(find.byKey(const Key('openDefence')), findsNothing);
+      expect(find.byKey(const Key('cancelDefence')), findsNothing);
     });
   });
 }

@@ -155,6 +155,20 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
                     ],
                   ),
           ),
+          const Gap.xl(),
+          Text('Defences I am attending',
+              style: Theme.of(context).textTheme.titleMedium),
+          const Gap.sm(),
+          // Also here, not only in panelist mode. An adviser who sits on no
+          // panels is clamped to adviser mode, and without this had no route
+          // to any defence at all -- including the ones they advise, where
+          // they are the ONLY person who can release the consolidation. The
+          // group would never receive the panel's comments.
+          //
+          // Attending only: Schedule, Open, Close, Edit and Cancel are gated
+          // on the coordinator role inside the defence room itself, and this
+          // adds no control of its own.
+          const DefencesList(),
         ],
       );
     }
