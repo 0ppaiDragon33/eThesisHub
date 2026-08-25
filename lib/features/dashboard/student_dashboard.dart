@@ -47,13 +47,26 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       // as they land. Chapters is the first to land, in M2.
       destinations: [
         const NavDestination(label: 'Thesis', icon: Icons.home_outlined),
-        if (chaptersUnlocked)
+        if (chaptersUnlocked) ...[
           const NavDestination(
               label: 'Chapters', icon: Icons.menu_book_outlined),
+          // Defences are gated on the same approval as Chapters. A defence
+          // is only ever scheduled for a thesis whose title is approved, so
+          // before then this tab would lead to a permanently empty page.
+          const NavDestination(
+              label: 'Defences', icon: Icons.forum_outlined),
+        ],
       ],
       actions: const [SignOutButton()],
       body: (_selectedIndex == 1 && chaptersUnlocked)
           ? ChaptersScreen(thesisId: thesis.id, embedded: true)
+          : (_selectedIndex == 2 && chaptersUnlocked)
+          ? const PageShell(
+              title: 'My defences',
+              subtitle: 'Your pre-oral and final defences, and the '
+                  'consolidated comments once your adviser releases them.',
+              children: [DefencesList()],
+            )
           : thesisAsync.when(
         loading: () => const LoadingState(label: 'Loading your thesis…'),
         error: (e, _) => PageShell(children: [
@@ -98,10 +111,6 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 child: const Text('Open thesis'),
               ),
               const SizedBox(height: AppTokens.sm),
-              const Gap.xl(),
-              Text('My defences', style: Theme.of(context).textTheme.titleMedium),
-              const Gap.sm(),
-              const DefencesList(),
             ],
           );
         },

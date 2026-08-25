@@ -214,7 +214,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('My advisees'), findsOneWidget);
+
+      // Defences are their own destination in both modes now, rather than a
+      // section stacked under the mode's own list.
+      await tester.tap(find.text('Defences'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('My defences'), findsOneWidget);
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
+      // The destinations genuinely swap content.
+      expect(find.text('My advisees'), findsNothing);
     });
 
     testWidgets('the adviser attends only — no coordinator controls',
@@ -232,6 +241,81 @@ void main() {
       expect(find.byKey(const Key('scheduleDefence')), findsNothing);
       expect(find.byKey(const Key('openDefence')), findsNothing);
       expect(find.byKey(const Key('cancelDefence')), findsNothing);
+    });
+  });
+
+  group('Defences as its own destination', () {
+    testWidgets('a panelist reaches Defences without wading past the queue',
+        (tester) async {
+      // Stacked under Panels, the title-defence queue came FIRST -- so an
+      // empty "No defences waiting" was the first thing a panelist saw, and
+      // their actual schedule sat underneath it. Two unrelated lists whose
+      // widgets are even named alike.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis(adviserUid: 'other'));
+      await db
+          .collection('theses/t1/nominations')
+          .doc('p1')
+          .set({'nomineeUid': 'p1', 'conformeStatus': 'accepted'});
+      await db.collection('defenses').doc('d1').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt':
+            Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
+        'venue': 'AVR', 'panelUids': <String>['p1'], 'adviserUid': 'other',
+        'leaderUid': 'l1', 'status': 'scheduled', 'createdBy': 'c1',
+      });
+
+      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
+          uid: 'p1', role: 'faculty'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('My panels'), findsOneWidget);
+
+      await tester.tap(find.text('Defences'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
+      expect(find.text('My panels'), findsNothing);
+    });
+
+    testWidgets('the student gets Defences only once the title is approved',
+        (tester) async {
+      // A defence is only ever scheduled for an approved thesis, so before
+      // then the tab would lead to a permanently empty page -- the
+      // control-that-does-nothing this scaffold hides its bar to avoid.
+      final db = FakeFirebaseFirestore();
+      await db
+          .collection('theses')
+          .doc('t1')
+          .set(thesis(status: 'titlePendingDefence'));
+
+      await tester.pumpWidget(await wrap(const StudentDashboard(), db,
+          uid: 'l1', role: 'student'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Defences'), findsNothing);
+    });
+
+    testWidgets('the student reaches Defences after approval', (tester) async {
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis());
+      await db.collection('defenses').doc('d1').set({
+        'thesisId': 't1', 'type': 'preOral',
+        'scheduledAt':
+            Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
+        'venue': 'AVR', 'panelUids': <String>[], 'adviserUid': 'a1',
+        'leaderUid': 'l1', 'status': 'scheduled', 'createdBy': 'c1',
+      });
+
+      await tester.pumpWidget(await wrap(const StudentDashboard(), db,
+          uid: 'l1', role: 'student'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Defences'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('My defences'), findsOneWidget);
+      expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
     });
   });
 }

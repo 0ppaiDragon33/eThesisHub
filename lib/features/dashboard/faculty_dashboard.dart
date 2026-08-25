@@ -80,6 +80,12 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
                 label: 'Advisees', icon: Icons.school_outlined)
             : const NavDestination(
                 label: 'Panels', icon: Icons.forum_outlined),
+        // Its own destination in BOTH modes rather than a section under
+        // each. Stacked under Panels it sat below the title-defence queue,
+        // so an empty queue was the first thing a panelist saw and their
+        // actual schedule was underneath it.
+        const NavDestination(
+            label: 'Defences', icon: Icons.event_note_outlined),
         const NavDestination(
             label: 'Nominations', icon: Icons.drafts_outlined),
       ],
@@ -113,9 +119,16 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
       // Destination 0 is the work of the mode you are in; destination 1 is
       // the Conforme inbox, which belongs to neither. Rendering both at once
       // (the previous shape) read as a broken tab rather than an unbuilt one.
-      body: _selectedIndex == 0
-          ? _modeBody(mode, adviseesAsync, myThesisIdsAsync)
-          : _nominationsBody(pendingAsync),
+      body: switch (_selectedIndex) {
+        1 => const PageShell(
+            title: 'My defences',
+            subtitle: 'Pre-oral and final defences you are attending, '
+                'whether you advise the group or sit on its panel.',
+            children: [DefencesList()],
+          ),
+        2 => _nominationsBody(pendingAsync),
+        _ => _modeBody(mode, adviseesAsync, myThesisIdsAsync),
+      },
     );
   }
 
@@ -155,20 +168,7 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
                     ],
                   ),
           ),
-          const Gap.xl(),
-          Text('Defences I am attending',
-              style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          // Also here, not only in panelist mode. An adviser who sits on no
-          // panels is clamped to adviser mode, and without this had no route
-          // to any defence at all -- including the ones they advise, where
-          // they are the ONLY person who can release the consolidation. The
-          // group would never receive the panel's comments.
-          //
-          // Attending only: Schedule, Open, Close, Edit and Cancel are gated
-          // on the coordinator role inside the defence room itself, and this
-          // adds no control of its own.
-          const DefencesList(),
+
         ],
       );
     }
@@ -186,14 +186,6 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
           ),
           data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
         ),
-        const Gap.xl(),
-        Text('My upcoming defences', style: Theme.of(context).textTheme.titleMedium),
-        const Gap.sm(),
-        // Both positions merged, not just the adviser one -- see
-        // myDefencesProvider's own doc comment. This is the panel section:
-        // a faculty member who advises one group and panels others must see
-        // both here, not only the theses whose titles are still pending.
-        const DefencesList(),
       ],
     );
   }
