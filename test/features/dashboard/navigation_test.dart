@@ -148,8 +148,11 @@ void main() {
   });
 
   group('dean and coordinator', () {
-    testWidgets('the dean gets three destinations that each swap the body',
+    testWidgets('the dean gets four destinations that each swap the body',
         (tester) async {
+      // Titles and Defences are separate jobs: approving a candidate title
+      // set is not attending a scheduled defence. Stacked together, the
+      // usually-empty title queue sat above the rooms that had content.
       final db = FakeFirebaseFirestore();
       await tester.pumpWidget(
           await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
@@ -157,15 +160,20 @@ void main() {
 
       expect(find.text('Nomination approvals'), findsOneWidget);
 
-      await tester.tap(find.text('Defences'));
+      await tester.tap(find.text('Titles'));
       await tester.pumpAndSettle();
       expect(find.text('Title defences'), findsOneWidget);
       expect(find.text('Nomination approvals'), findsNothing);
 
+      await tester.tap(find.text('Defences'));
+      await tester.pumpAndSettle();
+      expect(find.text('Scheduled defences'), findsOneWidget);
+      expect(find.text('Title defences'), findsNothing);
+
       await tester.tap(find.text('Readiness'));
       await tester.pumpAndSettle();
       expect(find.text('Defence readiness'), findsOneWidget);
-      expect(find.text('Title defences'), findsNothing);
+      expect(find.text('Scheduled defences'), findsNothing);
     });
 
     testWidgets('the coordinator keeps Faculty as a jump, not a panel',
@@ -183,6 +191,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Defence readiness'), findsOneWidget);
       expect(find.text('Nomination recommendations'), findsNothing);
+    });
+
+    testWidgets('the coordinator reaches Titles and Defences separately',
+        (tester) async {
+      // Faculty is a jump to another screen rather than a panel, and it sits
+      // last — so inserting Titles moved its index. An off-by-one there
+      // sends the coordinator to the wrong place and nothing else would
+      // notice.
+      final db = FakeFirebaseFirestore();
+      await tester.pumpWidget(await wrap(const CoordinatorDashboard(), db,
+          uid: 'c1', role: 'coordinator'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Titles'));
+      await tester.pumpAndSettle();
+      expect(find.text('Title defences'), findsOneWidget);
+
+      await tester.tap(find.text('Defences'));
+      await tester.pumpAndSettle();
+      expect(find.text('Scheduled defences'), findsOneWidget);
+      expect(find.text('Title defences'), findsNothing);
     });
   });
 

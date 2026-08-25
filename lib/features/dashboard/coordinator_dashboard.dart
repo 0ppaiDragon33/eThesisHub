@@ -41,7 +41,7 @@ class _CoordinatorDashboardState extends ConsumerState<CoordinatorDashboard> {
       // stays a jump to its own screen rather than a panel here, because
       // invites are a different job from reviewing theses.
       onDestinationSelected: (i) {
-        if (i == 3) {
+        if (i == 4) {
           context.go('/invites');
           return;
         }
@@ -50,7 +50,11 @@ class _CoordinatorDashboardState extends ConsumerState<CoordinatorDashboard> {
       destinations: const [
         NavDestination(
             label: 'Recommendations', icon: Icons.fact_check_outlined),
-        NavDestination(label: 'Defences', icon: Icons.forum_outlined),
+        // Two different jobs, so two destinations. Approving a candidate
+        // title set is not attending a scheduled defence, and stacking
+        // them put an empty title queue above the rooms that had content.
+        NavDestination(label: 'Titles', icon: Icons.forum_outlined),
+        NavDestination(label: 'Defences', icon: Icons.event_note_outlined),
         NavDestination(label: 'Readiness', icon: Icons.checklist_outlined),
         NavDestination(label: 'Faculty', icon: Icons.badge_outlined),
       ],
@@ -58,15 +62,16 @@ class _CoordinatorDashboardState extends ConsumerState<CoordinatorDashboard> {
       body: switch (_selectedIndex) {
         1 => const PageShell(
             title: 'Title defences',
-            subtitle: 'Groups presenting their candidate titles to the '
-                'panel you sit on ex officio.',
-            children: [
-              DefenceQueue(),
-              Gap.xl(),
-              DefencesList(),
-            ],
+            subtitle: 'Groups presenting their candidate titles.',
+            children: [DefenceQueue()],
           ),
         2 => const PageShell(
+            title: 'Scheduled defences',
+            subtitle: 'Pre-oral and final defences, and the rooms they run '
+                'in.',
+            children: [DefencesList()],
+          ),
+        3 => const PageShell(
             title: 'Defence readiness',
             subtitle: 'Theses whose chapters have cleared the gate for a '
                 'pre-oral or final defence.',

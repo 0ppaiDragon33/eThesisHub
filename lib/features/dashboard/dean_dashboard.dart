@@ -44,22 +44,27 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
       // scheduled -- and stacking them made the newest the least visible.
       destinations: const [
         NavDestination(label: 'Approvals', icon: Icons.gavel_outlined),
-        NavDestination(label: 'Defences', icon: Icons.forum_outlined),
+        // Two different jobs, so two destinations. Approving a candidate
+        // title set is not attending a scheduled defence, and stacking
+        // them put an empty title queue above the rooms that had content.
+        NavDestination(label: 'Titles', icon: Icons.forum_outlined),
+        NavDestination(label: 'Defences', icon: Icons.event_note_outlined),
         NavDestination(label: 'Readiness', icon: Icons.checklist_outlined),
       ],
       actions: const [SignOutButton()],
       body: switch (_selectedIndex) {
         1 => const PageShell(
             title: 'Title defences',
-            subtitle: 'Groups presenting their candidate titles. You are the '
-                'only person who can approve one or reject the set.',
-            children: [
-              DefenceQueue(),
-              Gap.xl(),
-              DefencesList(),
-            ],
+            subtitle: 'Groups presenting their candidate titles.',
+            children: [DefenceQueue()],
           ),
         2 => const PageShell(
+            title: 'Scheduled defences',
+            subtitle: 'Pre-oral and final defences, and the rooms they run '
+                'in.',
+            children: [DefencesList()],
+          ),
+        3 => const PageShell(
             title: 'Defence readiness',
             subtitle: 'Theses whose chapters have cleared the gate for a '
                 'pre-oral or final defence.',

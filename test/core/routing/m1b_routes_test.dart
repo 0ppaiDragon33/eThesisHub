@@ -132,8 +132,9 @@ void main() {
 
     // The dean and coordinator dashboards used to stack approvals, the
     // defence queue and readiness on one scrolling page. Each is its own
-    // destination now, so the queue has to be selected first.
-    await tester.tap(find.text('Defences'));
+    // destination now -- and 'Defences' since became the SCHEDULED rooms,
+    // while the candidate-title queue this test wants moved to 'Titles'.
+    await tester.tap(find.text('Titles'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget,
