@@ -82,6 +82,12 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // The dashboard now lands on Overview -- the "no work list" milestone
+    // this suite is named for -- so 'goToThesis' lives one tap over, on the
+    // Thesis destination, rather than being visible on first paint.
+    await tester.tap(find.text('Thesis'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToThesis')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToThesis')));
     await tester.pumpAndSettle();

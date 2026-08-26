@@ -65,7 +65,14 @@ Future<Widget> wrap(
 /// broken app rather than an unfinished one.
 void main() {
   group('student', () {
-    testWidgets('gets no bar before the title is approved', (tester) async {
+    testWidgets(
+        'shows only Overview and Thesis before the title is approved',
+        (tester) async {
+      // Overview lands ahead of Thesis in this milestone, so the bar now
+      // has two destinations (index 0 and 1) even before Chapters unlocks
+      // -- it is Chapters and Defences, at indices 2 and 3, that stay gated
+      // on approval. Chapters would lead straight to "Chapters are not
+      // open yet".
       final db = FakeFirebaseFirestore();
       await db
           .collection('theses')
@@ -76,9 +83,24 @@ void main() {
           uid: 'l1', role: 'student'));
       await tester.pumpAndSettle();
 
-      // Chapters would lead straight to "Chapters are not open yet".
-      expect(find.text('Chapters'), findsNothing);
-      expect(find.byType(NavigationBar), findsNothing);
+      // Two destinations is at the bar's own threshold, so it shows rather
+      // than hides -- unlike the pre-Overview shape, where Thesis alone
+      // was one destination and the bar stayed hidden.
+      final bar = find.byType(NavigationBar);
+      expect(bar, findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text('Overview')),
+          findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text('Thesis')),
+          findsOneWidget);
+      // Scoped to the bar, not the whole tree: the Overview body's own
+      // ProgressRail spells out every lifecycle stage -- Chapters among
+      // them -- as the road ahead regardless of whether it has unlocked
+      // yet, so an unscoped `find.text('Chapters')` would find that label
+      // and misreport the destination as present.
+      expect(find.descendant(of: bar, matching: find.text('Chapters')),
+          findsNothing);
+      expect(find.descendant(of: bar, matching: find.text('Defences')),
+          findsNothing);
     });
 
     testWidgets('gets a Chapters destination once the title is approved',
@@ -90,9 +112,15 @@ void main() {
           uid: 'l1', role: 'student'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapters'), findsOneWidget);
+      // Scoped to the bar: the Overview body's own ProgressRail also spells
+      // out "Chapters" as one of the six lifecycle stages, so an unscoped
+      // finder would see two matches rather than the one destination.
+      final bar = find.byType(NavigationBar);
+      final chaptersDestination =
+          find.descendant(of: bar, matching: find.text('Chapters'));
+      expect(chaptersDestination, findsOneWidget);
 
-      await tester.tap(find.text('Chapters'));
+      await tester.tap(chaptersDestination);
       await tester.pumpAndSettle();
 
       // The real chapter list, not a placeholder — and only one app bar,
