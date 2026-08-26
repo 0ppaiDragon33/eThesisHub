@@ -123,6 +123,10 @@ class AppTokens {
   /// measure so a screen does not change shape as you move through the flow.
   static const double measure = 620;
 
+  /// Dashboards need more room than forms. Four tiles at the form measure
+  /// would be 150px each, which is the compact step on a desktop.
+  static const double measureWide = 1180;
+
   static const double radius = 10;
   static const double radiusSm = 6;
 }
