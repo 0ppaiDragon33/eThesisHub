@@ -127,6 +127,69 @@ void main() {
     expect(find.text('0'), findsNothing);
   });
 
+  testWidgets(
+      'tiles with different content -- caption, progress, neither -- '
+      'share one height in a row', (tester) async {
+    // The whole reason StatTile's height must be fixed rather than a
+    // minimum: three same-width, same-step tiles with different trailing
+    // content (a caption line, a progress bar, nothing) previously landed
+    // at different natural heights, and the grid's Row then centred them
+    // against each other instead of sharing a baseline.
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            SizedBox(
+              width: 260,
+              child: StatTile(
+                label: 'Has a caption',
+                value: '1',
+                caption: 'Some caption text',
+                icon: Icons.check,
+                accent: AppTokens.accentPine,
+              ),
+            ),
+            SizedBox(
+              width: 260,
+              child: StatTile(
+                label: 'Has a progress bar',
+                value: '2',
+                progress: 0.5,
+                icon: Icons.check,
+                accent: AppTokens.accentSeal,
+              ),
+            ),
+            SizedBox(
+              width: 260,
+              child: StatTile(
+                label: 'Has neither',
+                value: '3',
+                icon: Icons.check,
+                accent: AppTokens.accentOchre,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ));
+
+    double heightOf(String label) => tester
+        .getSize(find.ancestor(
+          of: find.text(label),
+          matching: find.byType(StatTile),
+        ))
+        .height;
+
+    final withCaption = heightOf('Has a caption');
+    final withProgress = heightOf('Has a progress bar');
+    final withNeither = heightOf('Has neither');
+
+    expect(withProgress, withCaption);
+    expect(withNeither, withCaption);
+  });
+
   testWidgets('an errored tile shows a dash, not a zero', (tester) async {
     await tester.pumpWidget(wrap(AsyncStatTile<int>(
       label: 'Active theses',

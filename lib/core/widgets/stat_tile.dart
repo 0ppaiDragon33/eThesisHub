@@ -7,11 +7,23 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 /// One figure on a dashboard: a label, a number, and a coloured badge.
 ///
 /// The proportions are load-bearing rather than decorative. Label and badge
-/// are pushed to opposite edges, the value sits below a fixed gap so a row
-/// of tiles shares one baseline, and the padding is generous enough that
-/// the card reads as a card rather than as a table row. Four tiles that
-/// ignore this look like flat strips stretched across a monitor, which is
-/// precisely the complaint this widget was built to answer.
+/// are pushed to opposite edges, the value sits below a fixed gap, and the
+/// padding is generous enough that the card reads as a card rather than as
+/// a table row. Four tiles that ignore this look like flat strips stretched
+/// across a monitor, which is precisely the complaint this widget was built
+/// to answer.
+///
+/// The card's height is FIXED per step (148 normal / 116 compact), not a
+/// minimum. A minimum let two same-width, same-step tiles land at different
+/// heights depending on their content -- one with a caption, one with a
+/// progress bar, one with neither -- which the tile grid then centred
+/// against each other instead of sharing a baseline. A fixed height makes
+/// every tile in a row identical by construction; [label] and [caption] are
+/// clamped to two lines with an ellipsis so a long string cannot overflow
+/// the now-fixed box. The internal gaps below were tightened from their
+/// original (minimum-height) values for the same reason: label + value +
+/// caption stacked at the old spacing no longer fits in a box that can't
+/// grow to meet it.
 ///
 /// The badge colour comes from [AppTokens.accents] and is fixed by the
 /// tile's position on its dashboard. It must NEVER be derived from the
@@ -68,13 +80,13 @@ class StatTile extends StatelessWidget {
         final compact = constraints.maxWidth < compactBelow;
         final pad = compact ? 14.0 : 22.0;
         final badge = compact ? 28.0 : 38.0;
-        final minHeight = compact ? 116.0 : 148.0;
+        final height = compact ? 116.0 : 148.0;
         final valueSize = valueIsText
             ? (compact ? 15.0 : 19.0)
             : (compact ? 24.0 : 31.0);
 
         final card = Container(
-          constraints: BoxConstraints(minHeight: minHeight),
+          height: height,
           decoration: BoxDecoration(
             color: scheme.surface,
             border: Border.all(color: AppTokens.rule),
@@ -91,15 +103,15 @@ class StatTile extends StatelessWidget {
             key: const Key('statTilePadding'),
             padding: EdgeInsets.all(pad),
             child: Column(
-              // The Column sits in a Container that only sets minHeight, so
-              // its main axis is unbounded — an Expanded/Spacer here would
-              // throw. mainAxisSize.min plus the fixed gap below is the
-              // deliberate replacement for a bottom-pinning Spacer: a row of
-              // tiles shares a baseline because every tile has the same
-              // minHeight and the same fixed internal structure, not because
-              // anything pushes the value down to fill remaining space. Do
-              // not "fix" this back to a Spacer.
-              mainAxisSize: MainAxisSize.min,
+              // The Container above now sets a fixed height (not a
+              // minimum), so every tile of the same step is identical in
+              // height regardless of its content, and every tile's
+              // label/badge row starts from the same top offset. That is
+              // what gives a row of tiles one shared baseline -- not
+              // anything in this Column pushing content to fill space, so
+              // there is still no Expanded/Spacer here. label and caption
+              // are capped at two lines with an ellipsis so a long string
+              // cannot grow past the fixed box.
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -108,6 +120,8 @@ class StatTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: compact ? 11.5 : 13,
                           height: 1.4,
@@ -132,14 +146,16 @@ class StatTile extends StatelessWidget {
                     ),
                   ],
                 ),
-                SizedBox(height: compact ? 12 : 18),
+                SizedBox(height: compact ? 8 : 10),
                 _value(context, valueSize, compact),
                 if (progress != null)
                   _bar(context, compact)
                 else if (caption != null) ...[
-                  SizedBox(height: compact ? 5 : 7),
+                  SizedBox(height: compact ? 3 : 4),
                   Text(
                     caption!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: compact ? 10.5 : 12,
                       height: 1.35,

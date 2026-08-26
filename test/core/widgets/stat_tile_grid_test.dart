@@ -65,4 +65,40 @@ void main() {
     ));
     expect(tile.width, lessThan(340));
   });
+
+  testWidgets('column count never decreases as the window widens',
+      (tester) async {
+    // An earlier version derived a raw column count from minTileWidth and
+    // then vetoed it with a second, unrelated rule (StatTile.compactBelow).
+    // The two rules disagreed over 648px-848px: 3 columns at 640, 2 at 648,
+    // 4 at 848 -- the count visibly flickered as a window was dragged
+    // through that range. None of the four fixed-width tests above land in
+    // it, so only a sweep catches it.
+    var previous = 0;
+    for (var width = 360.0; width <= 1600; width += 20) {
+      await pumpAt(tester, width);
+      final columns = columnsOf(tester);
+      expect(
+        columns,
+        greaterThanOrEqualTo(previous),
+        reason: 'columns dropped at width=$width '
+            '(was $previous, now $columns)',
+      );
+      previous = columns;
+    }
+  });
+
+  testWidgets('the single threshold decides 4 columns vs 2, precisely',
+      (tester) async {
+    // With 4 children and a gap of AppTokens.md (16), 4 columns lands
+    // exactly on StatTile.compactBelow (200) at an available width of 848:
+    // (848 - 3*16) / 4 == 200. This is the only thing standing between 2
+    // and 4 columns now that minTileWidth is gone, so it must be pinned by
+    // a test rather than left free to drift.
+    await pumpAt(tester, 849);
+    expect(columnsOf(tester), 4, reason: 'just above the threshold');
+
+    await pumpAt(tester, 847);
+    expect(columnsOf(tester), 2, reason: 'just below the threshold');
+  });
 }

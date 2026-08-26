@@ -11,21 +11,22 @@ import 'package:ethesishub/core/widgets/stat_tile.dart';
 /// strips that four equal columns produce on a large monitor.
 ///
 /// Flutter has no `auto-fit`/`minmax`, so the column count is computed from
-/// the available width and handed to a fixed-count grid. `minTileWidth`
-/// drives that computation and the `.clamp(2, children.length)` below it is
-/// the actual guarantee against a single column -- it holds regardless of
-/// `minTileWidth`, by design. `minTileWidth` is still load-bearing: raise it
-/// past what a mid-width screen can offer four roomy columns and the
-/// tablet breakpoint (700px) buckles to three columns instead of two,
-/// which is exactly as ugly as the single column this widget exists to
-/// prevent. See the compact-threshold gate below for the other half of
-/// that decision.
+/// the available width and handed to a fixed-count grid. There are only two
+/// candidate counts -- `children.length` and `2` -- rather than a continuous
+/// range: this is deliberate, not a simplification. A single threshold
+/// (`StatTile.compactBelow`) decides between them, which makes the column
+/// count monotonic in width by construction, and restricting the candidates
+/// to those two means four tiles can never split 3-then-1, with a lonely
+/// tile stranded on its own row. An earlier version derived a raw count
+/// from one rule and then vetoed it with a second, unrelated rule; the two
+/// rules disagreed over a range of widths and the column count visibly
+/// flickered (3 -> 2 -> 4) as a window was resized through it. One rule,
+/// two candidates, removes that by construction.
 class StatTileGrid extends StatelessWidget {
   const StatTileGrid({super.key, required this.children});
 
   final List<Widget> children;
 
-  static const double minTileWidth = 150;
   static const double gap = AppTokens.md;
 
   @override
@@ -36,23 +37,14 @@ class StatTileGrid extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final available = constraints.maxWidth;
-            // How many columns of at least minTileWidth fit, counting the
-            // gaps between them. Never fewer than two: a single column of
-            // tall cards is the layout this widget exists to prevent.
-            var columns = ((available + gap) / (minTileWidth + gap)).floor();
-            columns = columns.clamp(2, children.length);
-
-            // The floor above only guarantees each tile clears the absolute
-            // minimum -- at a 700px tablet width, four columns of 150px
-            // technically fit (163px each), but that is StatTile's compact
-            // step, which reads as cramped rather than roomy on a screen
-            // that size. Stepping up past two columns is only worth it once
-            // each tile would clear StatTile's own compact threshold;
-            // otherwise two roomier columns beat more, cramped ones.
-            if (columns > 2) {
-              final tileWidth = (available - (columns - 1) * gap) / columns;
-              if (tileWidth < StatTile.compactBelow) columns = 2;
-            }
+            // Take every tile across if each one would clear StatTile's own
+            // compact threshold at that width; otherwise fall back to two.
+            // Never fewer than two: a single column of tall cards is the
+            // layout this widget exists to prevent.
+            final full = children.length;
+            final fullTileWidth = (available - (full - 1) * gap) / full;
+            final columns =
+                fullTileWidth >= StatTile.compactBelow ? full : 2;
 
             final rows = <Widget>[];
             for (var i = 0; i < children.length; i += columns) {
@@ -64,10 +56,11 @@ class StatTileGrid extends StatelessWidget {
               // uses a LayoutBuilder internally -- a combination that makes
               // both stretch (infinite height) and IntrinsicHeight
               // (LayoutBuilder cannot report intrinsic dimensions) crash
-              // layout. Row's default cross-axis alignment centres children
-              // instead, which is enough: every tile in a row shares the
-              // same width via Expanded, so StatTile's own compact/regular
-              // minHeight is already identical across the row.
+              // layout. Row's default cross-axis alignment (centre) is
+              // enough regardless: StatTile now has a fixed height per
+              // step rather than a minimum, so every tile in a row is
+              // identical in height by construction, not by coincidence
+              // of matching content.
               rows.add(Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
