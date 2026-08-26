@@ -329,6 +329,38 @@ void main() {
       }
     });
   });
+
+  group('typography', () {
+    test('headings are set in the bundled serif, body text is not', () {
+      // The palette's whole justification is a resemblance to paper. Until
+      // this milestone that resemblance was asserted in a doc comment and
+      // absent from the screen. If the family ever silently drops back to
+      // the platform default, every argument in Chapter IV loses its
+      // referent -- so it is pinned here rather than left to inspection.
+      final t = AppTheme.light.textTheme;
+      expect(t.headlineSmall?.fontFamily, AppTheme.serif);
+      expect(t.titleLarge?.fontFamily, AppTheme.serif);
+      expect(t.titleMedium?.fontFamily, AppTheme.serif);
+
+      // Interface furniture stays on the platform sans: a serif label at
+      // 13px reads as small rather than as considered. ThemeData fills any
+      // style that leaves fontFamily unset with the platform default (e.g.
+      // 'Roboto' on Android) rather than leaving it null, so the assertion
+      // that matters is that these styles never pick up the serif -- not
+      // that the field is literally null.
+      expect(t.bodyMedium?.fontFamily, isNot(AppTheme.serif));
+      expect(t.bodySmall?.fontFamily, isNot(AppTheme.serif));
+      expect(t.labelMedium?.fontFamily, isNot(AppTheme.serif));
+      expect(t.labelSmall?.fontFamily, isNot(AppTheme.serif));
+    });
+
+    test('dark theme sets the same families as light', () {
+      final l = AppTheme.light.textTheme;
+      final d = AppTheme.dark.textTheme;
+      expect(d.headlineSmall?.fontFamily, l.headlineSmall?.fontFamily);
+      expect(d.bodyMedium?.fontFamily, l.bodyMedium?.fontFamily);
+    });
+  });
 }
 
 void _ignore(int _) {}

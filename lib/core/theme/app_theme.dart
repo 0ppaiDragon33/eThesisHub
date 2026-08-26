@@ -4,15 +4,26 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 
 /// The application theme.
 ///
-/// Typography is deliberate in scale, weight and letter-spacing rather than
-/// in typeface: no font files are bundled, so the family is the platform
-/// default. The serif that the approved Form 1 layout uses belongs to the
-/// PDF, which the `pdf` package renders independently of this theme.
+/// Two typefaces, each with one job. Headings and stat values are set in
+/// the bundled Source Serif 4 (SIL OFL 1.1, `assets/fonts/`), which is the
+/// document voice; labels, body copy, chips and buttons stay on the
+/// platform sans, which is the interface voice. Scale, weight and tracking
+/// still do most of the work — the second family sharpens a distinction
+/// that already existed rather than replacing it.
 ///
-/// Titles are set tight and heavy, body text is set loose and light — the
-/// contrast between them is what gives a screen its structure, since there
-/// is no second typeface to do that job.
+/// The PDF renders its own serif through the `pdf` package and is
+/// unaffected by anything here.
 class AppTheme {
+  /// The bundled serif, used for the document voice only: page titles,
+  /// section headings and stat values. Everything else — labels, body,
+  /// chips, buttons, chart axes — stays on the platform sans, because the
+  /// contrast between the two is what the second family is for.
+  ///
+  /// A failed font load degrades to the platform default, which is exactly
+  /// how this app looked before the font was bundled. There is no broken
+  /// state to fall into.
+  static const String serif = 'SourceSerif4';
+
   static ThemeData get light => _build(
         brightness: Brightness.light,
         ink: AppTokens.ink,
@@ -180,6 +191,7 @@ class AppTheme {
   static TextTheme _typography(Color ink, Color inkMuted) {
     return TextTheme(
       headlineSmall: TextStyle(
+        fontFamily: serif,
         fontSize: 26,
         height: 1.2,
         fontWeight: FontWeight.w700,
@@ -187,6 +199,7 @@ class AppTheme {
         color: ink,
       ),
       titleLarge: TextStyle(
+        fontFamily: serif,
         fontSize: 20,
         height: 1.25,
         fontWeight: FontWeight.w700,
@@ -194,6 +207,7 @@ class AppTheme {
         color: ink,
       ),
       titleMedium: TextStyle(
+        fontFamily: serif,
         fontSize: 17,
         height: 1.3,
         fontWeight: FontWeight.w600,
