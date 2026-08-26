@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/core/theme/app_theme.dart';
@@ -100,5 +101,86 @@ void main() {
 
     await pumpAt(tester, 847);
     expect(columnsOf(tester), 2, reason: 'just below the threshold');
+  });
+
+  testWidgets(
+      'AsyncStatTile lays out at the grid-chosen step, both normal and '
+      'compact', (tester) async {
+    // The whole reason the step is published through the element tree
+    // rather than copied onto StatTile's constructor: AsyncStatTile is not
+    // a StatTile and has no compact field to copy onto, but it does render
+    // a StatTile as a genuine descendant, which is what should let it pick
+    // up the step this grid publishes.
+    Widget grid() => StatTileGrid(children: [
+          for (var i = 0; i < 4; i++)
+            AsyncStatTile<int>(
+              label: 'Async $i',
+              value: AsyncValue.data(i),
+              format: (n) => '$n',
+              icon: Icons.circle,
+              accent: AppTokens.accents[i],
+            ),
+        ]);
+
+    Future<double> padAt(double width) async {
+      tester.view.physicalSize = Size(width, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: SingleChildScrollView(child: grid())),
+      ));
+      await tester.pump();
+      final padding = tester
+          .widgetList<Padding>(find.byKey(const Key('statTilePadding')))
+          .first;
+      return (padding.padding as EdgeInsets).left;
+    }
+
+    // 1400px: 4 across, the normal step (padding 22).
+    expect(await padAt(1400), 22);
+
+    // 360px: 2 across, the compact step (padding 14).
+    expect(await padAt(360), 14);
+  });
+
+  testWidgets(
+      'a StatTile and an AsyncStatTile in the same grid share one height',
+      (tester) async {
+    // The combination the dashboards will actually use: not every tile is
+    // stream-backed (a static "Not scheduled" tile, say), but most are, and
+    // they sit in the same row. Both must land at the same height whatever
+    // their internal wrapping looks like.
+    final grid = StatTileGrid(children: [
+      const StatTile(
+        label: 'Plain tile',
+        value: '1',
+        caption: 'Has a caption',
+        icon: Icons.check,
+        accent: AppTokens.accentPine,
+      ),
+      AsyncStatTile<int>(
+        label: 'Async tile',
+        value: const AsyncValue.data(2),
+        format: (n) => '$n',
+        icon: Icons.check,
+        accent: AppTokens.accentSeal,
+      ),
+    ]);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(body: SingleChildScrollView(child: grid)),
+    ));
+    await tester.pump();
+
+    double heightOf(String label) => tester
+        .getSize(find.ancestor(
+          of: find.text(label),
+          matching: find.byType(StatTile),
+        ))
+        .height;
+
+    expect(heightOf('Async tile'), heightOf('Plain tile'));
   });
 }

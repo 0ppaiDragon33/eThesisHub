@@ -23,17 +23,23 @@ import 'package:ethesishub/core/widgets/stat_tile.dart';
 /// flickered (3 -> 2 -> 4) as a window was resized through it. One rule,
 /// two candidates, removes that by construction.
 ///
-/// This grid takes `List<StatTile>` rather than `List<Widget>` because it
-/// tells every tile its step (compact or not) rather than letting each tile
-/// guess from its own width via `LayoutBuilder`. That is what lets a row be
+/// This grid tells every tile its step (compact or not) by publishing a
+/// [StatTileStep] above the whole grid, rather than letting each tile guess
+/// from its own width via `LayoutBuilder`. That is what lets every row be
 /// wrapped in `IntrinsicHeight` -- `LayoutBuilder` cannot report intrinsic
 /// dimensions, so a `StatTile` measuring itself would make `IntrinsicHeight`
-/// throw. This grid already computes the tile width while choosing the
-/// column count, so it hands `StatTile` the answer instead.
+/// throw. An earlier version passed the step by copying `StatTile`'s fields
+/// onto a rebuilt tile, which only works for `StatTile` itself: it rejects
+/// `AsyncStatTile` (every stream-backed dashboard tile must be one, per its
+/// own "never render a false zero" rule) and silently drops any field a
+/// future change adds to `StatTile` without also updating the copy. An
+/// inherited widget reaches any descendant, `AsyncStatTile` included,
+/// without a field list to keep in sync -- which is also why `children` is
+/// `List<Widget>` again rather than `List<StatTile>`.
 class StatTileGrid extends StatelessWidget {
   const StatTileGrid({super.key, required this.children});
 
-  final List<StatTile> children;
+  final List<Widget> children;
 
   static const double gap = AppTokens.md;
 
@@ -58,12 +64,13 @@ class StatTileGrid extends StatelessWidget {
             final rows = <Widget>[];
             for (var i = 0; i < children.length; i += columns) {
               final slice = children.skip(i).take(columns).toList();
-              // Every tile in the row is told its step (see the class doc),
-              // so none of them runs its own LayoutBuilder, which is what
-              // makes IntrinsicHeight safe here: it sizes the row to the
-              // tallest tile's real content, with StatTile's minHeight as
-              // the floor, rather than every tile guessing independently
-              // and disagreeing.
+              // No tile in the row runs its own LayoutBuilder -- every one
+              // of them (however deeply an AsyncStatTile may wrap it) reads
+              // its step from the StatTileStep published below instead --
+              // which is what makes IntrinsicHeight safe here: it sizes
+              // the row to the tallest tile's real content, with
+              // StatTile's minHeight as the floor, rather than every tile
+              // guessing independently and disagreeing.
               rows.add(IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -74,9 +81,7 @@ class StatTileGrid extends StatelessWidget {
                       // width as every other row's, rather than letting a
                       // lone trailing tile expand to fill the line.
                       Expanded(
-                        child: j < slice.length
-                            ? _withStep(slice[j], compact)
-                            : const SizedBox(),
+                        child: j < slice.length ? slice[j] : const SizedBox(),
                       ),
                     ],
                   ],
@@ -87,32 +92,19 @@ class StatTileGrid extends StatelessWidget {
               }
             }
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: rows,
+            // One StatTileStep above every row: the column count -- and so
+            // the step -- is the same for the whole grid, not recomputed
+            // per row, so a single publisher above all of them is enough.
+            return StatTileStep(
+              compact: compact,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: rows,
+              ),
             );
           },
         ),
       ),
-    );
-  }
-
-  /// Rebuilds [tile] with [compact] forced, rather than left for the tile
-  /// to work out from its own width. A plain field copy: every other
-  /// property of [StatTile] is public and unrelated to layout.
-  static StatTile _withStep(StatTile tile, bool compact) {
-    return StatTile(
-      key: tile.key,
-      label: tile.label,
-      value: tile.value,
-      icon: tile.icon,
-      accent: tile.accent,
-      unit: tile.unit,
-      caption: tile.caption,
-      progress: tile.progress,
-      onTap: tile.onTap,
-      valueIsText: tile.valueIsText,
-      compact: compact,
     );
   }
 }

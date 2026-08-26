@@ -4,6 +4,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 
+/// Publishes the step ([compact] or not) that a [StatTileGrid] has chosen
+/// for the row it is building, so every [StatTile] descendant -- including
+/// one reached indirectly through [AsyncStatTile] -- can pick it up without
+/// the grid needing to touch the tile's constructor directly.
+///
+/// An earlier version had the grid copy [StatTile]'s fields onto a rebuilt
+/// tile to force the step. That only works for `StatTile` itself: it
+/// rejects `AsyncStatTile`, which every stream-backed dashboard tile must
+/// be (see the "never render a false zero" rule on [AsyncStatTile]), and
+/// it silently drops any field a future change adds to `StatTile` without
+/// also updating the copy. Publishing the step through the element tree
+/// instead reaches any descendant, however deep, and needs no field list
+/// to keep in sync.
+class StatTileStep extends InheritedWidget {
+  const StatTileStep({super.key, required this.compact, required super.child});
+
+  final bool compact;
+
+  /// `null` when no [StatTileGrid] (or other publisher) is an ancestor --
+  /// a standalone tile falls back to measuring its own width instead.
+  static bool? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<StatTileStep>()
+        ?.compact;
+  }
+
+  @override
+  bool updateShouldNotify(StatTileStep oldWidget) =>
+      compact != oldWidget.compact;
+}
+
 /// One figure on a dashboard: a label, a number, and a coloured badge.
 ///
 /// The proportions are load-bearing rather than decorative. Label and badge
@@ -69,28 +100,24 @@ class StatTile extends StatelessWidget {
   final VoidCallback? onTap;
   final bool valueIsText;
 
-  /// When a caller already knows the step -- the tile grid does, because
-  /// it has already computed the tile's width while choosing the column
-  /// count -- it can pass that here, and this widget skips its own
-  /// `LayoutBuilder` entirely, building directly at the given step.
-  /// `LayoutBuilder` cannot report intrinsic dimensions, which is what
-  /// stops a grid from sizing a row with `IntrinsicHeight` when every tile
-  /// decides its own step independently; a tile that is TOLD its step
-  /// removes that obstacle. Left `null` (the default), the tile falls back
-  /// to measuring its own width via `LayoutBuilder`, exactly as before -- a
-  /// standalone tile (as in this file's tests, pumped directly at a fixed
-  /// width) still works with no caller changes.
+  /// The explicit override. Resolution order, checked in [build]: this
+  /// constructor parameter first, then [StatTileStep.maybeOf] (what
+  /// `StatTileGrid` publishes), then the `LayoutBuilder` fallback below.
+  /// The constructor parameter stays useful for tests and for a caller that
+  /// wants to force a step outside a grid and outside the inherited widget.
   final bool? compact;
 
   /// Below this width the tile steps down a size. Keyed off the tile's own
   /// width rather than the screen's, so a tile placed in a narrow column on
-  /// a wide display behaves correctly. Only consulted when [compact] is not
-  /// supplied by the caller.
+  /// a wide display behaves correctly. Only consulted when neither
+  /// [compact] nor an ancestor [StatTileStep] supplies the step.
   static const double compactBelow = 200;
 
   @override
   Widget build(BuildContext context) {
-    if (compact != null) return _build(context, compact!);
+    final fromStep = StatTileStep.maybeOf(context);
+    final resolved = compact ?? fromStep;
+    if (resolved != null) return _build(context, resolved);
     return LayoutBuilder(
       builder: (context, constraints) {
         return _build(context, constraints.maxWidth < compactBelow);
@@ -262,6 +289,13 @@ class StatTile extends StatelessWidget {
 /// project has four times shipped a screen where a loading count and a real
 /// count of nothing were indistinguishable, which tells the reader their
 /// queue is empty when it may be full.
+///
+/// This widget takes no [StatTile.compact]: it never needs one, because the
+/// [StatTile] it returns from [build] is a genuine descendant of this
+/// widget's own [BuildContext], and so reaches any [StatTileStep] published
+/// by an ancestor [StatTileGrid] on its own -- the same inherited-widget
+/// lookup an ordinary `StatTile` placed directly in the grid would do.
+/// Nothing about wrapping the value in an `AsyncValue` changes that.
 class AsyncStatTile<T> extends StatelessWidget {
   const AsyncStatTile({
     super.key,
