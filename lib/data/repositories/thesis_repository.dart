@@ -217,6 +217,21 @@ class ThesisRepository {
         .map((s) => s.docs.map((d) => _toThesis(d.id, d.data())).toList());
   }
 
+  /// Every thesis in the college, unfiltered.
+  ///
+  /// Readable only by a coordinator or the dean. Their arm of the `theses`
+  /// list rule reads no field off `resource`, so — unlike the defence
+  /// listing in M3 — this query needs no `where` clause to be admitted.
+  /// Pinned by four emulator tests, including a student control.
+  ///
+  /// Never watch this from a student or faculty screen: it produces a
+  /// `permission-denied` the reader can do nothing about.
+  Stream<List<Thesis>> watchAll() {
+    return _theses
+        .snapshots()
+        .map((s) => s.docs.map((d) => _toThesis(d.id, d.data())).toList());
+  }
+
   /// Theses this faculty member advises.
   ///
   /// Needs the adviser arm on `allow list` added in M2 — before it, this
