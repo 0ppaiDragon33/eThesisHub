@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
-import 'package:ethesishub/core/widgets/states.dart';
-import 'package:ethesishub/core/widgets/status_chip.dart';
-import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/approvals_screen.dart';
 import 'package:ethesishub/features/dashboard/dean_overview.dart';
-import 'package:ethesishub/features/dashboard/defence_queue.dart';
-import 'package:ethesishub/features/defence/defences_list.dart';
-import 'package:ethesishub/features/documents/defence_readiness.dart';
-import 'package:ethesishub/providers/thesis_providers.dart';
+import 'package:ethesishub/features/dashboard/readiness_screen.dart';
+import 'package:ethesishub/features/dashboard/title_defences_screen.dart';
+import 'package:ethesishub/features/defence/defences_screen.dart';
 
 class DeanDashboard extends ConsumerStatefulWidget {
   const DeanDashboard({super.key});
@@ -26,9 +21,6 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final queueAsync =
-        ref.watch(thesesByStatusProvider(ThesisStatus.nominationPendingDean));
-
     return ResponsiveScaffold(
       // Identifies this dashboard for routing tests. Asserting on heading
       // copy instead ties every routing test to wording that changes.
@@ -57,62 +49,10 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
       ],
       actions: const [SignOutButton()],
       body: switch (_selectedIndex) {
-        1 => PageShell(
-        title: 'Nomination approvals',
-        subtitle: 'Theses the Coordinator has recommended, waiting on you.',
-        children: [
-          queueAsync.when(
-            loading: () => const LoadingState(),
-            error: (e, _) => ErrorState(
-              error: e,
-              message: 'Could not load the approval queue.',
-            ),
-            data: (theses) {
-              if (theses.isEmpty) {
-                return const EmptyState(
-                  icon: Icons.task_alt,
-                  title: 'Nothing waiting',
-                  message: 'Nominations appear here once the College '
-                      'Research Coordinator has recommended them.',
-                );
-              }
-              return Column(
-                children: [
-                  for (final t in theses)
-                    ListTile(
-                      title: Text(t.workingTitle),
-                      subtitle: Text('${t.program} · ${t.college}'),
-                      trailing: StatusChip(t.status, dense: true),
-                    ),
-                ],
-              );
-            },
-          ),
-          const Gap.lg(),
-          FilledButton(
-            key: const Key('goToReview'),
-            onPressed: () => context.go('/review'),
-            child: const Text('Open approval queue'),
-          ),
-        ],
-          ),
-        2 => const PageShell(
-            title: 'Title defences',
-            subtitle: 'Groups presenting their candidate titles.',
-            children: [DefenceQueue()],
-          ),
-        3 => const PageShell(
-            title: 'Scheduled defences',
-            subtitle: 'Pre-oral and final defences, and the rooms they run '
-                'in.',
-            children: [DefencesList()],
-          ),
-        4 => const PageShell(
-            title: 'Defence readiness',
-            subtitle: 'Theses whose chapters have cleared the gate for a '
-                'pre-oral or final defence.',
-            children: [DefenceReadinessList()],
-          ),
+        1 => const ApprovalsScreen(),
+        2 => const TitleDefencesScreen(),
+        3 => const DefencesScreen(),
+        4 => const ReadinessScreen(),
         _ => const DeanOverview(),
       },
     );

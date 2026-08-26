@@ -11,7 +11,7 @@ import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/student_overview.dart';
-import 'package:ethesishub/features/defence/defences_list.dart';
+import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -78,11 +78,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         1 => _thesisBody(context, thesisAsync),
         2 when chaptersUnlocked =>
           ChaptersScreen(thesisId: thesis.id, embedded: true),
-        3 when chaptersUnlocked => const PageShell(
+        3 when chaptersUnlocked => const DefencesScreen(
             title: 'My defences',
             subtitle: 'Your pre-oral and final defences, and the '
                 'consolidated comments once your adviser releases them.',
-            children: [DefencesList()],
           ),
         _ => const StudentOverview(),
       },
