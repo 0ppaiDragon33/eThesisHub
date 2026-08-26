@@ -235,6 +235,12 @@ void main() {
           uid: 'c1', role: 'coordinator'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now, ahead of Recommendations.
+      expect(find.byKey(const Key('coordinatorOverview')), findsOneWidget);
+      expect(find.text('Nomination recommendations'), findsNothing);
+
+      await tester.tap(find.text('Recommendations'));
+      await tester.pumpAndSettle();
       expect(find.text('Nomination recommendations'), findsOneWidget);
 
       await tester.tap(find.text('Readiness'));
@@ -246,9 +252,9 @@ void main() {
     testWidgets('the coordinator reaches Titles and Defences separately',
         (tester) async {
       // Faculty is a jump to another screen rather than a panel, and it sits
-      // last — so inserting Titles moved its index. An off-by-one there
-      // sends the coordinator to the wrong place and nothing else would
-      // notice.
+      // last — so inserting Overview and Titles moved its index twice. An
+      // off-by-one there sends the coordinator to the wrong place and
+      // nothing else would notice.
       final db = FakeFirebaseFirestore();
       await tester.pumpWidget(await wrap(const CoordinatorDashboard(), db,
           uid: 'c1', role: 'coordinator'));

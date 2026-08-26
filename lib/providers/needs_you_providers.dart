@@ -8,6 +8,7 @@ import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
@@ -322,6 +323,190 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   );
 
   ref.onDispose(controller.close);
+
+  return controller.stream;
+});
+
+/// Every defence in the college, unfiltered -- straight off
+/// [defenceRepositoryProvider] rather than through [myDefencesProvider],
+/// which awaits `currentUserProvider.future` first. Private to this file:
+/// [coordinatorNeedsYouProvider] is the only caller, and it must not depend
+/// on `users/{uid}` existing to resolve.
+final _allDefencesProvider = StreamProvider<List<Defence>>(
+  (ref) => ref.watch(defenceRepositoryProvider).watchAll(),
+);
+
+/// What is waiting on the signed-in coordinator: nominations that have
+/// cleared every Conforme, candidate title sets ready for a defence
+/// decision, and theses that have cleared the chapter gate for a defence
+/// but have none scheduled yet.
+///
+/// Each row routes to exactly where the coordinator dashboard's own
+/// destinations already send that same thesis -- `/review` for a
+/// recommendation (see the `goToReview` button in `coordinator_dashboard.
+/// dart`), `/defence/{id}` for a title defence (see `DefenceQueue`), and
+/// `/defence/schedule?id={id}` for scheduling a defence (see the
+/// `schedule-{id}` button in `defence_readiness.dart`'s `_ReadinessRow`) --
+/// reused verbatim so a row here is never a dead end.
+///
+/// A live fan-in over four sources, following the shape proven in
+/// [facultyNeedsYouProvider] and [deanNeedsYouProvider]: one `ref.listen`
+/// subscription per top-level source, `ref.onDispose` cleanup, `onError` on
+/// every one of them. Do NOT collapse this into an `await for` over one
+/// stream with `.first` read against another -- that shape only advances
+/// when the FIRST stream emits, and a change that touches only a later
+/// source never arrives. This project has shipped that exact bug once
+/// already.
+///
+/// The "ready for a defence but none scheduled" source is itself a second,
+/// nested fan-in, the same shape [facultyNeedsYouProvider] uses for its
+/// chapter subscriptions: which theses to watch chapters for is only known
+/// once the `titleApproved` list has emitted, and that list can grow or
+/// shrink, so the per-thesis chapter subscriptions are opened and closed to
+/// track it. Readiness itself is computed with [readinessOf] -- the exact
+/// function `defence_readiness.dart` uses to decide the same question for
+/// its own screen -- rather than re-deriving what "ready" means here. Two
+/// definitions of readiness that could drift apart would be worse than
+/// reusing the one that already exists.
+///
+/// Reads defences straight from [defenceRepositoryProvider] rather than
+/// through [myDefencesProvider]: that provider awaits `currentUserProvider.
+/// future` first (a known, out-of-scope quirk), and nothing on a needs-you
+/// queue may depend on `users/{uid}` existing to resolve at all.
+final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
+  final controller = StreamController<List<NeedsYouItem>>();
+
+  AsyncValue<List<Thesis>>? recommendations;
+  AsyncValue<List<Thesis>>? titleDefences;
+  AsyncValue<List<Thesis>>? readyCandidates;
+  AsyncValue<List<Defence>>? defences;
+
+  // thesisId -> its chapters, kept live by a subscription opened/closed as
+  // the ready-candidate list itself changes (see the fan-in note above).
+  final chaptersByThesis = <String, List<ThesisChapter>>{};
+  final chapterSubs = <String, StreamSubscription<List<ThesisChapter>>>{};
+
+  void emit() {
+    // Wait for one snapshot from each top-level source before emitting, so
+    // the queue never renders a partial merge as though it were complete.
+    if (recommendations == null ||
+        titleDefences == null ||
+        readyCandidates == null ||
+        defences == null) {
+      return;
+    }
+
+    final scheduledThesisIds = {
+      for (final d in (defences!.valueOrNull ?? const <Defence>[]))
+        if (!d.status.isTerminal) d.thesisId,
+    };
+
+    final items = <NeedsYouItem>[
+      for (final t in (recommendations!.valueOrNull ?? const <Thesis>[]))
+        NeedsYouItem(
+          title: t.workingTitle,
+          detail: 'Every nominee has accepted their Conforme, waiting on '
+              'your recommendation.',
+          route: '/review',
+          chipLabel: 'Recommend',
+          tone: NeedsYouTone.act,
+        ),
+      for (final t in (titleDefences!.valueOrNull ?? const <Thesis>[]))
+        NeedsYouItem(
+          title: t.workingTitle,
+          detail: 'Presented their candidate titles -- decide the outcome.',
+          route: '/defence/${t.id}',
+          chipLabel: 'Decide',
+          tone: NeedsYouTone.act,
+        ),
+      for (final t in (readyCandidates!.valueOrNull ?? const <Thesis>[]))
+        if (!scheduledThesisIds.contains(t.id) &&
+            chaptersByThesis[t.id] != null &&
+            readinessOf(chaptersByThesis[t.id]!) != DefenceReadiness.notReady)
+          NeedsYouItem(
+            title: t.workingTitle,
+            detail: 'Its chapters have cleared the gate for a defence -- '
+                'schedule one.',
+            route: '/defence/schedule?id=${t.id}',
+            chipLabel: 'Schedule',
+            tone: NeedsYouTone.act,
+          ),
+    ];
+
+    controller.add(items);
+  }
+
+  // Opens a chapter subscription for every currently ready-candidate thesis
+  // that does not already have one, and closes any whose thesis fell off
+  // the list -- the candidate list is the only thing that decides which
+  // chapter streams should be open.
+  void syncChapterSubs(List<Thesis> currentCandidates) {
+    final ids = currentCandidates.map((t) => t.id).toSet();
+    for (final id in chapterSubs.keys.toList()) {
+      if (!ids.contains(id)) {
+        chapterSubs.remove(id)?.cancel();
+        chaptersByThesis.remove(id);
+      }
+    }
+    for (final id in ids) {
+      if (chapterSubs.containsKey(id)) continue;
+      chapterSubs[id] = ref
+          .watch(documentRepositoryProvider)
+          .watchChapters(id)
+          .listen((chapters) {
+        chaptersByThesis[id] = chapters;
+        emit();
+      }, onError: controller.addError);
+    }
+  }
+
+  ref.listen<AsyncValue<List<Thesis>>>(
+    thesesByStatusProvider(ThesisStatus.nominationPendingCoordinator),
+    (previous, next) {
+      recommendations = next;
+      emit();
+    },
+    fireImmediately: true,
+    onError: (e, st) => controller.addError(e, st),
+  );
+
+  ref.listen<AsyncValue<List<Thesis>>>(
+    thesesByStatusProvider(ThesisStatus.titlePendingDefence),
+    (previous, next) {
+      titleDefences = next;
+      emit();
+    },
+    fireImmediately: true,
+    onError: (e, st) => controller.addError(e, st),
+  );
+
+  ref.listen<AsyncValue<List<Thesis>>>(
+    thesesByStatusProvider(ThesisStatus.titleApproved),
+    (previous, next) {
+      readyCandidates = next;
+      next.whenData(syncChapterSubs);
+      emit();
+    },
+    fireImmediately: true,
+    onError: (e, st) => controller.addError(e, st),
+  );
+
+  ref.listen<AsyncValue<List<Defence>>>(
+    _allDefencesProvider,
+    (previous, next) {
+      defences = next;
+      emit();
+    },
+    fireImmediately: true,
+    onError: (e, st) => controller.addError(e, st),
+  );
+
+  ref.onDispose(() {
+    for (final s in chapterSubs.values) {
+      s.cancel();
+    }
+    controller.close();
+  });
 
   return controller.stream;
 });
