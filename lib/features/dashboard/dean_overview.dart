@@ -56,7 +56,12 @@ class DeanOverview extends ConsumerWidget {
         ref.watch(thesesByStatusProvider(ThesisStatus.nominationPendingDean));
     final titleDefencesAsync =
         ref.watch(thesesByStatusProvider(ThesisStatus.titlePendingDefence));
-    final defencesAsync = ref.watch(myDefencesProvider);
+    // allDefencesProvider, not myDefencesProvider: the latter awaits
+    // currentUserProvider.future and branches on role, so a dean without a
+    // profile document falls through to the faculty adviser/panel fan-in
+    // instead of the college-wide watchAll() -- silently wrong, never
+    // blocked. See the note on allDefencesProvider itself.
+    final defencesAsync = ref.watch(allDefencesProvider);
     final allThesesAsync = ref.watch(allThesesProvider);
 
     return PageShell(

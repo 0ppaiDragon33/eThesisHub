@@ -327,15 +327,6 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   return controller.stream;
 });
 
-/// Every defence in the college, unfiltered -- straight off
-/// [defenceRepositoryProvider] rather than through [myDefencesProvider],
-/// which awaits `currentUserProvider.future` first. Private to this file:
-/// [coordinatorNeedsYouProvider] is the only caller, and it must not depend
-/// on `users/{uid}` existing to resolve.
-final _allDefencesProvider = StreamProvider<List<Defence>>(
-  (ref) => ref.watch(defenceRepositoryProvider).watchAll(),
-);
-
 /// What is waiting on the signed-in coordinator: nominations that have
 /// cleared every Conforme, candidate title sets ready for a defence
 /// decision, and theses that have cleared the chapter gate for a defence
@@ -492,7 +483,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   );
 
   ref.listen<AsyncValue<List<Defence>>>(
-    _allDefencesProvider,
+    allDefencesProvider,
     (previous, next) {
       defences = next;
       emit();

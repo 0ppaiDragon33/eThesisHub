@@ -43,7 +43,12 @@ class CoordinatorOverview extends ConsumerWidget {
     final allThesesAsync = ref.watch(allThesesProvider);
     final recommendAsync = ref.watch(
         thesesByStatusProvider(ThesisStatus.nominationPendingCoordinator));
-    final defencesAsync = ref.watch(myDefencesProvider);
+    // allDefencesProvider, not myDefencesProvider: the latter awaits
+    // currentUserProvider.future and branches on role, so a coordinator
+    // without a profile document falls through to the faculty adviser/panel
+    // fan-in instead of the college-wide watchAll() -- silently wrong,
+    // never blocked. See the note on allDefencesProvider itself.
+    final defencesAsync = ref.watch(allDefencesProvider);
     final directoryAsync = ref.watch(allDirectoryProvider);
 
     return PageShell(

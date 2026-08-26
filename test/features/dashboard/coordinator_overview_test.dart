@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -263,5 +264,47 @@ void main() {
 
     expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
     expect(find.text('Defence readiness'), findsNothing);
+  });
+
+  testWidgets(
+      'the Defences this week tile still shows the college-wide count '
+      'without a profile document', (tester) async {
+    // myDefencesProvider awaits currentUserProvider.future and branches on
+    // role -- with no `users/{uid}` document, that branch does not match
+    // the dean/coordinator arm, and it silently falls through to the
+    // faculty adviser/panel fan-in instead of watchAll(). Nothing hangs,
+    // so the earlier "greeting survives a missing profile" test cannot
+    // catch this: the tile just quietly shows the wrong count. This pins
+    // `allDefencesProvider` as the fix.
+    final db = FakeFirebaseFirestore();
+    final today = DateTime.now();
+    await db.collection('defenses').doc('def1').set({
+      'thesisId': 't1',
+      'type': 'preOral',
+      'scheduledAt': Timestamp.fromDate(today),
+      'venue': 'CICT AVR',
+      'panelUids': <String>[],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'scheduled',
+      'createdBy': 'c1',
+    });
+
+    await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
+        uid: 'c1', role: 'coordinator'));
+    // Remove the profile the helper wrote -- the same missing-document
+    // window the greeting test exercises, but checked against the tile
+    // instead of the greeting.
+    await db.collection('users').doc('c1').delete();
+    await tester.pumpAndSettle();
+
+    final tile = find.ancestor(
+        of: find.text('Defences this week'), matching: find.byKey(const Key('statTilePadding')));
+    expect(find.descendant(of: tile, matching: find.text('1')),
+        findsOneWidget);
+    expect(find.descendant(of: tile, matching: find.text('0')),
+        findsNothing);
+    expect(find.descendant(of: tile, matching: find.text('—')),
+        findsNothing);
   });
 }
