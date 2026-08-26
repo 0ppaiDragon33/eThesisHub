@@ -82,6 +82,12 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // The dashboard now lands on Overview -- the "no work list" milestone
+    // this suite is named for -- so 'goToThesis' lives one tap over, on the
+    // Thesis destination, rather than being visible on first paint.
+    await tester.tap(find.text('Thesis'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToThesis')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToThesis')));
     await tester.pumpAndSettle();
@@ -143,6 +149,11 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // Overview now lands first for the coordinator; the review-queue link
+    // with its own key sits on the Recommendations destination.
+    await tester.tap(find.text('Recommendations'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToReview')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToReview')));
     await tester.pumpAndSettle();
@@ -168,8 +179,13 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // Overview lands first now; the link with its own key sits on the
+    // Recommendations destination.
+    await tester.tap(find.text('Recommendations'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToFaculty')), findsOneWidget);
-    // Four destinations now, so the bar takes height the button used to
+    // Five destinations now, so the bar takes height the button used to
     // have; PageShell scrolls but tester.tap() does not scroll for you.
     await tester.ensureVisible(find.byKey(const Key('goToFaculty')));
     await tester.tap(find.byKey(const Key('goToFaculty')));
@@ -179,12 +195,41 @@ void main() {
     expect(find.byKey(const Key('goToFaculty')), findsNothing);
   });
 
+  testWidgets(
+      'the coordinator Faculty destination reaches /invites after the '
+      'Overview shift', (tester) async {
+    // Prepending Overview shifted every other coordinator destination's
+    // index by one -- Faculty moved from index 4 to index 5. The dashboard
+    // used to jump on a hard-coded `if (i == 4)`, which would have silently
+    // routed this exact tap (now index 5) to whatever destination 4
+    // (Readiness) renders instead, with no error. This is the regression
+    // test for that literal, exercised through the real router the way the
+    // bug actually shipped.
+    final c = await containerFor('coordinator', 'u5');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Faculty'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
+    expect(find.text('Defence readiness'), findsNothing);
+  });
+
   testWidgets('a dean reaches the review (approval) queue from the dashboard link',
       (tester) async {
     final c = await containerFor('dean', 'u4');
     addTearDown(c.dispose);
     await tester.pumpWidget(
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await tester.pumpAndSettle();
+
+    // Overview now lands first for the dean; the approval-queue link with
+    // its own key sits on the Approvals destination.
+    await tester.tap(find.text('Approvals'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToReview')), findsOneWidget);

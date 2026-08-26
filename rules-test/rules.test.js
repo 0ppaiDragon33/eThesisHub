@@ -3340,6 +3340,92 @@ test("M3: the schedule may be edited while scheduled, and never after",
     await assertFails(updateDoc(doc(coord, "defenses/df1"),
       { scheduledAt: inMinutes(120), venue: "Somewhere else" }));
   });
+
+// --- Dashboards: the coordinator and dean whole-college read ---
+//
+// The overview donut and the All-theses table both need an UNFILTERED list
+// of every thesis. The existing arm reads no field off `resource` for these
+// two roles, so unlike the M3 defence listing there is no filter the query
+// must carry. That is a claim about rules, and fake_cloud_firestore enforces
+// none, so it can only be proven here.
+
+async function seedRole(uid, role) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}`), {
+      fullName: "A Person", email: `${uid}@isufst.edu.ph`, role,
+      college: null, program: null, specialization: null,
+      active: true, createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+}
+
+test("a coordinator may list every thesis, unfiltered", async () => {
+  await seedRole("dash-coord-uid", "coordinator");
+  await seedThesis("t-dash-1", "someone-else", "draft");
+  await seedThesis("t-dash-2", "another-person", "titleApproved");
+
+  const coordinator = env
+    .authenticatedContext("dash-coord-uid", {
+      email: "dash-coord-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  const snap = await assertSucceeds(getDocs(collection(coordinator, "theses")));
+  assert.ok(snap.size >= 2, "the coordinator saw fewer theses than were seeded");
+});
+
+test("a dean may list every thesis, unfiltered", async () => {
+  await seedRole("dash-dean-uid", "dean");
+  await seedThesis("t-dash-3", "someone-else", "draft");
+
+  const dean = env
+    .authenticatedContext("dash-dean-uid", {
+      email: "dash-dean-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(getDocs(collection(dean, "theses")));
+});
+
+// The control. Without this the two tests above would pass for a rule that
+// admitted everyone, and the dashboards would leak every thesis in the
+// college to any signed-in student.
+test("a student may NOT list every thesis", async () => {
+  await seedRole("dash-student-uid", "student");
+  await seedThesis("t-dash-4", "someone-else", "draft");
+
+  const s = env
+    .authenticatedContext("dash-student-uid", {
+      email: "dash-student-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(getDocs(collection(s, "theses")));
+});
+
+// ...and the narrow query a student IS allowed, proving the denial above is
+// about the missing filter rather than about the student being blocked from
+// `theses` outright.
+test("a student may still list their own thesis", async () => {
+  await seedRole("dash-leader-uid", "student");
+  await seedThesis("t-dash-5", "dash-leader-uid", "draft");
+
+  const s = env
+    .authenticatedContext("dash-leader-uid", {
+      email: "dash-leader-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(getDocs(query(
+    collection(s, "theses"),
+    where("leaderUid", "==", "dash-leader-uid"),
+  )));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

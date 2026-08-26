@@ -11,6 +11,26 @@ final defenceRepositoryProvider = Provider<DefenceRepository>(
   (ref) => DefenceRepository(ref.watch(firestoreProvider)),
 );
 
+/// Every defence in the college, unfiltered -- straight off
+/// [defenceRepositoryProvider] rather than through [myDefencesProvider].
+///
+/// [myDefencesProvider] awaits `currentUserProvider.future` before it can
+/// decide which query to run, so anything reading it inherits a dependency
+/// on `users/{uid}` resolving. That dependency does not hang -- `watchUser`
+/// resolves to `null` for a missing profile rather than staying pending --
+/// but a `null` profile does not match the coordinator/dean branch either,
+/// so a coordinator or dean without a profile document silently falls
+/// through to the faculty adviser/panel fan-in and sees the wrong count
+/// instead of the college-wide one. That is the exact race window an
+/// earlier milestone's lockout bug came from (see the "never blocks on the
+/// profile document" notes on the overview screens), so anything on an
+/// overview that wants "every defence" -- a coordinator's or dean's
+/// "Defences this week" tile, or [coordinatorNeedsYouProvider]'s own
+/// "no defence scheduled" check -- reads it from here instead.
+final allDefencesProvider = StreamProvider<List<Defence>>(
+  (ref) => ref.watch(defenceRepositoryProvider).watchAll(),
+);
+
 final defenceProvider =
     StreamProvider.family<Defence?, String>((ref, defenceId) {
   // Rebuilt on a change of user: see [signedInUidProvider].

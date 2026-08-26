@@ -65,7 +65,14 @@ Future<Widget> wrap(
 /// broken app rather than an unfinished one.
 void main() {
   group('student', () {
-    testWidgets('gets no bar before the title is approved', (tester) async {
+    testWidgets(
+        'shows only Overview and Thesis before the title is approved',
+        (tester) async {
+      // Overview lands ahead of Thesis in this milestone, so the bar now
+      // has two destinations (index 0 and 1) even before Chapters unlocks
+      // -- it is Chapters and Defences, at indices 2 and 3, that stay gated
+      // on approval. Chapters would lead straight to "Chapters are not
+      // open yet".
       final db = FakeFirebaseFirestore();
       await db
           .collection('theses')
@@ -76,9 +83,24 @@ void main() {
           uid: 'l1', role: 'student'));
       await tester.pumpAndSettle();
 
-      // Chapters would lead straight to "Chapters are not open yet".
-      expect(find.text('Chapters'), findsNothing);
-      expect(find.byType(NavigationBar), findsNothing);
+      // Two destinations is at the bar's own threshold, so it shows rather
+      // than hides -- unlike the pre-Overview shape, where Thesis alone
+      // was one destination and the bar stayed hidden.
+      final bar = find.byType(NavigationBar);
+      expect(bar, findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text('Overview')),
+          findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text('Thesis')),
+          findsOneWidget);
+      // Scoped to the bar, not the whole tree: the Overview body's own
+      // ProgressRail spells out every lifecycle stage -- Chapters among
+      // them -- as the road ahead regardless of whether it has unlocked
+      // yet, so an unscoped `find.text('Chapters')` would find that label
+      // and misreport the destination as present.
+      expect(find.descendant(of: bar, matching: find.text('Chapters')),
+          findsNothing);
+      expect(find.descendant(of: bar, matching: find.text('Defences')),
+          findsNothing);
     });
 
     testWidgets('gets a Chapters destination once the title is approved',
@@ -90,9 +112,15 @@ void main() {
           uid: 'l1', role: 'student'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapters'), findsOneWidget);
+      // Scoped to the bar: the Overview body's own ProgressRail also spells
+      // out "Chapters" as one of the six lifecycle stages, so an unscoped
+      // finder would see two matches rather than the one destination.
+      final bar = find.byType(NavigationBar);
+      final chaptersDestination =
+          find.descendant(of: bar, matching: find.text('Chapters'));
+      expect(chaptersDestination, findsOneWidget);
 
-      await tester.tap(find.text('Chapters'));
+      await tester.tap(chaptersDestination);
       await tester.pumpAndSettle();
 
       // The real chapter list, not a placeholder — and only one app bar,
@@ -104,7 +132,7 @@ void main() {
   });
 
   group('faculty', () {
-    testWidgets('a panelist-only member sees Panels first, and no switch',
+    testWidgets('a panelist-only member has no switch, and can reach Panels',
         (tester) async {
       // The reported bug: they landed on an empty Advisees list and could
       // not leave, because the switch hides itself precisely when you hold
@@ -120,12 +148,22 @@ void main() {
           uid: 'p1', role: 'faculty'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Panels'), findsWidgets);
-      expect(find.text('Advisees'), findsNothing);
+      // Overview is destination 0 now, so this member no longer lands on
+      // Panels directly -- but the destination is still there, and no
+      // switch renders since they hold no adviser position.
+      final bar = find.byType(NavigationBar);
+      expect(find.descendant(of: bar, matching: find.text('Panels')),
+          findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text('Advisees')),
+          findsNothing);
       expect(find.byType(SegmentedButton<Object?>), findsNothing);
+
+      await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
+      await tester.pumpAndSettle();
+      expect(find.text('My panels'), findsOneWidget);
     });
 
-    testWidgets('an adviser sees Advisees first and can reach Nominations',
+    testWidgets('an adviser reaches Advisees and Nominations from Overview',
         (tester) async {
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
@@ -134,10 +172,16 @@ void main() {
           uid: 'a1', role: 'faculty'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Advisees'), findsWidgets);
+      // Overview is the landing destination (index 0) now, ahead of the
+      // mode's own list.
+      expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
+
+      final bar = find.byType(NavigationBar);
+      await tester.tap(find.descendant(of: bar, matching: find.text('Advisees')));
+      await tester.pumpAndSettle();
       expect(find.text('My advisees'), findsOneWidget);
 
-      await tester.tap(find.text('Nominations'));
+      await tester.tap(find.descendant(of: bar, matching: find.text('Nominations')));
       await tester.pumpAndSettle();
 
       // The destinations genuinely swap content. Rendering both at once is
@@ -158,6 +202,12 @@ void main() {
           await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now, ahead of Approvals.
+      expect(find.byKey(const Key('deanOverview')), findsOneWidget);
+      expect(find.text('Nomination approvals'), findsNothing);
+
+      await tester.tap(find.text('Approvals'));
+      await tester.pumpAndSettle();
       expect(find.text('Nomination approvals'), findsOneWidget);
 
       await tester.tap(find.text('Titles'));
@@ -185,6 +235,12 @@ void main() {
           uid: 'c1', role: 'coordinator'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now, ahead of Recommendations.
+      expect(find.byKey(const Key('coordinatorOverview')), findsOneWidget);
+      expect(find.text('Nomination recommendations'), findsNothing);
+
+      await tester.tap(find.text('Recommendations'));
+      await tester.pumpAndSettle();
       expect(find.text('Nomination recommendations'), findsOneWidget);
 
       await tester.tap(find.text('Readiness'));
@@ -196,9 +252,9 @@ void main() {
     testWidgets('the coordinator reaches Titles and Defences separately',
         (tester) async {
       // Faculty is a jump to another screen rather than a panel, and it sits
-      // last — so inserting Titles moved its index. An off-by-one there
-      // sends the coordinator to the wrong place and nothing else would
-      // notice.
+      // last — so inserting Overview and Titles moved its index twice. An
+      // off-by-one there sends the coordinator to the wrong place and
+      // nothing else would notice.
       final db = FakeFirebaseFirestore();
       await tester.pumpWidget(await wrap(const CoordinatorDashboard(), db,
           uid: 'c1', role: 'coordinator'));
@@ -242,11 +298,15 @@ void main() {
           uid: 'a1', role: 'faculty'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now; tap into Advisees explicitly.
+      final bar = find.byType(NavigationBar);
+      await tester.tap(find.descendant(of: bar, matching: find.text('Advisees')));
+      await tester.pumpAndSettle();
       expect(find.text('My advisees'), findsOneWidget);
 
       // Defences are their own destination in both modes now, rather than a
       // section stacked under the mode's own list.
-      await tester.tap(find.text('Defences'));
+      await tester.tap(find.descendant(of: bar, matching: find.text('Defences')));
       await tester.pumpAndSettle();
 
       expect(find.text('My defences'), findsOneWidget);
@@ -298,9 +358,13 @@ void main() {
           uid: 'p1', role: 'faculty'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now; tap into Panels explicitly.
+      final bar = find.byType(NavigationBar);
+      await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
+      await tester.pumpAndSettle();
       expect(find.text('My panels'), findsOneWidget);
 
-      await tester.tap(find.text('Defences'));
+      await tester.tap(find.descendant(of: bar, matching: find.text('Defences')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);

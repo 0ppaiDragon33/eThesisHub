@@ -19,6 +19,7 @@ class PageShell extends StatelessWidget {
     this.title,
     this.subtitle,
     this.scrollable = true,
+    this.maxWidth = AppTokens.measure,
   });
 
   /// Optional page heading, set above the content. Distinct from the app bar
@@ -28,6 +29,11 @@ class PageShell extends StatelessWidget {
   final String? subtitle;
   final List<Widget> children;
   final bool scrollable;
+
+  /// Forms read badly at full width and stay at [AppTokens.measure]. A
+  /// dashboard is not a form: four tiles at the form measure would each be
+  /// 150px, which is the compact step, on a desktop.
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +57,7 @@ class PageShell extends StatelessWidget {
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppTokens.measure),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: scrollable
             ? SingleChildScrollView(
                 padding: const EdgeInsets.all(AppTokens.lg),

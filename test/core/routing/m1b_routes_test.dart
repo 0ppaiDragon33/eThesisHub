@@ -90,12 +90,23 @@ void main() {
     await tester.pumpAndSettle();
 
     // u2 holds a panel seat and advises nothing, so the effective mode is
-    // clamped to panelist and 'Panels' IS the first destination -- no tab
-    // hop. Before the clamp, a panelist landed in adviser mode on an empty
-    // Advisees list and could not leave, because the mode switch hides
-    // itself precisely when you hold no adviser position.
-    expect(find.text('Panels'), findsWidgets,
+    // clamped to panelist and 'Panels' is the destination after Overview --
+    // Overview now lands first and is mode-independent, so this still needs
+    // one tap, but into Panels rather than Advisees. Before the clamp, a
+    // panelist landed in adviser mode on an empty Advisees list and could
+    // not leave, because the mode switch hides itself precisely when you
+    // hold no adviser position.
+    // This test's surface is wide (1000px), so ResponsiveScaffold renders a
+    // NavigationRail rather than a NavigationBar -- and the Overview body's
+    // own panelist-mode tile is ALSO labelled "Panels", so the finder must
+    // be scoped to the rail or it would match both.
+    final rail = find.byType(NavigationRail);
+    expect(find.descendant(of: rail, matching: find.text('Panels')),
+        findsOneWidget,
         reason: 'a panelist-only member must not land in adviser mode');
+    await tester.tap(find.descendant(of: rail, matching: find.text('Panels')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToDefence-t1')));
     await tester.pumpAndSettle();

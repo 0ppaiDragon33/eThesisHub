@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/core/config/app_config.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
 import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
@@ -289,6 +290,75 @@ void main() {
           isNot(AppTheme.dark.colorScheme.onSurface));
       expect(AppTheme.light.scaffoldBackgroundColor,
           isNot(AppTheme.dark.scaffoldBackgroundColor));
+    });
+  });
+
+  group('accent palette', () {
+    test('has five accents in both brightnesses, in matching order', () {
+      // Charts index into these by series number, so the two lists must
+      // stay the same length and the same order or a segment changes
+      // colour when the theme flips.
+      expect(AppTokens.accents, hasLength(5));
+      expect(AppTokens.accentsDark, hasLength(5));
+      expect(AppTokens.accents[0], AppTokens.accentPlum);
+      expect(AppTokens.accents[4], AppTokens.accentBrick);
+      expect(AppTokens.accentsDark[0], AppTokens.accentPlumDark);
+      expect(AppTokens.accentsDark[4], AppTokens.accentBrickDark);
+    });
+
+    test('every accent is distinguishable from its neighbours', () {
+      // The whole job of this set is to tell one series from another. Two
+      // accents that compute to the same luminance band read as one colour
+      // in a donut, which is the failure this asserts against.
+      final seen = <int>{};
+      for (final c in AppTokens.accents) {
+        expect(seen.add(c.toARGB32()), isTrue,
+            reason: 'duplicate accent ${c.toARGB32()}');
+      }
+    });
+
+    test('dark accents are lighter than their light counterparts', () {
+      // Same relationship rule the existing dark palette follows: a colour
+      // that sits on a dark surface must rise off it, not sink into it.
+      for (var i = 0; i < 5; i++) {
+        expect(
+          AppTokens.accentsDark[i].computeLuminance(),
+          greaterThan(AppTokens.accents[i].computeLuminance()),
+          reason: 'accent $i does not lift in dark mode',
+        );
+      }
+    });
+  });
+
+  group('typography', () {
+    test('headings are set in the bundled serif, body text is not', () {
+      // The palette's whole justification is a resemblance to paper. Until
+      // this milestone that resemblance was asserted in a doc comment and
+      // absent from the screen. If the family ever silently drops back to
+      // the platform default, every argument in Chapter IV loses its
+      // referent -- so it is pinned here rather than left to inspection.
+      final t = AppTheme.light.textTheme;
+      expect(t.headlineSmall?.fontFamily, AppTheme.serif);
+      expect(t.titleLarge?.fontFamily, AppTheme.serif);
+      expect(t.titleMedium?.fontFamily, AppTheme.serif);
+
+      // Interface furniture stays on the platform sans: a serif label at
+      // 13px reads as small rather than as considered. ThemeData fills any
+      // style that leaves fontFamily unset with the platform default (e.g.
+      // 'Roboto' on Android) rather than leaving it null, so the assertion
+      // that matters is that these styles never pick up the serif -- not
+      // that the field is literally null.
+      expect(t.bodyMedium?.fontFamily, isNot(AppTheme.serif));
+      expect(t.bodySmall?.fontFamily, isNot(AppTheme.serif));
+      expect(t.labelMedium?.fontFamily, isNot(AppTheme.serif));
+      expect(t.labelSmall?.fontFamily, isNot(AppTheme.serif));
+    });
+
+    test('dark theme sets the same families as light', () {
+      final l = AppTheme.light.textTheme;
+      final d = AppTheme.dark.textTheme;
+      expect(d.headlineSmall?.fontFamily, l.headlineSmall?.fontFamily);
+      expect(d.bodyMedium?.fontFamily, l.bodyMedium?.fontFamily);
     });
   });
 }
