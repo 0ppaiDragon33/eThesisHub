@@ -72,6 +72,15 @@ void main() {
 
     testWidgets('hides labels when collapsed but keeps the destinations',
         (tester) async {
+      // `NavigationRail` deliberately keeps a collapsed destination's
+      // label mounted (Visibility.maintain) so it stays in the
+      // accessibility tree — find.text would therefore still match it
+      // even though nothing is painted. What "collapsed" must actually
+      // mean is: visually collapsed (rail.extended == false), the icon
+      // still there, and the accessible name still carried, since a
+      // screen-reader user gets nothing else to tell destinations apart.
+      final handle = tester.ensureSemantics();
+
       await setSize(tester, 1400);
       await tester.pumpWidget(await wrap(
         destinations: const AsyncValue.data(_destinations),
@@ -79,11 +88,26 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Chapters'), findsNothing);
+      final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+      expect(rail.extended, isFalse);
+
       expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
+      final semantics =
+          tester.getSemantics(find.byIcon(Icons.menu_book_outlined));
+      expect(semantics.label, contains('Chapters'));
+
+      // Disposed explicitly, not via addTearDown: the framework's
+      // end-of-test semantics-handle check runs before addTearDown
+      // callbacks fire, so a handle only released there is still flagged
+      // as leaked.
+      handle.dispose();
     });
 
     testWidgets('the chevron toggles the sidebar', (tester) async {
+      // As above: NavigationRail keeps the label mounted even when
+      // collapsed, so the visible property to assert on is
+      // `rail.extended`, not find.text — find.text stays true either
+      // way, which is the point of keeping the accessible name.
       await setSize(tester, 1400);
       await tester.pumpWidget(
         await wrap(destinations: const AsyncValue.data(_destinations)),
@@ -91,9 +115,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Chapters'), findsOneWidget);
+      NavigationRail rail() =>
+          tester.widget<NavigationRail>(find.byType(NavigationRail));
+      expect(rail().extended, isTrue);
+
       await tester.tap(find.byKey(const Key('sidebarToggle')));
       await tester.pumpAndSettle();
-      expect(find.text('Chapters'), findsNothing);
+      expect(rail().extended, isFalse);
     });
 
     testWidgets('has no hamburger — the sidebar is already visible',
@@ -181,6 +209,28 @@ void main() {
       expect(find.byKey(const Key('shellSkeleton')), findsOneWidget);
       expect(find.text('Overview'), findsNothing);
       expect(find.text('PAGE BODY'), findsOneWidget);
+    });
+
+    testWidgets(
+        'while loading on narrow width, shows a hamburger whose drawer '
+        'holds the skeleton', (tester) async {
+      // On a phone the loading state must not be bare chrome with nothing
+      // in it — the hamburger stays present so the reader can see
+      // navigation is coming, and opening it finds the same inert
+      // skeleton rather than an empty drawer.
+      await setSize(tester, 400);
+      await tester.pumpWidget(
+        await wrap(destinations: const AsyncValue.loading()),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('shellMenu')), findsOneWidget);
+      expect(find.byKey(const Key('shellSkeleton')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('shellMenu')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('shellSkeleton')), findsOneWidget);
     });
 
     testWidgets('with no destinations, renders the child and no sidebar',

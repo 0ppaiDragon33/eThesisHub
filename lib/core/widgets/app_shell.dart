@@ -132,17 +132,38 @@ class _Chrome extends StatelessWidget {
         final wide = constraints.maxWidth >= AppShell.railBreakpoint;
 
         if (loading) {
+          if (wide) {
+            return Scaffold(
+              appBar: AppBar(title: Text(shell.title)),
+              body: Row(
+                children: [
+                  _Skeleton(rule: _rule(context), ink: _ink(context)),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: shell.child),
+                ],
+              ),
+            );
+          }
+          // Narrow while loading: the hamburger is still shown so the
+          // reader can see navigation is coming, and the drawer it opens
+          // holds the same inert skeleton rather than being empty.
           return Scaffold(
-            appBar: AppBar(title: Text(shell.title)),
-            body: wide
-                ? Row(
-                    children: [
-                      _Skeleton(rule: _rule(context), ink: _ink(context)),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: shell.child),
-                    ],
-                  )
-                : shell.child,
+            appBar: AppBar(
+              title: Text(shell.title),
+              leading: Builder(
+                builder: (context) => IconButton(
+                  key: const Key('shellMenu'),
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+            ),
+            drawer: Drawer(
+              child: SafeArea(
+                child: _Skeleton(rule: _rule(context), ink: _ink(context)),
+              ),
+            ),
+            body: shell.child,
           );
         }
 
@@ -198,16 +219,13 @@ class _Chrome extends StatelessWidget {
                     for (final d in list)
                       NavigationRailDestination(
                         icon: Icon(d.icon),
-                        // NavigationRail keeps the label widget mounted
-                        // (for semantics) even when collapsed, so an
-                        // unconditional Text would still be found by
-                        // find.text while hidden. Building it from our
-                        // own `expanded` flag rather than the rail's
-                        // internal animation keeps a collapsed rail
-                        // genuinely free of the label text.
-                        label: expanded
-                            ? Text(d.label)
-                            : const SizedBox.shrink(),
+                        // Always the real label. NavigationRail keeps it
+                        // mounted (Visibility.maintain) even when
+                        // collapsed specifically so the accessible name
+                        // survives — swapping in a SizedBox when
+                        // collapsed would delete every destination's
+                        // accessible name app-wide.
+                        label: Text(d.label),
                       ),
                   ],
                 ),
