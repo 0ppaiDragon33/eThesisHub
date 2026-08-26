@@ -67,10 +67,36 @@ are the only readers with a college-wide view and the only ones for
 whom aggregate shape is a real question. A faculty member with four
 advisees needs a list, not a chart.
 
-**D19 — Sans for interface furniture, serif for document voice.**
-Serif stays on page titles, headings and stat values. Tile labels,
-sub-lines and chart labels move to the system sans face. At 13px a
-serif label reads as small rather than as considered.
+**D19 — Bundle a serif, and give it only the document voice.**
+This corrects a factual error in the first draft of this spec, which
+assumed the app already set headings in a serif. It does not.
+`app_theme.dart` bundles no font files at all: the family is the
+platform default, and structure comes from weight, size and tracking
+alone. The serif in this project exists only inside the generated PDF,
+which the `pdf` package renders independently of the theme.
+
+That was a deliberate, documented choice and this milestone reverses
+it. Reversing it needs a reason, and the reason is that the paper
+metaphor has until now been asserted in a doc comment rather than
+visible on screen — every justification for the palette rests on a
+resemblance the interface never actually had.
+
+**Source Serif 4**, SIL Open Font License 1.1, two static weights
+(SemiBold 600, Bold 700). Chosen over Lora or EB Garamond because it
+was drawn for screen text at interface sizes rather than adapted from
+a print face, and over any commercial face because an OFL licence can
+be redistributed with the manuscript without a further permission.
+
+It is applied **only** to page titles, section headings and stat
+values. Tile labels, sub-lines, chip text, buttons, body copy, chart
+labels and every other piece of interface furniture stay on the
+platform sans. At 13px a serif label reads as small rather than as
+considered, and the whole point of a second family is the contrast.
+
+Costs, stated plainly: two font files in the repository, a licence
+line in the manuscript's tools section, and a brief fallback flash on
+first web paint. The theme declares a fallback stack so a failed font
+load degrades to the current appearance rather than to a broken one.
 
 ## 3. The accent palette
 
@@ -367,3 +393,8 @@ Specific to this milestone:
   and needs one sentence of reasoning, not a colour table.
 - `fl_chart` is the first dependency added for presentation rather than
   capability, and should be named in the tools section.
+- Source Serif 4 must be credited in the tools section with its SIL
+  Open Font License 1.1, and `assets/fonts/OFL.txt` ships with it.
+- `app_theme.dart`'s class doc comment currently states that no font
+  files are bundled and explains why. D19 reverses that; the comment
+  must be rewritten rather than left contradicting the code.
