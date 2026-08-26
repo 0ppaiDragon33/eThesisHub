@@ -7,6 +7,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// How many theses sit at each [ThesisStage], for the dean and coordinator
@@ -68,7 +69,9 @@ class _Body extends StatelessWidget {
       counts[stage] = (counts[stage] ?? 0) + 1;
     }
 
-    final total = counts.values.fold<int>(0, (a, b) => a + b);
+    // The same definition the "Active theses" tile above uses, so the two
+    // numbers on this screen cannot disagree. See [activeThesisCount].
+    final total = activeThesisCount(theses);
     if (total == 0) {
       return const EmptyState(
         title: 'No theses yet',

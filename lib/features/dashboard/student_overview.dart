@@ -8,8 +8,8 @@ import 'package:ethesishub/core/widgets/stat_tile.dart';
 import 'package:ethesishub/core/widgets/stat_tile_grid.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/features/dashboard/progress_rail.dart';
-import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
@@ -54,18 +54,15 @@ class StudentOverview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The accent POSITION per tile stays a compile-time constant fixed by
+    // where the tile sits; brightness only selects between that position's
+    // light and dark variant (spec D14, and every other colour consumer in
+    // the app does the same).
+    final brightness = Theme.of(context).brightness;
     final thesisAsync = ref.watch(myThesisProvider);
     final needsYouAsync = ref.watch(studentNeedsYouProvider);
 
-    // Never blocks on the profile document: M2 shipped a leader lockout by
-    // gating a control on `users/{uid}` existing.
-    final name = ref.watch(currentUserProvider).valueOrNull?.fullName ?? '';
-    final first = name.trim().split(RegExp(r'\s+')).first;
-    final greeting = first.isEmpty ? 'Good day' : 'Good day, $first';
-
     final thesis = thesisAsync.valueOrNull;
-    final hasDefence =
-        ref.watch(myDefencesProvider).valueOrNull?.isNotEmpty ?? false;
 
     // Its own resolution of the thesis stream, distinct from `.valueOrNull`
     // above: a genuine "no chapters yet" (thesis known, none uploaded) must
@@ -108,7 +105,7 @@ class StudentOverview extends ConsumerWidget {
       key: const Key('studentOverview'),
       maxWidth: AppTokens.measureWide,
       children: [
-        Text(greeting, style: Theme.of(context).textTheme.headlineSmall),
+        const OverviewGreeting(),
         const Gap.sm(),
         NeedsYouHeadline(
           items: needsYouAsync,
@@ -116,7 +113,14 @@ class StudentOverview extends ConsumerWidget {
         ),
         const Gap.lg(),
         if (thesis != null) ...[
-          ProgressRail(status: thesis.status, hasDefence: hasDefence),
+          // The rail reads the real defence and chapter lists rather
+          // than a bare "a defence document exists" flag: see ProgressRail's
+          // own note on what that flag got wrong.
+          ProgressRail(
+            status: thesis.status,
+            defences: defencesAsync.valueOrNull ?? const [],
+            chapters: chaptersAsync.valueOrNull ?? const [],
+          ),
           const Gap.lg(),
         ],
         StatTileGrid(children: [
@@ -132,7 +136,7 @@ class StudentOverview extends ConsumerWidget {
                     .length /
                 5,
             icon: Icons.task_alt_outlined,
-            accent: AppTokens.accents[2],
+            accent: AppTokens.accentFor(2, brightness),
           ),
           AsyncStatTile<List<ThesisChapter>>(
             label: 'With your adviser',
@@ -150,7 +154,7 @@ class StudentOverview extends ConsumerWidget {
                   : '${submitted.length} chapters awaiting review';
             },
             icon: Icons.hourglass_top_outlined,
-            accent: AppTokens.accents[3],
+            accent: AppTokens.accentFor(3, brightness),
           ),
           AsyncStatTile<List<Defence>>(
             label: 'Next defence',
@@ -168,7 +172,7 @@ class StudentOverview extends ConsumerWidget {
               return next == null ? null : '${next.type.label} · ${next.venue}';
             },
             icon: Icons.forum_outlined,
-            accent: AppTokens.accents[1],
+            accent: AppTokens.accentFor(1, brightness),
           ),
           AsyncStatTile<String>(
             label: 'Your adviser',
@@ -176,7 +180,7 @@ class StudentOverview extends ConsumerWidget {
             valueIsText: true,
             format: (name) => name,
             icon: Icons.school_outlined,
-            accent: AppTokens.accents[0],
+            accent: AppTokens.accentFor(0, brightness),
           ),
         ]),
         const Gap.lg(),

@@ -126,7 +126,13 @@ class StatTile extends StatelessWidget {
   }
 
   Widget _build(BuildContext context, bool compact) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Every other colour consumer in this app switches on brightness
+    // (status_chip.dart, defences_list.dart, needs_you_queue.dart). The app
+    // ships `themeMode: ThemeMode.system`, so a light-only rule draws a
+    // near-white hairline around a dark card on a phone in dark mode.
+    final dark = theme.brightness == Brightness.dark;
 
     final pad = compact ? 14.0 : 22.0;
     final badge = compact ? 28.0 : 38.0;
@@ -138,11 +144,12 @@ class StatTile extends StatelessWidget {
       constraints: BoxConstraints(minHeight: minHeight),
       decoration: BoxDecoration(
         color: scheme.surface,
-        border: Border.all(color: AppTokens.rule),
+        border: Border.all(color: dark ? AppTokens.ruleDark : AppTokens.rule),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: AppTokens.ink.withValues(alpha: 0.04),
+            color:
+                (dark ? Colors.black : AppTokens.ink).withValues(alpha: 0.04),
             blurRadius: 2,
             offset: const Offset(0, 1),
           ),
@@ -263,6 +270,7 @@ class StatTile extends StatelessWidget {
   }
 
   Widget _bar(BuildContext context, bool compact) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: EdgeInsets.only(top: compact ? 8 : 11),
       child: ClipRRect(
@@ -271,7 +279,7 @@ class StatTile extends StatelessWidget {
         child: LinearProgressIndicator(
           value: progress!.clamp(0.0, 1.0),
           minHeight: 5,
-          backgroundColor: AppTokens.rule,
+          backgroundColor: dark ? AppTokens.ruleDark : AppTokens.rule,
           valueColor: AlwaysStoppedAnimation<Color>(accent),
         ),
       ),
@@ -332,12 +340,19 @@ class AsyncStatTile<T> extends StatelessWidget {
       ),
       // An em dash, not a zero. The read failed; the count is unknown, and
       // saying "0" would be a claim the app cannot support.
+      // `valueIsText` and `onTap` are carried through: without the former a
+      // text tile's em dash is set at the 31px numeric size, which reads as
+      // a figure rather than as "unknown", and without the latter the tile
+      // stops being reachable at exactly the moment a reader most wants to
+      // open the screen behind it and see what went wrong.
       error: (_, _) => StatTile(
         label: label,
         value: '—',
         icon: icon,
         accent: accent,
         caption: 'Could not load',
+        valueIsText: valueIsText,
+        onTap: onTap,
       ),
       data: (v) => StatTile(
         label: label,

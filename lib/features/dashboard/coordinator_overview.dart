@@ -11,9 +11,9 @@ import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/all_theses_table.dart';
+import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
 import 'package:ethesishub/features/dashboard/submission_trend.dart';
-import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -32,13 +32,12 @@ class CoordinatorOverview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The accent POSITION per tile stays a compile-time constant fixed by
+    // where the tile sits; brightness only selects between that position's
+    // light and dark variant (spec D14, and every other colour consumer in
+    // the app does the same).
+    final brightness = Theme.of(context).brightness;
     final needsYouAsync = ref.watch(coordinatorNeedsYouProvider);
-
-    // Never blocks on the profile document: an earlier milestone locked a
-    // signed-in member out by gating a control on `users/{uid}` existing.
-    final name = ref.watch(currentUserProvider).valueOrNull?.fullName ?? '';
-    final first = name.trim().split(RegExp(r'\s+')).first;
-    final greeting = first.isEmpty ? 'Good day' : 'Good day, $first';
 
     final allThesesAsync = ref.watch(allThesesProvider);
     final recommendAsync = ref.watch(
@@ -55,7 +54,7 @@ class CoordinatorOverview extends ConsumerWidget {
       key: const Key('coordinatorOverview'),
       maxWidth: AppTokens.measureWide,
       children: [
-        Text(greeting, style: Theme.of(context).textTheme.headlineSmall),
+        const OverviewGreeting(),
         const Gap.sm(),
         NeedsYouHeadline(items: needsYouAsync, suffix: 'the college'),
         const Gap.lg(),
@@ -63,30 +62,32 @@ class CoordinatorOverview extends ConsumerWidget {
           AsyncStatTile<List<Thesis>>(
             label: 'Active theses',
             value: allThesesAsync,
-            format: (l) => '${l.length}',
+            // The same definition the stage donut below uses. See
+            // [activeThesisCount] for which one was chosen and why.
+            format: (l) => '${activeThesisCount(l)}',
             icon: Icons.school_outlined,
-            accent: AppTokens.accents[0],
+            accent: AppTokens.accentFor(0, brightness),
           ),
           AsyncStatTile<List<Thesis>>(
             label: 'Awaiting your recommendation',
             value: recommendAsync,
             format: (l) => '${l.length}',
             icon: Icons.fact_check_outlined,
-            accent: AppTokens.accents[3],
+            accent: AppTokens.accentFor(3, brightness),
           ),
           AsyncStatTile<List<Defence>>(
             label: 'Defences this week',
             value: defencesAsync,
-            format: (l) => '${_thisWeek(l).length}',
+            format: (l) => '${defencesThisWeek(l).length}',
             icon: Icons.event_note_outlined,
-            accent: AppTokens.accents[1],
+            accent: AppTokens.accentFor(1, brightness),
           ),
           AsyncStatTile<List<FacultyDirectoryEntry>>(
             label: 'Faculty accounts',
             value: directoryAsync,
             format: (l) => '${l.length}',
             icon: Icons.badge_outlined,
-            accent: AppTokens.accents[2],
+            accent: AppTokens.accentFor(2, brightness),
           ),
         ]),
         const Gap.lg(),
@@ -103,21 +104,5 @@ class CoordinatorOverview extends ConsumerWidget {
         const SubmissionTrend(),
       ],
     );
-  }
-
-  /// Defences scheduled within the next 7 days, today included. Mirrors the
-  /// filter `dean_overview.dart` and `faculty_overview.dart` apply to the
-  /// same provider, kept inline here rather than as a private top-level
-  /// provider since this overview has only the one tile that needs it.
-  static List<Defence> _thisWeek(List<Defence> defences) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final end = today.add(const Duration(days: 7));
-    return defences.where((d) {
-      final at = d.scheduledAt;
-      if (at == null) return false;
-      final day = DateTime(at.year, at.month, at.day);
-      return !day.isBefore(today) && day.isBefore(end);
-    }).toList();
   }
 }

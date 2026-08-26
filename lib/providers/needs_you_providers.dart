@@ -14,6 +14,44 @@ import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
+/// Decides whether a fan-in may publish yet.
+///
+/// `ref.listen(..., fireImmediately: true)` hands its listener an
+/// `AsyncLoading` **value**, not `null`. A gate written as
+/// `if (source == null) return` therefore passes on the very first frame,
+/// and a merge built out of `valueOrNull ?? const []` publishes `data([])`
+/// -- "Nothing needs you today" before a single snapshot has landed, and
+/// forever after a `permission-denied`. That is the exact "0 is
+/// indistinguishable from loading" bug spec §4 and §9 name, and this
+/// project has shipped it four times.
+///
+/// Returns:
+/// * `null` -- keep waiting; at least one source has no snapshot yet, so
+///   the provider stays `AsyncLoading` (which is what the queue renders as
+///   "Checking what needs you…").
+/// * an errored [AsyncValue] -- the first source that failed. The caller
+///   forwards it with `controller.addError` so the queue shows its error
+///   state rather than an empty one.
+/// * `data(true)` -- every source has a value; publish.
+///
+/// Errors are checked before loading so a failure is surfaced even while a
+/// sibling source is still in flight: the read is not coming back, and a
+/// queue that waits forever is no better than one that lies.
+AsyncValue<bool>? _gate(List<AsyncValue<Object?>?> sources) {
+  for (final source in sources) {
+    if (source != null && source.hasError) {
+      return AsyncValue<bool>.error(
+        source.error!,
+        source.stackTrace ?? StackTrace.empty,
+      );
+    }
+  }
+  for (final source in sources) {
+    if (source == null || !source.hasValue) return null;
+  }
+  return const AsyncValue<bool>.data(true);
+}
+
 /// What is waiting on the signed-in student.
 ///
 /// Only items they can act on. A chapter sitting with the adviser is NOT
@@ -87,8 +125,8 @@ final studentNeedsYouProvider =
 /// for `facultyModeProvider` in here, that is the bug.
 ///
 /// Merges four sources with a live fan-in -- one `.listen()` subscription
-/// per source, `ref.onDispose` cleanup, `onError: controller.addError` on
-/// every one of them -- following the shape proven in `myDefencesProvider`
+/// per source and `ref.onDispose` cleanup -- following the shape proven in
+/// `myDefencesProvider`
 /// (`lib/providers/defence_providers.dart:32`). Do NOT collapse this into an
 /// `await for` over one stream with `.first` read against another: that
 /// shape only advances when the FIRST stream emits, and a change that
@@ -118,13 +156,29 @@ final facultyNeedsYouProvider =
   final chapterSubs = <String, StreamSubscription<List<ThesisChapter>>>{};
 
   void emit() {
-    // Wait for one snapshot from each top-level source before emitting, so
-    // the queue never renders a partial merge as though it were complete.
-    if (noms == null || advisees == null || defences == null) return;
+    // Wait for a real VALUE from each top-level source before emitting --
+    // not merely for a non-null AsyncValue, which `fireImmediately` supplies
+    // on frame one. See [_gate].
+    final gate = _gate([noms, advisees, defences]);
+    if (gate == null) return;
+    if (gate.hasError) {
+      controller.addError(gate.error!, gate.stackTrace);
+      return;
+    }
+
+    // The chapter fan-in is second-order: `syncChapterSubs` opens a
+    // subscription per advised thesis the moment the advisee list resolves,
+    // but those subscriptions have not delivered their first snapshot yet.
+    // Emitting here would under-count the chapters awaiting review -- a
+    // transient "nothing needs you" of exactly the kind this gate exists to
+    // prevent -- so wait for every open subscription to have reported once.
+    for (final id in chapterSubs.keys) {
+      if (!chaptersByThesis.containsKey(id)) return;
+    }
 
     final items = <NeedsYouItem>[];
 
-    for (final p in (noms!.valueOrNull ?? const [])) {
+    for (final p in noms!.requireValue) {
       final position = p.nomination.position.value;
       final label = position.isEmpty
           ? position
@@ -152,7 +206,7 @@ final facultyNeedsYouProvider =
     }
 
     final now = DateTime.now();
-    for (final d in (defences!.valueOrNull ?? const [])) {
+    for (final d in defences!.requireValue) {
       if (d.adviserUid == uid &&
           d.status == DefenceStatus.completed &&
           d.consolidatedAt == null) {
@@ -218,7 +272,6 @@ final facultyNeedsYouProvider =
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.listen<AsyncValue<List<Thesis>>>(
@@ -229,7 +282,6 @@ final facultyNeedsYouProvider =
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.listen<AsyncValue<List<Defence>>>(
@@ -239,7 +291,6 @@ final facultyNeedsYouProvider =
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.onDispose(() {
@@ -263,7 +314,7 @@ final facultyNeedsYouProvider =
 ///
 /// A live fan-in over two [thesesByStatusProvider] streams, following the
 /// shape proven in [facultyNeedsYouProvider]: one `ref.listen` subscription
-/// per source, `ref.onDispose` cleanup, `onError` on every one of them. Do
+/// per source and `ref.onDispose` cleanup. Do
 /// NOT collapse this into an `await for` over one stream with `.first` read
 /// against the other -- that shape only advances when the FIRST stream
 /// emits, and a change that touches only the second source never arrives.
@@ -275,12 +326,18 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   AsyncValue<List<Thesis>>? titleDefences;
 
   void emit() {
-    // Wait for one snapshot from each source before emitting, so the queue
-    // never renders a partial merge as though it were complete.
-    if (approvals == null || titleDefences == null) return;
+    // Wait for a real VALUE from each source before emitting -- not merely
+    // for a non-null AsyncValue, which `fireImmediately` supplies on frame
+    // one. See [_gate].
+    final gate = _gate([approvals, titleDefences]);
+    if (gate == null) return;
+    if (gate.hasError) {
+      controller.addError(gate.error!, gate.stackTrace);
+      return;
+    }
 
     final items = <NeedsYouItem>[
-      for (final t in (approvals!.valueOrNull ?? const <Thesis>[]))
+      for (final t in approvals!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
           detail: 'Recommended by the Coordinator, waiting on your '
@@ -289,7 +346,7 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           chipLabel: 'Approve',
           tone: NeedsYouTone.act,
         ),
-      for (final t in (titleDefences!.valueOrNull ?? const <Thesis>[]))
+      for (final t in titleDefences!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
           detail: 'Presented their candidate titles -- decide the outcome.',
@@ -309,7 +366,6 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.listen<AsyncValue<List<Thesis>>>(
@@ -319,7 +375,6 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.onDispose(controller.close);
@@ -342,8 +397,7 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
 ///
 /// A live fan-in over four sources, following the shape proven in
 /// [facultyNeedsYouProvider] and [deanNeedsYouProvider]: one `ref.listen`
-/// subscription per top-level source, `ref.onDispose` cleanup, `onError` on
-/// every one of them. Do NOT collapse this into an `await for` over one
+/// subscription per top-level source and `ref.onDispose` cleanup. Do NOT collapse this into an `await for` over one
 /// stream with `.first` read against another -- that shape only advances
 /// when the FIRST stream emits, and a change that touches only a later
 /// source never arrives. This project has shipped that exact bug once
@@ -378,22 +432,34 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   final chapterSubs = <String, StreamSubscription<List<ThesisChapter>>>{};
 
   void emit() {
-    // Wait for one snapshot from each top-level source before emitting, so
-    // the queue never renders a partial merge as though it were complete.
-    if (recommendations == null ||
-        titleDefences == null ||
-        readyCandidates == null ||
-        defences == null) {
+    // Wait for a real VALUE from each top-level source before emitting --
+    // not merely for a non-null AsyncValue, which `fireImmediately` supplies
+    // on frame one. See [_gate].
+    final gate =
+        _gate([recommendations, titleDefences, readyCandidates, defences]);
+    if (gate == null) return;
+    if (gate.hasError) {
+      controller.addError(gate.error!, gate.stackTrace);
       return;
     }
 
+    // The chapter fan-in is second-order: `syncChapterSubs` opens a
+    // subscription per ready candidate the moment that list resolves, but
+    // those subscriptions have not delivered a first snapshot yet, and a
+    // candidate whose chapters are still unknown is silently skipped by the
+    // readiness filter below. Wait for every open subscription to have
+    // reported once.
+    for (final id in chapterSubs.keys) {
+      if (!chaptersByThesis.containsKey(id)) return;
+    }
+
     final scheduledThesisIds = {
-      for (final d in (defences!.valueOrNull ?? const <Defence>[]))
+      for (final d in defences!.requireValue)
         if (!d.status.isTerminal) d.thesisId,
     };
 
     final items = <NeedsYouItem>[
-      for (final t in (recommendations!.valueOrNull ?? const <Thesis>[]))
+      for (final t in recommendations!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
           detail: 'Every nominee has accepted their Conforme, waiting on '
@@ -402,7 +468,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           chipLabel: 'Recommend',
           tone: NeedsYouTone.act,
         ),
-      for (final t in (titleDefences!.valueOrNull ?? const <Thesis>[]))
+      for (final t in titleDefences!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
           detail: 'Presented their candidate titles -- decide the outcome.',
@@ -410,7 +476,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
         ),
-      for (final t in (readyCandidates!.valueOrNull ?? const <Thesis>[]))
+      for (final t in readyCandidates!.requireValue)
         if (!scheduledThesisIds.contains(t.id) &&
             chaptersByThesis[t.id] != null &&
             readinessOf(chaptersByThesis[t.id]!) != DefenceReadiness.notReady)
@@ -458,7 +524,6 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.listen<AsyncValue<List<Thesis>>>(
@@ -468,7 +533,6 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.listen<AsyncValue<List<Thesis>>>(
@@ -479,7 +543,6 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.listen<AsyncValue<List<Defence>>>(
@@ -489,7 +552,6 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       emit();
     },
     fireImmediately: true,
-    onError: (e, st) => controller.addError(e, st),
   );
 
   ref.onDispose(() {

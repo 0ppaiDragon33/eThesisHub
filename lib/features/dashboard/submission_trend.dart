@@ -136,7 +136,11 @@ class _Body extends StatelessWidget {
 
     final maxCount = counts.values.fold<int>(0, (a, b) => a > b ? a : b);
     final scheme = Theme.of(context).colorScheme;
-    final lineColor = AppTokens.accentFor(1, Theme.of(context).brightness);
+    final brightness = Theme.of(context).brightness;
+    final lineColor = AppTokens.accentFor(1, brightness);
+    final gridColor = brightness == Brightness.dark
+        ? AppTokens.ruleDark
+        : AppTokens.rule;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +170,7 @@ class _Body extends StatelessWidget {
                 drawVerticalLine: false,
                 horizontalInterval: maxCount == 0 ? 1 : null,
                 getDrawingHorizontalLine: (_) => FlLine(
-                  color: AppTokens.rule,
+                  color: gridColor,
                   strokeWidth: 1,
                 ),
               ),
