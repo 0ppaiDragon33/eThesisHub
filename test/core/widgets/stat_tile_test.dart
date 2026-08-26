@@ -127,50 +127,59 @@ void main() {
     expect(find.text('0'), findsNothing);
   });
 
-  testWidgets(
-      'tiles with different content -- caption, progress, neither -- '
-      'share one height in a row', (tester) async {
-    // The whole reason StatTile's height must be fixed rather than a
-    // minimum: three same-width, same-step tiles with different trailing
-    // content (a caption line, a progress bar, nothing) previously landed
-    // at different natural heights, and the grid's Row then centred them
-    // against each other instead of sharing a baseline.
+  Future<void> mixedContentSharesOneHeight(
+    WidgetTester tester, {
+    required bool compact,
+    required double width,
+  }) async {
+    // This is exactly the mechanism StatTileGrid uses: every tile is told
+    // its step (so none of them runs its own LayoutBuilder) and the row is
+    // wrapped in IntrinsicHeight, which is only legal because none of them
+    // does. Three same-width, same-step tiles with different trailing
+    // content (a caption line, a progress bar, nothing) have different
+    // natural heights on their own; IntrinsicHeight is what makes them
+    // share one.
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light,
       home: Scaffold(
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            SizedBox(
-              width: 260,
-              child: StatTile(
-                label: 'Has a caption',
-                value: '1',
-                caption: 'Some caption text',
-                icon: Icons.check,
-                accent: AppTokens.accentPine,
+        body: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: width,
+                child: StatTile(
+                  label: 'Has a caption',
+                  value: '1',
+                  caption: 'Some caption text',
+                  icon: Icons.check,
+                  accent: AppTokens.accentPine,
+                  compact: compact,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 260,
-              child: StatTile(
-                label: 'Has a progress bar',
-                value: '2',
-                progress: 0.5,
-                icon: Icons.check,
-                accent: AppTokens.accentSeal,
+              SizedBox(
+                width: width,
+                child: StatTile(
+                  label: 'Has a progress bar',
+                  value: '2',
+                  progress: 0.5,
+                  icon: Icons.check,
+                  accent: AppTokens.accentSeal,
+                  compact: compact,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 260,
-              child: StatTile(
-                label: 'Has neither',
-                value: '3',
-                icon: Icons.check,
-                accent: AppTokens.accentOchre,
+              SizedBox(
+                width: width,
+                child: StatTile(
+                  label: 'Has neither',
+                  value: '3',
+                  icon: Icons.check,
+                  accent: AppTokens.accentOchre,
+                  compact: compact,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ));
@@ -188,6 +197,42 @@ void main() {
 
     expect(withProgress, withCaption);
     expect(withNeither, withCaption);
+  }
+
+  testWidgets(
+      'tiles with different content -- caption, progress, neither -- '
+      'share one height in a row, at the normal step', (tester) async {
+    await mixedContentSharesOneHeight(tester, compact: false, width: 260);
+  });
+
+  testWidgets(
+      'tiles with different content -- caption, progress, neither -- '
+      'share one height in a row, at the compact step', (tester) async {
+    await mixedContentSharesOneHeight(tester, compact: true, width: 160);
+  });
+
+  testWidgets(
+      'a label and caption that both wrap to two lines do not overflow',
+      (tester) async {
+    // The regression this task exists to close: maxLines: 2 only bounds
+    // text HORIZONTALLY via the ellipsis -- it still reserves up to two
+    // full line-heights vertically. A fixed card height clipped this;
+    // nothing in lib/ today triggers it (every caption shipped so far is
+    // one line), but a caption like "Opens once Chapter III is approved"
+    // will wrap at these widths once later dashboards add one.
+    const tile = StatTile(
+      label: 'A label long enough that it wraps onto a second line',
+      value: '3',
+      caption: 'A caption long enough that it also wraps onto a second line',
+      icon: Icons.check,
+      accent: AppTokens.accentPine,
+    );
+
+    await tester.pumpWidget(wrap(tile, width: 260));
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(wrap(tile, width: 160));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('an errored tile shows a dash, not a zero', (tester) async {

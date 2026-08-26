@@ -22,10 +22,18 @@ import 'package:ethesishub/core/widgets/stat_tile.dart';
 /// rules disagreed over a range of widths and the column count visibly
 /// flickered (3 -> 2 -> 4) as a window was resized through it. One rule,
 /// two candidates, removes that by construction.
+///
+/// This grid takes `List<StatTile>` rather than `List<Widget>` because it
+/// tells every tile its step (compact or not) rather than letting each tile
+/// guess from its own width via `LayoutBuilder`. That is what lets a row be
+/// wrapped in `IntrinsicHeight` -- `LayoutBuilder` cannot report intrinsic
+/// dimensions, so a `StatTile` measuring itself would make `IntrinsicHeight`
+/// throw. This grid already computes the tile width while choosing the
+/// column count, so it hands `StatTile` the answer instead.
 class StatTileGrid extends StatelessWidget {
   const StatTileGrid({super.key, required this.children});
 
-  final List<Widget> children;
+  final List<StatTile> children;
 
   static const double gap = AppTokens.md;
 
@@ -43,37 +51,36 @@ class StatTileGrid extends StatelessWidget {
             // layout this widget exists to prevent.
             final full = children.length;
             final fullTileWidth = (available - (full - 1) * gap) / full;
-            final columns =
-                fullTileWidth >= StatTile.compactBelow ? full : 2;
+            final columns = fullTileWidth >= StatTile.compactBelow ? full : 2;
+            final tileWidth = (available - (columns - 1) * gap) / columns;
+            final compact = tileWidth < StatTile.compactBelow;
 
             final rows = <Widget>[];
             for (var i = 0; i < children.length; i += columns) {
               final slice = children.skip(i).take(columns).toList();
-              // Deliberately no crossAxisAlignment.stretch here (and no
-              // IntrinsicHeight to fake one): every dashboard hosts this
-              // widget inside a SingleChildScrollView, which hands the
-              // Column unbounded height, and StatTile's own build method
-              // uses a LayoutBuilder internally -- a combination that makes
-              // both stretch (infinite height) and IntrinsicHeight
-              // (LayoutBuilder cannot report intrinsic dimensions) crash
-              // layout. Row's default cross-axis alignment (centre) is
-              // enough regardless: StatTile now has a fixed height per
-              // step rather than a minimum, so every tile in a row is
-              // identical in height by construction, not by coincidence
-              // of matching content.
-              rows.add(Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  for (var j = 0; j < columns; j++) ...[
-                    if (j > 0) const SizedBox(width: gap),
-                    // Empty slots keep the last row's tiles the same width
-                    // as every other row's, rather than letting a lone
-                    // trailing tile expand to fill the line.
-                    Expanded(
-                      child: j < slice.length ? slice[j] : const SizedBox(),
-                    ),
+              // Every tile in the row is told its step (see the class doc),
+              // so none of them runs its own LayoutBuilder, which is what
+              // makes IntrinsicHeight safe here: it sizes the row to the
+              // tallest tile's real content, with StatTile's minHeight as
+              // the floor, rather than every tile guessing independently
+              // and disagreeing.
+              rows.add(IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var j = 0; j < columns; j++) ...[
+                      if (j > 0) const SizedBox(width: gap),
+                      // Empty slots keep the last row's tiles the same
+                      // width as every other row's, rather than letting a
+                      // lone trailing tile expand to fill the line.
+                      Expanded(
+                        child: j < slice.length
+                            ? _withStep(slice[j], compact)
+                            : const SizedBox(),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ));
               if (i + columns < children.length) {
                 rows.add(const SizedBox(height: gap));
@@ -87,6 +94,25 @@ class StatTileGrid extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+
+  /// Rebuilds [tile] with [compact] forced, rather than left for the tile
+  /// to work out from its own width. A plain field copy: every other
+  /// property of [StatTile] is public and unrelated to layout.
+  static StatTile _withStep(StatTile tile, bool compact) {
+    return StatTile(
+      key: tile.key,
+      label: tile.label,
+      value: tile.value,
+      icon: tile.icon,
+      accent: tile.accent,
+      unit: tile.unit,
+      caption: tile.caption,
+      progress: tile.progress,
+      onTap: tile.onTap,
+      valueIsText: tile.valueIsText,
+      compact: compact,
     );
   }
 }

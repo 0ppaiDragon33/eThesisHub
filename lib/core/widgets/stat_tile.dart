@@ -13,17 +13,19 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 /// across a monitor, which is precisely the complaint this widget was built
 /// to answer.
 ///
-/// The card's height is FIXED per step (148 normal / 116 compact), not a
-/// minimum. A minimum let two same-width, same-step tiles land at different
-/// heights depending on their content -- one with a caption, one with a
-/// progress bar, one with neither -- which the tile grid then centred
-/// against each other instead of sharing a baseline. A fixed height makes
-/// every tile in a row identical by construction; [label] and [caption] are
-/// clamped to two lines with an ellipsis so a long string cannot overflow
-/// the now-fixed box. The internal gaps below were tightened from their
-/// original (minimum-height) values for the same reason: label + value +
-/// caption stacked at the old spacing no longer fits in a box that can't
-/// grow to meet it.
+/// The card's height is a MINIMUM (148 normal / 116 compact), not fixed: a
+/// fixed height was tried and rejected, because worst-case content (a label
+/// or caption that wraps to its full two lines) needs roughly 172px, and no
+/// single constant can both fit that and avoid inflating every shorter tile
+/// to match. [label] and [caption] are still clamped to two lines with an
+/// ellipsis -- that only bounds them horizontally, stopping an overlong
+/// string from pushing the card wider or wrapping past two lines, not
+/// vertically. Making a row of tiles share one height despite that
+/// variability is the tile grid's job, not this widget's: it wraps each
+/// row in `IntrinsicHeight`, which sizes every tile in the row to the
+/// tallest one's real content, with this minimum as the floor. A lone
+/// `StatTile` outside a grid (as in this file's own tests) still sizes to
+/// its own content, which is why the minimum exists at all.
 ///
 /// The badge colour comes from [AppTokens.accents] and is fixed by the
 /// tile's position on its dashboard. It must NEVER be derived from the
@@ -42,6 +44,7 @@ class StatTile extends StatelessWidget {
     this.progress,
     this.onTap,
     this.valueIsText = false,
+    this.compact,
   });
 
   final String label;
@@ -66,115 +69,132 @@ class StatTile extends StatelessWidget {
   final VoidCallback? onTap;
   final bool valueIsText;
 
+  /// When a caller already knows the step -- the tile grid does, because
+  /// it has already computed the tile's width while choosing the column
+  /// count -- it can pass that here, and this widget skips its own
+  /// `LayoutBuilder` entirely, building directly at the given step.
+  /// `LayoutBuilder` cannot report intrinsic dimensions, which is what
+  /// stops a grid from sizing a row with `IntrinsicHeight` when every tile
+  /// decides its own step independently; a tile that is TOLD its step
+  /// removes that obstacle. Left `null` (the default), the tile falls back
+  /// to measuring its own width via `LayoutBuilder`, exactly as before -- a
+  /// standalone tile (as in this file's tests, pumped directly at a fixed
+  /// width) still works with no caller changes.
+  final bool? compact;
+
   /// Below this width the tile steps down a size. Keyed off the tile's own
   /// width rather than the screen's, so a tile placed in a narrow column on
-  /// a wide display behaves correctly.
+  /// a wide display behaves correctly. Only consulted when [compact] is not
+  /// supplied by the caller.
   static const double compactBelow = 200;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
+    if (compact != null) return _build(context, compact!);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < compactBelow;
-        final pad = compact ? 14.0 : 22.0;
-        final badge = compact ? 28.0 : 38.0;
-        final height = compact ? 116.0 : 148.0;
-        final valueSize = valueIsText
-            ? (compact ? 15.0 : 19.0)
-            : (compact ? 24.0 : 31.0);
+        return _build(context, constraints.maxWidth < compactBelow);
+      },
+    );
+  }
 
-        final card = Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            border: Border.all(color: AppTokens.rule),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: AppTokens.ink.withValues(alpha: 0.04),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
-            ],
+  Widget _build(BuildContext context, bool compact) {
+    final scheme = Theme.of(context).colorScheme;
+
+    final pad = compact ? 14.0 : 22.0;
+    final badge = compact ? 28.0 : 38.0;
+    final minHeight = compact ? 116.0 : 148.0;
+    final valueSize =
+        valueIsText ? (compact ? 15.0 : 19.0) : (compact ? 24.0 : 31.0);
+
+    final card = Container(
+      constraints: BoxConstraints(minHeight: minHeight),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: AppTokens.rule),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppTokens.ink.withValues(alpha: 0.04),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
           ),
-          child: Padding(
-            key: const Key('statTilePadding'),
-            padding: EdgeInsets.all(pad),
-            child: Column(
-              // The Container above now sets a fixed height (not a
-              // minimum), so every tile of the same step is identical in
-              // height regardless of its content, and every tile's
-              // label/badge row starts from the same top offset. That is
-              // what gives a row of tiles one shared baseline -- not
-              // anything in this Column pushing content to fill space, so
-              // there is still no Expanded/Spacer here. label and caption
-              // are capped at two lines with an ellipsis so a long string
-              // cannot grow past the fixed box.
+        ],
+      ),
+      child: Padding(
+        key: const Key('statTilePadding'),
+        padding: EdgeInsets.all(pad),
+        child: Column(
+          // The Container above sets a minimum, not a fixed height, so
+          // this Column's main axis is unbounded here -- an Expanded or
+          // Spacer would throw. mainAxisSize.min is what lets the card
+          // grow past the minimum for tall content (a wrapped label or
+          // caption) instead of overflowing. Sharing one height across a
+          // row of tiles is the tile grid's job (IntrinsicHeight + this
+          // minimum as the floor), not this widget's -- do not "fix" this
+          // back to a Spacer.
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: compact ? 11.5 : 13,
-                          height: 1.4,
-                          fontWeight: FontWeight.w500,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppTokens.md),
-                    Container(
-                      width: badge,
-                      height: badge,
-                      decoration: BoxDecoration(
-                        color: accent,
-                        borderRadius: BorderRadius.circular(compact ? 8 : 10),
-                      ),
-                      child: Icon(
-                        icon,
-                        size: compact ? 15 : 19,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: compact ? 8 : 10),
-                _value(context, valueSize, compact),
-                if (progress != null)
-                  _bar(context, compact)
-                else if (caption != null) ...[
-                  SizedBox(height: compact ? 3 : 4),
-                  Text(
-                    caption!,
+                Expanded(
+                  child: Text(
+                    label,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: compact ? 10.5 : 12,
-                      height: 1.35,
+                      fontSize: compact ? 11.5 : 13,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(width: AppTokens.md),
+                Container(
+                  width: badge,
+                  height: badge,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(compact ? 8 : 10),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: compact ? 15 : 19,
+                    color: Colors.white,
+                  ),
+                ),
               ],
             ),
-          ),
-        );
+            SizedBox(height: compact ? 12 : 18),
+            _value(context, valueSize, compact),
+            if (progress != null)
+              _bar(context, compact)
+            else if (caption != null) ...[
+              SizedBox(height: compact ? 5 : 7),
+              Text(
+                caption!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: compact ? 10.5 : 12,
+                  height: 1.35,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
 
-        if (onTap == null) return card;
-        return InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: card,
-        );
-      },
+    if (onTap == null) return card;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: card,
     );
   }
 
