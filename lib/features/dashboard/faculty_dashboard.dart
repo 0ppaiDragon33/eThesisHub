@@ -11,6 +11,7 @@ import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/faculty_overview.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
@@ -70,11 +71,15 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
       selectedIndex: _selectedIndex,
       onDestinationSelected: (i) => setState(() => _selectedIndex = i),
       // Destinations sit INSIDE the mode, per design decision D5: the switch
-      // is the primary axis and each mode is its own clean dashboard. The
-      // first destination is whatever that mode is for; Nominations appears
-      // in both, because a Conforme request is role-neutral — it is how you
-      // acquire either position in the first place.
+      // is the primary axis and each mode is its own clean dashboard. Overview
+      // is first and mode-independent -- its queue deliberately ignores the
+      // switch (D17) even though its tiles do not. The destination after it
+      // is whatever the mode is for; Nominations appears in both, because a
+      // Conforme request is role-neutral — it is how you acquire either
+      // position in the first place.
       destinations: [
+        const NavDestination(
+            label: 'Overview', icon: Icons.dashboard_outlined),
         mode == FacultyMode.adviser
             ? const NavDestination(
                 label: 'Advisees', icon: Icons.school_outlined)
@@ -116,17 +121,19 @@ class _FacultyDashboardState extends ConsumerState<FacultyDashboard> {
           ),
         const SignOutButton(),
       ],
-      // Destination 0 is the work of the mode you are in; destination 1 is
-      // the Conforme inbox, which belongs to neither. Rendering both at once
-      // (the previous shape) read as a broken tab rather than an unbuilt one.
+      // Destination 0 is Overview, mode-independent; destination 1 is the
+      // work of the mode you are in; destination 3 is the Conforme inbox,
+      // which belongs to neither. Rendering more than one body at once read
+      // as a broken tab rather than an unbuilt one, in the previous shape.
       body: switch (_selectedIndex) {
-        1 => const PageShell(
+        0 => const FacultyOverview(),
+        2 => const PageShell(
             title: 'My defences',
             subtitle: 'Pre-oral and final defences you are attending, '
                 'whether you advise the group or sit on its panel.',
             children: [DefencesList()],
           ),
-        2 => _nominationsBody(pendingAsync),
+        3 => _nominationsBody(pendingAsync),
         _ => _modeBody(mode, adviseesAsync, myThesisIdsAsync),
       },
     );

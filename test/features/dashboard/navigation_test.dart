@@ -132,7 +132,7 @@ void main() {
   });
 
   group('faculty', () {
-    testWidgets('a panelist-only member sees Panels first, and no switch',
+    testWidgets('a panelist-only member has no switch, and can reach Panels',
         (tester) async {
       // The reported bug: they landed on an empty Advisees list and could
       // not leave, because the switch hides itself precisely when you hold
@@ -148,12 +148,22 @@ void main() {
           uid: 'p1', role: 'faculty'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Panels'), findsWidgets);
-      expect(find.text('Advisees'), findsNothing);
+      // Overview is destination 0 now, so this member no longer lands on
+      // Panels directly -- but the destination is still there, and no
+      // switch renders since they hold no adviser position.
+      final bar = find.byType(NavigationBar);
+      expect(find.descendant(of: bar, matching: find.text('Panels')),
+          findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text('Advisees')),
+          findsNothing);
       expect(find.byType(SegmentedButton<Object?>), findsNothing);
+
+      await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
+      await tester.pumpAndSettle();
+      expect(find.text('My panels'), findsOneWidget);
     });
 
-    testWidgets('an adviser sees Advisees first and can reach Nominations',
+    testWidgets('an adviser reaches Advisees and Nominations from Overview',
         (tester) async {
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
@@ -162,10 +172,16 @@ void main() {
           uid: 'a1', role: 'faculty'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Advisees'), findsWidgets);
+      // Overview is the landing destination (index 0) now, ahead of the
+      // mode's own list.
+      expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
+
+      final bar = find.byType(NavigationBar);
+      await tester.tap(find.descendant(of: bar, matching: find.text('Advisees')));
+      await tester.pumpAndSettle();
       expect(find.text('My advisees'), findsOneWidget);
 
-      await tester.tap(find.text('Nominations'));
+      await tester.tap(find.descendant(of: bar, matching: find.text('Nominations')));
       await tester.pumpAndSettle();
 
       // The destinations genuinely swap content. Rendering both at once is
@@ -270,11 +286,15 @@ void main() {
           uid: 'a1', role: 'faculty'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now; tap into Advisees explicitly.
+      final bar = find.byType(NavigationBar);
+      await tester.tap(find.descendant(of: bar, matching: find.text('Advisees')));
+      await tester.pumpAndSettle();
       expect(find.text('My advisees'), findsOneWidget);
 
       // Defences are their own destination in both modes now, rather than a
       // section stacked under the mode's own list.
-      await tester.tap(find.text('Defences'));
+      await tester.tap(find.descendant(of: bar, matching: find.text('Defences')));
       await tester.pumpAndSettle();
 
       expect(find.text('My defences'), findsOneWidget);
@@ -326,9 +346,13 @@ void main() {
           uid: 'p1', role: 'faculty'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now; tap into Panels explicitly.
+      final bar = find.byType(NavigationBar);
+      await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
+      await tester.pumpAndSettle();
       expect(find.text('My panels'), findsOneWidget);
 
-      await tester.tap(find.text('Defences'));
+      await tester.tap(find.descendant(of: bar, matching: find.text('Defences')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);

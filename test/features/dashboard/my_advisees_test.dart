@@ -70,6 +70,11 @@ void main() {
     await tester.pumpWidget(await _wrap(db, uid: 'a1'));
     await tester.pumpAndSettle();
 
+    // Overview is destination 0 now; the advisee list sits at destination 1.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text('Advisees')));
+    await tester.pumpAndSettle();
+
     expect(find.text('My Advised Thesis'), findsOneWidget);
     expect(find.text('Someone Elses Thesis'), findsNothing);
   });
@@ -77,6 +82,10 @@ void main() {
   testWidgets('the placeholder copy is gone', (tester) async {
     final db = await _seed();
     await tester.pumpWidget(await _wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text('Advisees')));
     await tester.pumpAndSettle();
 
     // Shipped for two milestones, promising a list that could not exist
@@ -97,9 +106,20 @@ void main() {
     await tester.pumpWidget(await _wrap(db, uid: 'lonely'));
     await tester.pumpAndSettle();
 
+    // Overview is destination 0 regardless of position; it is the
+    // destination AFTER it -- the mode's own work -- that must be Panels,
+    // not an empty Advisees list.
+    final bar = find.byType(NavigationBar);
+    expect(find.descendant(of: bar, matching: find.text('Panels')),
+        findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('Advisees')),
+        findsNothing);
+    expect(find.byType(ErrorWidget), findsNothing);
+
+    await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
+    await tester.pumpAndSettle();
     expect(find.text('My panels'), findsOneWidget);
     expect(find.text('My advisees'), findsNothing);
-    expect(find.byType(ErrorWidget), findsNothing);
   });
 
   testWidgets('the advisee list is loading before the first snapshot arrives',
@@ -116,12 +136,21 @@ void main() {
       // a real query cannot hold this frame open long enough to assert on.
       myAdviseesProvider.overrideWith((ref) => StreamController<List<Thesis>>().stream),
     ]));
-    // Deliberately NOT pumpAndSettle: asserts the loading branch renders
-    // before the stream's first snapshot, rather than the empty-list
-    // branch. Collapsing loading into an empty data(const []) list would
-    // make "still loading" and "no advisees" indistinguishable -- a bug
-    // this project has already shipped four times (see the comment on
-    // adviseesAsync.when in faculty_dashboard.dart).
+    // One pump resolves the (overridden, already-settled) effective mode
+    // and mounts the NavigationBar at Overview; tapping into Advisees is
+    // what actually starts watching the stuck `myAdviseesProvider` stream.
+    // `myAdviseesProvider` itself never emits regardless of how many more
+    // frames pass, so this tap-and-pump does not risk settling past the
+    // state under test.
+    await tester.pump();
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text('Advisees')));
+    // Deliberately NOT pumpAndSettle from here: asserts the loading branch
+    // renders before the stream's first snapshot, rather than the
+    // empty-list branch. Collapsing loading into an empty data(const [])
+    // list would make "still loading" and "no advisees" indistinguishable
+    // -- a bug this project has already shipped four times (see the
+    // comment on adviseesAsync.when in faculty_dashboard.dart).
     await tester.pump();
 
     // The whole dashboard waits on the effective mode, because the mode
@@ -152,6 +181,10 @@ void main() {
     await tester.pumpWidget(await _wrap(db, uid: 'a1'));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text('Advisees')));
+    await tester.pumpAndSettle();
+
     expect(find.text('2 chapters awaiting review'), findsOneWidget);
   });
 
@@ -180,6 +213,14 @@ void main() {
       chaptersProvider('mine')
           .overrideWith((ref) => StreamController<List<ThesisChapter>>().stream),
     ]));
+    // An extra pump-and-tap to reach the mode body at destination 1 (Overview
+    // now sits at 0), then the same two-pump timing as before: the first
+    // resolves myAdviseesProvider (mounting the advisee's own card), the
+    // second lets that card's chaptersProvider start -- but its stream has
+    // not emitted yet, so the card's own loading branch is what should show.
+    await tester.pump();
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationBar), matching: find.text('Advisees')));
     await tester.pump();
     await tester.pump();
 
