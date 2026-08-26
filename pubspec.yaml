@@ -49,6 +49,7 @@ dependencies:
   # declared directly only so `lib/` may import it without tripping
   # depend_on_referenced_packages. No version moves — see pubspec.lock.
   url_launcher: 6.3.2
+  fl_chart: ^1.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
