@@ -167,6 +167,10 @@ ShellDestination? destinationForLocation(
 ) {
   final owners = destinations.where((d) => d.owns(location)).toList();
   if (owners.isEmpty) return null;
+  // Prefer the destination with the longest route. Today alsoOwns is
+  // always empty, so this sorts by route.length. If a destination ever
+  // gains an alsoOwns entry deeper than another destination's bare route,
+  // this would pick wrongly (should compare the matched root, not d.route).
   owners.sort((a, b) => b.route.length.compareTo(a.route.length));
   return owners.first;
 }

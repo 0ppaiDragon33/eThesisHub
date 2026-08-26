@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/core/navigation/shell_destination.dart';
@@ -33,6 +34,21 @@ void main() {
 
       expect(defences.owns('/defence/room/d1'), isFalse);
       expect(defences.owns('/defence/schedule'), isFalse);
+    });
+
+    test('a destination does NOT own a route that merely extends its name', () {
+      // The separator is the whole point. Without it '/thesis/chapters' would
+      // also own '/thesis/chaptersArchive', which is a different screen that
+      // happens to start with the same characters. The '/defences' vs
+      // '/defence/room' case above cannot catch this — those differ by a word,
+      // so naive startsWith already rejects it and the separator never comes
+      // into play.
+      const d = ShellDestination(
+        label: 'Chapters',
+        icon: Icons.menu_book_outlined,
+        route: '/thesis/chapters',
+      );
+      expect(d.owns('/thesis/chaptersArchive'), isFalse);
     });
 
     test('an unowned location resolves to no destination at all', () {
