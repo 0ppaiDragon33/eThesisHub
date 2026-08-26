@@ -250,3 +250,78 @@ final facultyNeedsYouProvider =
 
   return controller.stream;
 });
+
+/// What is waiting on the signed-in dean: nominations the Coordinator has
+/// recommended, and candidate title sets ready for a defence decision.
+///
+/// Each row routes to exactly where the dean dashboard's own destinations
+/// already send that same thesis -- `/review` for an approval (see the
+/// `goToReview` button in `dean_dashboard.dart`) and `/defence/{id}` for a
+/// title defence (see `DefenceQueue`) -- reused verbatim so a row here is
+/// never a dead end.
+///
+/// A live fan-in over two [thesesByStatusProvider] streams, following the
+/// shape proven in [facultyNeedsYouProvider]: one `ref.listen` subscription
+/// per source, `ref.onDispose` cleanup, `onError` on every one of them. Do
+/// NOT collapse this into an `await for` over one stream with `.first` read
+/// against the other -- that shape only advances when the FIRST stream
+/// emits, and a change that touches only the second source never arrives.
+/// This project has shipped that exact bug once already.
+final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
+  final controller = StreamController<List<NeedsYouItem>>();
+
+  AsyncValue<List<Thesis>>? approvals;
+  AsyncValue<List<Thesis>>? titleDefences;
+
+  void emit() {
+    // Wait for one snapshot from each source before emitting, so the queue
+    // never renders a partial merge as though it were complete.
+    if (approvals == null || titleDefences == null) return;
+
+    final items = <NeedsYouItem>[
+      for (final t in (approvals!.valueOrNull ?? const <Thesis>[]))
+        NeedsYouItem(
+          title: t.workingTitle,
+          detail: 'Recommended by the Coordinator, waiting on your '
+              'approval.',
+          route: '/review',
+          chipLabel: 'Approve',
+          tone: NeedsYouTone.act,
+        ),
+      for (final t in (titleDefences!.valueOrNull ?? const <Thesis>[]))
+        NeedsYouItem(
+          title: t.workingTitle,
+          detail: 'Presented their candidate titles -- decide the outcome.',
+          route: '/defence/${t.id}',
+          chipLabel: 'Decide',
+          tone: NeedsYouTone.act,
+        ),
+    ];
+
+    controller.add(items);
+  }
+
+  ref.listen<AsyncValue<List<Thesis>>>(
+    thesesByStatusProvider(ThesisStatus.nominationPendingDean),
+    (previous, next) {
+      approvals = next;
+      emit();
+    },
+    fireImmediately: true,
+    onError: (e, st) => controller.addError(e, st),
+  );
+
+  ref.listen<AsyncValue<List<Thesis>>>(
+    thesesByStatusProvider(ThesisStatus.titlePendingDefence),
+    (previous, next) {
+      titleDefences = next;
+      emit();
+    },
+    fireImmediately: true,
+    onError: (e, st) => controller.addError(e, st),
+  );
+
+  ref.onDispose(controller.close);
+
+  return controller.stream;
+});

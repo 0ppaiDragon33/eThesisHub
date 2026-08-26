@@ -202,6 +202,12 @@ void main() {
           await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
       await tester.pumpAndSettle();
 
+      // Overview lands first now, ahead of Approvals.
+      expect(find.byKey(const Key('deanOverview')), findsOneWidget);
+      expect(find.text('Nomination approvals'), findsNothing);
+
+      await tester.tap(find.text('Approvals'));
+      await tester.pumpAndSettle();
       expect(find.text('Nomination approvals'), findsOneWidget);
 
       await tester.tap(find.text('Titles'));

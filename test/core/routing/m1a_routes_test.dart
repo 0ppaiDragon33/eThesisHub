@@ -193,6 +193,11 @@ void main() {
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
+    // Overview now lands first for the dean; the approval-queue link with
+    // its own key sits on the Approvals destination.
+    await tester.tap(find.text('Approvals'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToReview')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToReview')));
     await tester.pumpAndSettle();

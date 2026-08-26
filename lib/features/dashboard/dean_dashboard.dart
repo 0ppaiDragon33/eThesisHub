@@ -8,6 +8,7 @@ import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/dean_overview.dart';
 import 'package:ethesishub/features/dashboard/defence_queue.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
@@ -35,14 +36,17 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
       title: 'eThesisHub',
       selectedIndex: _selectedIndex,
       onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-      // Only approvals resolve today; 'Overview' was a label for the screen
-      // you are already on, and defences and reports belong to unbuilt
-      // modules.
+      // Overview is prepended ahead of everything else, which shifts every
+      // other destination's index by one: Approvals(1), Titles(2),
+      // Defences(3), Readiness(4). The body switch below is recomputed
+      // against these positions rather than merely offset from the old
+      // ones.
       // Three sections that were stacked on one scrolling page, each now
       // its own destination. They answer different questions on different
       // days -- who needs a decision, who is defending, who is ready to be
       // scheduled -- and stacking them made the newest the least visible.
       destinations: const [
+        NavDestination(label: 'Overview', icon: Icons.dashboard_outlined),
         NavDestination(label: 'Approvals', icon: Icons.gavel_outlined),
         // Two different jobs, so two destinations. Approving a candidate
         // title set is not attending a scheduled defence, and stacking
@@ -53,24 +57,7 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
       ],
       actions: const [SignOutButton()],
       body: switch (_selectedIndex) {
-        1 => const PageShell(
-            title: 'Title defences',
-            subtitle: 'Groups presenting their candidate titles.',
-            children: [DefenceQueue()],
-          ),
-        2 => const PageShell(
-            title: 'Scheduled defences',
-            subtitle: 'Pre-oral and final defences, and the rooms they run '
-                'in.',
-            children: [DefencesList()],
-          ),
-        3 => const PageShell(
-            title: 'Defence readiness',
-            subtitle: 'Theses whose chapters have cleared the gate for a '
-                'pre-oral or final defence.',
-            children: [DefenceReadinessList()],
-          ),
-        _ => PageShell(
+        1 => PageShell(
         title: 'Nomination approvals',
         subtitle: 'Theses the Coordinator has recommended, waiting on you.',
         children: [
@@ -109,6 +96,24 @@ class _DeanDashboardState extends ConsumerState<DeanDashboard> {
           ),
         ],
           ),
+        2 => const PageShell(
+            title: 'Title defences',
+            subtitle: 'Groups presenting their candidate titles.',
+            children: [DefenceQueue()],
+          ),
+        3 => const PageShell(
+            title: 'Scheduled defences',
+            subtitle: 'Pre-oral and final defences, and the rooms they run '
+                'in.',
+            children: [DefencesList()],
+          ),
+        4 => const PageShell(
+            title: 'Defence readiness',
+            subtitle: 'Theses whose chapters have cleared the gate for a '
+                'pre-oral or final defence.',
+            children: [DefenceReadinessList()],
+          ),
+        _ => const DeanOverview(),
       },
     );
   }
