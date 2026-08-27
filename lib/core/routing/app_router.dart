@@ -11,12 +11,20 @@ import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
+import 'package:ethesishub/features/dashboard/advisees_screen.dart';
+import 'package:ethesishub/features/dashboard/approvals_screen.dart';
 import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
 import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
 import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
+import 'package:ethesishub/features/dashboard/overview_screen.dart';
+import 'package:ethesishub/features/dashboard/panels_screen.dart';
+import 'package:ethesishub/features/dashboard/readiness_screen.dart';
+import 'package:ethesishub/features/dashboard/recommendations_screen.dart';
 import 'package:ethesishub/features/dashboard/student_dashboard.dart';
+import 'package:ethesishub/features/dashboard/title_defences_screen.dart';
 import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
+import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
@@ -241,6 +249,39 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const CoordinatorDashboard(),
       ),
       GoRoute(path: '/dean', builder: (_, _) => const DeanDashboard()),
+      // The eight sidebar-destination routes. Registering them here does
+      // not switch any dashboard over -- '/dean', '/faculty', etc. above
+      // still work exactly as before; this only adds a second, direct way
+      // to reach each screen, which is what lets a later task move the
+      // shell over in one step. None of these share a segment with any
+      // dynamic route below (they are all single static segments, same
+      // shape as '/student' or '/dean' above), so there is no ordering
+      // hazard here the way there is for '/defence/schedule' further down.
+      GoRoute(path: '/overview', builder: (_, _) => const OverviewScreen()),
+      GoRoute(path: '/defences', builder: (_, _) => const DefencesScreen()),
+      GoRoute(path: '/advisees', builder: (_, _) => const AdviseesScreen()),
+      GoRoute(path: '/panels', builder: (_, _) => const PanelsScreen()),
+      GoRoute(
+        path: '/approvals',
+        builder: (_, _) => const ApprovalsScreen(),
+      ),
+      GoRoute(
+        path: '/recommendations',
+        builder: (_, _) => const RecommendationsScreen(),
+      ),
+      // NOT '/titles' -- '/thesis/titles' (below) already exists for
+      // submitting a candidate title set. Two routes a character apart
+      // meaning different things is exactly how '/faculty' came to be
+      // registered twice in M1, leaving the invites screen permanently
+      // unreachable (see '/invites' further down).
+      GoRoute(
+        path: '/title-defences',
+        builder: (_, _) => const TitleDefencesScreen(),
+      ),
+      GoRoute(
+        path: '/readiness',
+        builder: (_, _) => const ReadinessScreen(),
+      ),
       GoRoute(
         path: '/thesis/create',
         builder: (_, _) => const CreateThesisScreen(),
