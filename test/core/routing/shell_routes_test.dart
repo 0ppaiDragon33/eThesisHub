@@ -369,6 +369,230 @@ void main() {
     expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
   });
 
+  // --- Task 8: role guards for the eight destination routes ---
+  //
+  // Both directions for every row of the permission table: a permitted role
+  // reaches the route, and an excluded role is redirected home. A
+  // one-directional test would still pass with the guard deleted, which is
+  // how a guard that does nothing gets shipped.
+
+  testWidgets('every signed-in role reaches /overview and /defences',
+      (tester) async {
+    for (final role in ['student', 'faculty', 'coordinator', 'dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/overview');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('overviewScreen')), findsOneWidget,
+          reason: '$role must reach /overview');
+
+      c.read(goRouterProvider).go('/defences');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget,
+          reason: '$role must reach /defences');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets('faculty, coordinator and dean reach /advisees and /panels',
+      (tester) async {
+    for (final role in ['faculty', 'coordinator', 'dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/advisees');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('adviseesScreen')), findsOneWidget,
+          reason: '$role must reach /advisees');
+
+      c.read(goRouterProvider).go('/panels');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('panelsScreen')), findsOneWidget,
+          reason: '$role must reach /panels');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets('a student is redirected home from /advisees and /panels',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('student', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/advisees');
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('adviseesScreen')), findsNothing);
+
+    c.read(goRouterProvider).go('/panels');
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('panelsScreen')), findsNothing);
+  });
+
+  testWidgets('the dean reaches /approvals', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('dean', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/approvals');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('approvalsScreen')), findsOneWidget);
+  });
+
+  testWidgets(
+      'student, faculty and coordinator are redirected home from /approvals',
+      (tester) async {
+    for (final role in ['student', 'faculty', 'coordinator']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/approvals');
+      await tester.pumpAndSettle();
+
+      expect(locationOf(c), '/overview', reason: '$role must not stay');
+      expect(find.byKey(const Key('approvalsScreen')), findsNothing,
+          reason: '$role must be redirected off /approvals');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets('the coordinator reaches /recommendations', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/recommendations');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('recommendationsScreen')), findsOneWidget);
+  });
+
+  testWidgets(
+      'student, faculty and dean are redirected home from /recommendations',
+      (tester) async {
+    for (final role in ['student', 'faculty', 'dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/recommendations');
+      await tester.pumpAndSettle();
+
+      expect(locationOf(c), '/overview', reason: '$role must not stay');
+      expect(
+          find.byKey(const Key('recommendationsScreen')), findsNothing,
+          reason: '$role must be redirected off /recommendations');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets('coordinator and dean reach /title-defences and /readiness',
+      (tester) async {
+    for (final role in ['coordinator', 'dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/title-defences');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget,
+          reason: '$role must reach /title-defences');
+
+      c.read(goRouterProvider).go('/readiness');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('readinessScreen')), findsOneWidget,
+          reason: '$role must reach /readiness');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets(
+      'student and faculty are redirected home from /title-defences and '
+      '/readiness', (tester) async {
+    for (final role in ['student', 'faculty']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/title-defences');
+      await tester.pumpAndSettle();
+      expect(locationOf(c), '/overview', reason: '$role must not stay');
+      expect(find.byKey(const Key('titleDefencesScreen')), findsNothing,
+          reason: '$role must be redirected off /title-defences');
+
+      c.read(goRouterProvider).go('/readiness');
+      await tester.pumpAndSettle();
+      expect(locationOf(c), '/overview', reason: '$role must not stay');
+      expect(find.byKey(const Key('readinessScreen')), findsNothing,
+          reason: '$role must be redirected off /readiness');
+
+      c.dispose();
+    }
+  });
+
+  // --- The two exemptions that must survive this task ---
+
+  testWidgets('an adviser still reaches /thesis/chapters', (tester) async {
+    // The router carries a comment explaining that a blanket /thesis
+    // prefix guard would bounce every adviser away from the chapters they
+    // review. That bug is closed; this keeps it closed.
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'u1', 'status': 'titleApproved',
+      'panelistUids': <String>[], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
+      'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
+    });
+    final c = await containerForRole('faculty', db, uid: 'a1');
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/thesis/chapters?id=t1');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
+  });
+
+  testWidgets('a leader still reaches /defence/room/:id', (tester) async {
+    // Same class of failure: DefencesList sends the leader into the room
+    // to read the consolidated comments, and a blanket /defence/ guard
+    // bounced them home before the screen ever built.
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'u1', 'status': 'titleApproved',
+      'panelistUids': ['p1'], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
+      'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
+    });
+    await db.collection('defenses').doc('df1').set({
+      'thesisId': 't1', 'type': 'preOral', 'venue': 'Room 101',
+      'panelUids': ['p1'], 'adviserUid': 'a1', 'leaderUid': 'u1',
+      'status': 'scheduled', 'createdBy': 'c1',
+    });
+    final c = await containerForRole('student', db, uid: 'u1');
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/defence/room/df1');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
+  });
+
   testWidgets('a profile deleted AFTER the shell mounts reaches /no-profile',
       (tester) async {
     // The redirect does re-fire on a profile change -- app_router.dart's

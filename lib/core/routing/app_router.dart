@@ -191,6 +191,47 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.dean) {
                 return home;
               }
+              // The eight sidebar-destination routes (Task 6/7) each admit a
+              // subset of roles per the M1a spec's permission table. All
+              // eight are static single-segment paths -- see the comment
+              // above their GoRoute registrations -- so none of them needs
+              // an exemption the way '/thesis/chapters' and
+              // '/defence/room/' do below: nothing dynamic ever shares
+              // their prefix.
+              //
+              // '/overview' and '/defences' admit every signed-in role and
+              // so need no guard here at all.
+              //
+              // '/advisees' and '/panels' admit faculty, coordinators AND
+              // deans -- not just faculty -- for the same reason
+              // '/nominations' above is open to all three: a coordinator or
+              // dean nominated onto someone else's thesis genuinely holds
+              // an adviser or panel position and needs their own list of
+              // advisees or panels, same as a plain faculty member would.
+              if ((location == '/advisees' || location == '/panels') &&
+                  profile.role == UserRole.student) {
+                return home;
+              }
+              // '/approvals' is the dean's queue alone.
+              if (location == '/approvals' && profile.role != UserRole.dean) {
+                return home;
+              }
+              // '/recommendations' is the coordinator's alone.
+              if (location == '/recommendations' &&
+                  profile.role != UserRole.coordinator) {
+                return home;
+              }
+              // '/title-defences' and '/readiness' are coordinator and dean
+              // destinations -- never faculty (who sit on individual title
+              // defence panels via '/defence/:thesisId' instead, unguarded
+              // by role here) and never the student whose own titles or
+              // readiness are what these screens track.
+              if ((location == '/title-defences' ||
+                      location == '/readiness') &&
+                  profile.role != UserRole.coordinator &&
+                  profile.role != UserRole.dean) {
+                return home;
+              }
               // The title defence panel is faculty, coordinators and the
               // dean — never the student whose titles are being judged.
               //
