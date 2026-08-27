@@ -304,7 +304,7 @@ class AccountFooter extends ConsumerWidget {
     );
 
     if (wide) {
-      footer = SizedBox(width: 220, child: footer);
+      footer = SizedBox(width: AppShell.expandedRailWidth, child: footer);
     }
     return footer;
   }

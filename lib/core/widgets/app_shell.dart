@@ -41,6 +41,16 @@ class AppShell extends ConsumerWidget {
   static const double railBreakpoint = 900;
   static const int minDestinations = 2;
 
+  /// The rail's own width at each state -- shared, not duplicated, because
+  /// `AccountFooter` (`app_shell_host.dart`) has to self-impose the same
+  /// width on its footer when it detects it is sitting in the rail (see
+  /// the note there): if the two drifted apart, the footer would stop
+  /// lining up with the rail it sits inside, undoing the bottom-left
+  /// alignment fix. `collapsedRailWidth` mirrors `NavigationRail`'s own
+  /// floor -- never shrink below 72, or destination icons start crowding.
+  static const double expandedRailWidth = 220;
+  static const double collapsedRailWidth = 72;
+
   final AsyncValue<List<ShellDestination>> destinations;
   final String location;
   final Widget child;
@@ -252,8 +262,8 @@ class _Chrome extends StatelessWidget {
                       // stays: that is part of what makes the drawer read
                       // correctly, and nothing here overrides it.
                       data: NavigationRailThemeData(
-                        minWidth: 72,
-                        minExtendedWidth: 220,
+                        minWidth: AppShell.collapsedRailWidth,
+                        minExtendedWidth: AppShell.expandedRailWidth,
                         selectedLabelTextStyle: Theme.of(context)
                             .textTheme
                             .labelLarge,
@@ -436,7 +446,7 @@ class _Skeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
+      width: AppShell.expandedRailWidth,
       child: Padding(
         key: const Key('shellSkeleton'),
         padding: const EdgeInsets.all(AppTokens.md),
