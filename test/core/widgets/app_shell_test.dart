@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/core/widgets/app_shell.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
 const _destinations = [
@@ -33,6 +34,7 @@ Future<Widget> wrap({
   VoidCallback? onBack,
   Map<String, Object> prefs = const {},
   bool suppressBackControl = false,
+  Widget? accountFooter,
 }) async {
   SharedPreferences.setMockInitialValues(Map.of(prefs));
   final store = await SharedPreferences.getInstance();
@@ -47,6 +49,7 @@ Future<Widget> wrap({
         onNavigate: onNavigate,
         onBack: onBack,
         suppressBackControl: suppressBackControl,
+        accountFooter: accountFooter,
         child: const Text('PAGE BODY'),
       ),
     ),
@@ -57,6 +60,49 @@ Future<void> setSize(WidgetTester tester, double width) async {
   tester.view.physicalSize = Size(width, 1400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
+}
+
+Future<void> setViewSize(WidgetTester tester, double width, double height) async {
+  tester.view.physicalSize = Size(width, height);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
+/// Stands in for the real `AccountFooter` (`app_shell_host.dart`), which
+/// wires itself to Firebase-backed providers this widget test does not
+/// set up. Same shape and the same keys the real widget uses for its full
+/// (name + role + sign-out) rendering, so the sweep below is exercising
+/// the same layout hazard -- fixed-height content pinned to the bottom of
+/// a `NavigationRail` -- without needing a real profile stream.
+class _FakeAccountFooter extends StatelessWidget {
+  const _FakeAccountFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      key: Key('accountFooter'),
+      padding: EdgeInsets.all(8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Jane Reyes', key: Key('accountFooterName')),
+                Text(
+                  'College Research Coordinator',
+                  key: Key('accountFooterRole'),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.logout, key: Key('accountFooterSignOut')),
+        ],
+      ),
+    );
+  }
 }
 
 void main() {
@@ -426,6 +472,61 @@ void main() {
 
       final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
       expect(rail.selectedIndex, isNull);
+    });
+  });
+
+  group('short-rail account footer', () {
+    // Coordinator: six destinations, the worst case for how much vertical
+    // space the rail's own content claims before the footer gets a turn.
+    final coordinatorDestinations = destinationsFor(role: UserRole.coordinator);
+    assert(coordinatorDestinations.length == 6); // guards the "worst case" claim
+
+    for (final height in [320.0, 420.0, 600.0, 1000.0]) {
+      testWidgets('rail height=$height overflows nothing', (tester) async {
+        await setViewSize(tester, 1400, height);
+        await tester.pumpWidget(await wrap(
+          destinations: AsyncValue.data(coordinatorDestinations),
+          accountFooter: const _FakeAccountFooter(),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets(
+        'at a normal height the full footer renders and sits at the foot '
+        'of the sidebar', (tester) async {
+      await setViewSize(tester, 1400, 1000);
+      await tester.pumpWidget(await wrap(
+        destinations: AsyncValue.data(coordinatorDestinations),
+        accountFooter: const _FakeAccountFooter(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Jane Reyes'), findsOneWidget);
+      expect(find.text('College Research Coordinator'), findsOneWidget);
+
+      // Bottom-aligned: the footer's bottom edge sits near the bottom of
+      // the 1000px-tall screen, not directly beneath the last destination.
+      final footerBottom =
+          tester.getBottomLeft(find.byKey(const Key('accountFooter'))).dy;
+      expect(footerBottom, greaterThan(900));
+      expect(footerBottom, lessThanOrEqualTo(1000));
+    });
+
+    testWidgets('a collapsed (72px) rail does not overflow horizontally',
+        (tester) async {
+      await setViewSize(tester, 1400, 1000);
+      await tester.pumpWidget(await wrap(
+        destinations: AsyncValue.data(coordinatorDestinations),
+        accountFooter: const _FakeAccountFooter(),
+        prefs: {'sidebar_expanded': false},
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

@@ -231,18 +231,24 @@ class _Chrome extends StatelessWidget {
                         ref.read(sidebarExpandedProvider.notifier).toggle(),
                   ),
                   // `NavigationRail.trailing` is not bottom-aligned on its
-                  // own -- without `Expanded` + `Align`, it renders directly
+                  // own -- without `trailingAtBottom`, it renders directly
                   // beneath the last destination, which is not "at the foot
                   // of the sidebar" (spec §5.3) once the rail is taller than
-                  // its destination list, which is the common case.
-                  trailing: shell.accountFooter == null
-                      ? null
-                      : Expanded(
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: shell.accountFooter,
-                          ),
-                        ),
+                  // its destination list, which is the common case. An
+                  // earlier version pinned it with `Expanded` + `Align`
+                  // instead: that claims "whatever height is left after the
+                  // toggle and the destinations", which goes negative on a
+                  // short rail (a landscape phone, a squat browser window)
+                  // and overflows. `trailingAtBottom` pins the footer at a
+                  // fixed height without claiming the remainder, and
+                  // `scrollable` lets the destination list itself yield --
+                  // become a scrollable viewport -- when the two together
+                  // do not fit, so the footer degrades to "reachable by
+                  // scrolling the destinations above it" rather than
+                  // overflowing off the bottom.
+                  trailingAtBottom: true,
+                  scrollable: true,
+                  trailing: shell.accountFooter,
                   destinations: [
                     for (final d in list)
                       NavigationRailDestination(
