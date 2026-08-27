@@ -11,6 +11,8 @@ import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/dashboard/faculty_mode_switch.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shell_providers.dart';
+import 'package:ethesishub/providers/sidebar_provider.dart';
+import 'package:ethesishub/providers/theme_provider.dart';
 
 /// What the app bar calls the page you are on.
 ///
@@ -197,23 +199,69 @@ class AccountFooter extends ConsumerWidget {
     final profile = ref.watch(currentUserProvider).valueOrNull;
 
     if (profile == null) {
+      // Degraded state (spec: no code path may depend on `users/{uid}`
+      // existing to render the shell at all) -- sign-out and the theme
+      // toggle both still work here, since neither reads the profile.
       return const Padding(
         key: Key('accountFooterSignOutOnly'),
         padding: EdgeInsets.all(8),
-        child: SignOutButton(),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SignOutButton(),
+            _ThemeToggleButton(),
+          ],
+        ),
       );
     }
 
     final dark = Theme.of(context).brightness == Brightness.dark;
     final textTheme = Theme.of(context).textTheme;
 
-    return Padding(
+    // Same `Key('accountFooter')` widget renders in two places that behave
+    // very differently: `NavigationDrawer` lays its children out inside a
+    // plain `ListView`, which genuinely bounds their width to the drawer's
+    // own -- an `Expanded` there is safe. `NavigationRail`'s `trailing`
+    // slot does NOT: `NavigationRail` sizes itself from an
+    // `IntrinsicWidth`-style probe of its content with no `maxWidth` cap,
+    // so its trailing child is laid out with a genuinely UNBOUNDED width
+    // constraint. An `Expanded` there throws ("RenderFlex children have
+    // non-zero flex but incoming width constraints are unbounded"), and
+    // before that, a bare `Flexible` inside a min-size `Row` just rendered
+    // the name at its full natural width -- unbounded, so it never
+    // wrapped or ellipsized -- which is the overflow this fixes.
+    //
+    // `wide` mirrors `AppShell.railBreakpoint`: when the shell would be
+    // showing the rail (not the drawer), this footer self-imposes the
+    // rail's own width -- 220 expanded, 72 collapsed -- so `Expanded`
+    // below finally has something finite to divide. A collapsed 72px
+    // rail cannot fit a name, a role, AND two icon buttons, so that case
+    // drops to icons only, the same trade `NavigationRail` itself makes
+    // for destination labels when collapsed.
+    final wide = MediaQuery.sizeOf(context).width >= AppShell.railBreakpoint;
+    final expanded = wide ? ref.watch(sidebarExpandedProvider) : true;
+
+    if (wide && !expanded) {
+      return const Padding(
+        key: Key('accountFooter'),
+        padding: EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ThemeToggleButton(),
+            SignOutButton(),
+          ],
+        ),
+      );
+    }
+
+    Widget footer = Padding(
       key: const Key('accountFooter'),
       padding: const EdgeInsets.all(8),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Flexible(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -221,6 +269,7 @@ class AccountFooter extends ConsumerWidget {
                 Text(
                   profile.fullName,
                   key: const Key('accountFooterName'),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
@@ -230,6 +279,7 @@ class AccountFooter extends ConsumerWidget {
                 Text(
                   _roleLabel(profile.role),
                   key: const Key('accountFooterRole'),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodySmall?.copyWith(
                     color: dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
@@ -238,9 +288,49 @@ class AccountFooter extends ConsumerWidget {
               ],
             ),
           ),
-          const SignOutButton(),
+          // Sign-out and the theme toggle in their own column, separate
+          // from the name/role column above -- two icon-sized controls
+          // side by side would not fit the 220px rail alongside a long
+          // name, but stacked they always do.
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ThemeToggleButton(),
+              SignOutButton(),
+            ],
+          ),
         ],
       ),
+    );
+
+    if (wide) {
+      footer = SizedBox(width: 220, child: footer);
+    }
+    return footer;
+  }
+}
+
+/// Cycles [themeModeProvider] system -> light -> dark -> system.
+///
+/// The icon and tooltip both name the *next* state, not the current one --
+/// this is a control you press to get somewhere, not a status readout.
+class _ThemeToggleButton extends ConsumerWidget {
+  const _ThemeToggleButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    final (icon, tooltip) = switch (mode) {
+      ThemeMode.system => (Icons.light_mode_outlined, 'Switch to light theme'),
+      ThemeMode.light => (Icons.dark_mode_outlined, 'Switch to dark theme'),
+      ThemeMode.dark => (Icons.brightness_auto_outlined, 'Switch to system theme'),
+    };
+
+    return IconButton(
+      key: const Key('themeToggle'),
+      icon: Icon(icon),
+      tooltip: tooltip,
+      onPressed: () => ref.read(themeModeProvider.notifier).cycle(),
     );
   }
 }

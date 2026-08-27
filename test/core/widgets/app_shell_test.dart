@@ -5,7 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/app_shell.dart';
+import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
@@ -151,11 +153,14 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('the chevron toggles the sidebar', (tester) async {
+    testWidgets('the edge strip toggles the sidebar', (tester) async {
       // As above: NavigationRail keeps the label mounted even when
       // collapsed, so the visible property to assert on is
       // `rail.extended`, not find.text — find.text stays true either
       // way, which is the point of keeping the accessible name.
+      //
+      // The dedicated `Key('sidebarToggle')` button is gone -- the rail's
+      // own edge is now the control (`Key('sidebarEdgeToggle')`).
       await setSize(tester, 1400);
       await tester.pumpWidget(
         await wrap(destinations: const AsyncValue.data(_destinations)),
@@ -166,10 +171,26 @@ void main() {
       NavigationRail rail() =>
           tester.widget<NavigationRail>(find.byType(NavigationRail));
       expect(rail().extended, isTrue);
+      expect(find.byKey(const Key('sidebarToggle')), findsNothing);
 
-      await tester.tap(find.byKey(const Key('sidebarToggle')));
+      await tester.tap(find.byKey(const Key('sidebarEdgeToggle')));
       await tester.pumpAndSettle();
       expect(rail().extended, isFalse);
+
+      await tester.tap(find.byKey(const Key('sidebarEdgeToggle')));
+      await tester.pumpAndSettle();
+      expect(rail().extended, isTrue);
+    });
+
+    testWidgets('Key(sidebarToggle) no longer exists anywhere',
+        (tester) async {
+      await setSize(tester, 1400);
+      await tester.pumpWidget(
+        await wrap(destinations: const AsyncValue.data(_destinations)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('sidebarToggle')), findsNothing);
     });
 
     testWidgets('has no hamburger — the sidebar is already visible',
@@ -527,6 +548,46 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('content width when the sidebar collapses', () {
+    // Proves point 2 with a measurement, not just a rebuild: at the SAME
+    // fixed viewport, collapsing the rail must free real width for a
+    // `PageShell`-style dashboard body to grow into, not just recentre in
+    // the same box.
+    Future<double> probeWidth(WidgetTester tester, {required bool expanded}) async {
+      SharedPreferences.setMockInitialValues({'sidebar_expanded': expanded});
+      final store = await SharedPreferences.getInstance();
+      await setSize(tester, 1400);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [sharedPrefsProvider.overrideWithValue(store)],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: AppShell(
+            destinations: const AsyncValue.data(_destinations),
+            location: '/overview',
+            title: 'PAGE TITLE',
+            child: PageShell(
+              maxWidth: AppTokens.measureWide,
+              children: const [
+                SizedBox(height: 10, key: Key('widthProbe')),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return tester.getSize(find.byKey(const Key('widthProbe'))).width;
+    }
+
+    testWidgets('is wider collapsed than expanded, at a fixed viewport',
+        (tester) async {
+      final expandedWidth = await probeWidth(tester, expanded: true);
+      final collapsedWidth = await probeWidth(tester, expanded: false);
+
+      expect(collapsedWidth, greaterThan(expandedWidth));
+      expect(collapsedWidth, lessThanOrEqualTo(AppTokens.measureWide));
     });
   });
 }

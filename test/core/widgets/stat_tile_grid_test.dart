@@ -58,13 +58,16 @@ void main() {
 
   testWidgets('tiles stop widening past the measure', (tester) async {
     // Four equal columns across a very wide monitor is what produced the
-    // long flat strips. The row caps rather than smearing.
+    // long flat strips. The row caps rather than smearing. The bound is
+    // derived from `AppTokens.measureWide` (not a bare number) so this
+    // stays true if that token moves again -- it already has once, when
+    // the sidebar collapse was given real room to grow the content into.
     await pumpAt(tester, 2400);
     final tile = tester.getSize(find.ancestor(
       of: find.text('Tile 0'),
       matching: find.byType(StatTile),
     ));
-    expect(tile.width, lessThan(340));
+    expect(tile.width, lessThan(AppTokens.measureWide / 4));
   });
 
   testWidgets('column count never decreases as the window widens',

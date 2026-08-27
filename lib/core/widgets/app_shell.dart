@@ -219,51 +219,109 @@ class _Chrome extends StatelessWidget {
             ),
             body: Row(
               children: [
-                NavigationRail(
-                  extended: expanded,
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: (i) =>
-                      shell._navigate(context, list[i].route),
-                  leading: IconButton(
-                    key: const Key('sidebarToggle'),
-                    icon: Icon(expanded ? Icons.chevron_left : Icons.chevron_right),
-                    onPressed: () =>
-                        ref.read(sidebarExpandedProvider.notifier).toggle(),
-                  ),
-                  // `NavigationRail.trailing` is not bottom-aligned on its
-                  // own -- without `trailingAtBottom`, it renders directly
-                  // beneath the last destination, which is not "at the foot
-                  // of the sidebar" (spec §5.3) once the rail is taller than
-                  // its destination list, which is the common case. An
-                  // earlier version pinned it with `Expanded` + `Align`
-                  // instead: that claims "whatever height is left after the
-                  // toggle and the destinations", which goes negative on a
-                  // short rail (a landscape phone, a squat browser window)
-                  // and overflows. `trailingAtBottom` pins the footer at a
-                  // fixed height without claiming the remainder, and
-                  // `scrollable` lets the destination list itself yield --
-                  // become a scrollable viewport -- when the two together
-                  // do not fit, so the footer degrades to "reachable by
-                  // scrolling the destinations above it" rather than
-                  // overflowing off the bottom.
-                  trailingAtBottom: true,
-                  scrollable: true,
-                  trailing: shell.accountFooter,
-                  destinations: [
-                    for (final d in list)
-                      NavigationRailDestination(
-                        icon: Icon(d.icon),
-                        // Always the real label. NavigationRail keeps it
-                        // mounted (Visibility.maintain) even when
-                        // collapsed specifically so the accessible name
-                        // survives — swapping in a SizedBox when
-                        // collapsed would delete every destination's
-                        // accessible name app-wide.
-                        label: Text(d.label),
+                // Empty rail background, below/around the destination list,
+                // toggles the same as the edge strip -- the rail itself is
+                // the control, not a button bolted onto it. A plain
+                // ancestor `GestureDetector` (not a `Stack` overlay) on
+                // purpose: `NavigationRail` owns a custom, non-standard
+                // `RenderBox` that does not tolerate the extra dry-layout
+                // pass a `Stack` performs to size a non-positioned child --
+                // that combination corrupted its semantics bookkeeping
+                // (`!semantics.parentDataDirty`) and, at some widths, fed it
+                // an unbounded width, in both cases crashing every route
+                // test that renders the shell. A `GestureDetector` wrapping
+                // the rail as its parent does not touch layout at all --
+                // constraints pass straight through -- so it carries none of
+                // that risk. `HitTestBehavior.translucent` plus normal
+                // gesture-arena resolution means a tap that lands on a real
+                // destination (or on the footer's buttons) is still won by
+                // that descendant's own recognizer, since descendants join
+                // the arena before their ancestor and are swept first; only
+                // a tap that hits no descendant reaches this one.
+                GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () =>
+                      ref.read(sidebarExpandedProvider.notifier).toggle(),
+                  child: NavigationRailTheme(
+                      // Brings the rail closer to the drawer's proportions
+                      // (spec: "doesn't look like navigation unlike
+                      // mobile") -- a narrower extended width, and the same
+                      // type scale NavigationDrawer uses (labelLarge)
+                      // rather than the rail's own, smaller default
+                      // (labelMedium). The selected-item indicator pill
+                      // stays: that is part of what makes the drawer read
+                      // correctly, and nothing here overrides it.
+                      data: NavigationRailThemeData(
+                        minWidth: 72,
+                        minExtendedWidth: 220,
+                        selectedLabelTextStyle: Theme.of(context)
+                            .textTheme
+                            .labelLarge,
+                        unselectedLabelTextStyle: Theme.of(context)
+                            .textTheme
+                            .labelLarge,
                       ),
-                  ],
+                      child: NavigationRail(
+                        extended: expanded,
+                        selectedIndex: selectedIndex,
+                        onDestinationSelected: (i) =>
+                            shell._navigate(context, list[i].route),
+                        // No leading toggle button. The user's own words:
+                        // "remove the button entirely and just click the
+                        // navbar itself or the side of it" — collapsing is
+                        // reached by tapping empty rail space or the edge
+                        // strip beside the rail (below), never a dedicated
+                        // control. Safe as a hidden affordance only because
+                        // collapse exists solely on wide, mouse-driven
+                        // screens; a phone gets a drawer with nothing to
+                        // collapse.
+                        //
+                        // `NavigationRail.trailing` is not bottom-aligned
+                        // on its own -- without `trailingAtBottom`, it
+                        // renders directly beneath the last destination,
+                        // which is not "at the foot of the sidebar" (spec
+                        // §5.3) once the rail is taller than its
+                        // destination list, which is the common case. An
+                        // earlier version pinned it with `Expanded` +
+                        // `Align` instead: that claims "whatever height is
+                        // left after the destinations", which goes negative
+                        // on a short rail (a landscape phone, a squat
+                        // browser window) and overflows. `trailingAtBottom`
+                        // pins the footer at a fixed height without
+                        // claiming the remainder, and `scrollable` lets the
+                        // destination list itself yield -- become a
+                        // scrollable viewport -- when the two together do
+                        // not fit, so the footer degrades to "reachable by
+                        // scrolling the destinations above it" rather than
+                        // overflowing off the bottom.
+                        trailingAtBottom: true,
+                        scrollable: true,
+                        trailing: shell.accountFooter,
+                        destinations: [
+                          for (final d in list)
+                            NavigationRailDestination(
+                              icon: Icon(d.icon),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 2,
+                              ),
+                              // Always the real label. NavigationRail keeps
+                              // it mounted (Visibility.maintain) even when
+                              // collapsed specifically so the accessible
+                              // name survives — swapping in a SizedBox when
+                              // collapsed would delete every destination's
+                              // accessible name app-wide.
+                              label: Text(d.label),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                _SidebarEdgeToggle(
+                  expanded: expanded,
+                  ruleColor: _rule(context),
+                  onToggle: () =>
+                      ref.read(sidebarExpandedProvider.notifier).toggle(),
                 ),
-                const VerticalDivider(width: 1),
                 Expanded(child: shell.child),
               ],
             ),
@@ -310,6 +368,57 @@ class _Chrome extends StatelessWidget {
           body: shell.child,
         );
       },
+    );
+  }
+}
+
+/// The clickable strip between the rail and the content, on wide screens.
+///
+/// Replaces both the old `VerticalDivider` and the old `Key('sidebarToggle')`
+/// button: the boundary between rail and content is now the only visible
+/// affordance, and it does two jobs at once -- it still reads as a divider
+/// when idle, and tapping it toggles [sidebarExpandedProvider]. That is safe
+/// as a hidden affordance only because collapse exists solely on wide,
+/// mouse-driven screens; a phone gets a drawer and a hamburger and has
+/// nothing to collapse, so no equivalent exists there.
+class _SidebarEdgeToggle extends StatelessWidget {
+  const _SidebarEdgeToggle({
+    required this.expanded,
+    required this.ruleColor,
+    required this.onToggle,
+  });
+
+  final bool expanded;
+  final Color ruleColor;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = expanded ? 'Collapse sidebar' : 'Expand sidebar';
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: SizedBox(
+            width: 8,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const Key('sidebarEdgeToggle'),
+                canRequestFocus: true,
+                onTap: onToggle,
+                child: Center(
+                  child: Container(width: 1, color: ruleColor),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
