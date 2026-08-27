@@ -351,17 +351,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShellHost(
           // Not `state.matchedLocation`: that field is the location
-          // where this ShellRoute itself first matched, and go_router
-          // does not recompute it for an imperative `push` onto a
-          // sibling route already inside the shell -- it only advances
-          // on a fresh `go`. `state.uri` DOES track the pushed leaf (see
-          // `ShellRouteMatch.buildState` in go_router's own source,
-          // which rebuilds `uri` from the imperative match but reuses
-          // the old `matchedLocation` verbatim), so `.path` is the one
-          // that is actually current after a deep-screen push. Task 9
-          // needs this: without it, the shell keeps computing "deeper
-          // than a destination" against the pre-push location and never
-          // draws a back control on a pushed screen.
+          // where this ShellRoute itself first matched, and it does not
+          // advance for an imperative `push` onto a sibling route
+          // already inside the shell -- only a fresh `go` moves it.
+          // Verified against the pinned go_router 17.5.0 source
+          // (lib/src/match.dart, `ShellRouteMatch.buildState`): it
+          // passes `matches.uri` straight through for `uri` but its own
+          // `matchedLocation` field -- set once, when the shell itself
+          // matched -- for `matchedLocation`, so only `uri` picks up a
+          // later imperative push. `state.uri.path` is therefore the
+          // field that is actually current after a deep-screen push.
+          // Task 9 needs this: without it, the shell keeps computing
+          // "deeper than a destination" against the pre-push location
+          // and never draws a back control on a pushed screen. Pinned
+          // to `deep_navigation_test.dart`'s "shows a back control
+          // inside a pushed chapter" test, which fails if this
+          // regresses to `state.matchedLocation`.
           location: state.uri.path,
           pathParameters: state.pathParameters,
           child: child,
