@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ethesishub/app.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/user_repository.dart';
@@ -12,6 +13,7 @@ import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/repositories/faculty_directory_repository.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/shared_prefs_provider.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Records calls to promoteFromInvite.
@@ -330,8 +332,14 @@ void main() {
     final mockAuth = MockFirebaseAuth();
     final authService = _FlippableAuthService(mockAuth, uid, email);
 
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     final container = ProviderContainer(
       overrides: [
+        // The app shell reads sharedPrefsProvider (for the sidebar's
+        // remembered collapsed state), and this test drives the real app
+        // now that every signed-in route is inside that shell.
+        sharedPrefsProvider.overrideWithValue(prefs),
         firestoreProvider.overrideWithValue(db),
         firebaseAuthProvider.overrideWithValue(mockAuth),
         authServiceProvider.overrideWithValue(authService),
@@ -356,7 +364,7 @@ void main() {
     await tester.tap(find.byKey(const Key('reload')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget,
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget,
         reason: 'without invalidating authStateProvider, the router never '
             're-evaluates its redirect and the user is stuck on '
             '/verify-email');
@@ -379,8 +387,14 @@ void main() {
     final mockAuth = MockFirebaseAuth();
     final authService = _FlippableAuthService(mockAuth, uid, email);
 
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     final container = ProviderContainer(
       overrides: [
+        // The app shell reads sharedPrefsProvider (for the sidebar's
+        // remembered collapsed state), and this test drives the real app
+        // now that every signed-in route is inside that shell.
+        sharedPrefsProvider.overrideWithValue(prefs),
         firestoreProvider.overrideWithValue(db),
         firebaseAuthProvider.overrideWithValue(mockAuth),
         authServiceProvider.overrideWithValue(authService),
@@ -408,7 +422,7 @@ void main() {
     await tester.tap(find.byKey(const Key('reload')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget,
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget,
         reason: 'a non-permission-denied directory write failure must not '
             'skip the authStateProvider invalidate and strand the user on '
             '/verify-email');

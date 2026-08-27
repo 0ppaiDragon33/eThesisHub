@@ -111,8 +111,12 @@ Widget _wrap(
         )),
         ...overrides,
       ],
-      child: const MaterialApp(
-        home: DefenceRoomScreen(defenceId: 'd1'),
+      child: MaterialApp(
+        // the app shell supplies the Scaffold in the real app.
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Defence room')),
+          body: DefenceRoomScreen(defenceId: 'd1'),
+        ),
       ),
     );
 
@@ -474,6 +478,11 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'c1'));
     await tester.pumpAndSettle();
 
+    // The room's link to the consolidated view moved out of the app bar
+    // (which belongs to the shell now) and onto the page, so this control
+    // sits lower than it did; tester.tap() does not scroll for you.
+    await tester.ensureVisible(find.byKey(const Key('editSchedule')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editSchedule')));
     await tester.pumpAndSettle();
 
@@ -498,6 +507,11 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'c1'));
     await tester.pumpAndSettle();
 
+    // The room's link to the consolidated view moved out of the app bar
+    // (which belongs to the shell now) and onto the page, so this control
+    // sits lower than it did; tester.tap() does not scroll for you.
+    await tester.ensureVisible(find.byKey(const Key('editSchedule')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editSchedule')));
     await tester.pumpAndSettle();
 

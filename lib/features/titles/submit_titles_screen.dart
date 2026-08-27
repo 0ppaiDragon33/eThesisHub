@@ -194,12 +194,10 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
   /// not yet ready for candidate titles landed on a white page with no back
   /// button and no navigation, and had to reload the whole app to escape it.
   /// Whatever the screen has to say, it says it somewhere you can leave.
-  Widget _framed(List<Widget> children) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Candidate titles')),
-      body: PageShell(children: children),
-    );
-  }
+  /// The Scaffold and AppBar that used to be here belong to the app shell
+  /// now, which supplies them to every signed-in route — so every state
+  /// below still has a bar, a sidebar and a way back.
+  Widget _framed(List<Widget> children) => PageShell(children: children);
 
   @override
   Widget build(BuildContext context) {
@@ -253,10 +251,9 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
 
     final atCap = _titles.length >= TitleDefenceRepository.maxCandidates;
 
-    return Scaffold(
+    return KeyedSubtree(
       key: const Key('submitTitlesScreen'),
-      appBar: AppBar(title: const Text('Candidate titles')),
-      body: PageShell(
+      child: PageShell(
         title: 'Candidate titles',
         subtitle: 'Submit at least ${TitleDefenceRepository.minCandidates} '
             'candidate titles, each with a justification, plus one '

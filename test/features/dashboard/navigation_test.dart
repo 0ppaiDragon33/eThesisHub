@@ -6,10 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
-import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
-import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
-import 'package:ethesishub/features/dashboard/student_dashboard.dart';
+import 'package:ethesishub/app.dart';
+import 'package:ethesishub/core/routing/app_router.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
@@ -31,8 +29,7 @@ Map<String, dynamic> thesis({
       'status': status,
     };
 
-Future<Widget> wrap(
-  Widget dashboard,
+Future<ProviderContainer> containerFor(
   FakeFirebaseFirestore db, {
   required String uid,
   required String role,
@@ -45,62 +42,78 @@ Future<Widget> wrap(
     'role': role,
     'active': true,
   });
-  return ProviderScope(
-    overrides: [
-      firestoreProvider.overrideWithValue(db),
-      sharedPrefsProvider.overrideWithValue(prefs),
-      firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
-        signedIn: true,
-        mockUser: MockUser(
-            uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
-      )),
-    ],
-    child: MaterialApp(home: dashboard),
-  );
+  return ProviderContainer(overrides: [
+    firestoreProvider.overrideWithValue(db),
+    sharedPrefsProvider.overrideWithValue(prefs),
+    firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+      signedIn: true,
+      mockUser: MockUser(
+          uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
+    )),
+  ]);
+}
+
+/// Wide enough (1000px) for the shell to draw its rail rather than hide the
+/// destinations behind a hamburger. The narrow shape has its own coverage
+/// in test/core/widgets/app_shell_test.dart and
+/// test/core/routing/shell_routes_test.dart.
+Future<void> pumpApp(WidgetTester tester, ProviderContainer c) async {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+      UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+  await tester.pumpAndSettle();
+}
+
+/// The labels the sidebar is offering, read off the rail itself rather than
+/// off the page, so a heading that happens to use the same word cannot
+/// stand in for a destination that is not there.
+List<String?> railLabels(WidgetTester tester) => tester
+    .widget<NavigationRail>(find.byType(NavigationRail))
+    .destinations
+    .map((d) => (d.label as Text).data)
+    .toList();
+
+Future<void> tapDestination(WidgetTester tester, String label) async {
+  await tester.tap(find.descendant(
+      of: find.byType(NavigationRail), matching: find.text(label)));
+  await tester.pumpAndSettle();
 }
 
 /// A destination is only worth declaring if selecting it actually shows
-/// something. `ResponsiveScaffold` hides its bar below two destinations for
-/// exactly this reason: a control that does nothing when tapped reads as a
-/// broken app rather than an unfinished one.
+/// something: the shell hides its navigation below two destinations for
+/// exactly that reason, because a control that does nothing when tapped
+/// reads as a broken app rather than an unfinished one.
+///
+/// Every case here drives the REAL router. The four dashboards these tests
+/// used to pump directly are gone -- navigation is one shell around every
+/// signed-in route now -- so there is no widget below the router that could
+/// answer "which destinations does this role get, and does each one land
+/// somewhere". Bodies are asserted by their screen Key rather than by
+/// heading copy, because several destination labels and page headings are
+/// now the same words ('Title defences' is both), and a text finder cannot
+/// tell the sidebar from the page.
 void main() {
   group('student', () {
     testWidgets(
-        'shows only Overview and Thesis before the title is approved',
+        'shows only Overview and My thesis before the title is approved',
         (tester) async {
-      // Overview lands ahead of Thesis in this milestone, so the bar now
-      // has two destinations (index 0 and 1) even before Chapters unlocks
-      // -- it is Chapters and Defences, at indices 2 and 3, that stay gated
-      // on approval. Chapters would lead straight to "Chapters are not
-      // open yet".
+      // Chapters and Defences stay gated on the Dean approving a title:
+      // before then Chapters leads straight to "Chapters are not open yet"
+      // and no defence can have been scheduled.
       final db = FakeFirebaseFirestore();
       await db
           .collection('theses')
           .doc('t1')
           .set(thesis(status: 'titlePendingDefence'));
 
-      await tester.pumpWidget(await wrap(const StudentDashboard(), db,
-          uid: 'l1', role: 'student'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'l1', role: 'student');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Two destinations is at the bar's own threshold, so it shows rather
-      // than hides -- unlike the pre-Overview shape, where Thesis alone
-      // was one destination and the bar stayed hidden.
-      final bar = find.byType(NavigationBar);
-      expect(bar, findsOneWidget);
-      expect(find.descendant(of: bar, matching: find.text('Overview')),
-          findsOneWidget);
-      expect(find.descendant(of: bar, matching: find.text('Thesis')),
-          findsOneWidget);
-      // Scoped to the bar, not the whole tree: the Overview body's own
-      // ProgressRail spells out every lifecycle stage -- Chapters among
-      // them -- as the road ahead regardless of whether it has unlocked
-      // yet, so an unscoped `find.text('Chapters')` would find that label
-      // and misreport the destination as present.
-      expect(find.descendant(of: bar, matching: find.text('Chapters')),
-          findsNothing);
-      expect(find.descendant(of: bar, matching: find.text('Defences')),
-          findsNothing);
+      expect(railLabels(tester), ['Overview', 'My thesis']);
     });
 
     testWidgets('gets a Chapters destination once the title is approved',
@@ -108,24 +121,18 @@ void main() {
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis());
 
-      await tester.pumpWidget(await wrap(const StudentDashboard(), db,
-          uid: 'l1', role: 'student'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'l1', role: 'student');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Scoped to the bar: the Overview body's own ProgressRail also spells
-      // out "Chapters" as one of the six lifecycle stages, so an unscoped
-      // finder would see two matches rather than the one destination.
-      final bar = find.byType(NavigationBar);
-      final chaptersDestination =
-          find.descendant(of: bar, matching: find.text('Chapters'));
-      expect(chaptersDestination, findsOneWidget);
+      expect(railLabels(tester), contains('Chapters'));
 
-      await tester.tap(chaptersDestination);
-      await tester.pumpAndSettle();
+      await tapDestination(tester, 'Chapters');
 
-      // The real chapter list, not a placeholder — and only one app bar,
-      // because a nested Scaffold would stack a second one with a back
-      // button that goes nowhere.
+      // The real chapter list, not a placeholder -- and still exactly one
+      // app bar, the shell's. A screen that kept its own Scaffold would
+      // stack a second one with a back button that goes nowhere, which is
+      // the failure the `embedded` flag used to work around.
       expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
       expect(find.byType(AppBar), findsOneWidget);
     });
@@ -144,23 +151,16 @@ void main() {
           .doc('p1')
           .set({'nomineeUid': 'p1', 'conformeStatus': 'accepted'});
 
-      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-          uid: 'p1', role: 'faculty'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'p1', role: 'faculty');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Overview is destination 0 now, so this member no longer lands on
-      // Panels directly -- but the destination is still there, and no
-      // switch renders since they hold no adviser position.
-      final bar = find.byType(NavigationBar);
-      expect(find.descendant(of: bar, matching: find.text('Panels')),
-          findsOneWidget);
-      expect(find.descendant(of: bar, matching: find.text('Advisees')),
-          findsNothing);
+      expect(railLabels(tester), contains('Panels'));
+      expect(railLabels(tester), isNot(contains('Advisees')));
       expect(find.byType(SegmentedButton<Object?>), findsNothing);
 
-      await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
-      await tester.pumpAndSettle();
-      expect(find.text('My panels'), findsOneWidget);
+      await tapDestination(tester, 'Panels');
+      expect(find.byKey(const Key('panelsScreen')), findsOneWidget);
     });
 
     testWidgets('an adviser reaches Advisees and Nominations from Overview',
@@ -168,62 +168,87 @@ void main() {
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
 
-      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-          uid: 'a1', role: 'faculty'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'a1', role: 'faculty');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Overview is the landing destination (index 0) now, ahead of the
-      // mode's own list.
+      // Overview is where every role lands, ahead of the mode's own list.
       expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
 
-      final bar = find.byType(NavigationBar);
-      await tester.tap(find.descendant(of: bar, matching: find.text('Advisees')));
-      await tester.pumpAndSettle();
-      expect(find.text('My advisees'), findsOneWidget);
+      await tapDestination(tester, 'Advisees');
+      expect(find.byKey(const Key('adviseesScreen')), findsOneWidget);
 
-      await tester.tap(find.descendant(of: bar, matching: find.text('Nominations')));
-      await tester.pumpAndSettle();
+      await tapDestination(tester, 'Nominations');
 
       // The destinations genuinely swap content. Rendering both at once is
       // what made the old single page read as a broken tab.
-      expect(find.byKey(const Key('goToInbox')), findsOneWidget);
-      expect(find.text('My advisees'), findsNothing);
+      expect(find.byKey(const Key('nominationInboxScreen')), findsOneWidget);
+      expect(find.byKey(const Key('adviseesScreen')), findsNothing);
+    });
+
+    testWidgets('the mode switch moves between Advisees and Panels',
+        (tester) async {
+      // The switch used to sit in the faculty dashboard's app bar and swap
+      // a body index. Advisees and Panels are separate ROUTES now, so
+      // flipping the mode has to carry the reader across -- leaving them
+      // on '/advisees' in panelist mode would show a panelist a list the
+      // sidebar no longer even offers.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis(adviserUid: 'f3'));
+      await db.collection('theses').doc('t2').set(thesis(adviserUid: 'other'));
+      await db
+          .collection('theses/t2/nominations')
+          .doc('f3')
+          .set({'nomineeUid': 'f3', 'conformeStatus': 'accepted'});
+
+      final c = await containerFor(db, uid: 'f3', role: 'faculty');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      // f3 holds both positions, so the switch renders.
+      await tapDestination(tester, 'Advisees');
+      expect(find.byKey(const Key('adviseesScreen')), findsOneWidget);
+
+      await tester.tap(find.text('Panelist'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('panelsScreen')), findsOneWidget);
+      expect(find.byKey(const Key('adviseesScreen')), findsNothing);
+      expect(railLabels(tester), contains('Panels'));
+      expect(railLabels(tester), isNot(contains('Advisees')));
     });
   });
 
   group('dean and coordinator', () {
     testWidgets('the dean gets four destinations that each swap the body',
         (tester) async {
-      // Titles and Defences are separate jobs: approving a candidate title
-      // set is not attending a scheduled defence. Stacked together, the
-      // usually-empty title queue sat above the rooms that had content.
+      // Title defences and Defences are separate jobs: approving a
+      // candidate title set is not attending a scheduled defence. Stacked
+      // together, the usually-empty title queue sat above the rooms that
+      // had content.
       final db = FakeFirebaseFirestore();
-      await tester.pumpWidget(
-          await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'd1', role: 'dean');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Overview lands first now, ahead of Approvals.
+      // Overview lands first, ahead of Approvals.
       expect(find.byKey(const Key('deanOverview')), findsOneWidget);
-      expect(find.text('Nomination approvals'), findsNothing);
+      expect(find.byKey(const Key('approvalsScreen')), findsNothing);
 
-      await tester.tap(find.text('Approvals'));
-      await tester.pumpAndSettle();
-      expect(find.text('Nomination approvals'), findsOneWidget);
+      await tapDestination(tester, 'Approvals');
+      expect(find.byKey(const Key('approvalsScreen')), findsOneWidget);
 
-      await tester.tap(find.text('Titles'));
-      await tester.pumpAndSettle();
-      expect(find.text('Title defences'), findsOneWidget);
-      expect(find.text('Nomination approvals'), findsNothing);
+      await tapDestination(tester, 'Title defences');
+      expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget);
+      expect(find.byKey(const Key('approvalsScreen')), findsNothing);
 
-      await tester.tap(find.text('Defences'));
-      await tester.pumpAndSettle();
-      expect(find.text('Scheduled defences'), findsOneWidget);
-      expect(find.text('Title defences'), findsNothing);
+      await tapDestination(tester, 'Defences');
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+      expect(find.byKey(const Key('titleDefencesScreen')), findsNothing);
 
-      await tester.tap(find.text('Readiness'));
-      await tester.pumpAndSettle();
-      expect(find.text('Defence readiness'), findsOneWidget);
-      expect(find.text('Scheduled defences'), findsNothing);
+      await tapDestination(tester, 'Readiness');
+      expect(find.byKey(const Key('readinessScreen')), findsOneWidget);
+      expect(find.byKey(const Key('defencesScreen')), findsNothing);
     });
 
     testWidgets('the coordinator keeps Faculty as a jump, not a panel',
@@ -231,43 +256,40 @@ void main() {
       // Invites are a different job from reviewing theses, and they have
       // their own screen already.
       final db = FakeFirebaseFirestore();
-      await tester.pumpWidget(await wrap(const CoordinatorDashboard(), db,
-          uid: 'c1', role: 'coordinator'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'c1', role: 'coordinator');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Overview lands first now, ahead of Recommendations.
       expect(find.byKey(const Key('coordinatorOverview')), findsOneWidget);
-      expect(find.text('Nomination recommendations'), findsNothing);
+      expect(find.byKey(const Key('recommendationsScreen')), findsNothing);
 
-      await tester.tap(find.text('Recommendations'));
-      await tester.pumpAndSettle();
-      expect(find.text('Nomination recommendations'), findsOneWidget);
+      await tapDestination(tester, 'Recommendations');
+      expect(find.byKey(const Key('recommendationsScreen')), findsOneWidget);
 
-      await tester.tap(find.text('Readiness'));
-      await tester.pumpAndSettle();
-      expect(find.text('Defence readiness'), findsOneWidget);
-      expect(find.text('Nomination recommendations'), findsNothing);
+      await tapDestination(tester, 'Readiness');
+      expect(find.byKey(const Key('readinessScreen')), findsOneWidget);
+      expect(find.byKey(const Key('recommendationsScreen')), findsNothing);
+
+      await tapDestination(tester, 'Faculty');
+      expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+      expect(find.byKey(const Key('readinessScreen')), findsNothing);
     });
 
     testWidgets('the coordinator reaches Titles and Defences separately',
         (tester) async {
-      // Faculty is a jump to another screen rather than a panel, and it sits
-      // last — so inserting Overview and Titles moved its index twice. An
-      // off-by-one there sends the coordinator to the wrong place and
-      // nothing else would notice.
+      // Two destinations a word apart, each with its own screen. Collapsing
+      // them put an empty title queue above the rooms that had content.
       final db = FakeFirebaseFirestore();
-      await tester.pumpWidget(await wrap(const CoordinatorDashboard(), db,
-          uid: 'c1', role: 'coordinator'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'c1', role: 'coordinator');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      await tester.tap(find.text('Titles'));
-      await tester.pumpAndSettle();
-      expect(find.text('Title defences'), findsOneWidget);
+      await tapDestination(tester, 'Title defences');
+      expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget);
 
-      await tester.tap(find.text('Defences'));
-      await tester.pumpAndSettle();
-      expect(find.text('Scheduled defences'), findsOneWidget);
-      expect(find.text('Title defences'), findsNothing);
+      await tapDestination(tester, 'Defences');
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+      expect(find.byKey(const Key('titleDefencesScreen')), findsNothing);
     });
   });
 
@@ -294,25 +316,21 @@ void main() {
         'createdBy': 'c1',
       });
 
-      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-          uid: 'a1', role: 'faculty'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'a1', role: 'faculty');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Overview lands first now; tap into Advisees explicitly.
-      final bar = find.byType(NavigationBar);
-      await tester.tap(find.descendant(of: bar, matching: find.text('Advisees')));
-      await tester.pumpAndSettle();
-      expect(find.text('My advisees'), findsOneWidget);
+      await tapDestination(tester, 'Advisees');
+      expect(find.byKey(const Key('adviseesScreen')), findsOneWidget);
 
-      // Defences are their own destination in both modes now, rather than a
+      // Defences is its own destination in both modes now, rather than a
       // section stacked under the mode's own list.
-      await tester.tap(find.descendant(of: bar, matching: find.text('Defences')));
-      await tester.pumpAndSettle();
+      await tapDestination(tester, 'Defences');
 
-      expect(find.text('My defences'), findsOneWidget);
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
       // The destinations genuinely swap content.
-      expect(find.text('My advisees'), findsNothing);
+      expect(find.byKey(const Key('adviseesScreen')), findsNothing);
     });
 
     testWidgets('the adviser attends only — no coordinator controls',
@@ -323,9 +341,11 @@ void main() {
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
 
-      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-          uid: 'a1', role: 'faculty'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'a1', role: 'faculty');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      await tapDestination(tester, 'Defences');
 
       expect(find.byKey(const Key('scheduleDefence')), findsNothing);
       expect(find.byKey(const Key('openDefence')), findsNothing);
@@ -354,39 +374,35 @@ void main() {
         'leaderUid': 'l1', 'status': 'scheduled', 'createdBy': 'c1',
       });
 
-      await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-          uid: 'p1', role: 'faculty'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'p1', role: 'faculty');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      // Overview lands first now; tap into Panels explicitly.
-      final bar = find.byType(NavigationBar);
-      await tester.tap(find.descendant(of: bar, matching: find.text('Panels')));
-      await tester.pumpAndSettle();
-      expect(find.text('My panels'), findsOneWidget);
+      await tapDestination(tester, 'Panels');
+      expect(find.byKey(const Key('panelsScreen')), findsOneWidget);
 
-      await tester.tap(find.descendant(of: bar, matching: find.text('Defences')));
-      await tester.pumpAndSettle();
+      await tapDestination(tester, 'Defences');
 
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
-      expect(find.text('My panels'), findsNothing);
+      expect(find.byKey(const Key('panelsScreen')), findsNothing);
     });
 
     testWidgets('the student gets Defences only once the title is approved',
         (tester) async {
       // A defence is only ever scheduled for an approved thesis, so before
-      // then the tab would lead to a permanently empty page -- the
-      // control-that-does-nothing this scaffold hides its bar to avoid.
+      // then the destination would lead to a permanently empty page -- the
+      // control-that-does-nothing the shell hides its navigation to avoid.
       final db = FakeFirebaseFirestore();
       await db
           .collection('theses')
           .doc('t1')
           .set(thesis(status: 'titlePendingDefence'));
 
-      await tester.pumpWidget(await wrap(const StudentDashboard(), db,
-          uid: 'l1', role: 'student'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'l1', role: 'student');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      expect(find.text('Defences'), findsNothing);
+      expect(railLabels(tester), isNot(contains('Defences')));
     });
 
     testWidgets('the student reaches Defences after approval', (tester) async {
@@ -400,15 +416,43 @@ void main() {
         'leaderUid': 'l1', 'status': 'scheduled', 'createdBy': 'c1',
       });
 
-      await tester.pumpWidget(await wrap(const StudentDashboard(), db,
-          uid: 'l1', role: 'student'));
-      await tester.pumpAndSettle();
+      final c = await containerFor(db, uid: 'l1', role: 'student');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
 
-      await tester.tap(find.text('Defences'));
-      await tester.pumpAndSettle();
+      await tapDestination(tester, 'Defences');
 
-      expect(find.text('My defences'), findsOneWidget);
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
+    });
+  });
+
+  group('the shell itself', () {
+    testWidgets('a deep screen keeps the sidebar AND offers a way back',
+        (tester) async {
+      // The field report this milestone answers, stated once here at the
+      // level a reader meets it: leaving a destination used to leave you
+      // with no navigation at all.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis());
+
+      final c = await containerFor(db, uid: 'l1', role: 'student');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      c.read(goRouterProvider).go('/thesis/chapters/chapterI?id=t1');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('chapterDetailScreen')), findsOneWidget);
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byKey(const Key('shellBack')), findsOneWidget);
+
+      // And back rises to the destination that owns this location rather
+      // than to a Navigator stack that `context.go` never built.
+      await tester.tap(find.byKey(const Key('shellBack')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
     });
   });
 }

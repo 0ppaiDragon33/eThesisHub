@@ -40,7 +40,10 @@ Widget wrap(FakeFirebaseFirestore db,
         if (repository != null)
           thesisRepositoryProvider.overrideWithValue(repository),
       ],
-      child: const MaterialApp(home: NominationInboxScreen()),
+      // the app shell supplies the Scaffold in the real app.
+      child: const MaterialApp(
+        home: Scaffold(body: NominationInboxScreen()),
+      ),
     );
 
 /// The inbox lists both a title and (potentially several) action rows; the

@@ -29,7 +29,9 @@ Widget wrap(FakeFirebaseFirestore db, {List<Override> extraOverrides = const []}
           routes: [
             GoRoute(
               path: '/thesis/create',
-              builder: (_, _) => const CreateThesisScreen(),
+              // the app shell supplies the Scaffold in the real app.
+              builder: (_, _) =>
+                  const Scaffold(body: CreateThesisScreen()),
             ),
             GoRoute(
               path: '/thesis',

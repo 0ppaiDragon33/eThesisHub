@@ -115,7 +115,13 @@ class _ReadinessRow extends ConsumerWidget {
         // but until this tap, nothing in `lib/` ever linked here. The
         // router's `isChapterRoute` exemption already lets a non-student
         // through to this route.
-        onTap: () => context.go('/thesis/chapters?id=${thesis.id}'),
+        // '/thesis/chapters' is a destination for a student, but no
+        // coordinator or dean destination owns it -- both roles reach
+        // this list -- so for either reader it is a screen below nothing
+        // of their own and must be pushed (D23), not gone to: `go` would
+        // drop this readiness list off the stack, and the shell's back
+        // control would fall through to '/overview' instead of here.
+        onTap: () => context.push('/thesis/chapters?id=${thesis.id}'),
         title: Text(thesis.workingTitle),
         subtitle: chaptersAsync.when(
           loading: () => const Text('Chapters still loading…'),
@@ -147,7 +153,7 @@ class _ReadinessRow extends ConsumerWidget {
                 icon: const Icon(Icons.event_outlined),
                 tooltip: 'Schedule a defence',
                 onPressed: () =>
-                    context.go('/defence/schedule?id=${thesis.id}'),
+                    context.push('/defence/schedule?id=${thesis.id}'),
               ),
             ],
           ],

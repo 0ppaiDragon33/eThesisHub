@@ -84,10 +84,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
-    // The room's own AppBar names the defence type, which only renders once
-    // the defence document (not just the loading Scaffold, which shares the
-    // same key) has actually resolved.
-    expect(find.widgetWithText(AppBar, 'Pre-oral defence'), findsOneWidget);
+    // The app bar belongs to the shell now and is titled for the ROUTE, so
+    // the defence type moved to the page's own heading -- which is still
+    // the thing that only renders once the defence document (not just the
+    // loading state, which shares the same key) has actually resolved.
+    expect(find.widgetWithText(AppBar, 'Defence room'), findsOneWidget);
+    expect(find.text('Pre-oral defence'), findsOneWidget);
   });
 
   testWidgets('the consolidated view is reachable', (tester) async {
@@ -100,7 +102,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('consolidated')), findsOneWidget);
-    expect(find.widgetWithText(AppBar, 'Pre-oral defence'), findsOneWidget);
+    // Same as the room above: the shell's app bar names the route, and the
+    // defence type -- which only appears once the document resolves -- is
+    // the page's own heading.
+    expect(find.widgetWithText(AppBar, 'Consolidated comments'),
+        findsOneWidget);
+    expect(find.text('Pre-oral defence'), findsOneWidget);
   });
 
   // The collision guard. '/defence/schedule' and '/defence/:thesisId' share
@@ -127,10 +134,10 @@ void main() {
     c.read(goRouterProvider).go('/defence/room/does-not-exist');
     await tester.pumpAndSettle();
 
-    // DefenceRoomScreen's own "not found" branch renders inside the same
-    // Scaffold + AppBar key as its loaded state (see `_framed` in
-    // defence_room_screen.dart), so the real assertion is the AppBar plus
-    // the not-found copy, not the key's absence.
+    // DefenceRoomScreen's own "not found" branch renders under the same
+    // key as its loaded state (see `_framed` in defence_room_screen.dart),
+    // so the real assertion is the shell's single AppBar plus the
+    // not-found copy, not the key's absence.
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.text('Defence not found'), findsOneWidget);
   });

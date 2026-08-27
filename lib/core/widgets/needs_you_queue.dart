@@ -108,7 +108,12 @@ class NeedsYouQueue extends StatelessWidget {
                             .withValues(alpha: 0.08),
                       ),
                       FilledButton(
-                        onPressed: () => context.go(item.route),
+                        // A row's target is a mix of destinations and
+                        // screens below one -- see the doc comment on
+                        // `NeedsYouItem.deep`.
+                        onPressed: () => item.deep
+                            ? context.push(item.route)
+                            : context.go(item.route),
                         child: const Text('Open'),
                       ),
                     ],

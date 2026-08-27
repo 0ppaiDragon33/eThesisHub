@@ -61,8 +61,10 @@ Widget wrap(FakeFirebaseFirestore db, {UrlOpener? openUrl}) => ProviderScope(
           routes: [
             GoRoute(
               path: '/defence',
-              builder: (_, _) =>
-                  TitleDefenceScreen(thesisId: 't1', openUrl: openUrl),
+              // The app shell supplies the Scaffold in the real app.
+              builder: (_, _) => Scaffold(
+                body: TitleDefenceScreen(thesisId: 't1', openUrl: openUrl),
+              ),
             ),
             GoRoute(
               path: '/faculty',

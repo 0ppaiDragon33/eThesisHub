@@ -74,9 +74,13 @@ Widget wrap(
           routes: [
             GoRoute(
               path: '/thesis/titles',
-              builder: (_, _) => SubmitTitlesScreen(
-                thesisId: 't1',
-                pickDocument: pickDocument,
+              // The app shell supplies the Scaffold in the real app.
+              builder: (_, _) => Scaffold(
+                appBar: AppBar(title: const Text('Candidate titles')),
+                body: SubmitTitlesScreen(
+                  thesisId: 't1',
+                  pickDocument: pickDocument,
+                ),
               ),
             ),
             GoRoute(

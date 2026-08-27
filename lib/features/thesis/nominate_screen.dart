@@ -337,158 +337,157 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     // appeared to fix it only because auth was warm the second time.
     final thesisAsync = ref.watch(thesisByIdProvider(widget.thesisId));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nominate adviser and panel')),
-      body: directoryAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) =>
-            const Center(child: Text('Could not load the faculty directory.')),
-        data: (directory) {
-          // A student can never be nominated, and the leader cannot nominate
-          // themselves. The directory is not expected to contain students —
-          // `FacultyDirectoryRepository.upsertOwnEntry` never writes one —
-          // but both exclusions are enforced here too, defensively, rather
-          // than trusted from upstream data shape.
-          final faculty = directory
-              .where((f) => f.role != 'student')
-              .where((f) => leaderUid == null || f.uid != leaderUid)
-              .toList();
+    // No Scaffold and no AppBar: the app shell owns both for every
+    // signed-in route now.
+    return directoryAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) =>
+          const Center(child: Text('Could not load the faculty directory.')),
+      data: (directory) {
+        // A student can never be nominated, and the leader cannot nominate
+        // themselves. The directory is not expected to contain students —
+        // `FacultyDirectoryRepository.upsertOwnEntry` never writes one —
+        // but both exclusions are enforced here too, defensively, rather
+        // than trusted from upstream data shape.
+        final faculty = directory
+            .where((f) => f.role != 'student')
+            .where((f) => leaderUid == null || f.uid != leaderUid)
+            .toList();
 
-          // Three distinct outcomes, kept apart. Collapsing them is what
-          // produced the bug above: "still loading" was reported to the
-          // user as "this thesis has moved past draft".
-          if (thesisAsync.isLoading) {
-            return const LoadingState(label: 'Loading your thesis…');
-          }
-          if (thesisAsync.hasError) {
-            return PageShell(children: [
-              ErrorState(
-                error: thesisAsync.error,
-                message: 'Could not load this thesis.',
-              ),
-            ]);
-          }
+        // Three distinct outcomes, kept apart. Collapsing them is what
+        // produced the bug above: "still loading" was reported to the
+        // user as "this thesis has moved past draft".
+        if (thesisAsync.isLoading) {
+          return const LoadingState(label: 'Loading your thesis…');
+        }
+        if (thesisAsync.hasError) {
+          return PageShell(children: [
+            ErrorState(
+              error: thesisAsync.error,
+              message: 'Could not load this thesis.',
+            ),
+          ]);
+        }
 
-          final thesis = thesisAsync.valueOrNull;
-          if (thesis == null) {
-            return const PageShell(children: [
-              EmptyState(
-                icon: Icons.search_off,
-                title: 'Thesis not found',
-                message: 'This thesis no longer exists, or it belongs to '
-                    'another group.',
-              ),
-            ]);
-          }
+        final thesis = thesisAsync.valueOrNull;
+        if (thesis == null) {
+          return const PageShell(children: [
+            EmptyState(
+              icon: Icons.search_off,
+              title: 'Thesis not found',
+              message: 'This thesis no longer exists, or it belongs to '
+                  'another group.',
+            ),
+          ]);
+        }
 
-          final stillDraft = thesis.status == ThesisStatus.draft;
-          if (!stillDraft) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Nominations can only be submitted while this thesis is '
-                  'still a draft. This thesis has already moved past that '
-                  'stage.',
-                  key: const Key('notDraft'),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
-
-          final atCap = _panelUids.length >= _maxPanelists;
-
+        final stillDraft = thesis.status == ThesisStatus.draft;
+        if (!stillDraft) {
           return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _picker('adviser', 'Thesis Adviser', _adviserUid, faculty,
-                        (v) => setState(() => _adviserUid = v),
-                        isAdviserSlot: true),
-                    const SizedBox(height: 20),
-                    Text('Panel members (minimum 3, at most $_maxPanelists)'),
-                    for (var i = 0; i < _panelUids.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: _picker('panel$i', 'Panel member ${i + 1}',
-                            _panelUids[i], faculty,
-                            (v) => setState(() => _panelUids[i] = v)),
-                      ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        key: const Key('addPanelist'),
-                        onPressed: atCap
-                            ? null
-                            : () => setState(() => _panelUids.add(null)),
-                        child: const Text('+ Add panel member'),
-                      ),
-                    ),
-                    if (atCap)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Panel limited to $_maxPanelists member(s): this '
-                          'thesis reserves ${_exOfficio.length} ex-officio '
-                          'seat(s), and nominations per thesis are capped at '
-                          '$kMaxNominationDocs total.',
-                          key: const Key('panelCapReason'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                                'Also on your panel — added automatically'),
-                            const SizedBox(height: 6),
-                            for (final e in _exOfficio)
-                              Text('${e.fullName} — ${e.role}'),
-                            const SizedBox(height: 6),
-                            Text(
-                              'They sit on every panel by role, so there is '
-                              'nothing to choose and nothing for them to '
-                              'accept. That is why they are not listed as '
-                              'panel members above — though one of them may '
-                              'still be chosen as your thesis adviser, which '
-                              'they would be asked to accept.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(_error!,
-                            key: const Key('error'),
-                            style: TextStyle(
-                                color: Theme.of(context).colorScheme.error)),
-                      ),
-                    FilledButton(
-                      key: const Key('submitNomination'),
-                      onPressed: _busy ? null : () => _submit(faculty),
-                      child: Text(
-                          _busy ? 'Submitting…' : 'Submit nomination'),
-                    ),
-                  ],
-                ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Nominations can only be submitted while this thesis is '
+                'still a draft. This thesis has already moved past that '
+                'stage.',
+                key: const Key('notDraft'),
+                textAlign: TextAlign.center,
               ),
             ),
           );
-        },
-      ),
+        }
+
+        final atCap = _panelUids.length >= _maxPanelists;
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _picker('adviser', 'Thesis Adviser', _adviserUid, faculty,
+                      (v) => setState(() => _adviserUid = v),
+                      isAdviserSlot: true),
+                  const SizedBox(height: 20),
+                  Text('Panel members (minimum 3, at most $_maxPanelists)'),
+                  for (var i = 0; i < _panelUids.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: _picker('panel$i', 'Panel member ${i + 1}',
+                          _panelUids[i], faculty,
+                          (v) => setState(() => _panelUids[i] = v)),
+                    ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const Key('addPanelist'),
+                      onPressed: atCap
+                          ? null
+                          : () => setState(() => _panelUids.add(null)),
+                      child: const Text('+ Add panel member'),
+                    ),
+                  ),
+                  if (atCap)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Panel limited to $_maxPanelists member(s): this '
+                        'thesis reserves ${_exOfficio.length} ex-officio '
+                        'seat(s), and nominations per thesis are capped at '
+                        '$kMaxNominationDocs total.',
+                        key: const Key('panelCapReason'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                              'Also on your panel — added automatically'),
+                          const SizedBox(height: 6),
+                          for (final e in _exOfficio)
+                            Text('${e.fullName} — ${e.role}'),
+                          const SizedBox(height: 6),
+                          Text(
+                            'They sit on every panel by role, so there is '
+                            'nothing to choose and nothing for them to '
+                            'accept. That is why they are not listed as '
+                            'panel members above — though one of them may '
+                            'still be chosen as your thesis adviser, which '
+                            'they would be asked to accept.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(_error!,
+                          key: const Key('error'),
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error)),
+                    ),
+                  FilledButton(
+                    key: const Key('submitNomination'),
+                    onPressed: _busy ? null : () => _submit(faculty),
+                    child: Text(
+                        _busy ? 'Submitting…' : 'Submit nomination'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

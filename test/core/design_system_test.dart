@@ -1,11 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ethesishub/providers/shared_prefs_provider.dart';
 import 'package:ethesishub/core/config/app_config.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
-import 'package:ethesishub/core/widgets/responsive_scaffold.dart';
+import 'package:ethesishub/core/navigation/shell_destination.dart';
+import 'package:ethesishub/core/widgets/app_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -68,46 +72,62 @@ void main() {
     });
   });
 
-  group('ResponsiveScaffold', () {
-    testWidgets('hides its navigation below two destinations', (tester) async {
-      // A tab that goes nowhere reads as a broken app rather than an
-      // unfinished one. Dashboards declare only destinations that resolve,
-      // so the bar must disappear rather than show a single lonely tab.
-      await tester.pumpWidget(MaterialApp(
-        theme: AppTheme.light,
-        home: const ResponsiveScaffold(
-          title: 'eThesisHub',
-          destinations: [],
-          selectedIndex: 0,
-          onDestinationSelected: _ignore,
-          body: Text('body'),
+  // `ResponsiveScaffold` was the chrome each of the four dashboards built
+  // for itself, and it is gone: [AppShell] is now the single chrome around
+  // every signed-in route. These two cases move across unchanged in what
+  // they assert — the threshold below which navigation hides itself, and
+  // that it returns at two — because that rule is a property of the app's
+  // navigation, not of the widget that used to hold it.
+  group('AppShell navigation threshold', () {
+    Future<Widget> shell(List<ShellDestination> destinations) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = await SharedPreferences.getInstance();
+      return ProviderScope(
+        overrides: [sharedPrefsProvider.overrideWithValue(store)],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: AppShell(
+            destinations: AsyncValue.data(destinations),
+            location: '/overview',
+            title: 'eThesisHub',
+            child: const Text('body'),
+          ),
         ),
-      ));
+      );
+    }
+
+    testWidgets('hides its navigation below two destinations', (tester) async {
+      // A destination that goes nowhere reads as a broken app rather than
+      // an unfinished one, so the navigation disappears rather than
+      // showing a single lonely entry. The page itself still renders.
+      await tester.pumpWidget(await shell(const []));
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationBar), findsNothing);
       expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byType(NavigationDrawer), findsNothing);
+      expect(find.byKey(const Key('shellMenu')), findsNothing);
       expect(find.text('body'), findsOneWidget);
     });
 
     testWidgets('shows navigation at two destinations', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        theme: AppTheme.light,
-        home: const ResponsiveScaffold(
-          title: 'eThesisHub',
-          destinations: [
-            NavDestination(label: 'Theses', icon: Icons.folder_outlined),
-            NavDestination(label: 'Faculty', icon: Icons.badge_outlined),
-          ],
-          selectedIndex: 0,
-          onDestinationSelected: _ignore,
-          body: Text('body'),
+      await tester.pumpWidget(await shell(const [
+        ShellDestination(
+          label: 'Overview',
+          icon: Icons.dashboard_outlined,
+          route: '/overview',
         ),
-      ));
+        ShellDestination(
+          label: 'Faculty',
+          icon: Icons.badge_outlined,
+          route: '/invites',
+        ),
+      ]));
       await tester.pumpAndSettle();
 
-      // Narrow by default in tests, so the bottom bar is the one that shows.
-      expect(find.byType(NavigationBar), findsOneWidget);
+      // Narrow by default in tests (800px, below the 900 rail breakpoint),
+      // so on this surface the navigation is the drawer behind the
+      // hamburger rather than the rail.
+      expect(find.byKey(const Key('shellMenu')), findsOneWidget);
     });
   });
 
@@ -363,4 +383,3 @@ void main() {
   });
 }
 
-void _ignore(int _) {}

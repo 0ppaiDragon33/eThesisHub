@@ -8,8 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:ethesishub/app.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
-import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
+import 'package:ethesishub/features/dashboard/dean_overview.dart';
+import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
@@ -64,12 +66,44 @@ Future<Widget> wrap(
   );
 }
 
+/// For the one case below that has to go through the real router: the
+/// sidebar destinations live in the app shell now, and a bare widget pump
+/// cannot see them.
+Future<ProviderContainer> containerFor(String role, String uid) async {
+  final firestore = FakeFirebaseFirestore();
+  await firestore.collection('users').doc(uid).set({
+    'fullName': 'Test Dean',
+    'email': '$uid@isufst.edu.ph',
+    'role': role,
+    'active': true,
+  });
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  return ProviderContainer(overrides: [
+    sharedPrefsProvider.overrideWithValue(prefs),
+    firestoreProvider.overrideWithValue(firestore),
+    firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+      signedIn: true,
+      mockUser: MockUser(
+          uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
+    )),
+  ]);
+}
+
 void main() {
   testWidgets('the dean lands on the overview, not the approvals list',
       (tester) async {
-    final db = FakeFirebaseFirestore();
+    // Through the router, and wide: the destinations moved out of the
+    // deleted dean dashboard into the one app shell, which renders them as
+    // a rail above 900px. What is asserted is unchanged.
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final c = await containerFor('dean', 'd1');
+    addTearDown(c.dispose);
     await tester.pumpWidget(
-        await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
+        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
     // The complaint this task answers: the dean landed on the approvals
@@ -77,8 +111,8 @@ void main() {
     expect(find.byKey(const Key('deanOverview')), findsOneWidget);
     expect(find.text('Nomination approvals'), findsNothing);
 
-    final bar = find.byType(NavigationBar);
-    expect(find.descendant(of: bar, matching: find.text('Overview')),
+    final rail = find.byType(NavigationRail);
+    expect(find.descendant(of: rail, matching: find.text('Overview')),
         findsOneWidget);
   });
 
@@ -92,7 +126,7 @@ void main() {
         .set(thesis(status: 'nominationPendingDean'));
 
     await tester.pumpWidget(
-        await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
+        await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));
     await tester.pumpAndSettle();
 
     expect(find.text('A Working Title'), findsOneWidget);
@@ -102,7 +136,7 @@ void main() {
   testWidgets('both college-wide chart panels are present', (tester) async {
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(
-        await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
+        await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));
     await tester.pumpAndSettle();
 
     expect(find.text('Theses by stage'), findsOneWidget);
@@ -112,7 +146,7 @@ void main() {
   testWidgets('the four tiles render', (tester) async {
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(
-        await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
+        await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));
     await tester.pumpAndSettle();
 
     expect(find.text('Awaiting your approval'), findsOneWidget);
@@ -126,7 +160,7 @@ void main() {
     final db = FakeFirebaseFirestore();
 
     await tester.pumpWidget(await wrap(
-      const DeanDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'd1',
       role: 'dean',
@@ -151,10 +185,18 @@ void main() {
       (tester) async {
     // An earlier milestone shipped a lockout by gating on the profile doc.
     // Nothing on an overview may depend on `users/{uid}` existing.
+    //
+    // Pumped as [DeanOverview] rather than through [OverviewScreen], which
+    // is the widget whose whole job is to pick an overview BY role and
+    // which correctly renders nothing once the role has settled as unknown
+    // — an account with no profile is routed to /no-profile now (spec
+    // D25), so asking the role dispatcher to show a dean's overview
+    // without a role would assert the opposite of what the app does. The
+    // property under test is this overview's own.
     final db = FakeFirebaseFirestore();
 
     await tester.pumpWidget(
-        await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
+        await wrap(const DeanOverview(), db, uid: 'd1', role: 'dean'));
     // Remove the profile the helper wrote.
     await db.collection('users').doc('d1').delete();
     await tester.pumpAndSettle();
@@ -187,8 +229,11 @@ void main() {
       'createdBy': 'c1',
     });
 
+    // [DeanOverview] directly, for the same reason as the greeting test
+    // above: the role dispatcher renders nothing for a settled-unknown
+    // role by design, so it cannot host a no-profile test.
     await tester.pumpWidget(
-        await wrap(const DeanDashboard(), db, uid: 'd1', role: 'dean'));
+        await wrap(const DeanOverview(), db, uid: 'd1', role: 'dean'));
     // Remove the profile the helper wrote -- the same missing-document
     // window the greeting test exercises, but checked against the tile
     // instead of the greeting.

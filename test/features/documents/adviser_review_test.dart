@@ -59,9 +59,12 @@ Widget _wrap(FakeFirebaseFirestore db, {required String uid}) =>
         )),
       ],
       child: MaterialApp(
-        home: ChapterDetailScreen(
-          thesisId: 't1',
-          chapter: ChapterId.chapterI,
+        // the app shell supplies the Scaffold in the real app.
+        home: Scaffold(
+          body: ChapterDetailScreen(
+            thesisId: 't1',
+            chapter: ChapterId.chapterI,
+          ),
         ),
       ),
     );

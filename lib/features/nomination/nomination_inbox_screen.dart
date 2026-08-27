@@ -104,10 +104,11 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
     final pending = ref.watch(myPendingNominationsProvider);
 
-    return Scaffold(
+    // No Scaffold and no AppBar: the app shell owns both for every
+    // signed-in route now.
+    return KeyedSubtree(
       key: const Key('nominationInboxScreen'),
-      appBar: AppBar(title: const Text('Nomination inbox')),
-      body: pending.when(
+      child: pending.when(
         loading: () => const LoadingState(label: 'Loading your nominations…'),
         // The error object is passed through rather than discarded: there
         // are no server-side logs on Spark, so the code shown beside this

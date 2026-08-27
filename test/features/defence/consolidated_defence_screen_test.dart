@@ -105,8 +105,12 @@ Widget _wrap(
         )),
         ...overrides,
       ],
-      child: const MaterialApp(
-        home: ConsolidatedDefenceScreen(defenceId: 'd1'),
+      child: MaterialApp(
+        // the app shell supplies the Scaffold in the real app.
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Consolidated comments')),
+          body: ConsolidatedDefenceScreen(defenceId: 'd1'),
+        ),
       ),
     );
 

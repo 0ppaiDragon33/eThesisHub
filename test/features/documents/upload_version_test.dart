@@ -104,10 +104,13 @@ Widget _wrap(FakeFirebaseFirestore db, _FakeStorage storage,
           documentRepositoryProvider.overrideWithValue(repository),
       ],
       child: MaterialApp(
-        home: ChapterDetailScreen(
-          thesisId: 't1',
-          chapter: ChapterId.chapterI,
-          pickDocument: ({required Set<String> allowed}) async => doc(),
+        // the app shell supplies the Scaffold in the real app.
+        home: Scaffold(
+          body: ChapterDetailScreen(
+            thesisId: 't1',
+            chapter: ChapterId.chapterI,
+            pickDocument: ({required Set<String> allowed}) async => doc(),
+          ),
         ),
       ),
     );
