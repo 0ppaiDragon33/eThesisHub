@@ -350,7 +350,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // rather than guessing one.
       ShellRoute(
         builder: (context, state, child) => AppShellHost(
-          location: state.matchedLocation,
+          // Not `state.matchedLocation`: that field is the location
+          // where this ShellRoute itself first matched, and go_router
+          // does not recompute it for an imperative `push` onto a
+          // sibling route already inside the shell -- it only advances
+          // on a fresh `go`. `state.uri` DOES track the pushed leaf (see
+          // `ShellRouteMatch.buildState` in go_router's own source,
+          // which rebuilds `uri` from the imperative match but reuses
+          // the old `matchedLocation` verbatim), so `.path` is the one
+          // that is actually current after a deep-screen push. Task 9
+          // needs this: without it, the shell keeps computing "deeper
+          // than a destination" against the pre-push location and never
+          // draws a back control on a pushed screen.
+          location: state.uri.path,
           pathParameters: state.pathParameters,
           child: child,
         ),

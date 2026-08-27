@@ -217,6 +217,7 @@ final facultyNeedsYouProvider =
           route: '/defence/${d.id}',
           chipLabel: 'Consolidate',
           tone: NeedsYouTone.act,
+          deep: true,
         ));
       }
 
@@ -234,6 +235,7 @@ final facultyNeedsYouProvider =
           route: '/defence/${d.id}',
           chipLabel: 'Join',
           tone: NeedsYouTone.act,
+          deep: true,
         ));
       }
     }
@@ -353,6 +355,7 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/defence/${t.id}',
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
+          deep: true,
         ),
     ];
 
@@ -475,6 +478,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/defence/${t.id}',
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
+          deep: true,
         ),
       for (final t in readyCandidates!.requireValue)
         if (!scheduledThesisIds.contains(t.id) &&
@@ -487,6 +491,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
             route: '/defence/schedule?id=${t.id}',
             chipLabel: 'Schedule',
             tone: NeedsYouTone.act,
+            deep: true,
           ),
     ];
 

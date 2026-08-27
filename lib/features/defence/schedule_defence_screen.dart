@@ -136,7 +136,7 @@ class _ScheduleDefenceScreenState
       // defence room (Task 8). Matching it exactly here, before either
       // exists, means the moment they land this link is live rather than a
       // 404 nobody's test would have caught.
-      if (mounted) context.go('/defence/room/$id');
+      if (mounted) context.push('/defence/room/$id');
     } on ArgumentError catch (e) {
       // The one failure a coordinator can act on directly: fill in the
       // venue and try again. Its message comes straight from the

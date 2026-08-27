@@ -127,7 +127,7 @@ class DefencesList extends ConsumerWidget {
                         // outright too, so this is belt-and-suspenders, but
                         // sending the leader straight to the door they are
                         // actually meant to use is the honest UX.
-                        onPressed: () => context.go(uid != null &&
+                        onPressed: () => context.push(uid != null &&
                                 uid == d.leaderUid
                             ? '/defence/room/${d.id}/consolidated'
                             : '/defence/room/${d.id}'),

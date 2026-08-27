@@ -297,6 +297,27 @@ void main() {
       expect(find.byKey(const Key('shellBack')), findsOneWidget);
     });
 
+    testWidgets(
+        'with no onBack supplied, tapping it does not crash when there is '
+        'nothing to pop', (tester) async {
+      // The default falls back to `Navigator.maybePop`, not `Navigator.
+      // pop` -- a deep screen reached directly by URL has nothing beneath
+      // it in this Navigator (AppShell is the sole route under
+      // MaterialApp's `home`), and `pop` would throw where `maybePop`
+      // simply does nothing.
+      await setSize(tester, 1400);
+      await tester.pumpWidget(await wrap(
+        destinations: const AsyncValue.data(_destinations),
+        location: '/defence/room/d1',
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('shellBack')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('tapping it calls onBack', (tester) async {
       await setSize(tester, 1400);
       var backs = 0;

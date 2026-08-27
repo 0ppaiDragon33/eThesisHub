@@ -72,7 +72,7 @@ class _DefencesList extends ConsumerWidget {
                 'Candidate titles are ready for the panel to review.'),
             trailing: FilledButton(
               key: Key('goToDefence-$id'),
-              onPressed: () => context.go('/defence/$id'),
+              onPressed: () => context.push('/defence/$id'),
               child: const Text('Open'),
             ),
           ),

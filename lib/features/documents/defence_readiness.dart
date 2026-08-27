@@ -147,7 +147,7 @@ class _ReadinessRow extends ConsumerWidget {
                 icon: const Icon(Icons.event_outlined),
                 tooltip: 'Schedule a defence',
                 onPressed: () =>
-                    context.go('/defence/schedule?id=${thesis.id}'),
+                    context.push('/defence/schedule?id=${thesis.id}'),
               ),
             ],
           ],

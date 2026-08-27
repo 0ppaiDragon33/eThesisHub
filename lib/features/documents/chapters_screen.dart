@@ -112,7 +112,7 @@ class ChaptersScreen extends ConsumerWidget {
                         color: ChapterStatusWords.colorFor(
                             uploaded[id]!.status, brightness)),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.go(
+                onTap: () => context.push(
                     '/thesis/chapters/${id.value}?id=$thesisId'),
               ),
             ),

@@ -61,7 +61,10 @@ class AppShell extends ConsumerWidget {
     if (onBack != null) {
       onBack!();
     } else {
-      Navigator.pop(context);
+      // `maybePop`, not `pop`: a deep screen reached directly by URL has
+      // nothing beneath it in the Navigator stack, and `pop` would throw
+      // where `maybePop` simply does nothing.
+      Navigator.maybePop(context);
     }
   }
 
