@@ -435,10 +435,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // by ':defenceId' at position 2 -- the segment counts differ, so
       // go_router never even considers the shorter route for the longer
       // path. DefenceRoomScreen and ConsolidatedDefenceScreen each render
-      // their own "not found" state inside a Scaffold + AppBar (see
-      // `_framed` in both files), so no wrapper is needed here the way one
-      // is for the missing-id case above -- an unknown defenceId never
-      // strands the user on a bare page.
+      // their own "not found" state through the same `_framed` helper as
+      // their loaded state -- a KeyedSubtree around a PageShell, carrying
+      // the screen's own key, with no Scaffold and no AppBar of its own
+      // since the shell above supplies both. So no wrapper is needed here
+      // the way one is for the missing-id case above: an unknown defenceId
+      // lands on a page that still has the app bar, the sidebar and the
+      // back control, and never strands the reader.
       GoRoute(
         path: '/defence/room/:defenceId',
         builder: (context, state) => DefenceRoomScreen(

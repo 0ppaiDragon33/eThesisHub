@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/features/dashboard/advisees_screen.dart';
 import 'package:ethesishub/features/dashboard/approvals_screen.dart';
 import 'package:ethesishub/features/dashboard/overview_screen.dart';
@@ -236,6 +239,47 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('studentOverview')), findsNothing);
+    expect(find.byKey(const Key('facultyOverview')), findsNothing);
+    expect(find.byKey(const Key('deanOverview')), findsNothing);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
+  });
+
+  testWidgets('the overview screen shows a LOADING state while the role is '
+      'still resolving', (tester) async {
+    // The other half of spec D25, and the half that had no test.
+    //
+    // This screen used to read `.valueOrNull?.role` and render
+    // `SizedBox.shrink()` for null -- which is true BOTH while
+    // currentUserProvider is still loading AND when the profile document is
+    // absent. An ordinary first paint was therefore indistinguishable from
+    // a broken account and rendered the same nothing. The sibling test
+    // above pins the settled-unknown case; without this one, reverting the
+    // loading branch to `SizedBox.shrink()` re-introduces exactly that bug
+    // and every other test still passes.
+    //
+    // The stream never emits, so the loading branch is genuinely
+    // observable, and there is a single bare `pump()` -- NOT pumpAndSettle,
+    // which would resolve the profile and observe the loaded state instead,
+    // proving nothing.
+    final db = FakeFirebaseFirestore();
+    await tester.pumpWidget(await wrap(
+      const OverviewScreen(),
+      db,
+      uid: 'u1',
+      role: 'student',
+      overrides: [
+        currentUserProvider
+            .overrideWith((ref) => StreamController<AppUser?>().stream),
+      ],
+    ));
+    await tester.pump();
+
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    expect(find.text('Loading your overview…'), findsOneWidget);
+
+    // And no role is guessed to fill the gap while it loads -- the failure
+    // this project has shipped twice, both times looking like it worked.
     expect(find.byKey(const Key('studentOverview')), findsNothing);
     expect(find.byKey(const Key('facultyOverview')), findsNothing);
     expect(find.byKey(const Key('deanOverview')), findsNothing);

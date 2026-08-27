@@ -96,10 +96,11 @@ void main() {
     // panelist landed in adviser mode on an empty Advisees list and could
     // not leave, because the mode switch hides itself precisely when you
     // hold no adviser position.
-    // This test's surface is wide (1000px), so ResponsiveScaffold renders a
-    // NavigationRail rather than a NavigationBar -- and the Overview body's
-    // own panelist-mode tile is ALSO labelled "Panels", so the finder must
-    // be scoped to the rail or it would match both.
+    // This test's surface is wide (1000px), so the app shell renders its
+    // destinations as a NavigationRail rather than hiding them behind the
+    // narrow layout's hamburger -- and the Overview body's own
+    // panelist-mode tile is ALSO labelled "Panels", so the finder must be
+    // scoped to the rail or it would match both.
     final rail = find.byType(NavigationRail);
     expect(find.descendant(of: rail, matching: find.text('Panels')),
         findsOneWidget,
