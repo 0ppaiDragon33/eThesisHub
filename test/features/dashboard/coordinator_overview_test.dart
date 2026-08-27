@@ -10,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ethesishub/app.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
-import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
 import 'package:ethesishub/features/dashboard/coordinator_overview.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
@@ -93,16 +92,26 @@ void main() {
   testWidgets(
       'the coordinator lands on the overview, not the recommendations list',
       (tester) async {
-    final db = FakeFirebaseFirestore();
-    await tester.pumpWidget(await wrap(const CoordinatorDashboard(), db,
-        uid: 'c1', role: 'coordinator'));
+    // Through the router, and wide: the destinations moved out of the
+    // deleted coordinator dashboard into the one app shell, which renders
+    // them as a rail above 900px. What is asserted is unchanged — the
+    // coordinator LANDS on the overview rather than a work list, and
+    // Overview is offered in the navigation.
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final c = await containerFor('coordinator', 'c1');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('coordinatorOverview')), findsOneWidget);
     expect(find.text('Nomination recommendations'), findsNothing);
 
-    final bar = find.byType(NavigationBar);
-    expect(find.descendant(of: bar, matching: find.text('Overview')),
+    final rail = find.byType(NavigationRail);
+    expect(find.descendant(of: rail, matching: find.text('Overview')),
         findsOneWidget);
   });
 
@@ -252,14 +261,26 @@ void main() {
     // index by one -- Faculty moved from index 4 to index 5. The dashboard
     // used to jump on a hard-coded `if (i == 4)`, which would have silently
     // routed this exact tap (now index 5) to whatever destination 4
-    // (Readiness) renders instead, with no error.
+    // (Readiness) renders instead, with no error. The index literal is
+    // gone with the dashboard, but the property it guarded is not: tapping
+    // Faculty must reach the invites screen and nothing else.
+    //
+    // Wide on purpose. The destinations live in the app shell now, which
+    // shows them as a rail above 900px and behind a hamburger below it —
+    // the default 800px test surface would leave the drawer shut and the
+    // tap would find nothing.
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final c = await containerFor('coordinator', 'c1');
     addTearDown(c.dispose);
     await tester.pumpWidget(
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Faculty'));
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('Faculty')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);

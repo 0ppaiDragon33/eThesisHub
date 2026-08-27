@@ -36,6 +36,37 @@ Future<ProviderContainer> containerForRole(
   ]);
 }
 
+/// A signed-in, verified account with NO `users/{uid}` document.
+///
+/// Deliberately separate from [containerForRole] rather than a flag on it:
+/// the whole point of the tests below is the case where the profile is
+/// absent, and a helper that can silently seed one is how that case gets
+/// tested by accident instead of on purpose.
+Future<ProviderContainer> containerWithoutProfile(FakeFirebaseFirestore db,
+    {String uid = 'u1'}) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  return ProviderContainer(overrides: [
+    sharedPrefsProvider.overrideWithValue(prefs),
+    firestoreProvider.overrideWithValue(db),
+    firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+      signedIn: true,
+      mockUser: MockUser(
+          uid: uid, email: 't@isufst.edu.ph', isEmailVerified: true),
+    )),
+  ]);
+}
+
+/// The location the router actually settled on, not the one asked for.
+/// A redirect that silently fails to fire can still leave the right widget
+/// on screen by coincidence, so the URL is asserted alongside the widget.
+String locationOf(ProviderContainer c) => c
+    .read(goRouterProvider)
+    .routerDelegate
+    .currentConfiguration
+    .uri
+    .toString();
+
 Future<void> pumpRouted(WidgetTester tester, ProviderContainer c) async {
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -211,5 +242,155 @@ void main() {
                 '${entry.value} -- route collision');
       }
     }
+  });
+
+  // --- Task 7: one shell around every signed-in route ---
+
+  testWidgets('the sidebar is present on an inner screen', (tester) async {
+    // The field report this milestone answers: "I don't see any back menu
+    // while navigating on screens." Assert on a screen that is NOT a
+    // destination, or the test proves only what already worked -- the four
+    // dashboards always had navigation of their own, and every screen you
+    // reached FROM one had none.
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'u1', 'status': 'titleApproved',
+      'panelistUids': <String>[], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
+      'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
+    });
+    final c = await containerForRole('student', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/thesis/chapters?id=t1');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(NavigationRail), matching: find.text('Overview')),
+        findsOneWidget);
+    // No back control here on purpose: for a student whose title is
+    // approved, Chapters IS a destination, and the shell offers back only
+    // where the sidebar alone cannot return the reader (see
+    // isDeeperThanDestination). The nested case -- one chapter's detail --
+    // is covered in test/features/dashboard/navigation_test.dart.
+    expect(find.byKey(const Key('shellBack')), findsNothing);
+  });
+
+  testWidgets('a hamburger is present on an inner screen at phone width',
+      (tester) async {
+    // Narrow is where the old shape stranded people hardest: no rail, no
+    // bottom bar on an inner screen, and nothing but the browser's own
+    // back button.
+    tester.view.physicalSize = const Size(400, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'u1', 'status': 'titleApproved',
+      'panelistUids': <String>[], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
+      'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
+    });
+    final c = await containerForRole('student', db);
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: MaterialApp.router(routerConfig: c.read(goRouterProvider)),
+    ));
+    await tester.pumpAndSettle();
+
+    c.read(goRouterProvider).go('/thesis/chapters?id=t1');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
+    expect(find.byKey(const Key('shellMenu')), findsOneWidget);
+    // No rail at this width, and no bottom bar either: on narrow the
+    // destinations live behind this hamburger, which is present on EVERY
+    // screen rather than only on the four that used to be dashboards.
+    expect(find.byType(NavigationRail), findsNothing);
+  });
+
+  testWidgets('an old home route redirects to /overview', (tester) async {
+    // Anything already bookmarked must keep working. '/dean' was the dean's
+    // home for two milestones.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('dean', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/dean');
+    await tester.pumpAndSettle();
+
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    expect(find.byKey(const Key('deanOverview')), findsOneWidget);
+  });
+
+  testWidgets('every old home route redirects to /overview', (tester) async {
+    // One per path: each of the four was a real bookmarkable home, and a
+    // redirect covering only the one a test happened to pick would strand
+    // the other three.
+    for (final path in ['/student', '/faculty', '/coordinator', '/dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole('coordinator', db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go(path);
+      await tester.pumpAndSettle();
+
+      expect(locationOf(c), '/overview',
+          reason: '$path must still land its reader somewhere');
+      c.dispose();
+    }
+  });
+
+  testWidgets('a signed-in account with no profile reaches /no-profile',
+      (tester) async {
+    // Spec D25 at the router level, not just the widget level. This account
+    // was previously bounced to /login, which reads as being signed out
+    // when they are not.
+    final db = FakeFirebaseFirestore();
+    final c = await containerWithoutProfile(db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    expect(locationOf(c), '/no-profile');
+    expect(find.byKey(const Key('noProfileScreen')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsNothing);
+    expect(find.byKey(const Key('studentOverview')), findsNothing);
+    expect(find.byKey(const Key('facultyOverview')), findsNothing);
+    expect(find.byKey(const Key('deanOverview')), findsNothing);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
+  });
+
+  testWidgets('a profile deleted AFTER the shell mounts reaches /no-profile',
+      (tester) async {
+    // The redirect does re-fire on a profile change -- app_router.dart's
+    // ref.listen(currentUserProvider) drives the refresh notifier -- but
+    // nothing tested it, so nothing would have noticed if that listen were
+    // dropped. A profile can genuinely vanish under a live session: a
+    // coordinator deactivating an account, or a half-finished registration
+    // being cleaned up.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('dean', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+
+    await db.collection('users').doc('u1').delete();
+    await tester.pumpAndSettle();
+
+    expect(locationOf(c), '/no-profile');
+    expect(find.byKey(const Key('noProfileScreen')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsNothing);
+    expect(find.byKey(const Key('deanOverview')), findsNothing);
+    expect(find.byKey(const Key('studentOverview')), findsNothing);
   });
 }

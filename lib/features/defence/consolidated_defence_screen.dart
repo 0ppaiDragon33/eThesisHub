@@ -70,16 +70,19 @@ class _ConsolidatedDefenceScreenState
     }
   }
 
-  /// Wraps every non-content state in the same Scaffold + AppBar the loaded
-  /// screen uses, so a page still loading its defence, its comment log, or
-  /// the signed-in profile is never a bare, unnavigable page.
-  Widget _framed(List<Widget> children, {String? title}) {
-    return Scaffold(
-      key: const Key('consolidated'),
-      appBar: AppBar(title: Text(title ?? 'Consolidated comments')),
-      body: PageShell(children: children),
-    );
-  }
+  /// Wraps every non-content state in the same frame the loaded screen
+  /// uses, so a page still loading its defence, its comment log, or the
+  /// signed-in profile is never a bare, unnavigable page.
+  ///
+  /// The Scaffold and AppBar moved to the app shell, which titles this
+  /// route 'Consolidated comments' for every one of these states — hence
+  /// the [title] override being gone: it named the app bar, and there is
+  /// no longer an app bar here to name. What the page is showing is said
+  /// by [PageShell]'s own heading instead.
+  Widget _framed(List<Widget> children) => KeyedSubtree(
+        key: const Key('consolidated'),
+        child: PageShell(children: children),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -135,14 +138,12 @@ class _ConsolidatedDefenceScreenState
             ),
           ),
         ],
-        title: defence.type.label,
       );
     }
 
     if (commentsAsync.isLoading) {
       return _framed(
         const [LoadingState(label: 'Loading comments…')],
-        title: defence.type.label,
       );
     }
     if (commentsAsync.hasError) {
@@ -153,7 +154,6 @@ class _ConsolidatedDefenceScreenState
             message: 'Could not load the comment log.',
           ),
         ],
-        title: defence.type.label,
       );
     }
     final comments = commentsAsync.valueOrNull ?? const <DefenceComment>[];
@@ -161,7 +161,6 @@ class _ConsolidatedDefenceScreenState
     if (meAsync.isLoading) {
       return _framed(
         const [LoadingState(label: 'Loading your profile…')],
-        title: defence.type.label,
       );
     }
     if (meAsync.hasError) {
@@ -172,7 +171,6 @@ class _ConsolidatedDefenceScreenState
             message: 'Could not load your profile.',
           ),
         ],
-        title: defence.type.label,
       );
     }
 
@@ -207,10 +205,9 @@ class _ConsolidatedDefenceScreenState
       if (seenKeys.add(key)) authorUidsInOrder.add(c.authorUid);
     }
 
-    return Scaffold(
+    return KeyedSubtree(
       key: const Key('consolidated'),
-      appBar: AppBar(title: Text(defence.type.label)),
-      body: PageShell(
+      child: PageShell(
         title: defence.type.label,
         subtitle: 'Consolidated comments',
         children: [

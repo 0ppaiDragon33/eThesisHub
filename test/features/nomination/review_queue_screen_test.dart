@@ -49,7 +49,9 @@ Widget wrap(FakeFirebaseFirestore db, ThesisStatus queue, bool isDean,
           thesisRepositoryProvider.overrideWithValue(repository),
       ],
       child: MaterialApp(
-          home: ReviewQueueScreen(queue: queue, isDean: isDean)),
+          // the app shell supplies the Scaffold in the real app.
+          home: Scaffold(
+              body: ReviewQueueScreen(queue: queue, isDean: isDean))),
     );
 
 /// Matches the `useTallSurface` pattern from `nominate_screen_test.dart` /

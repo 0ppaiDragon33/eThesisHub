@@ -164,15 +164,13 @@ class _ScheduleDefenceScreenState
     }
   }
 
-  /// Wraps every non-form state in the same Scaffold + AppBar the form
-  /// uses, so a screen still loading its thesis or its chapters is never a
+  /// Wraps every non-form state in the same frame the form uses.
+  ///
+  /// The Scaffold and AppBar that used to be here belong to the app shell
+  /// now, which supplies them to every state of every signed-in route —
+  /// so a screen still loading its thesis or its chapters is still never a
   /// bare, unnavigable page.
-  Widget _framed(List<Widget> children) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Schedule a defence')),
-      body: PageShell(children: children),
-    );
-  }
+  Widget _framed(List<Widget> children) => PageShell(children: children);
 
   @override
   Widget build(BuildContext context) {
@@ -208,10 +206,9 @@ class _ScheduleDefenceScreenState
 
     final isCoordinator = me?.role == UserRole.coordinator;
 
-    return Scaffold(
+    return KeyedSubtree(
       key: const Key('scheduleDefenceScreen'),
-      appBar: AppBar(title: const Text('Schedule a defence')),
-      body: PageShell(
+      child: PageShell(
         title: 'Schedule a defence',
         subtitle: thesis.workingTitle,
         children: [

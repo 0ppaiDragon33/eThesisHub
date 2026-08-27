@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:ethesishub/features/dashboard/student_dashboard.dart';
+import 'package:ethesishub/features/dashboard/overview_screen.dart';
+import 'package:ethesishub/features/dashboard/student_overview.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
@@ -82,7 +83,7 @@ void main() {
     }
 
     await tester.pumpWidget(await wrap(
-      const StudentDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'l1',
       role: 'student',
@@ -115,7 +116,7 @@ void main() {
     }
 
     await tester.pumpWidget(await wrap(
-      const StudentDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'l1',
       role: 'student',
@@ -135,7 +136,7 @@ void main() {
     });
 
     await tester.pumpWidget(await wrap(
-      const StudentDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'l1',
       role: 'student',
@@ -150,11 +151,22 @@ void main() {
       (tester) async {
     // M2 shipped a leader lockout by gating on the profile doc. Nothing on
     // an overview may depend on `users/{uid}` existing.
+    //
+    // Pumped as [StudentOverview] rather than through [OverviewScreen],
+    // which is the widget whose whole job is to pick an overview BY role
+    // and which correctly renders nothing once the role has settled as
+    // unknown — a signed-in account with no profile is routed to
+    // /no-profile now, not left on an overview (spec D25). Routing it
+    // through the role dispatcher would therefore assert the opposite of
+    // what the app is supposed to do. The property under test is this
+    // overview's own: none of its panels may gate on `users/{uid}`. That
+    // it is reached at all is asserted at the router level, in
+    // test/core/routing/shell_routes_test.dart.
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(leaderUid: 'l1'));
 
     await tester.pumpWidget(await wrap(
-      const StudentDashboard(),
+      const StudentOverview(),
       db,
       uid: 'l1',
       role: 'student',
@@ -175,7 +187,7 @@ void main() {
         .set(thesis(leaderUid: 'l1', status: 'titleApproved'));
 
     await tester.pumpWidget(await wrap(
-      const StudentDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'l1',
       role: 'student',

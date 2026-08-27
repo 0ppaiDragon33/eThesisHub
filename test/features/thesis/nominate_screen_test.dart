@@ -67,7 +67,9 @@ Widget wrap(FakeFirebaseFirestore db,
           routes: [
             GoRoute(
               path: '/thesis/nominate',
-              builder: (_, _) => const NominateScreen(thesisId: 't1'),
+              // the app shell supplies the Scaffold in the real app.
+              builder: (_, _) =>
+                  const Scaffold(body: NominateScreen(thesisId: 't1')),
             ),
             GoRoute(
               path: '/thesis',

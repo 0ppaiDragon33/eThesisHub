@@ -144,12 +144,17 @@ void main() {
     // The dean and coordinator dashboards used to stack approvals, the
     // defence queue and readiness on one scrolling page. Each is its own
     // destination now -- and 'Defences' since became the SCHEDULED rooms,
-    // while the candidate-title queue this test wants moved to 'Titles'.
-    await tester.tap(find.text('Titles'));
+    // while the candidate-title queue this test wants sits under 'Title
+    // defences', which is a sidebar entry in the shell rather than a
+    // dashboard tab. Scoped to the rail: the page this lands on is headed
+    // with the same two words.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail),
+        matching: find.text('Title defences')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget,
-        reason: 'the $role dashboard must offer a way into the defence');
+        reason: 'the $role sidebar must offer a way into the defence');
     await tester.tap(find.byKey(const Key('goToDefence-t1')));
     await tester.pumpAndSettle();
 
@@ -160,9 +165,9 @@ void main() {
     expect(find.byKey(const Key('goToDefence-t1')), findsNothing);
   }
 
-  testWidgets('the Dean reaches a defence from their dashboard',
+  testWidgets('the Dean reaches a defence from their sidebar',
       (tester) => reachesDefence(tester, 'dean'));
 
-  testWidgets('the Coordinator reaches a defence from their dashboard',
+  testWidgets('the Coordinator reaches a defence from their sidebar',
       (tester) => reachesDefence(tester, 'coordinator'));
 }

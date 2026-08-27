@@ -6,10 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ethesishub/app.dart';
 
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
-import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
+import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
@@ -34,6 +35,50 @@ Map<String, dynamic> thesis({
       'academicYear': '2026-2027',
       'status': status,
     };
+
+/// Drives the REAL router, wide enough for the shell's rail to render.
+///
+/// Two of the cases below are about the shell rather than the overview
+/// body — that Overview is the first destination, and that the mode switch
+/// swaps the tiles — and neither lives inside [FacultyOverview] any more.
+/// The destinations moved to the one shell around every signed-in route,
+/// and the Adviser/Panelist switch moved into that shell's trailing slot
+/// from the deleted faculty dashboard's app bar. Pumping the body alone
+/// could no longer see either, so these go through the router, which is
+/// also where a reader meets them.
+Future<ProviderContainer> routedContainer(
+  FakeFirebaseFirestore db, {
+  required String uid,
+  required String role,
+}) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  await db.collection('users').doc(uid).set({
+    'fullName': 'Test User',
+    'email': '$uid@isufst.edu.ph',
+    'role': role,
+    'active': true,
+  });
+  return ProviderContainer(overrides: [
+    firestoreProvider.overrideWithValue(db),
+    sharedPrefsProvider.overrideWithValue(prefs),
+    firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+      signedIn: true,
+      mockUser: MockUser(
+          uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
+    )),
+  ]);
+}
+
+Future<void> pumpRouted(WidgetTester tester, ProviderContainer c) async {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+      UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+  await tester.pumpAndSettle();
+}
 
 /// Same shape as `wrap()` in navigation_test.dart, with an `overrides` hook
 /// so a test can force the effective mode or replace a stream directly.
@@ -88,7 +133,7 @@ void main() {
     await db.collection('theses').doc('t2').set(thesis(adviserUid: 'other'));
 
     await tester.pumpWidget(await wrap(
-      const FacultyDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'f1',
       role: 'faculty',
@@ -118,7 +163,7 @@ void main() {
         .set({'currentVersion': 1, 'status': 'submitted'});
 
     await tester.pumpWidget(await wrap(
-      const FacultyDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'f2',
       role: 'faculty',
@@ -137,17 +182,28 @@ void main() {
   });
 
   testWidgets('the overview is the first destination', (tester) async {
+    // Through the router now: the destinations live in the shell, not in
+    // a dashboard, so a bare widget pump can no longer see them. The
+    // property is unchanged — a faculty member LANDS on the overview, and
+    // Overview is the first thing the sidebar offers. Landing on a work
+    // queue was the complaint the previous milestone existed to answer.
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
 
-    await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-        uid: 'a1', role: 'faculty'));
-    await tester.pumpAndSettle();
+    final c = await routedContainer(db, uid: 'a1', role: 'faculty');
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
 
     expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
-    final bar = find.byType(NavigationBar);
-    expect(find.descendant(of: bar, matching: find.text('Overview')),
+    final rail = find.byType(NavigationRail);
+    expect(find.descendant(of: rail, matching: find.text('Overview')),
         findsOneWidget);
+    final destinations = tester
+        .widget<NavigationRail>(rail)
+        .destinations
+        .map((d) => (d.label as Text).data)
+        .toList();
+    expect(destinations.first, 'Overview');
   });
 
   testWidgets('the tiles change with the mode switch', (tester) async {
@@ -159,9 +215,12 @@ void main() {
       'conformeStatus': 'accepted',
     });
 
-    await tester.pumpWidget(await wrap(const FacultyDashboard(), db,
-        uid: 'f3', role: 'faculty'));
-    await tester.pumpAndSettle();
+    // Through the router: the Adviser/Panelist switch moved out of the
+    // deleted faculty dashboard's app bar and into the shell's trailing
+    // slot, so it is only present when the shell is.
+    final c = await routedContainer(db, uid: 'f3', role: 'faculty');
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
 
     // f3 holds both positions. The stored preference is unset, which
     // defaults to adviser mode -- so the tile row shows the adviser's
@@ -188,7 +247,7 @@ void main() {
     await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
 
     await tester.pumpWidget(await wrap(
-      const FacultyDashboard(),
+      const OverviewScreen(),
       db,
       uid: 'a1',
       role: 'faculty',

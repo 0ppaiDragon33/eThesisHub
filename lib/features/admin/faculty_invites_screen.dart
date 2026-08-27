@@ -138,13 +138,15 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
     final me = ref.watch(authStateProvider).valueOrNull;
     final invitesAsync = ref.watch(facultyInvitesProvider);
 
-    return Scaffold(
+    // No Scaffold and no AppBar: the app shell owns both for every
+    // signed-in route now, and a second Scaffold here would stack a second
+    // app bar with a back button that goes nowhere.
+    return KeyedSubtree(
       // Identifies the destination for reachability tests. Asserting on the
-      // AppBar title instead would match the dashboard button that opens
-      // this screen, and so would pass whether or not navigation happened.
+      // AppBar title instead would match the sidebar entry that opens this
+      // screen, and so would pass whether or not navigation happened.
       key: const Key('facultyInvitesScreen'),
-      appBar: AppBar(title: const Text('Faculty')),
-      body: Center(
+      child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),
           child: ListView(

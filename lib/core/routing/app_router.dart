@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/widgets/app_shell_host.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
@@ -9,18 +10,15 @@ import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
+import 'package:ethesishub/features/auth/no_profile_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
 import 'package:ethesishub/features/dashboard/advisees_screen.dart';
 import 'package:ethesishub/features/dashboard/approvals_screen.dart';
-import 'package:ethesishub/features/dashboard/coordinator_dashboard.dart';
-import 'package:ethesishub/features/dashboard/dean_dashboard.dart';
-import 'package:ethesishub/features/dashboard/faculty_dashboard.dart';
 import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/features/dashboard/panels_screen.dart';
 import 'package:ethesishub/features/dashboard/readiness_screen.dart';
 import 'package:ethesishub/features/dashboard/recommendations_screen.dart';
-import 'package:ethesishub/features/dashboard/student_dashboard.dart';
 import 'package:ethesishub/features/dashboard/title_defences_screen.dart';
 import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
@@ -44,12 +42,25 @@ class _RouterRefreshNotifier extends ChangeNotifier {
 }
 
 /// Home route for each account role.
-String homeRouteFor(UserRole role) => switch (role) {
-      UserRole.student => '/student',
-      UserRole.faculty => '/faculty',
-      UserRole.coordinator => '/coordinator',
-      UserRole.dean => '/dean',
-    };
+///
+/// One route for all four now. Each role used to land on a dashboard of
+/// its own — '/student', '/faculty', '/coordinator', '/dean' — which is
+/// also why navigation existed on exactly those four screens and nowhere
+/// else. `/overview` renders the same per-role overview inside the one
+/// shell that now wraps every signed-in route, so leaving it no longer
+/// strands anybody.
+///
+/// The four old paths are not deleted; they redirect here (see
+/// [oldHomeRoutes]), because they have been bookmarkable URLs for two
+/// milestones.
+String homeRouteFor(UserRole role) => '/overview';
+
+/// The four pre-shell dashboard paths, kept alive as redirects.
+///
+/// A bookmark, a browser history entry or a link pasted into a chat is not
+/// a thing this app gets to invalidate quietly: a 404 or a blank page is
+/// indistinguishable from the app being broken.
+const oldHomeRoutes = ['/student', '/faculty', '/coordinator', '/dean'];
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   // Build the router once. Use a ChangeNotifier with ref.listen to re-evaluate
@@ -101,22 +112,29 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // already covers the "still loading" case (handled below). A
               // settled `data(null)` here means the users/{uid} document
               // does not exist for this signed-in, verified account (e.g.
-              // it was never created, or was removed). Send them to /login,
-              // which shows a "signed in as X — sign out" affordance so
-              // they aren't stuck with no error and no escape.
+              // it was never created, or was removed).
+              //
+              // /no-profile, not /login: this account IS signed in, and
+              // sending it to the sign-in screen said the opposite. The
+              // screen it lands on now names the two causes apart — the
+              // document is absent versus the read failed — and offers
+              // Retry and Sign out (spec D25).
               if (profile == null) {
-                return onAuthScreen ? null : '/login';
+                return location == '/no-profile' ? null : '/no-profile';
               }
 
               final home = homeRouteFor(profile.role);
               if (onAuthScreen || location == '/verify-email') return home;
 
-              // Prevent reaching another role's dashboard by typing its URL.
-              final userDashboards =
-                  UserRole.values.map(homeRouteFor).toList();
-              if (userDashboards.contains(location) && location != home) {
-                return home;
-              }
+              // A profile that has come back (a retry that succeeded, or a
+              // coordinator finishing the registration) must not leave the
+              // reader parked on the dead end.
+              if (location == '/no-profile') return home;
+
+              // The four pre-shell dashboards. They are no longer screens,
+              // but they are still URLs people hold, so each lands on the
+              // one overview rather than nothing.
+              if (oldHomeRoutes.contains(location)) return home;
 
               // M1a screens are role-scoped. A wrong-role user goes to their
               // own home rather than seeing an empty or forbidden screen.
@@ -133,6 +151,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // ChaptersScreen ever built — the same class of "the link
               // exists but the route refuses the very role that needs it"
               // failure this whole task exists to close.
+              //
+              // (faculty_dashboard.dart itself is gone as of the app-shell
+              // switchover; that link lives in advisees_screen.dart now and
+              // points at the same path, so the exemption is load-bearing
+              // exactly as before.)
               //
               // Exempt exactly the chapter routes, not everything sharing
               // the prefix: a future '/thesis/chaptersArchive' must not
@@ -174,7 +197,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // '/defence/room/...' is deliberately exempt, even though it
               // starts with '/defence/': DefencesList is shared by all four
               // dashboards (see its own doc comment), including the
-              // student's, and its "Open" button sends the leader straight
+              // student's -- those four dashboards are now the one
+              // '/defences' destination every role reaches through the app
+              // shell, which changes nothing about who follows this link --
+              // and its "Open" button sends the leader straight
               // into '/defence/room/${d.id}' to watch the log and, once the
               // adviser releases it, read the consolidated comments at
               // '/defence/room/${d.id}/consolidated' — ConsolidatedDefenceScreen
@@ -197,9 +223,25 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // back to the signed-in leader's own thesis rather than
               // crashing on the route builder's null-check; a leader with no
               // thesis yet is sent to create one first.
-              const bareVisitFallbackPaths = [
+              final bareVisitFallbackPaths = [
                 '/thesis/nominate',
                 '/thesis/titles',
+                // The sidebar's Chapters destination is a bare
+                // '/thesis/chapters': a destination is one fixed route and
+                // cannot carry a query parameter only the signed-in
+                // leader's own thesis can supply. The dashboard tab it
+                // replaces passed that id in directly, so without this the
+                // Chapters destination would land every student on "No
+                // thesis given" -- a control that does nothing, which is
+                // exactly what the destination list is curated to avoid.
+                //
+                // Students only. An adviser reaches chapters through
+                // '/thesis/chapters?id=...' from their advisee list and
+                // has no Chapters destination of their own, so falling
+                // their bare visit back to "the leader's own thesis" would
+                // resolve to a thesis they do not lead, or to
+                // /thesis/create, neither of which is what they asked for.
+                if (profile.role == UserRole.student) '/thesis/chapters',
               ];
               if (bareVisitFallbackPaths.contains(location) &&
                   state.uri.queryParameters['id'] == null) {
@@ -228,7 +270,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               return null;
             },
             loading: () => null, // still loading profile, stay put
-            error: (_, _) => null,
+            // A FAILED profile read is not the same as a slow one, and it
+            // used to be handled as though it were: returning null left
+            // the reader wherever they happened to be, with no error and
+            // no explanation, on a screen whose every query was about to
+            // fail for the same reason. /no-profile shows the Firestore
+            // code — the only place the reason surfaces in the field,
+            // there being no server-side logs on Spark — plus Retry and
+            // Sign out.
+            error: (_, _) => location == '/no-profile' ? null : '/no-profile',
           );
         },
         loading: () => null, // still loading auth, stay put
@@ -242,21 +292,38 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/verify-email',
         builder: (_, _) => const VerifyEmailScreen(),
       ),
-      GoRoute(path: '/student', builder: (_, _) => const StudentDashboard()),
-      GoRoute(path: '/faculty', builder: (_, _) => const FacultyDashboard()),
+      // Everything below sits inside ONE shell. That is the whole point of
+      // this milestone: navigation used to exist on exactly four screens
+      // (the four dashboards, each carrying its own ResponsiveScaffold),
+      // and every one of the sixteen screens you could reach from them was
+      // a bare Scaffold. Leaving a dashboard left you with no sidebar, no
+      // bottom bar and no way home — reported from the field as "I don't
+      // see any back menu while navigating on screens."
+      //
+      // Login, register and verify-email stay OUTSIDE it, above: they are
+      // the screens for someone who is not signed in, and a sidebar full
+      // of destinations they cannot reach is worse than none. /no-profile
+      // is inside, because that reader IS signed in — the shell renders
+      // its app bar and simply offers no destinations, since
+      // shellDestinationsProvider yields an empty list for an unknown role
+      // rather than guessing one.
+      ShellRoute(
+        builder: (context, state, child) => AppShellHost(
+          location: state.matchedLocation,
+          pathParameters: state.pathParameters,
+          child: child,
+        ),
+        routes: [
       GoRoute(
-        path: '/coordinator',
-        builder: (_, _) => const CoordinatorDashboard(),
+        path: '/no-profile',
+        builder: (_, _) => const NoProfileScreen(),
       ),
-      GoRoute(path: '/dean', builder: (_, _) => const DeanDashboard()),
-      // The eight sidebar-destination routes. Registering them here does
-      // not switch any dashboard over -- '/dean', '/faculty', etc. above
-      // still work exactly as before; this only adds a second, direct way
-      // to reach each screen, which is what lets a later task move the
-      // shell over in one step. None of these share a segment with any
-      // dynamic route below (they are all single static segments, same
-      // shape as '/student' or '/dean' above), so there is no ordering
-      // hazard here the way there is for '/defence/schedule' further down.
+      // The eight sidebar-destination routes. The four old dashboard paths
+      // ('/student', '/faculty', '/coordinator', '/dean') are gone as
+      // screens and redirect here instead (see `oldHomeRoutes`). None of
+      // these share a segment with any dynamic route below (they are all
+      // single static segments), so there is no ordering hazard here the
+      // way there is for '/defence/schedule' further down.
       GoRoute(path: '/overview', builder: (_, _) => const OverviewScreen()),
       GoRoute(path: '/defences', builder: (_, _) => const DefencesScreen()),
       GoRoute(path: '/advisees', builder: (_, _) => const AdviseesScreen()),
@@ -301,9 +368,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             // self-resolving: the moment that provider settles, the
             // refreshListenable fires and the redirect sends us to
             // /thesis/create or /thesis/nominate?id=... as appropriate.
-            return const Scaffold(
+            //
+            // No Scaffold of its own: the shell above supplies it, and a
+            // second one here would stack a second app bar.
+            return const Center(
               key: Key('nominateBareVisitLoading'),
-              body: Center(child: CircularProgressIndicator()),
+              child: CircularProgressIndicator(),
             );
           }
           return NominateScreen(thesisId: id);
@@ -317,9 +387,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // parameter, and distinguish loading from absent while doing it.
           final id = state.uri.queryParameters['id'];
           if (id == null) {
-            return const Scaffold(
+            return const Center(
               key: Key('submitTitlesBareVisitLoading'),
-              body: Center(child: CircularProgressIndicator()),
+              child: CircularProgressIndicator(),
             );
           }
           return SubmitTitlesScreen(thesisId: id);
@@ -344,16 +414,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // must not crash into a blank screen with no way back -- same
           // failure mode '/thesis/chapters' avoids for a missing thesis id.
           if (id == null || id.isEmpty) {
-            return Scaffold(
-              appBar: AppBar(title: const Text('Schedule a defence')),
-              body: const PageShell(children: [
-                EmptyState(
-                  icon: Icons.link_off,
-                  title: 'No thesis given',
-                  message: 'Open scheduling from a thesis you coordinate.',
-                ),
-              ]),
-            );
+            // The shell supplies the app bar (titled 'Schedule a defence',
+            // see shellTitleFor) and the sidebar, so this refusal is
+            // already somewhere the reader can leave from.
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.link_off,
+                title: 'No thesis given',
+                message: 'Open scheduling from a thesis you coordinate.',
+              ),
+            ]);
           }
           return ScheduleDefenceScreen(thesisId: id);
         },
@@ -431,16 +501,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // with no way back -- the same failure mode the chapter-detail
           // route below avoids for an unknown chapter id.
           if (id == null || id.isEmpty) {
-            return Scaffold(
-              appBar: AppBar(title: const Text('Chapters')),
-              body: const PageShell(children: [
-                EmptyState(
-                  icon: Icons.link_off,
-                  title: 'No thesis given',
-                  message: 'Open your chapters from your thesis status page.',
-                ),
-              ]),
-            );
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.link_off,
+                title: 'No thesis given',
+                message: 'Open your chapters from your thesis status page.',
+              ),
+            ]);
           }
           return ChaptersScreen(thesisId: id);
         },
@@ -461,19 +528,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // "stranded with no way back" bug this project already shipped
           // once (see the redirect callback's own history above).
           if (id == null || id.isEmpty || chapter == null) {
-            return Scaffold(
-              appBar: AppBar(title: const Text('Chapter')),
-              body: const PageShell(children: [
-                EmptyState(
-                  icon: Icons.search_off,
-                  title: 'No such chapter',
-                  message: 'There are five chapters, I through V.',
-                ),
-              ]),
-            );
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.search_off,
+                title: 'No such chapter',
+                message: 'There are five chapters, I through V.',
+              ),
+            ]);
           }
           return ChapterDetailScreen(thesisId: id, chapter: chapter);
         },
+      ),
+        ],
       ),
     ],
   );

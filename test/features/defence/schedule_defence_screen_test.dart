@@ -86,7 +86,10 @@ Widget _wrap(
           routes: [
             GoRoute(
               path: '/schedule',
-              builder: (_, _) => const ScheduleDefenceScreen(thesisId: 't1'),
+              // the app shell supplies the Scaffold in the real app.
+              builder: (_, _) => Scaffold(
+                  appBar: AppBar(title: const Text('Schedule a defence')),
+                  body: const ScheduleDefenceScreen(thesisId: 't1')),
             ),
             // Matches the real path Task 11 registers for the defence room
             // (Task 8): '/defence/room/:defenceId'. If the screen's own

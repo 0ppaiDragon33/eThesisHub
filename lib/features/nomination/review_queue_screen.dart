@@ -123,14 +123,13 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
     final label = widget.isDean ? 'Approve' : 'Recommend';
 
-    return Scaffold(
+    // No Scaffold and no AppBar: the app shell owns both. The bar's title
+    // still differs by role — see `shellTitleFor`, which asks the same
+    // question ('/review' for a dean approves, for a coordinator
+    // recommends) one level up.
+    return KeyedSubtree(
       key: const Key('reviewQueueScreen'),
-      appBar: AppBar(
-        title: Text(widget.isDean
-            ? 'Nomination approvals'
-            : 'Nomination recommendations'),
-      ),
-      body: StreamBuilder(
+      child: StreamBuilder(
         stream: _queueStream,
         builder: (context, snap) {
           if (!snap.hasData) {

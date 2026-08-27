@@ -6,6 +6,7 @@ import 'package:ethesishub/core/widgets/needs_you_queue.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/stat_tile.dart';
 import 'package:ethesishub/core/widgets/stat_tile_grid.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/nomination.dart';
@@ -85,13 +86,24 @@ class FacultyOverview extends ConsumerWidget {
     final modeAsync = ref.watch(effectiveFacultyModeProvider);
     final needsYouAsync = ref.watch(facultyNeedsYouProvider);
 
-    // `FacultyDashboard` resolves the mode and only then builds this widget,
-    // so by construction it has a value here. The gate that used to stand in
-    // this spot was unreachable, and had it been reachable it would have
-    // replaced the greeting with a full-screen error -- exactly what spec §9
-    // forbids, because a dashboard that replaces itself with an error
-    // strands the reader with no way to reach the screens that do work.
-    final mode = modeAsync.requireValue;
+    // This used to call `requireValue`, on the strength of
+    // `FacultyDashboard` resolving the mode before it ever built this
+    // widget. That dashboard is gone — `/overview` renders this directly
+    // now — so the unresolved case is reachable and has to be answered
+    // here.
+    //
+    // It is answered per-SECTION, not per-page: the greeting, the
+    // headline and the queue below are all mode-independent (spec D17)
+    // and have their own loading states already, so only the tile grid
+    // waits. Replacing the whole overview with a spinner or an error is
+    // what spec §9 forbids — a dashboard that replaces itself strands the
+    // reader with no way to reach the screens that do work.
+    //
+    // And the mode is not defaulted while it resolves. That was the
+    // hard-won rule in faculty_dashboard.dart: guessing shows a panelist
+    // the adviser's four tiles and then swaps them out from under them on
+    // every launch.
+    final mode = modeAsync.valueOrNull;
 
     final adviseesAsync = ref.watch(myAdviseesProvider);
     final nominationsAsync = ref.watch(myPendingNominationsProvider);
@@ -111,71 +123,74 @@ class FacultyOverview extends ConsumerWidget {
           suffix: 'your advisees and panels',
         ),
         const Gap.lg(),
-        StatTileGrid(
-          children: mode == FacultyMode.adviser
-              ? [
-                  AsyncStatTile<int>(
-                    label: 'Chapters awaiting your review',
-                    value: chaptersAwaitingAsync,
-                    format: (n) => '$n',
-                    icon: Icons.hourglass_top_outlined,
-                    accent: AppTokens.accentFor(3, brightness),
-                  ),
-                  AsyncStatTile<List<Thesis>>(
-                    label: 'Advisees',
-                    value: adviseesAsync,
-                    format: (l) => '${l.length}',
-                    icon: Icons.school_outlined,
-                    accent: AppTokens.accentFor(0, brightness),
-                  ),
-                  AsyncStatTile<int>(
-                    label: 'Defences this week',
-                    value: defencesThisWeekAsync,
-                    format: (n) => '$n',
-                    icon: Icons.event_note_outlined,
-                    accent: AppTokens.accentFor(1, brightness),
-                  ),
-                  AsyncStatTile<
-                      List<({String thesisId, Nomination nomination})>>(
-                    label: 'Conforme requests',
-                    value: nominationsAsync,
-                    format: (l) => '${l.length}',
-                    icon: Icons.drafts_outlined,
-                    accent: AppTokens.accentFor(2, brightness),
-                  ),
-                ]
-              : [
-                  AsyncStatTile<int>(
-                    label: 'Panels',
-                    value: panelCountAsync,
-                    format: (n) => '$n',
-                    icon: Icons.forum_outlined,
-                    accent: AppTokens.accentFor(0, brightness),
-                  ),
-                  AsyncStatTile<int>(
-                    label: 'Title sets to review',
-                    value: titleSetsAsync,
-                    format: (n) => '$n',
-                    icon: Icons.fact_check_outlined,
-                    accent: AppTokens.accentFor(3, brightness),
-                  ),
-                  AsyncStatTile<int>(
-                    label: 'Defences this week',
-                    value: defencesThisWeekAsync,
-                    format: (n) => '$n',
-                    icon: Icons.event_note_outlined,
-                    accent: AppTokens.accentFor(1, brightness),
-                  ),
-                  AsyncStatTile<
-                      List<({String thesisId, Nomination nomination})>>(
-                    label: 'Conforme requests',
-                    value: nominationsAsync,
-                    format: (l) => '${l.length}',
-                    icon: Icons.drafts_outlined,
-                    accent: AppTokens.accentFor(2, brightness),
-                  ),
-                ],
-        ),
+        if (mode == null)
+          const LoadingState(label: 'Working out which positions you hold…')
+        else
+          StatTileGrid(
+            children: mode == FacultyMode.adviser
+                ? [
+                    AsyncStatTile<int>(
+                      label: 'Chapters awaiting your review',
+                      value: chaptersAwaitingAsync,
+                      format: (n) => '$n',
+                      icon: Icons.hourglass_top_outlined,
+                      accent: AppTokens.accentFor(3, brightness),
+                    ),
+                    AsyncStatTile<List<Thesis>>(
+                      label: 'Advisees',
+                      value: adviseesAsync,
+                      format: (l) => '${l.length}',
+                      icon: Icons.school_outlined,
+                      accent: AppTokens.accentFor(0, brightness),
+                    ),
+                    AsyncStatTile<int>(
+                      label: 'Defences this week',
+                      value: defencesThisWeekAsync,
+                      format: (n) => '$n',
+                      icon: Icons.event_note_outlined,
+                      accent: AppTokens.accentFor(1, brightness),
+                    ),
+                    AsyncStatTile<
+                        List<({String thesisId, Nomination nomination})>>(
+                      label: 'Conforme requests',
+                      value: nominationsAsync,
+                      format: (l) => '${l.length}',
+                      icon: Icons.drafts_outlined,
+                      accent: AppTokens.accentFor(2, brightness),
+                    ),
+                  ]
+                : [
+                    AsyncStatTile<int>(
+                      label: 'Panels',
+                      value: panelCountAsync,
+                      format: (n) => '$n',
+                      icon: Icons.forum_outlined,
+                      accent: AppTokens.accentFor(0, brightness),
+                    ),
+                    AsyncStatTile<int>(
+                      label: 'Title sets to review',
+                      value: titleSetsAsync,
+                      format: (n) => '$n',
+                      icon: Icons.fact_check_outlined,
+                      accent: AppTokens.accentFor(3, brightness),
+                    ),
+                    AsyncStatTile<int>(
+                      label: 'Defences this week',
+                      value: defencesThisWeekAsync,
+                      format: (n) => '$n',
+                      icon: Icons.event_note_outlined,
+                      accent: AppTokens.accentFor(1, brightness),
+                    ),
+                    AsyncStatTile<
+                        List<({String thesisId, Nomination nomination})>>(
+                      label: 'Conforme requests',
+                      value: nominationsAsync,
+                      format: (l) => '${l.length}',
+                      icon: Icons.drafts_outlined,
+                      accent: AppTokens.accentFor(2, brightness),
+                    ),
+                  ],
+          ),
         const Gap.lg(),
         NeedsYouQueue(
           items: needsYouAsync,

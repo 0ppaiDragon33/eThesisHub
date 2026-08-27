@@ -307,53 +307,47 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     // Loading / error / not-found are kept as separate branches: collapsing
     // loading into another state has previously told a user their thesis had
     // moved on while it was still loading.
+    // None of these states carries a Scaffold any more: the app shell owns
+    // it, along with the app bar and the sidebar, for every signed-in
+    // route.
     if (meAsync.isLoading || thesisAsync.isLoading) {
-      return const Scaffold(
-        body: LoadingState(label: 'Loading the title defence…'),
-      );
+      return const LoadingState(label: 'Loading the title defence…');
     }
     if (meAsync.hasError) {
-      return Scaffold(
-        body: PageShell(children: [
-          ErrorState(
-            error: meAsync.error,
-            message: 'Could not load your account.',
-          ),
-        ]),
-      );
+      return PageShell(children: [
+        ErrorState(
+          error: meAsync.error,
+          message: 'Could not load your account.',
+        ),
+      ]);
     }
     if (thesisAsync.hasError) {
-      return Scaffold(
-        body: PageShell(children: [
-          ErrorState(
-            error: thesisAsync.error,
-            message: 'Could not load this thesis.',
-          ),
-        ]),
-      );
+      return PageShell(children: [
+        ErrorState(
+          error: thesisAsync.error,
+          message: 'Could not load this thesis.',
+        ),
+      ]);
     }
 
     final me = meAsync.valueOrNull;
     final thesis = thesisAsync.valueOrNull;
     if (me == null || thesis == null) {
-      return const Scaffold(
-        body: PageShell(children: [
-          EmptyState(
-            icon: Icons.search_off,
-            title: 'Thesis not found',
-            message: 'This thesis no longer exists, or it belongs to '
-                'another group.',
-          ),
-        ]),
-      );
+      return const PageShell(children: [
+        EmptyState(
+          icon: Icons.search_off,
+          title: 'Thesis not found',
+          message: 'This thesis no longer exists, or it belongs to '
+              'another group.',
+        ),
+      ]);
     }
 
     final isDean = me.role == UserRole.dean;
 
-    return Scaffold(
+    return KeyedSubtree(
       key: const Key('titleDefenceScreen'),
-      appBar: AppBar(title: const Text('Title defence')),
-      body: PageShell(
+      child: PageShell(
         title: 'Title defence',
         subtitle: thesis.workingTitle,
         children: [

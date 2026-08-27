@@ -15,26 +15,18 @@ class ChaptersScreen extends ConsumerWidget {
   const ChaptersScreen({
     super.key,
     required this.thesisId,
-    this.embedded = false,
   });
 
   final String thesisId;
 
-  /// True when a dashboard is hosting this as a nav destination and already
-  /// supplies the Scaffold and app bar. Nesting a second Scaffold inside one
-  /// stacks two app bars and gives the inner one a back button that goes
-  /// nowhere.
-  final bool embedded;
-
-  /// Every state renders inside this frame. A bare [PageShell] has no
-  /// Scaffold, so a refusal had no app bar and no way back at all.
-  Widget _framed(List<Widget> children) {
-    if (embedded) return PageShell(children: children);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chapters')),
-      body: PageShell(children: children),
-    );
-  }
+  /// Every state renders inside this frame.
+  ///
+  /// No Scaffold and no AppBar of its own any more: the app shell supplies
+  /// both for every signed-in route, so a refusal here still has an app
+  /// bar, a sidebar and a way back — which is what the old `embedded` flag
+  /// existed to arrange when a dashboard was hosting this screen, and what
+  /// nothing arranged when the router was.
+  Widget _framed(List<Widget> children) => PageShell(children: children);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -127,10 +119,6 @@ class ChaptersScreen extends ConsumerWidget {
         ],
     );
 
-    if (embedded) return page;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chapters')),
-      body: page,
-    );
+    return page;
   }
 }

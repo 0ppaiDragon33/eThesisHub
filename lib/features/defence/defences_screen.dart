@@ -3,13 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 
-/// The Defences destination on every dashboard: a [PageShell] wrapping
-/// [DefencesList]. The heading copy is tailored per role -- a student
-/// reads about their own comments, faculty about whichever positions they
-/// hold -- so each dashboard supplies its own [title] and [subtitle]
-/// exactly as it did before this screen was pulled out on its own; the
-/// Dean and Coordinator share the same wording, which is why it is also
-/// this widget's default.
+/// The Defences destination, at '/defences': a [PageShell] wrapping
+/// [DefencesList].
+///
+/// The heading used to be tailored per role, because each of the four
+/// dashboards hosted this body itself and passed its own wording in. Those
+/// dashboards are gone and '/defences' is one route reached by one
+/// sidebar entry, so it carries one heading. [DefencesList] itself is
+/// already per-reader — it shows the defences you are actually party to —
+/// which is where the difference between a student's view and a
+/// panelist's actually lives.
+///
+/// [title] and [subtitle] stay overridable for a caller that embeds this
+/// list under a different heading.
 class DefencesScreen extends StatelessWidget {
   const DefencesScreen({
     super.key,
