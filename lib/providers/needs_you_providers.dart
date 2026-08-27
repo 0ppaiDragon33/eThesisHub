@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -68,22 +70,26 @@ final studentNeedsYouProvider =
   final items = <NeedsYouItem>[];
 
   if (thesis.status == ThesisStatus.draft) {
+    const route = '/thesis/nominate?id=';
     items.add(NeedsYouItem(
       title: thesis.workingTitle,
       detail: 'Still a draft — nominate an adviser and panel to begin.',
-      route: '/thesis/nominate?id=${thesis.id}',
+      route: '$route${thesis.id}',
       chipLabel: 'Nominate',
       tone: NeedsYouTone.act,
+      deep: isDeepForRole(UserRole.student, route),
     ));
   }
 
   if (thesis.status == ThesisStatus.titleRejected) {
+    const route = '/thesis/titles?id=';
     items.add(NeedsYouItem(
       title: thesis.workingTitle,
       detail: 'Your candidate titles were returned. Submit a new set.',
-      route: '/thesis/titles?id=${thesis.id}',
+      route: '$route${thesis.id}',
       chipLabel: 'Resubmit',
       tone: NeedsYouTone.returned,
+      deep: isDeepForRole(UserRole.student, route),
     ));
   }
 
@@ -107,6 +113,11 @@ final studentNeedsYouProvider =
               route: '/thesis/chapters?id=${thesis.id}',
               chipLabel: 'Revise',
               tone: NeedsYouTone.returned,
+              // This branch only runs once `thesis.status ==
+              // titleApproved`, so chapters really are unlocked -- the
+              // default `chaptersUnlocked: true` is correct here, not a
+              // shortcut.
+              deep: isDeepForRole(UserRole.student, '/thesis/chapters'),
             ),
       ];
     }
@@ -189,6 +200,7 @@ final facultyNeedsYouProvider =
         route: '/nominations',
         chipLabel: 'Reply',
         tone: NeedsYouTone.act,
+        deep: isDeepForRole(UserRole.faculty, '/nominations'),
       ));
     }
 
@@ -201,6 +213,13 @@ final facultyNeedsYouProvider =
           route: '/thesis/chapters?id=${entry.key}',
           chipLabel: 'Review',
           tone: NeedsYouTone.waiting,
+          // No faculty destination owns '/thesis/chapters' at all -- only
+          // a student's sidebar ever does -- so this is deep for every
+          // adviser regardless of that student's own chaptersUnlocked
+          // state. Previously hard-coded `deep: false` (its default), the
+          // exact "reviewed against the Task 9 brief's five-route list
+          // instead of the destination it points at" bug this fixes.
+          deep: isDeepForRole(UserRole.faculty, '/thesis/chapters'),
         ));
       }
     }
@@ -217,7 +236,7 @@ final facultyNeedsYouProvider =
           route: '/defence/${d.id}',
           chipLabel: 'Consolidate',
           tone: NeedsYouTone.act,
-          deep: true,
+          deep: isDeepForRole(UserRole.faculty, '/defence/${d.id}'),
         ));
       }
 
@@ -235,7 +254,7 @@ final facultyNeedsYouProvider =
           route: '/defence/${d.id}',
           chipLabel: 'Join',
           tone: NeedsYouTone.act,
-          deep: true,
+          deep: isDeepForRole(UserRole.faculty, '/defence/${d.id}'),
         ));
       }
     }
@@ -347,6 +366,11 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/review',
           chipLabel: 'Approve',
           tone: NeedsYouTone.act,
+          // No `ShellDestination` owns '/review' -- it is not the dean's
+          // own destination, whatever `needs_you_item.dart` used to claim
+          // -- so this is deep for every role, including the dean.
+          // Previously hard-coded `deep: false` (its default).
+          deep: isDeepForRole(UserRole.dean, '/review'),
         ),
       for (final t in titleDefences!.requireValue)
         NeedsYouItem(
@@ -355,7 +379,7 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/defence/${t.id}',
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
-          deep: true,
+          deep: isDeepForRole(UserRole.dean, '/defence/${t.id}'),
         ),
     ];
 
@@ -470,6 +494,9 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/review',
           chipLabel: 'Recommend',
           tone: NeedsYouTone.act,
+          // See the identical note in deanNeedsYouProvider: '/review' is
+          // not a coordinator destination either.
+          deep: isDeepForRole(UserRole.coordinator, '/review'),
         ),
       for (final t in titleDefences!.requireValue)
         NeedsYouItem(
@@ -478,7 +505,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/defence/${t.id}',
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
-          deep: true,
+          deep: isDeepForRole(UserRole.coordinator, '/defence/${t.id}'),
         ),
       for (final t in readyCandidates!.requireValue)
         if (!scheduledThesisIds.contains(t.id) &&
@@ -491,7 +518,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
             route: '/defence/schedule?id=${t.id}',
             chipLabel: 'Schedule',
             tone: NeedsYouTone.act,
-            deep: true,
+            deep: isDeepForRole(UserRole.coordinator, '/defence/schedule'),
           ),
     ];
 

@@ -104,7 +104,13 @@ class _AdviseeCard extends ConsumerWidget {
         ),
         trailing: FilledButton(
           key: Key('openChapters-${thesis.id}'),
-          onPressed: () => context.go('/thesis/chapters?id=${thesis.id}'),
+          // '/thesis/chapters' IS a destination -- but only for a
+          // student. No faculty destination owns it, so for the adviser
+          // reading this list it is a screen below nothing of their own
+          // and must be pushed (D23), not gone to: `go` would leave this
+          // adviser's Advisees list off the stack, and the shell's back
+          // control would fall through to '/overview' instead of here.
+          onPressed: () => context.push('/thesis/chapters?id=${thesis.id}'),
           child: const Text('Open'),
         ),
       ),

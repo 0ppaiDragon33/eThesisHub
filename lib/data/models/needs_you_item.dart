@@ -24,12 +24,16 @@ class NeedsYouItem {
 
   /// Where "Open" goes.
   ///
-  /// Rows in this queue point at a mix of destinations (e.g. `/review`,
-  /// `/nominations`) and screens below a destination (e.g.
-  /// `/defence/{id}`, `/defence/schedule`). [deep] says which this is, so
-  /// `NeedsYouQueue` can send the former through `context.go` and the
-  /// latter through `context.push` — a blanket rule would either stack
-  /// destinations or leave a deep screen unable to pop back here.
+  /// Rows in this queue point at a mix of destinations owned by the
+  /// reading role's own sidebar (e.g. `/nominations` for faculty) and
+  /// screens no destination of theirs owns (e.g. `/review`, `/defence/{id}`,
+  /// `/defence/schedule`). [deep] says which this is, so `NeedsYouQueue`
+  /// can send the former through `context.go` and the latter through
+  /// `context.push` — a blanket rule would either stack destinations or
+  /// leave a deep screen unable to pop back here.
+  ///
+  /// `/review` is never a destination for anyone -- no `ShellDestination`
+  /// owns it -- so every row that points there is deep, for every role.
   final String route;
   final String chipLabel;
   final NeedsYouTone tone;

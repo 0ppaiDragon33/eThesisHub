@@ -53,7 +53,10 @@ class RecommendationsScreen extends ConsumerWidget {
         const Gap.lg(),
         FilledButton(
           key: const Key('goToReview'),
-          onPressed: () => context.go('/review'),
+          // `/review` is not a `ShellDestination` for any role -- see the
+          // identical note on `ApprovalsScreen`'s own link -- so it is
+          // pushed per D23, not gone to.
+          onPressed: () => context.push('/review'),
           child: const Text('Open review queue'),
         ),
         const Gap.sm(),

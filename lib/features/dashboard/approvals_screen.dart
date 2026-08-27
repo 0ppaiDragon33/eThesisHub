@@ -53,7 +53,11 @@ class ApprovalsScreen extends ConsumerWidget {
         const Gap.lg(),
         FilledButton(
           key: const Key('goToReview'),
-          onPressed: () => context.go('/review'),
+          // `/review` is not a `ShellDestination` for any role -- no
+          // sidebar entry owns it -- so it is pushed, not gone to, per
+          // D23: a screen below a destination gets a real back stop
+          // rather than replacing this destination on the stack.
+          onPressed: () => context.push('/review'),
           child: const Text('Open approval queue'),
         ),
       ],

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/navigation/shell_destination.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/app_shell.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/data/models/chapter.dart';
@@ -60,27 +61,35 @@ String shellTitleFor(
     return 'Title defence';
   }
 
-  return const {
-    '/overview': 'eThesisHub',
-    '/defences': 'Defences',
-    '/advisees': 'Advisees',
-    '/panels': 'Panels',
-    '/approvals': 'Approvals',
-    '/recommendations': 'Recommendations',
-    '/title-defences': 'Title defences',
-    '/readiness': 'Readiness',
-    '/no-profile': 'Profile unavailable',
-    '/thesis': 'My thesis',
-    '/thesis/create': 'Create thesis group',
-    '/thesis/nominate': 'Nominate adviser and panel',
-    '/thesis/titles': 'Candidate titles',
-    '/thesis/chapters': 'Chapters',
-    '/defence/schedule': 'Schedule a defence',
-    '/nominations': 'Nomination inbox',
-    '/invites': 'Faculty',
-  }[location] ??
-      'eThesisHub';
+  return _staticTitles[location] ?? 'eThesisHub';
 }
+
+/// Static route -> title lookup for [shellTitleFor].
+///
+/// '/overview' names itself, not the app: spec §5.4 says the bar names the
+/// screen you are on, and 'eThesisHub' on the one destination every role
+/// lands on first said the opposite -- the sidebar's own label for it is
+/// 'Overview' (see `shell_destination.dart`), so the two disagreed about
+/// what to call the same screen.
+const _staticTitles = {
+  '/overview': 'Overview',
+  '/defences': 'Defences',
+  '/advisees': 'Advisees',
+  '/panels': 'Panels',
+  '/approvals': 'Approvals',
+  '/recommendations': 'Recommendations',
+  '/title-defences': 'Title defences',
+  '/readiness': 'Readiness',
+  '/no-profile': 'Profile unavailable',
+  '/thesis': 'My thesis',
+  '/thesis/create': 'Create thesis group',
+  '/thesis/nominate': 'Nominate adviser and panel',
+  '/thesis/titles': 'Candidate titles',
+  '/thesis/chapters': 'Chapters',
+  '/defence/schedule': 'Schedule a defence',
+  '/nominations': 'Nomination inbox',
+  '/invites': 'Faculty',
+};
 
 /// Wires [AppShell] to this app's providers and router.
 ///
@@ -116,26 +125,36 @@ class AppShellHost extends ConsumerWidget {
       // start two position-count queries they have no rules arm for.
       trailing:
           role == UserRole.faculty ? FacultyModeSwitch(location: location) : null,
-      // One sign-out for the whole app, where it used to be repeated in
-      // four dashboards' app bars.
-      accountFooter: const Padding(
-        padding: EdgeInsets.all(8),
-        child: SignOutButton(),
-      ),
+      // Name, role and sign-out at the foot of the sidebar (spec §5.3),
+      // where it used to be a bare `SignOutButton` repeated in four
+      // dashboards' app bars with no identity shown anywhere but the
+      // '/overview' greeting.
+      accountFooter: const AccountFooter(),
+      // '/no-profile' is this milestone's designated dead end: no
+      // destination owns it (the sidebar is empty for an unknown role, by
+      // design), so `isDeeperThanDestination` always answers true there
+      // and a back control would render -- but `_back` below always falls
+      // through to the same '/overview' redirect that immediately bounces
+      // back to '/no-profile', so tapping it does nothing. A control that
+      // does nothing on the app's own dead-end screen is exactly what this
+      // milestone exists to remove, so it is suppressed here rather than
+      // left to render and fail silently.
+      suppressBackControl: location == '/no-profile',
       onBack: () => _back(context, list),
       child: child,
     );
   }
 
-  /// Back, for an app whose every navigation is a `context.go`.
+  /// Back, for an app whose navigation is a mix of `context.go` (onto a
+  /// destination) and `context.push` (onto a screen below one, per D23).
   ///
-  /// `go` REPLACES the stack rather than pushing onto it, which is why
-  /// Flutter never drew a back arrow here and why a plain `Navigator.pop`
-  /// would have nothing to pop. So "back" is answered structurally: rise
-  /// to the destination that owns this location, or to the overview when
-  /// none does. `canPop` is still consulted first, so a genuine push (a
-  /// dialog route, or any future `context.push`) unwinds the way its
-  /// reader expects.
+  /// A pushed screen has a real Navigator entry beneath it, so `canPop`
+  /// answers true and a plain pop is correct and sufficient -- see below.
+  /// This structural fallback exists for what a pop cannot handle: a deep
+  /// screen reached directly by URL (a bookmark, a refresh, a shared link)
+  /// has nothing beneath it in THIS Navigator to pop to, so it rises to
+  /// the destination that owns this location instead, or to the overview
+  /// when none does.
   void _back(BuildContext context, List<ShellDestination> destinations) {
     if (context.canPop()) {
       context.pop();
@@ -147,5 +166,81 @@ class AppShellHost extends ConsumerWidget {
       return;
     }
     context.go('/overview');
+  }
+}
+
+/// A role's label for [AccountFooter]. Local to display, not [UserRole]
+/// itself -- D25 governs what the app DOES with an unknown role (nothing
+/// silently defaulted), not what a resolved one is called on screen.
+String _roleLabel(UserRole role) => switch (role) {
+      UserRole.student => 'Student',
+      UserRole.faculty => 'Faculty',
+      UserRole.coordinator => 'College Research Coordinator',
+      UserRole.dean => 'Dean',
+    };
+
+/// Name, role and sign-out at the foot of the sidebar (spec §5.3).
+///
+/// Watches [currentUserProvider] itself rather than trusting whatever
+/// already gated the shell into rendering: the one account this footer
+/// MUST still work for is exactly the one whose `users/{uid}` document is
+/// missing or unreadable -- the `/no-profile` case -- because that reader
+/// has no destination to reach and no other account to switch to, so
+/// sign-out is the one control that may never depend on the profile read
+/// that just failed. A missing or errored profile therefore degrades to
+/// sign-out alone, never a blank footer and never a thrown error.
+class AccountFooter extends ConsumerWidget {
+  const AccountFooter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(currentUserProvider).valueOrNull;
+
+    if (profile == null) {
+      return const Padding(
+        key: Key('accountFooterSignOutOnly'),
+        padding: EdgeInsets.all(8),
+        child: SignOutButton(),
+      );
+    }
+
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Padding(
+      key: const Key('accountFooter'),
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  profile.fullName,
+                  key: const Key('accountFooterName'),
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: dark ? AppTokens.inkDark : AppTokens.ink,
+                  ),
+                ),
+                Text(
+                  _roleLabel(profile.role),
+                  key: const Key('accountFooterRole'),
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SignOutButton(),
+        ],
+      ),
+    );
   }
 }

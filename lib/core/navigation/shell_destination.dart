@@ -188,3 +188,43 @@ bool isDeeperThanDestination(
   if (owner == null) return true;
   return location != owner.route;
 }
+
+/// Whether [route] is a screen below a destination for [role] -- the exact
+/// ownership test the shell itself runs to decide the back control (see
+/// [isDeeperThanDestination]), applied ahead of time so anything that hands
+/// out a route (a needs-you queue, a card's "Open" button) can decide
+/// `push` vs `go` from the one definition rather than restating it.
+///
+/// This is deliberately role-dependent, not a fixed list of "deep routes":
+/// '/thesis/chapters' is the Chapters destination itself for a student
+/// once chapters are unlocked, so it is NOT deep for one, but no faculty,
+/// dean or coordinator destination owns it at all, so the very same route
+/// IS deep for those roles. Callers reading a route on behalf of a role
+/// that is not its own -- an adviser opening a student's chapters, a
+/// coordinator opening one from the readiness list -- always get `true`,
+/// which is correct: that reader has no destination to return them to
+/// there, so the screen must be pushed to leave a real back stop.
+///
+/// [route] may carry a query string (`/thesis/chapters?id=t1`); only its
+/// path is meaningful to ownership.
+///
+/// [chaptersUnlocked] and [facultyMode] only change the answer for a
+/// student or faculty role respectively, and only for routes under
+/// '/thesis' or the Advisees/Panels pair -- they default to the most
+/// permissive values because a caller checking a route it just built
+/// (inside the branch that proves the gate is already open) knows its own
+/// answer is right either way.
+bool isDeepForRole(
+  UserRole role,
+  String route, {
+  bool chaptersUnlocked = true,
+  FacultyMode facultyMode = FacultyMode.adviser,
+}) {
+  final path = Uri.parse(route).path;
+  final destinations = destinationsFor(
+    role: role,
+    chaptersUnlocked: chaptersUnlocked,
+    facultyMode: facultyMode,
+  );
+  return isDeeperThanDestination(destinations, path);
+}

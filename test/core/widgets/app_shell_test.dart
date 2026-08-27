@@ -32,6 +32,7 @@ Future<Widget> wrap({
   ValueChanged<String>? onNavigate,
   VoidCallback? onBack,
   Map<String, Object> prefs = const {},
+  bool suppressBackControl = false,
 }) async {
   SharedPreferences.setMockInitialValues(Map.of(prefs));
   final store = await SharedPreferences.getInstance();
@@ -45,6 +46,7 @@ Future<Widget> wrap({
         title: 'PAGE TITLE',
         onNavigate: onNavigate,
         onBack: onBack,
+        suppressBackControl: suppressBackControl,
         child: const Text('PAGE BODY'),
       ),
     ),
@@ -346,6 +348,54 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('shellMenu')), findsOneWidget);
+      expect(find.byKey(const Key('shellBack')), findsOneWidget);
+    });
+  });
+
+  group('back control on the designated dead end (IMPORTANT minor 3)', () {
+    testWidgets(
+        'suppressBackControl hides it even on a route no destination owns',
+        (tester) async {
+      // '/no-profile' owns nothing in any destination list, so
+      // isDeeperThanDestination alone always answers true there -- but
+      // `AppShellHost._back` can only ever fall through to '/overview',
+      // which the redirect immediately bounces back to '/no-profile'. A
+      // control that does nothing is exactly what this milestone exists
+      // to remove.
+      await setSize(tester, 1400);
+      await tester.pumpWidget(await wrap(
+        destinations: const AsyncValue.data([]),
+        location: '/no-profile',
+        suppressBackControl: true,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('shellBack')), findsNothing);
+    });
+
+    testWidgets('without suppression, the same route WOULD show a back '
+        'control -- proving the flag is load-bearing', (tester) async {
+      await setSize(tester, 1400);
+      await tester.pumpWidget(await wrap(
+        destinations: const AsyncValue.data([]),
+        location: '/no-profile',
+        suppressBackControl: false,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('shellBack')), findsOneWidget);
+    });
+
+    testWidgets('a genuinely deep route elsewhere is unaffected',
+        (tester) async {
+      await setSize(tester, 1400);
+      await tester.pumpWidget(await wrap(
+        destinations: const AsyncValue.data(_destinations),
+        location: '/thesis/chapters/chapterIII',
+        suppressBackControl: false,
+      ));
+      await tester.pumpAndSettle();
+
       expect(find.byKey(const Key('shellBack')), findsOneWidget);
     });
   });

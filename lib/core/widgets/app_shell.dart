@@ -35,6 +35,7 @@ class AppShell extends ConsumerWidget {
     this.onBack,
     this.trailing,
     this.accountFooter,
+    this.suppressBackControl = false,
   });
 
   static const double railBreakpoint = 900;
@@ -48,6 +49,16 @@ class AppShell extends ConsumerWidget {
   final VoidCallback? onBack;
   final Widget? trailing;
   final Widget? accountFooter;
+
+  /// True on the app's one designated dead end (`/no-profile`): no
+  /// destination owns it, so ownership alone would always draw a back
+  /// control there, but tapping it can only fall through to '/overview',
+  /// which the redirect immediately bounces straight back. A control that
+  /// does nothing is worse than none, so the caller that knows this route
+  /// is the dead end suppresses it explicitly rather than `AppShell`
+  /// guessing from the location string -- this widget otherwise knows
+  /// nothing about any specific route (see the class doc above).
+  final bool suppressBackControl;
 
   void _navigate(BuildContext context, String route) {
     if (onNavigate != null) {
@@ -126,7 +137,9 @@ class _Chrome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showNav = !loading && list.length >= AppShell.minDestinations;
-    final deep = !loading && isDeeperThanDestination(list, shell.location);
+    final deep = !loading &&
+        !shell.suppressBackControl &&
+        isDeeperThanDestination(list, shell.location);
     final owner = loading ? null : destinationForLocation(list, shell.location);
     final selectedIndex = owner == null ? null : list.indexOf(owner);
 
@@ -217,7 +230,19 @@ class _Chrome extends StatelessWidget {
                     onPressed: () =>
                         ref.read(sidebarExpandedProvider.notifier).toggle(),
                   ),
-                  trailing: shell.accountFooter,
+                  // `NavigationRail.trailing` is not bottom-aligned on its
+                  // own -- without `Expanded` + `Align`, it renders directly
+                  // beneath the last destination, which is not "at the foot
+                  // of the sidebar" (spec §5.3) once the rail is taller than
+                  // its destination list, which is the common case.
+                  trailing: shell.accountFooter == null
+                      ? null
+                      : Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: shell.accountFooter,
+                          ),
+                        ),
                   destinations: [
                     for (final d in list)
                       NavigationRailDestination(

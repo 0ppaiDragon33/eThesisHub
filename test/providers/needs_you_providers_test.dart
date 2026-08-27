@@ -4,12 +4,14 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/document_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -17,31 +19,24 @@ import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// Task 9 fix round 1. `NeedsYouQueue` decides `push` vs `go` per row on
-/// `NeedsYouItem.deep` (`lib/core/widgets/needs_you_queue.dart:114-116`),
-/// and every provider in this file sets that flag by hand on the rows it
-/// builds. Nothing pinned the flag to the route it is attached to, so
-/// dropping `deep: true` from a row — or the ternary itself flipping —
-/// would fail no test.
+/// Task 9 fix round 2 (whole-branch review, IMPORTANT 1+2). `NeedsYouQueue`
+/// decides `push` vs `go` per row on `NeedsYouItem.deep`
+/// (`lib/core/widgets/needs_you_queue.dart:114-116`).
 ///
-/// [_isDeepRoute] is an independent restatement of the five deep routes
-/// named in the Task 9 brief (`/thesis/chapters/:chapterId`,
-/// `/defence/:thesisId`, `/defence/schedule`, `/defence/room/:defenceId`,
-/// and its `/consolidated` child), derived from the route's own shape
-/// rather than from whatever `deep` says. The tests below walk every item
-/// each provider emits and assert the two agree — so a NEW row, wired with
-/// the wrong flag, fails automatically without anyone updating a
-/// hand-written list of cases.
-bool _isDeepRoute(String route) {
-  final path = route.split('?').first;
-  if (path.startsWith('/thesis/chapters/')) return true;
-  if (path == '/defence/schedule') return true;
-  if (path.startsWith('/defence/room/')) return true;
-  // What remains starting with '/defence/' and not already matched above
-  // is '/defence/:thesisId' -- the title-defence panel route.
-  if (path.startsWith('/defence/')) return true;
-  return false;
-}
+/// Round 1 pinned that flag against `_isDeepRoute`, a hand-written
+/// restatement of "the five deep routes named in the Task 9 brief" -- which
+/// is exactly the enumeration the implementation itself was built against,
+/// so the test could never disagree with the bug: both were reading off the
+/// same wrong list. `/review` (no destination anywhere owns it) and
+/// `/thesis/chapters` read by a role that holds no Chapters destination
+/// (an adviser, a dean, a coordinator) both shipped `deep: false` and
+/// neither test nor implementation noticed.
+///
+/// This now asserts against [isDeepForRole] -- the same ownership test
+/// `AppShell` itself runs to decide the back control -- rather than a
+/// second hand-written list. A new row wired with the wrong flag still
+/// fails automatically, but now it fails against the actual definition of
+/// "deep", not a copy of it.
 
 /// Stands in for [documentRepositoryProvider] without touching Firestore:
 /// the base [DocumentRepository] only needs *a* [FirebaseFirestore], never
@@ -278,8 +273,11 @@ void main() {
             .overrideWith((ref) => Stream.value([defenceDue, defenceInProgress])),
         documentRepositoryProvider.overrideWithValue(_FakeDocumentRepository({
           // A submitted chapter on the one advisee thesis -- the 'Review'
-          // row, route '/thesis/chapters?id=...', deep: false (it is the
-          // LIST route, not '/thesis/chapters/:chapterId').
+          // row, route '/thesis/chapters?id=...', deep: true. It is the
+          // LIST route, not '/thesis/chapters/:chapterId', but no faculty
+          // destination owns '/thesis/chapters' at all -- only a
+          // student's sidebar does -- so it is deep for this reader
+          // regardless.
           't-advisee': const [
             ThesisChapter(
               id: ChapterId.chapterI,
@@ -301,7 +299,7 @@ void main() {
       expect(items.length, 4, reason: 'fixture did not emit the expected '
           'nomination + chapter-review + two defence rows: $items');
       for (final item in items) {
-        expect(item.deep, _isDeepRoute(item.route),
+        expect(item.deep, isDeepForRole(UserRole.faculty, item.route),
             reason: 'NeedsYouItem.deep=${item.deep} disagrees with the '
                 'route shape for "${item.route}" (title: ${item.title})');
       }
@@ -352,7 +350,7 @@ void main() {
           reason: 'fixture did not emit the expected approval + title-'
               'defence rows: $items');
       for (final item in items) {
-        expect(item.deep, _isDeepRoute(item.route),
+        expect(item.deep, isDeepForRole(UserRole.dean, item.route),
             reason: 'NeedsYouItem.deep=${item.deep} disagrees with the '
                 'route shape for "${item.route}" (title: ${item.title})');
       }
@@ -443,9 +441,46 @@ void main() {
           reason: 'fixture did not emit the expected recommendation + '
               'title-defence + schedule rows: $items');
       for (final item in items) {
-        expect(item.deep, _isDeepRoute(item.route),
+        expect(item.deep, isDeepForRole(UserRole.coordinator, item.route),
             reason: 'NeedsYouItem.deep=${item.deep} disagrees with the '
                 'route shape for "${item.route}" (title: ${item.title})');
+      }
+    });
+  });
+
+  group('deep-route classification is role-dependent, not a fixed list',
+      () {
+    // The defect this fixes: '/thesis/chapters' IS a destination for a
+    // student (once chapters are unlocked) but is NOT one for anybody
+    // else, so whether it counts as "deep" must be computed against the
+    // reading role's own destination list, never a role-blind list of
+    // route shapes.
+    test('is NOT deep for a student once chapters are unlocked', () {
+      expect(isDeepForRole(UserRole.student, '/thesis/chapters?id=t1'),
+          isFalse);
+    });
+
+    test('IS deep for a faculty member -- no destination of theirs owns it',
+        () {
+      expect(
+          isDeepForRole(UserRole.faculty, '/thesis/chapters?id=t1'), isTrue);
+    });
+
+    test('IS deep for a dean -- no destination of theirs owns it either',
+        () {
+      expect(isDeepForRole(UserRole.dean, '/thesis/chapters?id=t1'), isTrue);
+    });
+
+    test('IS deep for a coordinator, same reason', () {
+      expect(isDeepForRole(UserRole.coordinator, '/thesis/chapters?id=t1'),
+          isTrue);
+    });
+
+    test('/review is deep for every role -- no ShellDestination owns it',
+        () {
+      for (final role in UserRole.values) {
+        expect(isDeepForRole(role, '/review'), isTrue,
+            reason: '$role should treat /review as deep');
       }
     });
   });

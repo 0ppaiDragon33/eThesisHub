@@ -180,4 +180,45 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  // IMPORTANT 3 (whole-branch review): the app bar overflowed by 1.4px at
+  // 360dp -- one of the commonest Android widths -- for a faculty member
+  // on a deep route. `app_shell.dart`'s narrow layout puts the hamburger
+  // in `leading` and BOTH the back control and `trailing` in `actions`,
+  // and `app_shell_host.dart` passes `FacultyModeSwitch` (a two-segment
+  // `SegmentedButton` inside a `Badge`) as `trailing`. No test pumped a
+  // faculty member on a deep route below 400dp, so nothing caught it.
+  //
+  // Fixed by giving `FacultyModeSwitch` a narrow-width compact mode (a
+  // single icon toggle) instead of moving it out of the app bar -- see
+  // its own doc comment in `faculty_mode_switch.dart`.
+  testWidgets(
+      'the app bar does not overflow for a faculty member on a deep route, '
+      'at 320/360/390/412dp', (tester) async {
+    final db = FakeFirebaseFirestore();
+    // Advises t1 (so the mode switch actually renders instead of hiding
+    // itself for holding no adviser position -- a fix that never runs is
+    // not a fix), and t1's chapters are unlocked, matching the probe's own
+    // repro: a faculty member on '/thesis/chapters?id=t1'.
+    await db.collection('theses').doc('t1').set(approvedThesis(
+          leaderUid: 'u2',
+          adviserUid: 'f1',
+        ));
+    final c = await containerForRole('faculty', db, uid: 'f1');
+    addTearDown(c.dispose);
+
+    await pumpRouted(tester, c, width: 320, height: 800);
+    c.read(goRouterProvider).go('/thesis/chapters?id=t1');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'overflow at 320dp');
+
+    for (final width in [360.0, 390.0, 412.0]) {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1.0;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull,
+          reason: 'app bar overflowed at ${width}dp');
+    }
+  });
 }
