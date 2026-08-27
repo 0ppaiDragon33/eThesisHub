@@ -104,13 +104,15 @@ void main() {
         overrides: [
           currentUserProvider.overrideWith((ref) => Stream.value(null)),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: OverviewGreeting()),
+        child: MaterialApp(
+          home: Scaffold(
+            body: OverviewGreeting(now: () => DateTime(2026, 8, 24, 9)),
+          ),
         ),
       ));
       await tester.pump();
 
-      expect(find.text('Good day'), findsOneWidget);
+      expect(find.text('Good morning'), findsOneWidget);
     });
 
     testWidgets('uses the first whitespace-separated token of fullName',
@@ -126,13 +128,55 @@ void main() {
                 createdAt: _monday,
               ))),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: OverviewGreeting()),
+        child: MaterialApp(
+          home: Scaffold(
+            body: OverviewGreeting(now: () => DateTime(2026, 8, 24, 9)),
+          ),
         ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Good day, Maria'), findsOneWidget);
+      expect(find.text('Good morning, Maria'), findsOneWidget);
+    });
+
+    // The time-of-day bands, pinned at their boundaries: 11:59 and 17:59
+    // are the last minute of their band, 12:00 and 18:00 are the first
+    // minute of the next one. An off-by-one here would put the boundary
+    // minute in the wrong band while every other minute of the day still
+    // passed.
+    Future<void> pumpAt(WidgetTester tester, DateTime at) => tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              currentUserProvider.overrideWith((ref) => Stream.value(null)),
+            ],
+            child: MaterialApp(
+              home: Scaffold(body: OverviewGreeting(now: () => at)),
+            ),
+          ),
+        );
+
+    testWidgets('11:59 is still morning', (tester) async {
+      await pumpAt(tester, DateTime(2026, 8, 24, 11, 59));
+      await tester.pump();
+      expect(find.text('Good morning'), findsOneWidget);
+    });
+
+    testWidgets('12:00 is afternoon', (tester) async {
+      await pumpAt(tester, DateTime(2026, 8, 24, 12, 0));
+      await tester.pump();
+      expect(find.text('Good afternoon'), findsOneWidget);
+    });
+
+    testWidgets('17:59 is still afternoon', (tester) async {
+      await pumpAt(tester, DateTime(2026, 8, 24, 17, 59));
+      await tester.pump();
+      expect(find.text('Good afternoon'), findsOneWidget);
+    });
+
+    testWidgets('18:00 is evening', (tester) async {
+      await pumpAt(tester, DateTime(2026, 8, 24, 18, 0));
+      await tester.pump();
+      expect(find.text('Good evening'), findsOneWidget);
     });
   });
 }

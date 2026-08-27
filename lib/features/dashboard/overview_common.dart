@@ -20,15 +20,32 @@ import 'package:ethesishub/providers/auth_providers.dart';
 ///
 /// There is no separate given-name field and no honorific, so the first
 /// whitespace-separated token of `fullName` is the whole of it.
+///
+/// The greeting itself follows the time of day: "Good morning" before
+/// 12:00, "Good afternoon" from 12:00 up to (not including) 18:00, and
+/// "Good evening" from 18:00 on. "Good evening" rather than "Good night" --
+/// "Good night" is a farewell in English, not a greeting, and this greets
+/// someone arriving at the app. [now] defaults to [DateTime.now] and is
+/// only ever overridden by a test, which pins the clock instead of racing
+/// it.
 class OverviewGreeting extends ConsumerWidget {
-  const OverviewGreeting({super.key});
+  const OverviewGreeting({super.key, this.now = DateTime.now});
+
+  final DateTime Function() now;
+
+  static String _band(DateTime at) {
+    if (at.hour < 12) return 'Good morning';
+    if (at.hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final name = ref.watch(currentUserProvider).valueOrNull?.fullName ?? '';
     final first = name.trim().split(RegExp(r'\s+')).first;
+    final greeting = _band(now());
     return Text(
-      first.isEmpty ? 'Good day' : 'Good day, $first',
+      first.isEmpty ? greeting : '$greeting, $first',
       style: Theme.of(context).textTheme.headlineSmall,
     );
   }

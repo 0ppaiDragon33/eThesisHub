@@ -60,11 +60,21 @@ class PageShell extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: scrollable
             ? SingleChildScrollView(
-                padding: const EdgeInsets.all(AppTokens.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppTokens.lg,
+                  AppTokens.md,
+                  AppTokens.lg,
+                  AppTokens.lg,
+                ),
                 child: column,
               )
             : Padding(
-                padding: const EdgeInsets.all(AppTokens.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppTokens.lg,
+                  AppTokens.md,
+                  AppTokens.lg,
+                  AppTokens.lg,
+                ),
                 child: column,
               ),
       ),
