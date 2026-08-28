@@ -3426,6 +3426,91 @@ test("a student may still list their own thesis", async () => {
   )));
 });
 
+// --- Coordinator admin: designation on users ---
+
+test("a coordinator may set nomination designation on another account", async () => {
+  await seedRole("desig-coord-uid", "coordinator");
+  await seedRole("desig-faculty-uid", "faculty");
+
+  const coordinator = env
+    .authenticatedContext("desig-coord-uid", {
+      email: "desig-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(doc(coordinator, "users/desig-faculty-uid"), {
+    nominableAsAdviser: true,
+    nominableAsPanelist: false,
+  }));
+});
+
+// The control. Without it the test above would pass for a rule that let
+// anyone write anything.
+test("a faculty member may NOT set their own designation", async () => {
+  await seedRole("self-desig-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("self-desig-uid", {
+      email: "self-desig-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(doc(self, "users/self-desig-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("a coordinator may NOT set designation on their OWN account", async () => {
+  // request.auth.uid != uid is already in the rule; this keeps it there.
+  await seedRole("selfcoord-uid", "coordinator");
+
+  const coordinator = env
+    .authenticatedContext("selfcoord-uid", {
+      email: "selfcoord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(doc(coordinator, "users/selfcoord-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("a coordinator may NOT smuggle a role change alongside designation",
+  async () => {
+    // onlyChanged() is a hasOnly over affected keys, so a write touching
+    // role as well must fail entirely. This is the test that proves
+    // widening the list did not widen it too far.
+    await seedRole("smuggle-coord-uid", "coordinator");
+    await seedRole("smuggle-target-uid", "faculty");
+
+    const coordinator = env
+      .authenticatedContext("smuggle-coord-uid", {
+        email: "smuggle-coord-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(updateDoc(doc(coordinator, "users/smuggle-target-uid"), {
+      nominableAsAdviser: false,
+      role: "dean",
+    }));
+  });
+
+test("a coordinator may still deactivate an account", async () => {
+  // The pre-existing capability this milestone finally surfaces in the UI.
+  await seedRole("deact-coord-uid", "coordinator");
+  await seedRole("deact-target-uid", "faculty");
+
+  const coordinator = env
+    .authenticatedContext("deact-coord-uid", {
+      email: "deact-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(doc(coordinator, "users/deact-target-uid"), {
+    active: false,
+  }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

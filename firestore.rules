@@ -90,10 +90,18 @@ service cloud.firestore {
       // below). The beneficiary of an elevation can never remove its
       // facultyInvites record (only mark it consumed) — but coordinators can
       // delete or overwrite invites, so this is not a permanent guarantee.
+      //
+      // `nominableAsAdviser` and `nominableAsPanelist` are designation: set
+      // from the Users screen to mark an account eligible to be nominated as
+      // an adviser, a panelist, both, or neither. They ride the same
+      // `onlyChanged` list as the rest of this arm, so a write touching
+      // `role` alongside them still fails the whole update — `role` remains
+      // unwritable here no matter what else is in the payload.
       allow update: if isCoordinator()
                     && request.auth.uid != uid
                     && onlyChanged(['fullName', 'college', 'program',
-                                    'specialization', 'active']);
+                                    'specialization', 'active',
+                                    'nominableAsAdviser', 'nominableAsPanelist']);
 
       allow delete: if false;
     }
