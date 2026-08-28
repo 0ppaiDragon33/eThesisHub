@@ -582,14 +582,16 @@ void main() {
   });
 
   testWidgets(
-      'an ex-officio entry is never filtered by designation, even when '
-      'explicitly marked not nominable', (tester) async {
-    // D32: an ex-officio seat is conferred by office, not by a
-    // coordinator's checkbox, and must never be blocked by a missed (or
-    // even a deliberately withheld) designation. Both fields are set to
-    // false here specifically so a filter that forgot the ex-officio
-    // exemption would still hide them — proving the exemption is real,
-    // not just untested.
+      'an office holder narrowed out of adviser is absent from the adviser '
+      'picker, and their panel-seat exemption is untouched', (tester) async {
+    // D32 exempts the ex-officio SEAT, not the adviser slot. An office
+    // holder chosen as ADVISER is written `exOfficio: false,
+    // position: 'adviser'`, so `mayCreateNomination` checks their
+    // `nominableAsAdviser` like anyone else's — offering them here would
+    // hand the student a name the rules then refuse, which is D29's
+    // "cannot disagree forwards" broken. D31's own motivating case: a
+    // college coordinator who holds no advisees, narrowed by unticking
+    // Adviser.
     useTallSurface(tester);
     final db = await seeded();
     await db.collection('facultyDirectory').doc('coord').update({
@@ -604,16 +606,89 @@ void main() {
     await tester.pumpWidget(wrap(db));
     await tester.pumpAndSettle();
 
-    // Still offered on the adviser slot despite nominableAsAdviser: false.
     final adviser = await openDropdownValues(tester, const Key('adviser'));
-    expect(adviser, contains('coord'));
-    expect(adviser, contains('dean'));
+    expect(adviser, isNot(contains('coord')),
+        reason: 'the adviser slot is not the ex-officio seat, so the '
+            'nomination rule checks nominableAsAdviser and refuses');
+    expect(adviser, isNot(contains('dean')));
 
-    // Still absent from the panel slot, same as always — that exclusion is
-    // the pre-existing ex-officio-seat rule, unrelated to designation.
+    // Absent from the panel slot too, same as always — but that exclusion
+    // is the pre-existing ex-officio-seat rule, not the designation
+    // filter, which the next test proves by leaving designation alone.
     final panel = await openDropdownValues(tester, const Key('panel0'));
     expect(panel, isNot(contains('coord')));
     expect(panel, isNot(contains('dean')));
+  });
+
+  testWidgets(
+      'an office holder still designated as an adviser is offered on the '
+      'adviser slot', (tester) async {
+    // The control for the test above: office holders are not excluded from
+    // the adviser slot as a class — a Research Coordinator or Dean who
+    // genuinely advises still appears. Without this, hiding every office
+    // holder from the adviser picker would pass the test above too.
+    useTallSurface(tester);
+    final db = await seeded();
+    await db.collection('facultyDirectory').doc('coord').update({
+      'nominableAsAdviser': true,
+      'nominableAsPanelist': false,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, contains('coord'));
+
+    // And the panel slot still excludes them by office, regardless of the
+    // panelist designation just written — D32's seat exemption intact.
+    final panel = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel, isNot(contains('coord')));
+  });
+
+  testWidgets(
+      'the refusal message names an office holder picked as adviser',
+      (tester) async {
+    // The other half of the same defect: when an office holder IS the
+    // cause of the refusal, excluding them from the candidate list named
+    // the three innocent panelists and told the student to replace the
+    // wrong people. The adviser is always a candidate.
+    useTallSurface(tester);
+    final db = await seeded();
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      thesisRepositoryProvider
+          .overrideWithValue(PermissionDeniedThesisRepository(db)),
+    ]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Bito-onon — coordinator · CICT').last);
+    await tester.pumpAndSettle();
+
+    for (final pick in [
+      ('panel0', 'Dr. Diamante — CICT'),
+      ('panel1', 'Dr. Padojinog — CICT'),
+      ('panel2', 'Dr. Braganza — CICT'),
+    ]) {
+      await tester.tap(find.byKey(Key(pick.$1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(pick.$2).last);
+      await tester.pumpAndSettle();
+    }
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('submitNomination')));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+
+    final error = tester.widget<Text>(find.byKey(const Key('error')));
+    expect(error.data, contains('Dr. Bito-onon'),
+        reason: 'the office holder in the adviser slot is exactly the '
+            'nominee the rules check, so they must be named');
+    expect(error.data, contains('adviser'));
   });
 
   testWidgets(

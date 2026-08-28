@@ -4,11 +4,45 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/repositories/user_repository.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
-Widget wrap(FakeFirebaseFirestore db,
-        {String uid = 'coord-1', String email = 'coord@isufst.edu.ph'}) =>
+/// Refuses every designation and activation write with `permission-denied`,
+/// the way the rules do when a coordinator reaches the self-edit ban through
+/// a path the UI did not anticipate -- or when the `users` write lands and
+/// the `facultyDirectory` mirror is refused, which
+/// [UserRepository.setDesignation] rethrows.
+class RefusingUserRepository extends UserRepository {
+  RefusingUserRepository(super.db);
+
+  static FirebaseException get _denied => FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: 'Missing or insufficient permissions.',
+      );
+
+  @override
+  Future<void> setDesignation({
+    required String uid,
+    required bool adviser,
+    required bool panelist,
+  }) async =>
+      throw _denied;
+
+  @override
+  Future<void> setActive(String uid, bool active) async => throw _denied;
+}
+
+Widget wrap(
+  FakeFirebaseFirestore db, {
+  String uid = 'coord-1',
+  String email = 'coord@isufst.edu.ph',
+  List<Override> extraOverrides = const [],
+}) =>
     ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
@@ -16,6 +50,7 @@ Widget wrap(FakeFirebaseFirestore db,
           signedIn: true,
           mockUser: MockUser(uid: uid, email: email, isEmailVerified: true),
         )),
+        ...extraOverrides,
       ],
       // The app shell supplies the Scaffold in the real app.
       child: const MaterialApp(home: Scaffold(body: UsersScreen())),
@@ -40,9 +75,9 @@ Map<String, dynamic> userDoc(
     };
 
 void useWideSurface(WidgetTester tester) {
-  // Wide enough for the DataTable to lay out without wrapping oddly, and
-  // tall enough that the filters and at least a few rows fit without
-  // scrolling the whole page out from under a tap.
+  // Wide enough for the hand-rolled flex row layout to lay out without
+  // wrapping oddly, and tall enough that the filters and at least a few
+  // rows fit without scrolling the whole page out from under a tap.
   tester.view.physicalSize = const Size(1400, 1400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -251,5 +286,194 @@ void main() {
 
     expect(find.byKey(const Key('notSignedIn-u1')), findsOneWidget);
     expect(find.byKey(const Key('notSignedIn-u2')), findsNothing);
+  });
+
+  testWidgets(
+      "the coordinator's own DESIGNATION controls are disabled with a "
+      'reason, not only the active switch', (tester) async {
+    // The `users` coordinator arm carries `request.auth.uid != uid` for ALL
+    // seven writable fields, not only `active`, so tapping your own Adviser
+    // or Panelist box is always refused. Spec §5.2 asks for "controls
+    // disabled and the reason stated" -- plural.
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db
+        .collection('users')
+        .doc('coord-1')
+        .set(userDoc('The Coordinator', role: 'coordinator'));
+    await db.collection('users').doc('u2').set(userDoc('Someone Else'));
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = tester
+        .widget<Checkbox>(find.byKey(const Key('adviserCheckbox-coord-1')));
+    final panelist = tester
+        .widget<Checkbox>(find.byKey(const Key('panelistCheckbox-coord-1')));
+    expect(adviser.onChanged, isNull,
+        reason: 'the rules refuse request.auth.uid == uid on '
+            'nominableAsAdviser too, not only on active');
+    expect(panelist.onChanged, isNull);
+    expect(find.byKey(const Key('ownRowDesignationReason-coord-1')),
+        findsOneWidget);
+
+    // Another account's controls are still live -- the ban is about the
+    // reader's own row, not about designation generally.
+    expect(
+        tester
+            .widget<Checkbox>(find.byKey(const Key('adviserCheckbox-u2')))
+            .onChanged,
+        isNotNull);
+  });
+
+  testWidgets('a refused designation write is shown, with its Firestore code',
+      (tester) async {
+    // Spec §7: a refused write says WHICH write was refused. The write was
+    // neither awaited nor caught, so a refusal became an unhandled Future
+    // error and the checkbox silently snapped back -- which also hid the
+    // real case where the `users` write succeeds and the facultyDirectory
+    // mirror is refused, leaving authority and mirror divergent with
+    // nothing on screen saying so.
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('u1').set(userDoc('Alma Cruz'));
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      userRepositoryProvider.overrideWithValue(RefusingUserRepository(db)),
+    ]));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('adviserCheckbox-u1')));
+    await tester.tap(find.byKey(const Key('adviserCheckbox-u1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('designationWriteError-u1')), findsOneWidget);
+    expect(find.textContaining('Alma Cruz'), findsWidgets);
+    expect(find.byKey(const Key('errorCode')), findsOneWidget);
+    expect(
+        tester.widget<Text>(find.byKey(const Key('errorCode'))).data,
+        '[permission-denied]');
+  });
+
+  testWidgets('a refused active write is shown, with its Firestore code',
+      (tester) async {
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('u1').set(userDoc('Alma Cruz'));
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      userRepositoryProvider.overrideWithValue(RefusingUserRepository(db)),
+    ]));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
+    await tester.tap(find.byKey(const Key('activeSwitch-u1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('activeWriteError-u1')), findsOneWidget);
+    expect(
+        tester.widget<Text>(find.byKey(const Key('errorCode'))).data,
+        '[permission-denied]');
+  });
+
+  testWidgets('the Positions column counts advisees and panel seats apart',
+      (tester) async {
+    // The one column the spec argues for on its own merits (§5.1, because
+    // of D30) and the only row element that can silently show a wrong
+    // number. The two counts differ (2 vs 3) precisely so a fold that read
+    // the wrong field, or added the two together, fails here rather than
+    // agreeing by coincidence.
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    for (final f in ['Adv Isor', 'Pan Elist', 'Idle Faculty']) {
+      await db
+          .collection('users')
+          .doc(f.split(' ').first.toLowerCase())
+          .set(userDoc(f));
+    }
+
+    Future<void> thesis(String id, String adviser, List<String> panel) =>
+        db.collection('theses').doc(id).set({
+          'leaderUid': 'l-$id',
+          'status': 'draft',
+          'adviserUid': adviser,
+          'panelistUids': panel,
+          'memberNames': <String>[],
+          'workingTitle': 'T',
+          'college': 'CICT',
+          'program': 'BSIT',
+          'semester': 'First',
+          'academicYear': '2026-2027',
+        });
+
+    // 'adv' advises two groups and sits on three panels.
+    await thesis('t1', 'adv', ['pan']);
+    await thesis('t2', 'adv', ['pan']);
+    await thesis('t3', 'other', ['adv', 'pan']);
+    await thesis('t4', 'other', ['adv']);
+    await thesis('t5', 'other', ['adv']);
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Text>(find.byKey(const Key('positions-adv'))).data,
+        '2 advising · 3 panel');
+    // Advises nothing, but sits on three panels -- exactly the D30 case
+    // the column exists to put in front of the coordinator.
+    expect(tester.widget<Text>(find.byKey(const Key('positions-pan'))).data,
+        '0 advising · 3 panel');
+    // Genuinely holds nothing.
+    expect(find.byKey(const Key('positions-idle')), findsNothing);
+  });
+
+  testWidgets(
+      'a failed theses query says so instead of rendering as "holds '
+      'nothing"', (tester) async {
+    // Spec §7: "the row shows what it knows and says what it could not
+    // load". Rendering "—" for every row would be indistinguishable from
+    // holding nothing -- the exact misreading §5.1 built this column to
+    // prevent.
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('u1').set(userDoc('Alma Cruz'));
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      allThesesProvider.overrideWith((ref) => Stream<List<Thesis>>.error(
+            FirebaseException(
+                plugin: 'cloud_firestore', code: 'permission-denied'),
+          )),
+    ]));
+    await tester.pumpAndSettle();
+
+    // The account list itself still renders -- a failed positions query
+    // must not blank it.
+    expect(find.text('Alma Cruz'), findsOneWidget);
+    expect(find.byKey(const Key('positionsUnavailable')), findsOneWidget);
+    expect(find.byKey(const Key('positionsUnknown-u1')), findsOneWidget);
+    expect(find.byKey(const Key('positions-u1')), findsNothing);
+  });
+
+  testWidgets('a failed directory query says so instead of going quiet',
+      (tester) async {
+    // A failed directory read silently withdrew every "not yet signed in"
+    // marker: the screen looked exactly as it does when every account has
+    // an entry.
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('u1').set(userDoc('Alma Cruz'));
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      allDirectoryProvider
+          .overrideWith((ref) => Stream<List<FacultyDirectoryEntry>>.error(
+                FirebaseException(
+                    plugin: 'cloud_firestore', code: 'permission-denied'),
+              )),
+    ]));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alma Cruz'), findsOneWidget);
+    expect(find.byKey(const Key('directoryUnavailable')), findsOneWidget);
+    // And the marker is NOT claimed either way, since nothing is known.
+    expect(find.byKey(const Key('notSignedIn-u1')), findsNothing);
   });
 }

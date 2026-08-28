@@ -201,13 +201,26 @@ ShellDestination? destinationForLocation(
 /// Two cases: a location nested beneath a destination, and a location no
 /// destination owns at all. In both the sidebar alone cannot return the
 /// reader where they came from.
+///
+/// An `alsoOwns` root is NOT one of those cases. `alsoOwns` names a route
+/// the destination owns as a PEER of its own -- the Users destination owns
+/// '/users' and '/invites' as its two tabs -- not a screen nested beneath
+/// it. Comparing against `owner.route` alone made '/invites' answer `true`
+/// and drew a back control on a top-level tab, which says "you are one
+/// level down" about a place you are not, and points at whatever route the
+/// reader happened to visit before rather than at a parent, since there is
+/// no parent. Both tabs carry the Accounts/Invites strip, so leaving one is
+/// already a tab away and the back control adds nothing but the wrong
+/// claim. Matching any of the destination's roots is the same test
+/// [destinationForLocation] itself uses to decide ownership, so the two
+/// stay consistent.
 bool isDeeperThanDestination(
   List<ShellDestination> destinations,
   String location,
 ) {
   final owner = destinationForLocation(destinations, location);
   if (owner == null) return true;
-  return location != owner.route;
+  return location != owner.route && !owner.alsoOwns.contains(location);
 }
 
 /// Whether [route] is a screen below a destination for [role] -- the exact

@@ -239,12 +239,14 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// storage-upload investigation taught this project once already).
   ///
   /// A batched write does not report which document a security rule
-  /// refused, so every non-ex-officio nominee in this submission is a
-  /// candidate. This screen's own floor of at least three real panel
-  /// members means a first submission almost always names several —
-  /// the adviser (unless they are an ex-officio office holder) plus
-  /// every panelist, since a panel slot never offers one of those in
-  /// the first place. All of them are named together, never guessed at,
+  /// refused, so every nominee whose designation the rules actually check
+  /// is a candidate: the adviser — always, office holder or not, because an
+  /// adviser nomination carries `exOfficio: false` and is checked like
+  /// anyone else's — plus every non-ex-officio panelist. Only a panelist
+  /// sitting by office is exempt, and a panel slot never offers one of
+  /// those in the first place. This screen's own floor of at least three
+  /// real panel members means a first submission almost always names
+  /// several. All of them are named together, never guessed at,
   /// rather than picking one arbitrarily and risking exactly the kind of
   /// confidently-wrong copy this method exists to avoid. The
   /// single-sentence form is kept as the general case — not hardcoded to
@@ -256,8 +258,13 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   ) {
     final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
     final candidates = <(String name, String position)>[
-      if (!exOfficioUids.contains(adviser.uid))
-        (adviser.fullName, 'adviser'),
+      // The adviser is ALWAYS a candidate, office holder or not. An
+      // ex-officio office holder picked as adviser is written with
+      // `exOfficio: false`, so the rules check their `nominableAsAdviser`
+      // like anyone else's — excluding them here named the three innocent
+      // panelists and omitted the actual culprit, telling the student to
+      // replace the wrong people.
+      (adviser.fullName, 'adviser'),
       for (final p in panelists)
         if (!exOfficioUids.contains(p.uid)) (p.fullName, 'panelist'),
     ];
@@ -333,10 +340,18 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// lists them — so choosing one as a panel member adds nobody:
   /// `submitNominations` resolves that pick into their single automatic
   /// seat. Offering the choice at all only led to a submit-time refusal for
-  /// something the screen could have ruled out. Every OTHER ex-officio
-  /// entry stays exempt from the designation filter below too (spec D32):
-  /// that seat is conferred by office, not by a coordinator's checkbox, and
-  /// must never be blocked by a missed designation.
+  /// something the screen could have ruled out.
+  ///
+  /// D32's exemption covers the ex-officio SEAT and nothing else. An office
+  /// holder chosen in the ADVISER slot is not sitting by office: that
+  /// nomination is written with `exOfficio: false, position: 'adviser'`
+  /// (see `ThesisRepository.submitNominations`), so it lands in the
+  /// non-ex-officio branch of `mayCreateNomination` and IS checked against
+  /// `nominableAsAdviser`. Exempting them here offered a name the rules
+  /// then refused — and made designation and position disagree FORWARDS,
+  /// which D29 says cannot happen. So the adviser slot filters everyone,
+  /// office holders included; only the panel slot's ex-officio exclusion
+  /// above is about the seat.
   ///
   /// Everyone else is filtered on [FacultyDirectoryEntry.nominableAsAdviser]
   /// / `.nominableAsPanelist`, set by a coordinator on the Users screen. A
@@ -361,9 +376,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   ) {
     final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
     if (isAdviserSlot) {
-      return faculty
-          .where((f) => exOfficioUids.contains(f.uid) || f.nominableAsAdviser)
-          .toList();
+      return faculty.where((f) => f.nominableAsAdviser).toList();
     }
     return faculty
         .where((f) => !exOfficioUids.contains(f.uid))

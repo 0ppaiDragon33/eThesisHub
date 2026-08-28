@@ -115,7 +115,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       subtitle: 'Every account in the college. Activate, deactivate, and set '
           'who may be nominated as an adviser or a panelist.',
       children: [
-        _Tabs(onInvites: () => context.go('/invites')),
+        const UsersTabs(selected: UsersTab.accounts),
         const Gap.lg(),
         _Filters(
           roleFilter: _roleFilter,
@@ -153,12 +153,47 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               for (final e in directoryAsync.valueOrNull ?? const [])
                 e.uid,
             };
-            return _UsersTable(
-              users: visible,
-              positions: positions,
-              directoryUids: directoryUids,
-              directoryLoaded: directoryAsync.hasValue,
-              myUid: myUid,
+            // Spec §7: each panel resolves its own AsyncValue, and a failed
+            // one must SAY so rather than degrade into something that reads
+            // as data. A failed theses query used to render every Positions
+            // cell as "—", indistinguishable from "holds nothing" -- the
+            // exact misreading the column exists to prevent (§5.1, because
+            // of D30): the coordinator narrows someone while the screen
+            // says they sit on nothing. Same for the directory, whose
+            // failure silently withdrew every "not yet signed in" marker.
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (thesesAsync.hasError) ...[
+                  ErrorState(
+                    key: const Key('positionsUnavailable'),
+                    error: thesesAsync.error,
+                    message: 'Could not load current positions. The Positions '
+                        'column below is unknown for every row — it does not '
+                        'mean these accounts hold nothing.',
+                  ),
+                  const Gap.md(),
+                ],
+                if (directoryAsync.hasError) ...[
+                  ErrorState(
+                    key: const Key('directoryUnavailable'),
+                    error: directoryAsync.error,
+                    message: 'Could not load the faculty directory, so this '
+                        'screen cannot say which accounts have never signed '
+                        'in and therefore have no designation in the '
+                        'nomination picker yet.',
+                  ),
+                  const Gap.md(),
+                ],
+                _UsersTable(
+                  users: visible,
+                  positions: positions,
+                  positionsFailed: thesesAsync.hasError,
+                  directoryUids: directoryUids,
+                  directoryLoaded: directoryAsync.hasValue,
+                  myUid: myUid,
+                ),
+              ],
             );
           },
         ),
@@ -167,31 +202,45 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   }
 }
 
-/// Accounts (this screen) vs Invites (`/invites`), rendered as tabs even
-/// though they are two separate routes -- see the class doc above.
-class _Tabs extends StatelessWidget {
-  const _Tabs({required this.onInvites});
+/// Which of the Users destination's two tabs a screen is.
+enum UsersTab { accounts, invites }
 
-  final VoidCallback onInvites;
+/// Accounts (`/users`) vs Invites (`/invites`), rendered as tabs even though
+/// they are two separate routes -- see [UsersScreen]'s class doc.
+///
+/// Public and shared by BOTH screens. It lived privately in this file at
+/// first, so `/invites` rendered with the rail highlighting "Users", the app
+/// bar reading "Invites", and no Accounts/Invites control anywhere on the
+/// screen -- a tab you could enter and not leave. Spec §5 promises a
+/// destination "with two tabs", which is only true if both of them carry
+/// the strip.
+class UsersTabs extends StatelessWidget {
+  const UsersTabs({super.key, required this.selected});
+
+  final UsersTab selected;
 
   @override
   Widget build(BuildContext context) {
+    // Selecting the tab already showing is a no-op rather than a route
+    // change with no destination-changing effect.
     return Row(
       children: [
         ChoiceChip(
           key: const Key('usersTabAccounts'),
           label: const Text('Accounts'),
-          selected: true,
-          // Already here; selecting the current tab is a no-op rather than
-          // a route with no destination-changing effect.
-          onSelected: (_) {},
+          selected: selected == UsersTab.accounts,
+          onSelected: (_) {
+            if (selected != UsersTab.accounts) context.go('/users');
+          },
         ),
         const SizedBox(width: AppTokens.sm),
         ChoiceChip(
           key: const Key('usersTabInvites'),
           label: const Text('Invites'),
-          selected: false,
-          onSelected: (_) => onInvites(),
+          selected: selected == UsersTab.invites,
+          onSelected: (_) {
+            if (selected != UsersTab.invites) context.go('/invites');
+          },
         ),
       ],
     );
@@ -265,6 +314,7 @@ class _UsersTable extends StatelessWidget {
   const _UsersTable({
     required this.users,
     required this.positions,
+    required this.positionsFailed,
     required this.directoryUids,
     required this.directoryLoaded,
     required this.myUid,
@@ -272,6 +322,11 @@ class _UsersTable extends StatelessWidget {
 
   final List<AppUser> users;
   final Map<String, PositionCounts> positions;
+
+  /// The theses query failed, so [positions] is empty for a reason that has
+  /// nothing to do with what anyone holds. Every cell says "unknown"
+  /// instead of "—".
+  final bool positionsFailed;
   final Set<String> directoryUids;
   final bool directoryLoaded;
   final String? myUid;
@@ -316,11 +371,17 @@ class _UsersTable extends StatelessWidget {
               // `role` (the rules pin it to the invite/promotion path),
               // and a control that always fails reads as a broken app.
               Text(u.role.value, key: Key('roleText-${u.uid}')),
-              _PositionsCell(user: u, counts: positions[u.uid]),
+              _PositionsCell(
+                user: u,
+                counts: positions[u.uid],
+                failed: positionsFailed,
+              ),
               // A student can never be nominated, so a designation
               // control here would be meaningless -- not merely denied,
               // but asking a question that does not apply to this role.
-              u.isFaculty ? _DesignationCell(user: u) : const Text('—'),
+              u.isFaculty
+                  ? _DesignationCell(user: u, isOwnRow: u.uid == myUid)
+                  : const Text('—'),
               _ActiveCell(user: u, isOwnRow: u.uid == myUid),
             ],
           ),
@@ -408,69 +469,165 @@ class _NameCell extends StatelessWidget {
 }
 
 class _PositionsCell extends StatelessWidget {
-  const _PositionsCell({required this.user, required this.counts});
+  const _PositionsCell({
+    required this.user,
+    required this.counts,
+    required this.failed,
+  });
 
   final AppUser user;
   final PositionCounts? counts;
 
+  /// The theses query failed. "—" would be a lie here: it reads as "holds
+  /// nothing", which is the one conclusion this column exists to stop a
+  /// coordinator drawing wrongly before they narrow someone (D30).
+  final bool failed;
+
   @override
   Widget build(BuildContext context) {
+    if (failed && user.isFaculty) {
+      return Text(
+        'Unknown',
+        key: Key('positionsUnknown-${user.uid}'),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+      );
+    }
     final c = counts;
     if (!user.isFaculty || c == null || (c.advising == 0 && c.panelling == 0)) {
       return const Text('—');
     }
-    return Text('${c.advising} advising · ${c.panelling} panel');
+    return Text('${c.advising} advising · ${c.panelling} panel',
+        key: Key('positions-${user.uid}'));
   }
 }
 
-class _DesignationCell extends ConsumerWidget {
-  const _DesignationCell({required this.user});
+/// The two designation checkboxes for one account.
+///
+/// Stateful because a refused write has to be shown. Spec §7: *"a refused
+/// write says which write was refused … a coordinator hitting the self-edit
+/// ban through some path the UI did not anticipate must be told that, not
+/// 'something went wrong'."* Previously the write was neither awaited nor
+/// caught, so a refusal became an unhandled Future error and the checkbox
+/// silently snapped back to its old value on the next stream event -- which
+/// also hid the real case in [UserRepository.setDesignation], where the
+/// `users` write can succeed and the `facultyDirectory` mirror be refused,
+/// leaving authority and mirror divergent with nothing on screen saying so.
+class _DesignationCell extends ConsumerStatefulWidget {
+  const _DesignationCell({required this.user, required this.isOwnRow});
 
   final AppUser user;
 
+  /// The reader's own row. The `users` coordinator arm carries
+  /// `request.auth.uid != uid` for ALL seven writable fields, not only
+  /// `active`, so designating yourself is always refused -- the controls
+  /// say so up front, exactly as the active switch does (spec §5.2, whose
+  /// "controls disabled and the reason stated" is plural).
+  final bool isOwnRow;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    void write({bool? adviser, bool? panelist}) {
-      ref.read(userRepositoryProvider).setDesignation(
+  ConsumerState<_DesignationCell> createState() => _DesignationCellState();
+}
+
+class _DesignationCellState extends ConsumerState<_DesignationCell> {
+  Object? _error;
+
+  Future<void> _write({bool? adviser, bool? panelist}) async {
+    final user = widget.user;
+    try {
+      await ref.read(userRepositoryProvider).setDesignation(
             uid: user.uid,
             adviser: adviser ?? user.nominableAsAdviser,
             panelist: panelist ?? user.nominableAsPanelist,
           );
+      if (mounted && _error != null) setState(() => _error = null);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
     }
+  }
 
-    // Wrap, not Row: this column is narrow at the shell's own rail
-    // breakpoint, and a Row here has no way to give up horizontal space --
-    // it would silently clip "Panelist" off the edge instead of dropping
-    // to a second line.
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.user;
+    final disabled = widget.isOwnRow;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Checkbox(
-          key: Key('adviserCheckbox-${user.uid}'),
-          value: user.nominableAsAdviser,
-          onChanged: (v) => write(adviser: v ?? false),
+        // Wrap, not Row: this column is narrow at the shell's own rail
+        // breakpoint, and a Row here has no way to give up horizontal
+        // space -- it would silently clip "Panelist" off the edge instead
+        // of dropping to a second line.
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Checkbox(
+              key: Key('adviserCheckbox-${user.uid}'),
+              value: user.nominableAsAdviser,
+              onChanged:
+                  disabled ? null : (v) => _write(adviser: v ?? false),
+            ),
+            const Text('Adviser'),
+            const SizedBox(width: AppTokens.sm),
+            Checkbox(
+              key: Key('panelistCheckbox-${user.uid}'),
+              value: user.nominableAsPanelist,
+              onChanged:
+                  disabled ? null : (v) => _write(panelist: v ?? false),
+            ),
+            const Text('Panelist'),
+          ],
         ),
-        const Text('Adviser'),
-        const SizedBox(width: AppTokens.sm),
-        Checkbox(
-          key: Key('panelistCheckbox-${user.uid}'),
-          value: user.nominableAsPanelist,
-          onChanged: (v) => write(panelist: v ?? false),
-        ),
-        const Text('Panelist'),
+        if (disabled)
+          Text(
+            'This is your own account — you cannot set your own '
+            'designation.',
+            key: Key('ownRowDesignationReason-${user.uid}'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.xs),
+            child: ErrorState(
+              key: Key('designationWriteError-${user.uid}'),
+              error: _error,
+              message: 'Could not save the designation for '
+                  '${user.fullName}. Their account may still say something '
+                  'different from the nomination picker.',
+            ),
+          ),
       ],
     );
   }
 }
 
-class _ActiveCell extends ConsumerWidget {
+class _ActiveCell extends ConsumerStatefulWidget {
   const _ActiveCell({required this.user, required this.isOwnRow});
 
   final AppUser user;
   final bool isOwnRow;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ActiveCell> createState() => _ActiveCellState();
+}
+
+class _ActiveCellState extends ConsumerState<_ActiveCell> {
+  Object? _error;
+
+  Future<void> _setActive(bool value) async {
+    try {
+      await ref.read(userRepositoryProvider).setActive(widget.user.uid, value);
+      if (mounted && _error != null) setState(() => _error = null);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.user;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -482,11 +639,9 @@ class _ActiveCell extends ConsumerWidget {
           // never activate or deactivate their own account. Disabling the
           // control here says so before the write is even attempted --
           // hiding the row would be stranger than showing it refused.
-          onChanged: isOwnRow
-              ? null
-              : (v) => ref.read(userRepositoryProvider).setActive(user.uid, v),
+          onChanged: widget.isOwnRow ? null : _setActive,
         ),
-        if (isOwnRow)
+        if (widget.isOwnRow)
           SizedBox(
             width: 160,
             child: Text(
@@ -494,6 +649,16 @@ class _ActiveCell extends ConsumerWidget {
               'deactivate yourself.',
               key: Key('ownRowReason-${user.uid}'),
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppTokens.xs),
+            child: ErrorState(
+              key: Key('activeWriteError-${user.uid}'),
+              error: _error,
+              message:
+                  'Could not change whether ${user.fullName} is active.',
             ),
           ),
       ],
