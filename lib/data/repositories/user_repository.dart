@@ -2,11 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/models/faculty_invite.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/data/repositories/faculty_directory_repository.dart';
 
 class UserRepository {
-  UserRepository(this._db);
+  UserRepository(this._db, [FacultyDirectoryRepository? directoryRepository])
+      : _directory = directoryRepository ?? FacultyDirectoryRepository(_db);
 
   final FirebaseFirestore _db;
+  final FacultyDirectoryRepository _directory;
 
   CollectionReference<Map<String, dynamic>> get _users =>
       _db.collection('users');
@@ -33,6 +36,57 @@ class UserRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'createdBy': null,
     });
+  }
+
+  /// Every account, sorted by name. Backs the coordinator's Users screen.
+  ///
+  /// Coordinator/dean only: the rules deny `list` on `users` to every other
+  /// role, so watching this from any other screen surfaces a
+  /// `permission-denied` the reader cannot act on.
+  Stream<List<AppUser>> watchAllUsers() {
+    return _users.snapshots().map((s) {
+      final list =
+          s.docs.map((d) => _toUser(d.id, d.data())!).toList();
+      list.sort((a, b) => a.fullName.compareTo(b.fullName));
+      return list;
+    });
+  }
+
+  /// Activates or deactivates an account.
+  Future<void> setActive(String uid, bool active) {
+    return _users.doc(uid).update({'active': active});
+  }
+
+  /// Sets whether this account may be nominated as an adviser and/or a
+  /// panelist, writing `users` -- the authority -- first, then mirroring the
+  /// same two fields onto `facultyDirectory` if an entry exists there.
+  ///
+  /// A faculty member who has been invited and designated but has never
+  /// signed in has no directory entry yet -- there is nothing to mirror to,
+  /// since the entry is only created client-side at sign-in
+  /// ([FacultyDirectoryRepository.upsertOwnEntry]). The directory repository
+  /// mirrors with `update`, which throws `not-found` in that case; that is
+  /// expected, not an error (spec §4.2.1 names this window), so only that
+  /// one code is swallowed here. A `permission-denied` -- or anything else --
+  /// still surfaces, since it means something is actually wrong.
+  Future<void> setDesignation({
+    required String uid,
+    required bool adviser,
+    required bool panelist,
+  }) async {
+    await _users.doc(uid).update({
+      'nominableAsAdviser': adviser,
+      'nominableAsPanelist': panelist,
+    });
+    try {
+      await _directory.setDesignation(
+        uid: uid,
+        adviser: adviser,
+        panelist: panelist,
+      );
+    } on FirebaseException catch (e) {
+      if (e.code != 'not-found') rethrow;
+    }
   }
 
   Future<AppUser?> fetchUser(String uid) async {
