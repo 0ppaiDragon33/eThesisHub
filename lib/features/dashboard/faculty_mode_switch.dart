@@ -11,10 +11,12 @@ import 'package:ethesishub/providers/faculty_mode_provider.dart';
 /// trailing slot — the same place, one level up, for every faculty route
 /// rather than only the dashboard.
 ///
-/// Renders nothing at all unless the member actually holds an adviser
-/// position. A member with none is clamped to panelist by
-/// [effectiveFacultyModeProvider], and a switch that could only ever move
-/// them to an empty Advisees list is a control that does nothing.
+/// Renders nothing at all unless the member holds BOTH capabilities --
+/// [facultyHoldsBothCapabilitiesProvider], the union of designation and
+/// positions actually held (spec D30). A member with only one capability is
+/// clamped to it by [effectiveFacultyModeProvider], and a switch that could
+/// only ever move them to a destination they cannot reach is a control that
+/// does nothing.
 ///
 /// The badge counts work waiting in the mode that is NOT in force, so a
 /// member deep in one role can see the other filling up without switching
@@ -42,13 +44,13 @@ class FacultyModeSwitch extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final modeAsync = ref.watch(effectiveFacultyModeProvider);
-    final holdsAdviserPositions =
-        (ref.watch(adviserPositionCountProvider).valueOrNull ?? 0) > 0;
+    final bothCapable =
+        ref.watch(facultyHoldsBothCapabilitiesProvider).valueOrNull ?? false;
     final pendingElsewhere =
         ref.watch(pendingInOtherModeProvider).valueOrNull ?? 0;
 
     final mode = modeAsync.valueOrNull;
-    if (mode == null || !holdsAdviserPositions) return const SizedBox.shrink();
+    if (mode == null || !bothCapable) return const SizedBox.shrink();
 
     void select(FacultyMode next) {
       ref.read(facultyModeProvider.notifier).set(next);

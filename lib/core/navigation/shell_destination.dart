@@ -52,7 +52,11 @@ class ShellDestination {
 List<ShellDestination> destinationsFor({
   required UserRole role,
   bool chaptersUnlocked = false,
-  FacultyMode facultyMode = FacultyMode.adviser,
+  // Nullable: `null` means the member currently holds neither designation
+  // nor a position for either mode, and (spec §6) gets neither the Advisees
+  // nor the Panels destination at all rather than one that leads to an
+  // empty screen.
+  FacultyMode? facultyMode = FacultyMode.adviser,
 }) {
   const overview = ShellDestination(
     label: 'Overview',
@@ -87,14 +91,16 @@ List<ShellDestination> destinationsFor({
     UserRole.faculty => [
         overview,
         // One or the other, never both: the mode is the primary axis and
-        // each mode is its own clean list (design decision D5).
+        // each mode is its own clean list (design decision D5). `null`
+        // (neither designated nor holding a position for either mode)
+        // declares NEITHER destination — not an empty one (spec §6).
         if (facultyMode == FacultyMode.adviser)
           const ShellDestination(
             label: 'Advisees',
             icon: Icons.school_outlined,
             route: '/advisees',
           )
-        else
+        else if (facultyMode == FacultyMode.panelist)
           const ShellDestination(
             label: 'Panels',
             icon: Icons.forum_outlined,

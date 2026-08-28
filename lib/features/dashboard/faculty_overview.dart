@@ -103,6 +103,14 @@ class FacultyOverview extends ConsumerWidget {
     // hard-won rule in faculty_dashboard.dart: guessing shows a panelist
     // the adviser's four tiles and then swaps them out from under them on
     // every launch.
+    //
+    // `modeAsync.isLoading` (no snapshot yet) is a genuinely different
+    // question from `mode == null` (a resolved answer of "neither
+    // capability"): `effectiveFacultyModeProvider` can now settle on `null`
+    // as real data, and treating that the same as "still resolving" would
+    // spin the tile section's loading state forever for a member on leave
+    // rather than simply omitting it (spec §6).
+    final stillResolving = modeAsync.isLoading;
     final mode = modeAsync.valueOrNull;
 
     final adviseesAsync = ref.watch(myAdviseesProvider);
@@ -123,8 +131,14 @@ class FacultyOverview extends ConsumerWidget {
           suffix: 'your advisees and panels',
         ),
         const Gap.lg(),
-        if (mode == null)
+        if (stillResolving)
           const LoadingState(label: 'Working out which positions you hold…')
+        else if (mode == null)
+          // Neither designated nor holding a position for either mode --
+          // resolved, not loading. There is no tile set to show and none is
+          // owed; the greeting, headline and queue above and below already
+          // cover everything mode-independent (spec D17).
+          const SizedBox.shrink()
         else
           StatTileGrid(
             children: mode == FacultyMode.adviser
