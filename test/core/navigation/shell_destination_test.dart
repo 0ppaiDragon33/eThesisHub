@@ -150,6 +150,27 @@ void main() {
       expect(panelist, isNot(contains('/advisees')));
     });
 
+    test('a faculty member designated neither gets no mode destination', () {
+      // Truth-table row 5 (spec D30 / §6). The provider-level test in
+      // faculty_positions_test.dart proves the mode resolves to null; this
+      // proves what null MEANS at the destination layer -- that neither
+      // Advisees nor Panels is declared at all. A destination leading to an
+      // empty screen reads as a broken app, so "neither" must declare
+      // nothing rather than an empty something.
+      final routes = destinationsFor(
+        role: UserRole.faculty,
+        facultyMode: null,
+      ).map((d) => d.route);
+
+      expect(routes, isNot(contains('/advisees')));
+      expect(routes, isNot(contains('/panels')));
+      // And the rest of the faculty list survives -- this must not become a
+      // test that passes because the whole list is empty.
+      expect(routes, contains('/overview'));
+      expect(routes, contains('/defences'));
+      expect(routes, contains('/nominations'));
+    });
+
     test('the coordinator gets Users and the dean does not', () {
       expect(
         destinationsFor(role: UserRole.coordinator).map((d) => d.route),
