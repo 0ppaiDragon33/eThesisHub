@@ -3626,6 +3626,42 @@ test("a coordinator may NOT create a directory entry", async () => {
   }));
 });
 
+test("PROBE: subject creates entry with explicit null designation", async () => {
+  // Round-1 fix: a sentinel-comparison pin (whatever the sentinel) collides
+  // with a subject who writes that exact sentinel value. `null` collides
+  // just as `true` did. The pin must be a presence check, not a value
+  // check, so this must fail regardless of what value accompanies the key.
+  await seedRole("dir-null-create-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("dir-null-create-uid", {
+      email: "dir-null-create-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(self, "facultyDirectory/dir-null-create-uid"), {
+    fullName: "Dr. X", role: "faculty", nominableAsAdviser: null,
+  }));
+});
+
+test("PROBE: subject update-injects explicit null designation onto an existing undesignated entry",
+  async () => {
+    await seedRole("dir-null-update-uid", "faculty");
+    await seedDirectory("dir-null-update-uid");
+
+    const self = env
+      .authenticatedContext("dir-null-update-uid", {
+        email: "dir-null-update-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(self, "facultyDirectory/dir-null-update-uid"),
+      { nominableAsAdviser: null },
+      { merge: true },
+    ));
+  });
+
 test.after(async () => {
   await env.cleanup();
 });

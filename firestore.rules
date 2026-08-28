@@ -1095,24 +1095,35 @@ service cloud.firestore {
       // widening, by itself, would also let the subject set their own
       // designation through the same merge — making it self-declarable,
       // which is exactly what living on `users` (not `facultyDirectory`) is
-      // meant to prevent. So the widening is fenced: `subjectMayNotChange`
-      // below pins both designation fields to their current values (absent
-      // compares equal to absent, via `.get(key, <sentinel>)` on both
-      // sides) on every write this function allows, and only
+      // meant to prevent. So the widening is fenced: `subjectDesignationUntouched`
+      // below requires that this write does not affect either designation
+      // key at all, on every write this function allows, and only
       // `mayCoordinatorSetDesignation` — a separate arm, update-only,
       // touching only those two keys — may actually change them.
       //
-      // The sentinel must be a value neither field can legitimately hold —
-      // `true` is NOT safe here even though both fields are booleans: on
-      // create, `resource` doesn't exist so the "current value" side falls
-      // back to the sentinel, and a subject creating the entry with
-      // `nominableAsAdviser: true` would then compare `true == true` and be
-      // wrongly admitted. (Caught by the "may NOT introduce designation on
-      // create" test — see task-3-report.md for the falsification.) `null`
-      // is never a value either field holds, so it can't collide.
-      function subjectMayNotChange(field) {
-        return request.resource.data.get(field, null)
-               == (resource != null ? resource.data.get(field, null) : null);
+      // This is a presence check, not a value check, and deliberately so:
+      // an earlier version compared `request.resource.data.get(field,
+      // <sentinel>)` against a sentinel default to make "absent" compare
+      // equal to "absent" — first with `true` as the sentinel, then with
+      // `null`. Both were wrong the same way: whatever sentinel is chosen
+      // is *also* a value a subject can write, so a subject writing that
+      // exact value collides with "absent" and is wrongly admitted (`true`
+      // via a `create` carrying `nominableAsAdviser: true`; `null` via a
+      // `create` or merge-`update` carrying `nominableAsAdviser: null`).
+      // There is no sentinel immune to this — any fixed value is itself a
+      // legal write. So the check below never inspects values at all: on
+      // create it asks whether either key is present in the incoming
+      // document; on update it asks whether either key is among the keys
+      // `diff()` reports as affected between the stored and incoming
+      // documents (the same `diff().affectedKeys()` reasoning `onlyChanged`
+      // above already uses). Neither question can be defeated by a choice
+      // of value, because neither one looks at a value.
+      function subjectDesignationUntouched() {
+        return resource == null
+               ? !request.resource.data.keys()
+                    .hasAny(['nominableAsAdviser', 'nominableAsPanelist'])
+               : !request.resource.data.diff(resource.data).affectedKeys()
+                    .hasAny(['nominableAsAdviser', 'nominableAsPanelist']);
       }
 
       function mayWriteOwnDirectoryEntry() {
@@ -1124,8 +1135,7 @@ service cloud.firestore {
                     ['fullName', 'role', 'college', 'specialization',
                      'nominableAsAdviser', 'nominableAsPanelist'])
                && request.resource.data.role == role
-               && subjectMayNotChange('nominableAsAdviser')
-               && subjectMayNotChange('nominableAsPanelist');
+               && subjectDesignationUntouched();
       }
 
       // Update-only: a coordinator-created entry would have no name (it
