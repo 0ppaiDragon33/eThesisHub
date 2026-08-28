@@ -252,6 +252,28 @@ void main() {
     expect(find.byKey(const Key('calendarCell-2026-09-15')), findsNothing);
   });
 
+  testWidgets(
+      'no defences at all shows the empty state, not an empty grid, and '
+      'not loading or error text', (tester) async {
+    // Distinct from "an empty month is distinguishable from a failed
+    // read" above: that test seeds a real defence and merely navigates to
+    // a month with nothing in it, so the underlying dataset is non-empty
+    // and the calendar chrome (legend, grid) renders. This is the OTHER
+    // branch -- the account has no defences at all -- which
+    // defence_calendar.dart handles with its own EmptyState, separate
+    // from both the loading and the error branch.
+    final db = await _seedUser('f1');
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('noDefences')), findsOneWidget);
+    expect(find.text('No defences scheduled'), findsOneWidget);
+    expect(find.byKey(const Key('defenceCalendar')), findsNothing);
+    expect(find.text('Loading your defences…'), findsNothing);
+    expect(find.text('Could not load your defences.'), findsNothing);
+  });
+
   testWidgets('a loading month is not shown as empty', (tester) async {
     final db = await _seedUser('f1');
     final neverDefences = StreamController<List<Defence>>();

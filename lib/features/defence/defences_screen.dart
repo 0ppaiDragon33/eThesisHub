@@ -52,9 +52,32 @@ class _DefencesScreenState extends State<DefencesScreen> {
       title: widget.title,
       subtitle: widget.subtitle,
       children: [
-        _ViewToggle(
-          view: _view,
-          onChanged: (v) => setState(() => _view = v),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SegmentedButton<_DefencesView>(
+            // Keyed on the control itself, not its segments --
+            // `ButtonSegment` carries no `key` parameter on the pinned
+            // Flutter version. `faculty_mode_switch.dart`'s
+            // `facultyModeSegmented` solves the same wall the same way, and
+            // its tests tap by the segment's label text rather than a key,
+            // which is the pattern this follows too.
+            key: const Key('defencesViewToggle'),
+            segments: const [
+              ButtonSegment(
+                value: _DefencesView.list,
+                label: Text('List'),
+                icon: Icon(Icons.view_list_outlined),
+              ),
+              ButtonSegment(
+                value: _DefencesView.calendar,
+                label: Text('Calendar'),
+                icon: Icon(Icons.calendar_month_outlined),
+              ),
+            ],
+            selected: {_view},
+            onSelectionChanged: (selection) =>
+                setState(() => _view = selection.first),
+          ),
         ),
         const SizedBox(height: AppTokens.md),
         switch (_view) {
@@ -63,67 +86,5 @@ class _DefencesScreenState extends State<DefencesScreen> {
         },
       ],
     );
-  }
-}
-
-class _ViewToggle extends StatelessWidget {
-  const _ViewToggle({required this.view, required this.onChanged});
-
-  final _DefencesView view;
-  final ValueChanged<_DefencesView> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      key: const Key('defencesViewToggle'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ToggleButton(
-          key: const Key('defencesViewList'),
-          label: 'List',
-          icon: Icons.view_list_outlined,
-          selected: view == _DefencesView.list,
-          onPressed: () => onChanged(_DefencesView.list),
-        ),
-        const SizedBox(width: AppTokens.sm),
-        _ToggleButton(
-          key: const Key('defencesViewCalendar'),
-          label: 'Calendar',
-          icon: Icons.calendar_month_outlined,
-          selected: view == _DefencesView.calendar,
-          onPressed: () => onChanged(_DefencesView.calendar),
-        ),
-      ],
-    );
-  }
-}
-
-class _ToggleButton extends StatelessWidget {
-  const _ToggleButton({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onPressed,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final child = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: AppTokens.xs),
-        Text(label),
-      ],
-    );
-    return selected
-        ? FilledButton(onPressed: onPressed, child: child)
-        : OutlinedButton(onPressed: onPressed, child: child);
   }
 }
