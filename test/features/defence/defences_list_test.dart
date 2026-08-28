@@ -8,9 +8,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
+
+/// Same shape as `approvedThesis()` in
+/// `test/core/routing/deep_navigation_test.dart`, kept local: every
+/// defence row now resolves its thesis's working title, and this is the
+/// minimal doc `thesisByIdProvider` needs to resolve one.
+Map<String, dynamic> _thesisDoc({
+  required String leaderUid,
+  required String workingTitle,
+}) =>
+    {
+      'leaderUid': leaderUid,
+      'adviserUid': 'a1',
+      'panelistUids': const <String>[],
+      'memberNames': const <String>[],
+      'workingTitle': workingTitle,
+      'college': 'CICT',
+      'program': 'BSIT',
+      'semester': 'First',
+      'academicYear': '2026-2027',
+      'status': 'titleApproved',
+    };
 
 /// Seeds a `users/{uid}` profile for the given faculty uid, plus one
 /// `defenses/{id}` doc with the given adviser/panel/scheduled time.
@@ -19,13 +42,16 @@ Future<void> _seedDefence(
   required String id,
   required String adviserUid,
   required List<String> panelUids,
-  required DateTime scheduledAt,
+  DateTime? scheduledAt,
   String status = 'scheduled',
+  String type = 'preOral',
+  String? thesisId,
 }) async {
   await db.collection('defenses').doc(id).set({
-    'thesisId': 't-$id',
-    'type': 'preOral',
-    'scheduledAt': Timestamp.fromDate(scheduledAt),
+    'thesisId': thesisId ?? 't-$id',
+    'type': type,
+    'scheduledAt':
+        scheduledAt == null ? null : Timestamp.fromDate(scheduledAt),
     'venue': 'Room $id',
     'panelUids': panelUids,
     'adviserUid': adviserUid,
@@ -243,5 +269,168 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(AppBar, 'Consolidated d1'), findsOneWidget);
+  });
+
+  testWidgets('a row shows the thesis working title, not the defence type',
+      (tester) async {
+    final db = await _seedUser('f1');
+    await db
+        .collection('theses')
+        .doc('t-d1')
+        .set(_thesisDoc(leaderUid: 'l1', workingTitle: 'On Widget Trees'));
+    await _seedDefence(
+      db,
+      id: 'd1',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+      thesisId: 't-d1',
+    );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('On Widget Trees'), findsOneWidget);
+    // The type moved beneath the title rather than disappearing.
+    expect(find.textContaining('Pre-oral defence'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a row shows a pending placeholder, never blank, while the title '
+      'is still loading', (tester) async {
+    final db = await _seedUser('f1');
+    await _seedDefence(
+      db,
+      id: 'd1',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+      thesisId: 't-d1',
+    );
+    // A stream that never emits, standing in for the per-thesis read: the
+    // defence list itself settles (fake_cloud_firestore resolves inside a
+    // pump), but the title must not render as blank while ITS OWN stream is
+    // still pending.
+    final neverThesis = StreamController<Thesis?>();
+    addTearDown(neverThesis.close);
+
+    await tester.pumpWidget(_wrap(
+      db,
+      uid: 'f1',
+      overrides: [
+        thesisByIdProvider.overrideWith((ref, arg) => neverThesis.stream),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('On Widget Trees'), findsNothing);
+    expect(find.byKey(const Key('defenceRow-d1')), findsOneWidget);
+    expect(find.text('Loading title…'), findsOneWidget);
+  });
+
+  testWidgets('cancelled defences stay visible, struck through and muted',
+      (tester) async {
+    final db = await _seedUser('f1');
+    await db
+        .collection('theses')
+        .doc('t-d1')
+        .set(_thesisDoc(leaderUid: 'l1', workingTitle: 'Called Off Study'));
+    await _seedDefence(
+      db,
+      id: 'd1',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+      thesisId: 't-d1',
+      status: 'cancelled',
+    );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceRow-d1')), findsOneWidget);
+    final title = tester.widget<Text>(find.text('Called Off Study'));
+    expect(title.style?.decoration, TextDecoration.lineThrough);
+  });
+
+  testWidgets(
+      'the list is grouped into Pre-oral and Final sections, each '
+      'soonest first', (tester) async {
+    final db = await _seedUser('f1');
+    // Seeded out of both type-order and date-order on purpose: a fixture
+    // that happened to already be sorted would pass with the grouping or
+    // the sort deleted.
+    await _seedDefence(
+      db,
+      id: 'finalLater',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 10, 1, 9),
+      type: 'final',
+    );
+    await _seedDefence(
+      db,
+      id: 'preOralLater',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 10, 2, 9),
+    );
+    await _seedDefence(
+      db,
+      id: 'finalSooner',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+      type: 'final',
+    );
+    await _seedDefence(
+      db,
+      id: 'preOralSooner',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 2, 9),
+    );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    final preOralHeading = find.text('Pre-oral');
+    final finalHeading = find.text('Final');
+    expect(preOralHeading, findsOneWidget);
+    expect(finalHeading, findsOneWidget);
+
+    // Pre-oral section renders above the Final section.
+    expect(tester.getTopLeft(preOralHeading).dy,
+        lessThan(tester.getTopLeft(finalHeading).dy));
+
+    // Within each section, soonest first.
+    final preOralSooner = find.byKey(const Key('defenceRow-preOralSooner'));
+    final preOralLater = find.byKey(const Key('defenceRow-preOralLater'));
+    expect(tester.getTopLeft(preOralSooner).dy,
+        lessThan(tester.getTopLeft(preOralLater).dy));
+
+    final finalSooner = find.byKey(const Key('defenceRow-finalSooner'));
+    final finalLater = find.byKey(const Key('defenceRow-finalLater'));
+    expect(tester.getTopLeft(finalSooner).dy,
+        lessThan(tester.getTopLeft(finalLater).dy));
+  });
+
+  testWidgets('a section with nothing in it is omitted, not shown empty',
+      (tester) async {
+    final db = await _seedUser('f1');
+    await _seedDefence(
+      db,
+      id: 'onlyFinal',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+      type: 'final',
+    );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Final'), findsOneWidget);
+    expect(find.text('Pre-oral'), findsNothing);
   });
 }
