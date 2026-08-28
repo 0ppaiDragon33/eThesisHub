@@ -251,10 +251,10 @@ void main() {
       expect(find.byKey(const Key('defencesScreen')), findsNothing);
     });
 
-    testWidgets('the coordinator keeps Faculty as a jump, not a panel',
+    testWidgets('the coordinator keeps Users as a jump, not a panel',
         (tester) async {
-      // Invites are a different job from reviewing theses, and they have
-      // their own screen already.
+      // Account administration is a different job from reviewing theses,
+      // and it has its own screen already.
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'c1', role: 'coordinator');
       addTearDown(c.dispose);
@@ -270,8 +270,10 @@ void main() {
       expect(find.byKey(const Key('readinessScreen')), findsOneWidget);
       expect(find.byKey(const Key('recommendationsScreen')), findsNothing);
 
-      await tapDestination(tester, 'Faculty');
-      expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+      await tapDestination(tester, 'Users');
+      // 'Users' lands on '/users' (Accounts), not '/invites' directly --
+      // Invites is the destination's other tab, see users_screen.dart.
+      expect(find.byKey(const Key('usersScreen')), findsOneWidget);
       expect(find.byKey(const Key('readinessScreen')), findsNothing);
     });
 

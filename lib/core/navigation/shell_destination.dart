@@ -145,9 +145,10 @@ List<ShellDestination> destinationsFor({
           route: '/readiness',
         ),
         const ShellDestination(
-          label: 'Faculty',
-          icon: Icons.badge_outlined,
-          route: '/invites',
+          label: 'Users',
+          icon: Icons.people_outline,
+          route: '/users',
+          alsoOwns: ['/invites'],
         ),
       ],
   };
@@ -159,20 +160,34 @@ List<ShellDestination> destinationsFor({
 /// than highlighting the wrong thing.
 ///
 /// When multiple destinations own a location, returns the most specific
-/// one (the one with the longest route), since nested destinations like
-/// '/thesis/chapters' should be preferred over '/thesis'.
+/// one -- the one whose matched root (its [ShellDestination.route] or one
+/// of its [ShellDestination.alsoOwns] entries) is longest, since nested
+/// roots like '/thesis/chapters' should be preferred over '/thesis'.
+///
+/// Compares the length of the ROOT THAT ACTUALLY MATCHED, never
+/// `d.route.length` alone: a destination can own a location only through
+/// an `alsoOwns` entry deeper than its own bare route (Users owns
+/// '/invites' this way), and sorting by `d.route` would then prefer a
+/// shorter, less specific match purely because that destination's own
+/// route happened to be a longer string. See
+/// `shell_destination_test.dart`'s "the tiebreak compares the matched
+/// root" case for the scenario this would get wrong.
 ShellDestination? destinationForLocation(
   List<ShellDestination> destinations,
   String location,
 ) {
-  final owners = destinations.where((d) => d.owns(location)).toList();
-  if (owners.isEmpty) return null;
-  // Prefer the destination with the longest route. Today alsoOwns is
-  // always empty, so this sorts by route.length. If a destination ever
-  // gains an alsoOwns entry deeper than another destination's bare route,
-  // this would pick wrongly (should compare the matched root, not d.route).
-  owners.sort((a, b) => b.route.length.compareTo(a.route.length));
-  return owners.first;
+  ShellDestination? best;
+  var bestRootLength = -1;
+  for (final d in destinations) {
+    for (final root in [d.route, ...d.alsoOwns]) {
+      final matches = location == root || location.startsWith('$root/');
+      if (matches && root.length > bestRootLength) {
+        bestRootLength = root.length;
+        best = d;
+      }
+    }
+  }
+  return best;
 }
 
 /// True when the shell should offer a back control.

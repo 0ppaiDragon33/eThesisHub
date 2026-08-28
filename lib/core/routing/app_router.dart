@@ -9,6 +9,7 @@ import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
+import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/no_profile_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
@@ -230,6 +231,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                       location == '/readiness') &&
                   profile.role != UserRole.coordinator &&
                   profile.role != UserRole.dean) {
+                return home;
+              }
+              // '/users' (Accounts) and '/invites' (Invites) are the two
+              // tabs of the coordinator's Users destination -- coordinator
+              // only. This is UX, not the security boundary: the rules
+              // deny `list` on `users` and on `facultyInvites` to every
+              // other role, so a wrong-role visitor who reached either
+              // screen would find nothing readable and nothing writable.
+              if ((location == '/users' || location == '/invites') &&
+                  profile.role != UserRole.coordinator) {
                 return home;
               }
               // The title defence panel is faculty, coordinators and the
@@ -544,6 +555,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/invites',
         builder: (_, _) => const FacultyInvitesScreen(),
+      ),
+      // The Accounts tab of the same Users destination as '/invites'
+      // (Invites) -- see shell_destination.dart's `alsoOwns: ['/invites']`
+      // on the Users entry. Registered as its own route, not a query
+      // parameter on '/invites', so both tabs stay independently
+      // bookmarkable.
+      GoRoute(
+        path: '/users',
+        builder: (_, _) => const UsersScreen(),
       ),
       // '/thesis/chapters' (the list) is registered before
       // '/thesis/chapters/:chapterId' (one chapter's detail) only because

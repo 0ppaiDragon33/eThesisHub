@@ -55,6 +55,38 @@ void main() {
       final ds = destinationsFor(role: UserRole.dean);
       expect(destinationForLocation(ds, '/defence/room/d1'), isNull);
     });
+
+    test(
+        'the tiebreak compares the matched root, not the bare route length',
+        () {
+      // A destination can own a location only through an `alsoOwns` entry
+      // that is deeper (a longer string) than another destination's own
+      // bare route -- exactly the shape Users/'/invites' takes once Users
+      // populates alsoOwns for the first time in the app. Sorting by
+      // `d.route.length` alone (the bug this fixes) would pick `shallow`
+      // here, because '/invites'.length (8) beats '/u'.length (2), even
+      // though `deep`'s alsoOwns entry is the root that actually matches
+      // this location most specifically.
+      const deep = ShellDestination(
+        label: 'Deep',
+        icon: Icons.people_outline,
+        route: '/u',
+        alsoOwns: ['/invites/history'],
+      );
+      const shallow = ShellDestination(
+        label: 'Shallow',
+        icon: Icons.history,
+        route: '/invites',
+      );
+
+      final owner =
+          destinationForLocation([deep, shallow], '/invites/history');
+      expect(owner, same(deep),
+          reason: "the matched root '/invites/history' (17 chars) is "
+              "deeper than 'shallow's own route '/invites' (8 chars), "
+              "even though 'deep'.route itself is shorter than "
+              "'shallow'.route");
+    });
   });
 
   group('depth', () {
@@ -118,15 +150,21 @@ void main() {
       expect(panelist, isNot(contains('/advisees')));
     });
 
-    test('the coordinator gets Faculty and the dean does not', () {
+    test('the coordinator gets Users and the dean does not', () {
       expect(
         destinationsFor(role: UserRole.coordinator).map((d) => d.route),
-        contains('/invites'),
+        contains('/users'),
       );
       expect(
         destinationsFor(role: UserRole.dean).map((d) => d.route),
-        isNot(contains('/invites')),
+        isNot(contains('/users')),
       );
+    });
+
+    test('the Users destination also owns /invites', () {
+      final users = destinationsFor(role: UserRole.coordinator)
+          .firstWhere((d) => d.route == '/users');
+      expect(users.owns('/invites'), isTrue);
     });
 
     test('no role is given a route that does not exist in the app', () {
@@ -135,7 +173,7 @@ void main() {
       const known = {
         '/overview', '/thesis', '/thesis/chapters', '/defences',
         '/advisees', '/panels', '/nominations', '/approvals',
-        '/recommendations', '/title-defences', '/readiness', '/invites',
+        '/recommendations', '/title-defences', '/readiness', '/users',
       };
       for (final role in UserRole.values) {
         for (final d in destinationsFor(

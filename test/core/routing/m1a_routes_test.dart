@@ -203,24 +203,24 @@ void main() {
   });
 
   testWidgets(
-      'the coordinator Faculty destination reaches /invites after the '
+      'the coordinator Users destination reaches /users after the '
       'Overview shift', (tester) async {
     // Prepending Overview shifted every other coordinator destination's
-    // index by one -- Faculty moved from index 4 to index 5. The dashboard
-    // used to jump on a hard-coded `if (i == 4)`, which would have silently
-    // routed this exact tap (now index 5) to whatever destination 4
-    // (Readiness) renders instead, with no error. This is the regression
-    // test for that literal, exercised through the real router the way the
-    // bug actually shipped.
+    // index by one -- this destination (Faculty, now Users) moved from
+    // index 4 to index 5. The dashboard used to jump on a hard-coded
+    // `if (i == 4)`, which would have silently routed this exact tap (now
+    // index 5) to whatever destination 4 (Readiness) renders instead, with
+    // no error. This is the regression test for that literal, exercised
+    // through the real router the way the bug actually shipped.
     final c = await containerFor('coordinator', 'u5');
     addTearDown(c.dispose);
     await pumpApp(tester, c);
 
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Faculty')));
+        of: find.byType(NavigationRail), matching: find.text('Users')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+    expect(find.byKey(const Key('usersScreen')), findsOneWidget);
     expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
     expect(find.byKey(const Key('readinessScreen')), findsNothing);
   });

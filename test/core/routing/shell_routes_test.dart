@@ -593,6 +593,55 @@ void main() {
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
   });
 
+  // --- Task 6: the Users destination owns two routes ---
+
+  testWidgets('both /users and /invites highlight the Users destination',
+      (tester) async {
+    // Users is the first destination in the app to populate `alsoOwns`
+    // ('/invites', alongside its own '/users'). Both routes must light up
+    // the same rail entry, or the coordinator lands on the Invites tab
+    // with the sidebar telling them they are somewhere else.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/users');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('usersScreen')), findsOneWidget);
+    var rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    final usersIndex = rail.destinations
+        .indexWhere((d) => (d.label as Text).data == 'Users');
+    expect(usersIndex, isNonNegative);
+    expect(rail.selectedIndex, usersIndex,
+        reason: '/users must select the Users destination');
+
+    c.read(goRouterProvider).go('/invites');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+    rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    expect(rail.selectedIndex, usersIndex,
+        reason: '/invites must ALSO select the Users destination');
+  });
+
+  testWidgets('a student is redirected home from /users and /invites',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('student', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/users');
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('usersScreen')), findsNothing);
+
+    c.read(goRouterProvider).go('/invites');
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsNothing);
+  });
+
   testWidgets('a profile deleted AFTER the shell mounts reaches /no-profile',
       (tester) async {
     // The redirect does re-fire on a profile change -- app_router.dart's
