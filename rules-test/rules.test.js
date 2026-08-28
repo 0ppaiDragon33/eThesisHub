@@ -3662,6 +3662,108 @@ test("PROBE: subject update-injects explicit null designation onto an existing u
     ));
   });
 
+test("a nomination naming an adviser-only nominee as PANELIST is refused",
+  async () => {
+    await seedRole("nom-leader-uid", "student");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/nom-adviser-only-uid"), {
+        fullName: "Dr. A", email: "ao@isufst.edu.ph", role: "faculty",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+        nominableAsAdviser: true, nominableAsPanelist: false,
+      });
+    });
+    await seedThesis("t-nom-desig", "nom-leader-uid", "draft");
+
+    const leader = env
+      .authenticatedContext("nom-leader-uid", {
+        email: "nom-leader-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(leader, "theses/t-nom-desig/nominations/nom-adviser-only-uid"), {
+        nomineeUid: "nom-adviser-only-uid", nomineeName: "Dr. A",
+        position: "panelist", exOfficio: false,
+        conformeStatus: "pending", respondedAt: null, declineReason: null,
+      }));
+  });
+
+// The control: the same nominee, the position they ARE designated for.
+test("the same nominee succeeds as ADVISER", async () => {
+  await seedRole("nom-leader2-uid", "student");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/nom-adviser-only2-uid"), {
+      fullName: "Dr. A", email: "ao2@isufst.edu.ph", role: "faculty",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+      nominableAsAdviser: true, nominableAsPanelist: false,
+    });
+  });
+  await seedThesis("t-nom-desig2", "nom-leader2-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader2-uid", {
+      email: "nom-leader2-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-desig2/nominations/nom-adviser-only2-uid"), {
+      nomineeUid: "nom-adviser-only2-uid", nomineeName: "Dr. A",
+      position: "adviser", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+    }));
+});
+
+test("an account with NO designation fields is still nominable", async () => {
+  // Every account predates these fields. If this fails, deploying the
+  // milestone makes the entire existing faculty unpickable.
+  await seedRole("nom-leader3-uid", "student");
+  await seedRole("nom-legacy-uid", "faculty");   // no designation written
+  await seedThesis("t-nom-legacy", "nom-leader3-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader3-uid", {
+      email: "nom-leader3-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-legacy/nominations/nom-legacy-uid"), {
+      nomineeUid: "nom-legacy-uid", nomineeName: "Dr. L",
+      position: "panelist", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+    }));
+});
+
+test("an EX-OFFICIO nomination ignores designation entirely", async () => {
+  // Spec D32: that seat comes from the office, not from a list.
+  await seedRole("nom-leader4-uid", "student");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/nom-dean-uid"), {
+      fullName: "Dean B", email: "dean-nom@isufst.edu.ph", role: "dean",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+      nominableAsAdviser: false, nominableAsPanelist: false,
+    });
+  });
+  await seedThesis("t-nom-exof", "nom-leader4-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader4-uid", {
+      email: "nom-leader4-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-exof/nominations/nom-dean-uid"), {
+      nomineeUid: "nom-dean-uid", nomineeName: "Dean B",
+      position: "panelist", exOfficio: true,
+      conformeStatus: "exOfficio", respondedAt: null, declineReason: null,
+    }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

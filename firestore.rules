@@ -511,6 +511,25 @@ service cloud.firestore {
         // faculty inbox's collection-group query filters on the field while
         // the collection-group read rule authorises on the id; if they could
         // disagree, one nominee's seat could be filed under another's query.
+        //
+        // Designation — a coordinator marks, per account, whether it may be
+        // nominated as adviser and/or as panelist. Like the role above, this
+        // is read from `users/{nomineeUid}` rather than `facultyDirectory`:
+        // the directory is that same client-written, self-maintained mirror,
+        // so trusting it would make designation self-declarable too. The
+        // field defaults to `true` on absence because every account that
+        // predates this milestone has neither field set — reading absence as
+        // "not nominable" would silently lock out the entire existing
+        // faculty. This is confined to the non-ex-officio branch: an
+        // ex-officio seat is conferred by office, not by a coordinator's
+        // checkbox, and must never be blocked by a missed designation.
+        function nomineeDesignatedFor(uid, position) {
+          let u = get(/databases/$(database)/documents/users/$(uid)).data;
+          return position == 'adviser'
+                 ? u.get('nominableAsAdviser', true)
+                 : u.get('nominableAsPanelist', true);
+        }
+
         function mayCreateNomination() {
           let t = thesisData(thesisId);
           let role = roleOf(nomineeUid);
@@ -523,7 +542,8 @@ service cloud.firestore {
                  && role in ['faculty', 'coordinator', 'dean']
                  && d.nomineeUid == nomineeUid
                  && (
-                      (d.exOfficio == false && d.conformeStatus == 'pending')
+                      (d.exOfficio == false && d.conformeStatus == 'pending'
+                       && nomineeDesignatedFor(nomineeUid, d.position))
                       ||
                       (d.exOfficio == true
                        && d.conformeStatus == 'exOfficio'
