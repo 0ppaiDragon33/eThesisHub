@@ -3511,6 +3511,121 @@ test("a coordinator may still deactivate an account", async () => {
   }));
 });
 
+// --- Coordinator admin: designation on the directory mirror ---
+
+async function seedDirectory(uid, extra = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `facultyDirectory/${uid}`), {
+      fullName: "Dr. X", role: "faculty", ...extra,
+    });
+  });
+}
+
+test("an ordinary sign-in upsert still succeeds on an entry that carries designation",
+  async () => {
+    // THE regression this task exists to avoid. Under merge:true the
+    // hasOnly pin applies to the merged RESULT, so without widening it,
+    // designating someone breaks their sign-in housekeeping.
+    await seedRole("dir-signin-uid", "faculty");
+    await seedDirectory("dir-signin-uid", { nominableAsPanelist: false });
+
+    const self = env
+      .authenticatedContext("dir-signin-uid", {
+        email: "dir-signin-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertSucceeds(setDoc(
+      doc(self, "facultyDirectory/dir-signin-uid"),
+      { fullName: "Dr. X", role: "faculty", college: "CICT" },
+      { merge: true },
+    ));
+  });
+
+test("a faculty member may NOT change their own designation in the directory",
+  async () => {
+    // Widening hasOnly is exactly what would open this. D27's whole point.
+    await seedRole("dir-self-uid", "faculty");
+    await seedDirectory("dir-self-uid", { nominableAsAdviser: false });
+
+    const self = env
+      .authenticatedContext("dir-self-uid", {
+        email: "dir-self-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(self, "facultyDirectory/dir-self-uid"),
+      { nominableAsAdviser: true },
+      { merge: true },
+    ));
+  });
+
+test("a faculty member may NOT introduce designation on create", async () => {
+  await seedRole("dir-create-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("dir-create-uid", {
+      email: "dir-create-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(self, "facultyDirectory/dir-create-uid"), {
+    fullName: "Dr. X", role: "faculty", nominableAsAdviser: true,
+  }));
+});
+
+test("a coordinator may change designation on an existing entry", async () => {
+  await seedRole("dir-coord-uid", "coordinator");
+  await seedRole("dir-target-uid", "faculty");
+  await seedDirectory("dir-target-uid");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord-uid", {
+      email: "dir-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(
+    doc(coordinator, "facultyDirectory/dir-target-uid"),
+    { nominableAsPanelist: false },
+  ));
+});
+
+test("a coordinator may NOT change a name in the directory", async () => {
+  // The coordinator writes designation and nothing else; the subject
+  // owns their own name. Neither may write the other's fields.
+  await seedRole("dir-coord2-uid", "coordinator");
+  await seedDirectory("dir-target2-uid");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord2-uid", {
+      email: "dir-coord2-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(
+    doc(coordinator, "facultyDirectory/dir-target2-uid"),
+    { fullName: "Someone Else" },
+  ));
+});
+
+test("a coordinator may NOT create a directory entry", async () => {
+  // A coordinator-created entry would have no name and would appear as a
+  // blank row in the nomination picker.
+  await seedRole("dir-coord3-uid", "coordinator");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord3-uid", {
+      email: "dir-coord3-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(coordinator, "facultyDirectory/nobody-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

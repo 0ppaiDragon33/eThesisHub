@@ -1081,18 +1081,66 @@ service cloud.firestore {
       // nomination path itself. The written role must now equal the caller's
       // real role from `users/{uid}`, and only the four keys
       // `upsertOwnEntry` actually writes are accepted.
+      //
+      // D27 (coordinator admin): the directory now also mirrors
+      // `nominableAsAdviser`/`nominableAsPanelist` from `users/{uid}` so the
+      // student-facing nomination picker — which cannot read `users` — can
+      // filter on them. `upsertOwnEntry` writes with `SetOptions(merge:
+      // true)`, under which `request.resource.data` is the merged *result*,
+      // not the written subset (see the comment at
+      // `faculty_directory_repository.dart:43-46`). So once an entry carries
+      // either designation field, the subject's ordinary sign-in write
+      // becomes a six-key document, and `hasOnly` must accept six keys or
+      // every subsequent sign-in for a designated account is refused. That
+      // widening, by itself, would also let the subject set their own
+      // designation through the same merge — making it self-declarable,
+      // which is exactly what living on `users` (not `facultyDirectory`) is
+      // meant to prevent. So the widening is fenced: `subjectMayNotChange`
+      // below pins both designation fields to their current values (absent
+      // compares equal to absent, via `.get(key, <sentinel>)` on both
+      // sides) on every write this function allows, and only
+      // `mayCoordinatorSetDesignation` — a separate arm, update-only,
+      // touching only those two keys — may actually change them.
+      //
+      // The sentinel must be a value neither field can legitimately hold —
+      // `true` is NOT safe here even though both fields are booleans: on
+      // create, `resource` doesn't exist so the "current value" side falls
+      // back to the sentinel, and a subject creating the entry with
+      // `nominableAsAdviser: true` would then compare `true == true` and be
+      // wrongly admitted. (Caught by the "may NOT introduce designation on
+      // create" test — see task-3-report.md for the falsification.) `null`
+      // is never a value either field holds, so it can't collide.
+      function subjectMayNotChange(field) {
+        return request.resource.data.get(field, null)
+               == (resource != null ? resource.data.get(field, null) : null);
+      }
+
       function mayWriteOwnDirectoryEntry() {
         let role = myRole();
         return signedIn()
                && request.auth.uid == uid
                && role != 'student'
                && request.resource.data.keys().hasOnly(
-                    ['fullName', 'role', 'college', 'specialization'])
-               && request.resource.data.role == role;
+                    ['fullName', 'role', 'college', 'specialization',
+                     'nominableAsAdviser', 'nominableAsPanelist'])
+               && request.resource.data.role == role
+               && subjectMayNotChange('nominableAsAdviser')
+               && subjectMayNotChange('nominableAsPanelist');
+      }
+
+      // Update-only: a coordinator-created entry would have no name (it
+      // never runs `upsertOwnEntry`) and would appear as a blank row in the
+      // nomination picker, so this arm may only touch an entry that already
+      // exists, and only the two designation fields.
+      function mayCoordinatorSetDesignation() {
+        return isCoordinator()
+               && resource != null
+               && onlyChanged(['nominableAsAdviser', 'nominableAsPanelist']);
       }
 
       allow read: if verified();
-      allow create, update: if mayWriteOwnDirectoryEntry();
+      allow create, update: if mayWriteOwnDirectoryEntry()
+                             || mayCoordinatorSetDesignation();
       // Nobody removes a directory entry: a deleted entry would silently
       // drop an office holder out of the ex-officio picker. Deactivation
       // lives on `users.active` instead.
