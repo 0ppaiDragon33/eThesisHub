@@ -44,11 +44,31 @@ Future<void> seatOnPanel(
         .doc(uid)
         .set({'nomineeUid': uid, 'conformeStatus': 'accepted'});
 
+/// [nominableAsAdviser] / [nominableAsPanelist] seed a `users/{uid}`
+/// designation document when either is given (a missing key on a seeded
+/// doc still defaults to `true`, matching production). Leaving both null
+/// seeds NO profile document at all -- the degradation path
+/// [_deriveFacultyMode] takes when there is nothing to read, which every
+/// pre-existing test below relies on to keep exercising the pure
+/// position-only fallback.
 Future<ProviderContainer> containerFor(
   FakeFirebaseFirestore db, {
   String uid = 'f1',
   String? storedMode,
+  bool? nominableAsAdviser,
+  bool? nominableAsPanelist,
+  List<Override> extraOverrides = const [],
 }) async {
+  if (nominableAsAdviser != null || nominableAsPanelist != null) {
+    await db.collection('users').doc(uid).set({
+      'fullName': 'Test Faculty',
+      'email': '$uid@isufst.edu.ph',
+      'role': 'faculty',
+      'active': true,
+      'nominableAsAdviser': ?nominableAsAdviser,
+      'nominableAsPanelist': ?nominableAsPanelist,
+    });
+  }
   SharedPreferences.setMockInitialValues(
       storedMode == null ? {} : {facultyModeKey: storedMode});
   final prefs = await SharedPreferences.getInstance();
@@ -61,6 +81,7 @@ Future<ProviderContainer> containerFor(
         mockUser: MockUser(uid: uid, email: '$uid@isufst.edu.ph'),
       ),
     ),
+    ...extraOverrides,
   ]);
   addTearDown(container.dispose);
   return container;
@@ -168,6 +189,150 @@ void main() {
           FacultyMode.panelist);
       expect(container.read(facultyModeProvider), FacultyMode.adviser,
           reason: 'the stored preference is untouched');
+    });
+  });
+
+  // Spec §6's truth table (D30): capability is the UNION of designation and
+  // positions actually held. Neither subtracts. Every row gets its own test
+  // -- testing only the rows where designation and reality agree would pass
+  // with the union quietly replaced by designation alone, which is exactly
+  // what the falsification below (temporarily) does to prove this suite
+  // would catch it.
+  group('the designation union (spec D30 / §6 truth table)', () {
+    Future<bool> bothCapable(ProviderContainer c) =>
+        c.read(facultyHoldsBothCapabilitiesProvider.future);
+
+    test('both designated, nothing held -> both, switch shown', () async {
+      final db = FakeFirebaseFirestore();
+      final container = await containerFor(
+        db,
+        nominableAsAdviser: true,
+        nominableAsPanelist: true,
+      ); // no stored preference -> defaults to adviser
+
+      expect(await container.read(effectiveFacultyModeProvider.future),
+          FacultyMode.adviser);
+      expect(await bothCapable(container), isTrue);
+    });
+
+    test('adviser designated, nothing held -> adviser, no switch', () async {
+      final db = FakeFirebaseFirestore();
+      final container = await containerFor(
+        db,
+        nominableAsAdviser: true,
+        nominableAsPanelist: false,
+      );
+
+      expect(await container.read(effectiveFacultyModeProvider.future),
+          FacultyMode.adviser);
+      expect(await bothCapable(container), isFalse);
+    });
+
+    test('panelist designated, nothing held -> panelist, no switch',
+        () async {
+      final db = FakeFirebaseFirestore();
+      final container = await containerFor(
+        db,
+        nominableAsAdviser: false,
+        nominableAsPanelist: true,
+      );
+
+      expect(await container.read(effectiveFacultyModeProvider.future),
+          FacultyMode.panelist);
+      expect(await bothCapable(container), isFalse);
+    });
+
+    test(
+        'adviser designated, holds 3 panels -> BOTH, switch shown '
+        '(the row that proves the union)', () async {
+      // The load-bearing row. A coordinator narrowed this member to
+      // adviser-only, but they already sit on three panels -- live,
+      // approved responsibilities that must not vanish from their own
+      // screen just because their designation was narrowed afterwards
+      // (spec D30). If the union were quietly replaced by designation
+      // alone, this is the only row that would notice: every other row
+      // has designation and positions agreeing.
+      final db = FakeFirebaseFirestore();
+      for (final id in ['p1', 'p2', 'p3']) {
+        await db.collection('theses').doc(id).set(thesis());
+        await seatOnPanel(db, id, 'f1');
+      }
+      final container = await containerFor(
+        db,
+        nominableAsAdviser: true,
+        nominableAsPanelist: false,
+      ); // no stored preference -> defaults to adviser
+
+      expect(await container.read(panelPositionCountProvider.future), 3);
+      expect(await container.read(effectiveFacultyModeProvider.future),
+          FacultyMode.adviser,
+          reason: 'both capable, so the stored preference (adviser) wins');
+      expect(await bothCapable(container), isTrue,
+          reason: 'designation adds adviser, the 3 panels grant panelist -- '
+              'both, so the switch must show');
+    });
+
+    test('neither designated, nothing held -> neither, no destination',
+        () async {
+      final db = FakeFirebaseFirestore();
+      final container = await containerFor(
+        db,
+        nominableAsAdviser: false,
+        nominableAsPanelist: false,
+      );
+
+      expect(
+          await container.read(effectiveFacultyModeProvider.future), isNull,
+          reason: 'null is the real answer -- neither mode is reachable, '
+              'so destinationsFor offers neither Advisees nor Panels');
+      expect(await bothCapable(container), isFalse);
+    });
+
+    test('neither designated, holds 2 advisees -> adviser, no switch',
+        () async {
+      // A position already held always grants access even when designation
+      // was narrowed to nothing -- the other half of D30: a position can
+      // add capability just as much as designation can, it just cannot be
+      // the ONLY thing that adds it once this member is genuinely
+      // narrowed to zero designation.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis(adviserUid: 'f1'));
+      await db.collection('theses').doc('t2').set(thesis(adviserUid: 'f1'));
+      final container = await containerFor(
+        db,
+        nominableAsAdviser: false,
+        nominableAsPanelist: false,
+      );
+
+      expect(await container.read(effectiveFacultyModeProvider.future),
+          FacultyMode.adviser);
+      expect(await bothCapable(container), isFalse);
+    });
+
+    test(
+        'a failed profile read still yields a mode from positions alone '
+        '(degradation, spec §6)', () async {
+      // Nothing may depend on `users/{uid}` existing (or being readable) in
+      // order to render a faculty member's mode. A genuinely FAILED read --
+      // as opposed to a merely absent profile document, which the other
+      // tests in this file already exercise -- must fall back to exactly
+      // today's position-only derivation rather than leaving the member
+      // with no mode at all.
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis(adviserUid: 'f1'));
+
+      final container = await containerFor(
+        db,
+        extraOverrides: [
+          currentUserProvider.overrideWith(
+            (ref) => Stream.error(Exception('profile read failed')),
+          ),
+        ],
+      );
+
+      expect(await container.read(effectiveFacultyModeProvider.future),
+          FacultyMode.adviser,
+          reason: 'positions alone: one adviser thesis, zero panel seats');
     });
   });
 }

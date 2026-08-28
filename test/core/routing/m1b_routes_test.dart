@@ -10,10 +10,12 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
 Future<ProviderContainer> containerFor(
-    String role, String uid, FakeFirebaseFirestore db) async {
+    String role, String uid, FakeFirebaseFirestore db,
+    {bool? nominableAsAdviser}) async {
   await db.collection('users').doc(uid).set({
     'fullName': 'Test', 'email': 't@isufst.edu.ph', 'role': role,
     'active': true,
+    'nominableAsAdviser': ?nominableAsAdviser,
   });
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -82,15 +84,20 @@ void main() {
       'nomineeUid': 'u2', 'nomineeName': 'Dr. Test', 'position': 'panelist',
       'exOfficio': false, 'conformeStatus': 'accepted',
     });
-    final c = await containerFor('faculty', 'u2', db);
+    // Explicitly panelist-only: a missing designation now defaults to fully
+    // nominable (spec §6), so without this the stored preference's default
+    // (adviser) would win and Panels would never appear as a destination.
+    final c =
+        await containerFor('faculty', 'u2', db, nominableAsAdviser: false);
     addTearDown(c.dispose);
 
     await tester.pumpWidget(
         UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
     await tester.pumpAndSettle();
 
-    // u2 holds a panel seat and advises nothing, so the effective mode is
-    // clamped to panelist and 'Panels' is the destination after Overview --
+    // u2 holds a panel seat, advises nothing, and is designated
+    // panelist-only, so the effective mode is clamped to panelist and
+    // 'Panels' is the destination after Overview --
     // Overview now lands first and is mode-independent, so this still needs
     // one tap, but into Panels rather than Advisees. Before the clamp, a
     // panelist landed in adviser mode on an empty Advisees list and could

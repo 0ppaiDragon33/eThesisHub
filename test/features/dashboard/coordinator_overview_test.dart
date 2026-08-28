@@ -255,15 +255,16 @@ void main() {
   });
 
   testWidgets(
-      'the Faculty destination still reaches /invites after the Overview '
+      'the Users destination still reaches /users after the Overview '
       'shift', (tester) async {
     // Prepending Overview shifted every other coordinator destination's
-    // index by one -- Faculty moved from index 4 to index 5. The dashboard
-    // used to jump on a hard-coded `if (i == 4)`, which would have silently
-    // routed this exact tap (now index 5) to whatever destination 4
-    // (Readiness) renders instead, with no error. The index literal is
-    // gone with the dashboard, but the property it guarded is not: tapping
-    // Faculty must reach the invites screen and nothing else.
+    // index by one -- this destination (Faculty, now Users) moved from
+    // index 4 to index 5. The dashboard used to jump on a hard-coded
+    // `if (i == 4)`, which would have silently routed this exact tap (now
+    // index 5) to whatever destination 4 (Readiness) renders instead, with
+    // no error. The index literal is gone with the dashboard, but the
+    // property it guarded is not: tapping Users must reach the accounts
+    // screen and nothing else.
     //
     // Wide on purpose. The destinations live in the app shell now, which
     // shows them as a rail above 900px and behind a hamburger below it —
@@ -280,10 +281,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Faculty')));
+        of: find.byType(NavigationRail), matching: find.text('Users')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+    expect(find.byKey(const Key('usersScreen')), findsOneWidget);
     expect(find.text('Defence readiness'), findsNothing);
   });
 

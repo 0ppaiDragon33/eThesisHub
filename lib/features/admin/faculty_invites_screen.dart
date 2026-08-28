@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/faculty_invite.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// Lets a Research Coordinator promote someone to faculty, coordinator or
@@ -152,6 +153,12 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
+              // The Invites half of the Users destination's two tabs. Both
+              // tabs carry the same strip: without it this route rendered
+              // with the rail highlighting "Users" and no way back to
+              // Accounts anywhere on the screen (spec §5).
+              const UsersTabs(selected: UsersTab.invites),
+              const SizedBox(height: 16),
               const Text('Invite a faculty member',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),

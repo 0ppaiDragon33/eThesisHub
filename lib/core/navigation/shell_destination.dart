@@ -52,7 +52,11 @@ class ShellDestination {
 List<ShellDestination> destinationsFor({
   required UserRole role,
   bool chaptersUnlocked = false,
-  FacultyMode facultyMode = FacultyMode.adviser,
+  // Nullable: `null` means the member currently holds neither designation
+  // nor a position for either mode, and (spec §6) gets neither the Advisees
+  // nor the Panels destination at all rather than one that leads to an
+  // empty screen.
+  FacultyMode? facultyMode = FacultyMode.adviser,
 }) {
   const overview = ShellDestination(
     label: 'Overview',
@@ -87,14 +91,16 @@ List<ShellDestination> destinationsFor({
     UserRole.faculty => [
         overview,
         // One or the other, never both: the mode is the primary axis and
-        // each mode is its own clean list (design decision D5).
+        // each mode is its own clean list (design decision D5). `null`
+        // (neither designated nor holding a position for either mode)
+        // declares NEITHER destination — not an empty one (spec §6).
         if (facultyMode == FacultyMode.adviser)
           const ShellDestination(
             label: 'Advisees',
             icon: Icons.school_outlined,
             route: '/advisees',
           )
-        else
+        else if (facultyMode == FacultyMode.panelist)
           const ShellDestination(
             label: 'Panels',
             icon: Icons.forum_outlined,
@@ -145,9 +151,10 @@ List<ShellDestination> destinationsFor({
           route: '/readiness',
         ),
         const ShellDestination(
-          label: 'Faculty',
-          icon: Icons.badge_outlined,
-          route: '/invites',
+          label: 'Users',
+          icon: Icons.people_outline,
+          route: '/users',
+          alsoOwns: ['/invites'],
         ),
       ],
   };
@@ -159,20 +166,34 @@ List<ShellDestination> destinationsFor({
 /// than highlighting the wrong thing.
 ///
 /// When multiple destinations own a location, returns the most specific
-/// one (the one with the longest route), since nested destinations like
-/// '/thesis/chapters' should be preferred over '/thesis'.
+/// one -- the one whose matched root (its [ShellDestination.route] or one
+/// of its [ShellDestination.alsoOwns] entries) is longest, since nested
+/// roots like '/thesis/chapters' should be preferred over '/thesis'.
+///
+/// Compares the length of the ROOT THAT ACTUALLY MATCHED, never
+/// `d.route.length` alone: a destination can own a location only through
+/// an `alsoOwns` entry deeper than its own bare route (Users owns
+/// '/invites' this way), and sorting by `d.route` would then prefer a
+/// shorter, less specific match purely because that destination's own
+/// route happened to be a longer string. See
+/// `shell_destination_test.dart`'s "the tiebreak compares the matched
+/// root" case for the scenario this would get wrong.
 ShellDestination? destinationForLocation(
   List<ShellDestination> destinations,
   String location,
 ) {
-  final owners = destinations.where((d) => d.owns(location)).toList();
-  if (owners.isEmpty) return null;
-  // Prefer the destination with the longest route. Today alsoOwns is
-  // always empty, so this sorts by route.length. If a destination ever
-  // gains an alsoOwns entry deeper than another destination's bare route,
-  // this would pick wrongly (should compare the matched root, not d.route).
-  owners.sort((a, b) => b.route.length.compareTo(a.route.length));
-  return owners.first;
+  ShellDestination? best;
+  var bestRootLength = -1;
+  for (final d in destinations) {
+    for (final root in [d.route, ...d.alsoOwns]) {
+      final matches = location == root || location.startsWith('$root/');
+      if (matches && root.length > bestRootLength) {
+        bestRootLength = root.length;
+        best = d;
+      }
+    }
+  }
+  return best;
 }
 
 /// True when the shell should offer a back control.
@@ -180,13 +201,26 @@ ShellDestination? destinationForLocation(
 /// Two cases: a location nested beneath a destination, and a location no
 /// destination owns at all. In both the sidebar alone cannot return the
 /// reader where they came from.
+///
+/// An `alsoOwns` root is NOT one of those cases. `alsoOwns` names a route
+/// the destination owns as a PEER of its own -- the Users destination owns
+/// '/users' and '/invites' as its two tabs -- not a screen nested beneath
+/// it. Comparing against `owner.route` alone made '/invites' answer `true`
+/// and drew a back control on a top-level tab, which says "you are one
+/// level down" about a place you are not, and points at whatever route the
+/// reader happened to visit before rather than at a parent, since there is
+/// no parent. Both tabs carry the Accounts/Invites strip, so leaving one is
+/// already a tab away and the back control adds nothing but the wrong
+/// claim. Matching any of the destination's roots is the same test
+/// [destinationForLocation] itself uses to decide ownership, so the two
+/// stay consistent.
 bool isDeeperThanDestination(
   List<ShellDestination> destinations,
   String location,
 ) {
   final owner = destinationForLocation(destinations, location);
   if (owner == null) return true;
-  return location != owner.route;
+  return location != owner.route && !owner.alsoOwns.contains(location);
 }
 
 /// Whether [route] is a screen below a destination for [role] -- the exact

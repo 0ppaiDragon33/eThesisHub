@@ -33,6 +33,12 @@ Future<ProviderContainer> containerFor(
   FakeFirebaseFirestore db, {
   required String uid,
   required String role,
+  // Both default `true` -- a missing designation reads as fully nominable
+  // (spec §6) -- so a scenario that means "panelist only" or "adviser only"
+  // must say so explicitly now that designation feeds the mode switch, not
+  // rely on holding just the one position the way it did before Task 8.
+  bool? nominableAsAdviser,
+  bool? nominableAsPanelist,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -41,6 +47,8 @@ Future<ProviderContainer> containerFor(
     'email': '$uid@isufst.edu.ph',
     'role': role,
     'active': true,
+    'nominableAsAdviser': ?nominableAsAdviser,
+    'nominableAsPanelist': ?nominableAsPanelist,
   });
   return ProviderContainer(overrides: [
     firestoreProvider.overrideWithValue(db),
@@ -144,6 +152,14 @@ void main() {
       // The reported bug: they landed on an empty Advisees list and could
       // not leave, because the switch hides itself precisely when you hold
       // no adviser position.
+      //
+      // A missing designation now defaults to fully nominable (spec §6), so
+      // holding only a panel position is no longer, on its own, enough to
+      // make someone "panelist only" -- a coordinator's explicit narrowing
+      // is what does that. Seeding `nominableAsAdviser: false` is what makes
+      // this genuinely a panelist-only scenario under the new rule, rather
+      // than one that happens to hold no adviser position today but could
+      // still be designated for it.
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis(adviserUid: 'other'));
       await db
@@ -151,7 +167,12 @@ void main() {
           .doc('p1')
           .set({'nomineeUid': 'p1', 'conformeStatus': 'accepted'});
 
-      final c = await containerFor(db, uid: 'p1', role: 'faculty');
+      final c = await containerFor(
+        db,
+        uid: 'p1',
+        role: 'faculty',
+        nominableAsAdviser: false,
+      );
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
@@ -251,10 +272,10 @@ void main() {
       expect(find.byKey(const Key('defencesScreen')), findsNothing);
     });
 
-    testWidgets('the coordinator keeps Faculty as a jump, not a panel',
+    testWidgets('the coordinator keeps Users as a jump, not a panel',
         (tester) async {
-      // Invites are a different job from reviewing theses, and they have
-      // their own screen already.
+      // Account administration is a different job from reviewing theses,
+      // and it has its own screen already.
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'c1', role: 'coordinator');
       addTearDown(c.dispose);
@@ -270,8 +291,10 @@ void main() {
       expect(find.byKey(const Key('readinessScreen')), findsOneWidget);
       expect(find.byKey(const Key('recommendationsScreen')), findsNothing);
 
-      await tapDestination(tester, 'Faculty');
-      expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+      await tapDestination(tester, 'Users');
+      // 'Users' lands on '/users' (Accounts), not '/invites' directly --
+      // Invites is the destination's other tab, see users_screen.dart.
+      expect(find.byKey(const Key('usersScreen')), findsOneWidget);
       expect(find.byKey(const Key('readinessScreen')), findsNothing);
     });
 
@@ -360,6 +383,11 @@ void main() {
       // empty "No defences waiting" was the first thing a panelist saw, and
       // their actual schedule sat underneath it. Two unrelated lists whose
       // widgets are even named alike.
+      //
+      // Explicitly panelist-only (see the identical note above): a missing
+      // designation now defaults to fully nominable, so without narrowing
+      // this member the stored preference's default (adviser) would win
+      // and 'Panels' would never appear to tap.
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis(adviserUid: 'other'));
       await db
@@ -374,7 +402,12 @@ void main() {
         'leaderUid': 'l1', 'status': 'scheduled', 'createdBy': 'c1',
       });
 
-      final c = await containerFor(db, uid: 'p1', role: 'faculty');
+      final c = await containerFor(
+        db,
+        uid: 'p1',
+        role: 'faculty',
+        nominableAsAdviser: false,
+      );
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 

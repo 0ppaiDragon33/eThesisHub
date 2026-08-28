@@ -87,13 +87,22 @@ void main() {
         findsNothing);
   });
 
-  testWidgets('a member with no positions lands on Panels, not an empty '
-      'Advisees list', (tester) async {
-    // The reported failure: FacultyMode.fromString(null) resolves to
-    // adviser, so a newly invited faculty member landed on an empty
-    // Advisees list -- and could not leave, because the mode switch hides
-    // itself precisely when you hold no adviser position. The effective
-    // mode is now clamped to the positions actually held.
+  testWidgets(
+      'a newly invited member with no positions gets the mode switch, not '
+      'an empty screen and no way out', (tester) async {
+    // The reported failure this milestone closes: `FacultyMode.fromString
+    // (null)` resolves to adviser, so a newly invited faculty member landed
+    // on an empty Advisees list -- and could not leave, because the switch
+    // was gated on holding an adviser position, which they never had.
+    //
+    // A missing `users/{uid}` designation field defaults to `true` for both
+    // `nominableAsAdviser` and `nominableAsPanelist` (spec §6): a brand-new
+    // account, not yet narrowed by a coordinator, is designated for both.
+    // Capability is the union of designation and positions held, so this
+    // member is "both capable" even though they hold zero positions --
+    // which is exactly the fix: they land on the stored preference
+    // (defaulting to Advisees) WITH the switch, rather than being stranded
+    // wherever the old position-only clamp happened to put them.
     //
     // Through the REAL router and wide (1000px), because the destinations
     // this asserts on moved out of the deleted faculty dashboard and into
@@ -131,16 +140,26 @@ void main() {
     await tester.pumpAndSettle();
 
     // Overview is destination 0 regardless of position; it is the
-    // destination AFTER it -- the mode's own work -- that must be Panels,
-    // not an empty Advisees list.
+    // destination AFTER it -- the mode's own work -- that must be Advisees
+    // (the stored preference's default), not absent and not a dead end.
     final rail = find.byType(NavigationRail);
-    expect(find.descendant(of: rail, matching: find.text('Panels')),
-        findsOneWidget);
     expect(find.descendant(of: rail, matching: find.text('Advisees')),
-        findsNothing);
+        findsOneWidget);
     expect(find.byType(ErrorWidget), findsNothing);
 
-    await tester.tap(find.descendant(of: rail, matching: find.text('Panels')));
+    // And the switch is there, because they can reach both modes -- so
+    // Panels is not unreachable even though no position ever put them there.
+    expect(find.byKey(const Key('facultyModeSegmented')), findsOneWidget);
+
+    // The switch only re-routes off the mode's OWN screen (`/advisees` or
+    // `/panels`); on Overview it would just relabel the rail. Navigate to
+    // Advisees first so flipping the switch has somewhere to move FROM.
+    await tester
+        .tap(find.descendant(of: rail, matching: find.text('Advisees')));
+    await tester.pumpAndSettle();
+    expect(find.text('My advisees'), findsOneWidget);
+
+    await tester.tap(find.text('Panelist'));
     await tester.pumpAndSettle();
     expect(find.text('My panels'), findsOneWidget);
     expect(find.text('My advisees'), findsNothing);

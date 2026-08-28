@@ -3426,6 +3426,344 @@ test("a student may still list their own thesis", async () => {
   )));
 });
 
+// --- Coordinator admin: designation on users ---
+
+test("a coordinator may set nomination designation on another account", async () => {
+  await seedRole("desig-coord-uid", "coordinator");
+  await seedRole("desig-faculty-uid", "faculty");
+
+  const coordinator = env
+    .authenticatedContext("desig-coord-uid", {
+      email: "desig-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(doc(coordinator, "users/desig-faculty-uid"), {
+    nominableAsAdviser: true,
+    nominableAsPanelist: false,
+  }));
+});
+
+// The control. Without it the test above would pass for a rule that let
+// anyone write anything.
+test("a faculty member may NOT set their own designation", async () => {
+  await seedRole("self-desig-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("self-desig-uid", {
+      email: "self-desig-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(doc(self, "users/self-desig-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("a coordinator may NOT set designation on their OWN account", async () => {
+  // request.auth.uid != uid is already in the rule; this keeps it there.
+  await seedRole("selfcoord-uid", "coordinator");
+
+  const coordinator = env
+    .authenticatedContext("selfcoord-uid", {
+      email: "selfcoord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(doc(coordinator, "users/selfcoord-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("a coordinator may NOT smuggle a role change alongside designation",
+  async () => {
+    // onlyChanged() is a hasOnly over affected keys, so a write touching
+    // role as well must fail entirely. This is the test that proves
+    // widening the list did not widen it too far.
+    await seedRole("smuggle-coord-uid", "coordinator");
+    await seedRole("smuggle-target-uid", "faculty");
+
+    const coordinator = env
+      .authenticatedContext("smuggle-coord-uid", {
+        email: "smuggle-coord-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(updateDoc(doc(coordinator, "users/smuggle-target-uid"), {
+      nominableAsAdviser: false,
+      role: "dean",
+    }));
+  });
+
+test("a coordinator may still deactivate an account", async () => {
+  // The pre-existing capability this milestone finally surfaces in the UI.
+  await seedRole("deact-coord-uid", "coordinator");
+  await seedRole("deact-target-uid", "faculty");
+
+  const coordinator = env
+    .authenticatedContext("deact-coord-uid", {
+      email: "deact-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(doc(coordinator, "users/deact-target-uid"), {
+    active: false,
+  }));
+});
+
+// --- Coordinator admin: designation on the directory mirror ---
+
+async function seedDirectory(uid, extra = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `facultyDirectory/${uid}`), {
+      fullName: "Dr. X", role: "faculty", ...extra,
+    });
+  });
+}
+
+test("an ordinary sign-in upsert still succeeds on an entry that carries designation",
+  async () => {
+    // THE regression this task exists to avoid. Under merge:true the
+    // hasOnly pin applies to the merged RESULT, so without widening it,
+    // designating someone breaks their sign-in housekeeping.
+    await seedRole("dir-signin-uid", "faculty");
+    await seedDirectory("dir-signin-uid", { nominableAsPanelist: false });
+
+    const self = env
+      .authenticatedContext("dir-signin-uid", {
+        email: "dir-signin-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertSucceeds(setDoc(
+      doc(self, "facultyDirectory/dir-signin-uid"),
+      { fullName: "Dr. X", role: "faculty", college: "CICT" },
+      { merge: true },
+    ));
+  });
+
+test("a faculty member may NOT change their own designation in the directory",
+  async () => {
+    // Widening hasOnly is exactly what would open this. D27's whole point.
+    await seedRole("dir-self-uid", "faculty");
+    await seedDirectory("dir-self-uid", { nominableAsAdviser: false });
+
+    const self = env
+      .authenticatedContext("dir-self-uid", {
+        email: "dir-self-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(self, "facultyDirectory/dir-self-uid"),
+      { nominableAsAdviser: true },
+      { merge: true },
+    ));
+  });
+
+test("a faculty member may NOT introduce designation on create", async () => {
+  await seedRole("dir-create-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("dir-create-uid", {
+      email: "dir-create-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(self, "facultyDirectory/dir-create-uid"), {
+    fullName: "Dr. X", role: "faculty", nominableAsAdviser: true,
+  }));
+});
+
+test("a coordinator may change designation on an existing entry", async () => {
+  await seedRole("dir-coord-uid", "coordinator");
+  await seedRole("dir-target-uid", "faculty");
+  await seedDirectory("dir-target-uid");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord-uid", {
+      email: "dir-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(
+    doc(coordinator, "facultyDirectory/dir-target-uid"),
+    { nominableAsPanelist: false },
+  ));
+});
+
+test("a coordinator may NOT change a name in the directory", async () => {
+  // The coordinator writes designation and nothing else; the subject
+  // owns their own name. Neither may write the other's fields.
+  await seedRole("dir-coord2-uid", "coordinator");
+  await seedDirectory("dir-target2-uid");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord2-uid", {
+      email: "dir-coord2-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(
+    doc(coordinator, "facultyDirectory/dir-target2-uid"),
+    { fullName: "Someone Else" },
+  ));
+});
+
+test("a coordinator may NOT create a directory entry", async () => {
+  // A coordinator-created entry would have no name and would appear as a
+  // blank row in the nomination picker.
+  await seedRole("dir-coord3-uid", "coordinator");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord3-uid", {
+      email: "dir-coord3-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(coordinator, "facultyDirectory/nobody-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("PROBE: subject creates entry with explicit null designation", async () => {
+  // Round-1 fix: a sentinel-comparison pin (whatever the sentinel) collides
+  // with a subject who writes that exact sentinel value. `null` collides
+  // just as `true` did. The pin must be a presence check, not a value
+  // check, so this must fail regardless of what value accompanies the key.
+  await seedRole("dir-null-create-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("dir-null-create-uid", {
+      email: "dir-null-create-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(self, "facultyDirectory/dir-null-create-uid"), {
+    fullName: "Dr. X", role: "faculty", nominableAsAdviser: null,
+  }));
+});
+
+test("PROBE: subject update-injects explicit null designation onto an existing undesignated entry",
+  async () => {
+    await seedRole("dir-null-update-uid", "faculty");
+    await seedDirectory("dir-null-update-uid");
+
+    const self = env
+      .authenticatedContext("dir-null-update-uid", {
+        email: "dir-null-update-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(self, "facultyDirectory/dir-null-update-uid"),
+      { nominableAsAdviser: null },
+      { merge: true },
+    ));
+  });
+
+test("a nomination naming an adviser-only nominee as PANELIST is refused",
+  async () => {
+    await seedRole("nom-leader-uid", "student");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/nom-adviser-only-uid"), {
+        fullName: "Dr. A", email: "ao@isufst.edu.ph", role: "faculty",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+        nominableAsAdviser: true, nominableAsPanelist: false,
+      });
+    });
+    await seedThesis("t-nom-desig", "nom-leader-uid", "draft");
+
+    const leader = env
+      .authenticatedContext("nom-leader-uid", {
+        email: "nom-leader-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(leader, "theses/t-nom-desig/nominations/nom-adviser-only-uid"), {
+        nomineeUid: "nom-adviser-only-uid", nomineeName: "Dr. A",
+        position: "panelist", exOfficio: false,
+        conformeStatus: "pending", respondedAt: null, declineReason: null,
+      }));
+  });
+
+// The control: the same nominee, the position they ARE designated for.
+test("the same nominee succeeds as ADVISER", async () => {
+  await seedRole("nom-leader2-uid", "student");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/nom-adviser-only2-uid"), {
+      fullName: "Dr. A", email: "ao2@isufst.edu.ph", role: "faculty",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+      nominableAsAdviser: true, nominableAsPanelist: false,
+    });
+  });
+  await seedThesis("t-nom-desig2", "nom-leader2-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader2-uid", {
+      email: "nom-leader2-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-desig2/nominations/nom-adviser-only2-uid"), {
+      nomineeUid: "nom-adviser-only2-uid", nomineeName: "Dr. A",
+      position: "adviser", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+    }));
+});
+
+test("an account with NO designation fields is still nominable", async () => {
+  // Every account predates these fields. If this fails, deploying the
+  // milestone makes the entire existing faculty unpickable.
+  await seedRole("nom-leader3-uid", "student");
+  await seedRole("nom-legacy-uid", "faculty");   // no designation written
+  await seedThesis("t-nom-legacy", "nom-leader3-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader3-uid", {
+      email: "nom-leader3-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-legacy/nominations/nom-legacy-uid"), {
+      nomineeUid: "nom-legacy-uid", nomineeName: "Dr. L",
+      position: "panelist", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+    }));
+});
+
+test("an EX-OFFICIO nomination ignores designation entirely", async () => {
+  // Spec D32: that seat comes from the office, not from a list.
+  await seedRole("nom-leader4-uid", "student");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/nom-dean-uid"), {
+      fullName: "Dean B", email: "dean-nom@isufst.edu.ph", role: "dean",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+      nominableAsAdviser: false, nominableAsPanelist: false,
+    });
+  });
+  await seedThesis("t-nom-exof", "nom-leader4-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader4-uid", {
+      email: "nom-leader4-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-exof/nominations/nom-dean-uid"), {
+      nomineeUid: "nom-dean-uid", nomineeName: "Dean B",
+      position: "panelist", exOfficio: true,
+      conformeStatus: "exOfficio", respondedAt: null, declineReason: null,
+    }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

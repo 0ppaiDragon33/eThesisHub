@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -62,29 +63,100 @@ final panelPositionCountProvider = FutureProvider<int>((ref) async {
   return all.where((id) => !advised.contains(id)).length;
 });
 
-/// The mode actually in force, which is the stored preference clamped to the
-/// positions the member really holds.
+/// Shared by [effectiveFacultyModeProvider] and
+/// [facultyHoldsBothCapabilitiesProvider], which both need the same
+/// derivation and would otherwise have to keep two copies of it in sync.
+/// Cheap to call twice: everything it awaits is itself a cached provider, so
+/// the underlying Firestore reads happen once regardless of how many callers
+/// watch this.
 ///
-/// The stored value is a preference, not an authority. Without the clamp a
-/// newly invited panelist is stranded: `FacultyMode.fromString(null)` returns
-/// `adviser`, so they land on an empty Advisees list — and they cannot leave,
-/// because the switch is hidden precisely when they hold no adviser position.
+/// Capability is the union of designation and positions actually held —
+/// neither subtracts. Designation adds what a member MAY become; a position
+/// they already hold always grants access, because a coordinator narrowing
+/// someone's designation must never make a live, approved responsibility
+/// vanish from that member's own screen (spec D30). This project has
+/// shipped that failure twice already: once permanently hiding a group
+/// leader's upload button, once routing a profile-less dean down the
+/// faculty code path.
 ///
-/// Holding neither position resolves to panelist. Both lists are empty either
-/// way, but Nominations sits beside Panels, and the Conforme request that
-/// prompted the invite is the one thing actually waiting for them.
-///
-/// Async on purpose. Collapsing the unresolved state into a default would
-/// flip the mode visibly on every launch, and would tell an adviser-only
-/// member they are a panelist for as long as the query takes.
-final effectiveFacultyModeProvider = FutureProvider<FacultyMode>((ref) async {
+/// On a failed (or missing) profile read, degrades to the position-only
+/// derivation this provider used before designation existed: both positions
+/// held keeps the stored preference, only one clamps to that one, and
+/// holding neither resolves to panelist (Nominations sits beside Panels,
+/// and the Conforme request that prompted an invite is the one thing
+/// actually waiting there). `currentUserProvider` cannot tell "the read
+/// failed" apart from "there is no profile document yet", and both cases
+/// get the same, always-non-null answer: nothing may depend on
+/// `users/{uid}` existing in order to render a mode at all.
+Future<({FacultyMode? mode, bool bothCapable})> _deriveFacultyMode(
+  Ref ref,
+) async {
   final stored = ref.watch(facultyModeProvider);
   final adviserCount = await ref.watch(adviserPositionCountProvider.future);
   final panelCount = await ref.watch(panelPositionCountProvider.future);
 
-  if (adviserCount > 0 && panelCount > 0) return stored;
-  if (adviserCount > 0) return FacultyMode.adviser;
-  return FacultyMode.panelist;
+  AppUser? profile;
+  try {
+    profile = await ref.watch(currentUserProvider.future);
+  } catch (_) {
+    profile = null;
+  }
+
+  if (profile == null) {
+    if (adviserCount > 0 && panelCount > 0) {
+      return (mode: stored, bothCapable: true);
+    }
+    if (adviserCount > 0) {
+      return (mode: FacultyMode.adviser, bothCapable: false);
+    }
+    return (mode: FacultyMode.panelist, bothCapable: false);
+  }
+
+  final canAdvise = profile.nominableAsAdviser || adviserCount > 0;
+  final canPanel = profile.nominableAsPanelist || panelCount > 0;
+
+  if (canAdvise && canPanel) return (mode: stored, bothCapable: true);
+  if (canAdvise) return (mode: FacultyMode.adviser, bothCapable: false);
+  if (canPanel) return (mode: FacultyMode.panelist, bothCapable: false);
+  return (mode: null, bothCapable: false);
+}
+
+/// The mode actually in force, or `null` when the member may reach neither
+/// Advisees nor Panels.
+///
+/// `null` is a real, durable answer here — not a stand-in for "still
+/// loading". A [FacultyMode] enum value cannot express "neither": it is
+/// persisted by [facultyModeProvider], whose `fromString` defaults a
+/// missing/unparseable stored value to adviser, so a third enum member would
+/// be an unreachable state hiding in a stored preference and would change
+/// how every already-stored value parses. The stored preference answers
+/// "which do you prefer when you hold both" (always one of two); this
+/// answers "which can you reach" (can genuinely be neither). Different
+/// questions get different types.
+///
+/// Every consumer must handle `null` — that is the point. `null` is exactly
+/// what suppresses the Advisees/Panels destination in `destinationsFor`
+/// (spec §6): a destination leading to an empty screen reads as a broken
+/// app, so "neither" declares no destination at all.
+///
+/// Async on purpose. Collapsing the unresolved state into a default would
+/// flip the mode visibly on every launch, and would tell an adviser-only
+/// member they are a panelist for as long as the query takes.
+final effectiveFacultyModeProvider = FutureProvider<FacultyMode?>((ref) async {
+  return (await _deriveFacultyMode(ref)).mode;
+});
+
+/// Whether the member currently holds BOTH capabilities — the gate for
+/// showing the Adviser/Panelist switch at all. A member with only one
+/// capability has nowhere the switch could move them, and one that could
+/// only ever lead to an empty list is a control that does nothing.
+///
+/// Kept separate from [effectiveFacultyModeProvider] because the mode alone
+/// cannot be inspected to recover this: an adviser-only member and a
+/// both-capable member whose stored preference happens to be adviser both
+/// resolve to `FacultyMode.adviser`.
+final facultyHoldsBothCapabilitiesProvider = FutureProvider<bool>((ref) async {
+  return (await _deriveFacultyMode(ref)).bothCapable;
 });
 
 /// Work waiting in whichever mode is NOT in force, for the switch's badge.
@@ -95,6 +167,10 @@ final effectiveFacultyModeProvider = FutureProvider<FacultyMode>((ref) async {
 /// deep in one role can see the other filling up without switching to check.
 final pendingInOtherModeProvider = FutureProvider<int>((ref) async {
   final mode = await ref.watch(effectiveFacultyModeProvider.future);
+
+  // Neither mode is reachable, so there is no "other mode" to have work
+  // waiting in, and no switch for a badge to sit on.
+  if (mode == null) return 0;
 
   if (mode == FacultyMode.adviser) {
     final ids = await ref.watch(myThesisIdsProvider.future);

@@ -593,6 +593,115 @@ void main() {
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
   });
 
+  // --- Task 6: the Users destination owns two routes ---
+
+  testWidgets('both /users and /invites highlight the Users destination',
+      (tester) async {
+    // Users is the first destination in the app to populate `alsoOwns`
+    // ('/invites', alongside its own '/users'). Both routes must light up
+    // the same rail entry, or the coordinator lands on the Invites tab
+    // with the sidebar telling them they are somewhere else.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/users');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('usersScreen')), findsOneWidget);
+    var rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    final usersIndex = rail.destinations
+        .indexWhere((d) => (d.label as Text).data == 'Users');
+    expect(usersIndex, isNonNegative);
+    expect(rail.selectedIndex, usersIndex,
+        reason: '/users must select the Users destination');
+
+    c.read(goRouterProvider).go('/invites');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+    rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    expect(rail.selectedIndex, usersIndex,
+        reason: '/invites must ALSO select the Users destination');
+  });
+
+  testWidgets(
+      'both tabs carry the Accounts/Invites strip and each navigates to '
+      'the other', (tester) async {
+    // Spec §5 promises a destination "with two tabs". The strip lived only
+    // on the Accounts screen, so /invites rendered with the rail
+    // highlighting "Users", the app bar reading "Invites", and no
+    // Accounts/Invites control anywhere on the screen -- a tab you could
+    // enter and not leave.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/users');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('usersTabAccounts')), findsOneWidget);
+    expect(find.byKey(const Key('usersTabInvites')), findsOneWidget);
+
+    // Accounts -> Invites.
+    await tester.tap(find.byKey(const Key('usersTabInvites')));
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/invites');
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
+
+    // And the strip is on THIS screen too, selected the other way.
+    expect(find.byKey(const Key('usersTabAccounts')), findsOneWidget);
+    expect(find.byKey(const Key('usersTabInvites')), findsOneWidget);
+    expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('usersTabInvites')))
+            .selected,
+        isTrue);
+
+    // Invites -> Accounts.
+    await tester.tap(find.byKey(const Key('usersTabAccounts')));
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/users');
+    expect(find.byKey(const Key('usersScreen')), findsOneWidget);
+  });
+
+  testWidgets('neither tab draws a back control -- both are top level',
+      (tester) async {
+    // Populating `alsoOwns` made '/invites' deeper than its owner's route
+    // by `isDeeperThanDestination`'s old `location != owner.route` test,
+    // which would draw a back control on a top-level tab. An `alsoOwns`
+    // root is a PEER of the destination's own route, not a screen beneath
+    // it, and the tab strip is what actually leaves it.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    for (final route in ['/users', '/invites']) {
+      c.read(goRouterProvider).go(route);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('shellBack')), findsNothing,
+          reason: '$route is a top-level tab of the Users destination');
+    }
+  });
+
+  testWidgets('a student is redirected home from /users and /invites',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('student', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/users');
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('usersScreen')), findsNothing);
+
+    c.read(goRouterProvider).go('/invites');
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/overview');
+    expect(find.byKey(const Key('facultyInvitesScreen')), findsNothing);
+  });
+
   testWidgets('a profile deleted AFTER the shell mounts reaches /no-profile',
       (tester) async {
     // The redirect does re-fire on a profile change -- app_router.dart's

@@ -90,7 +90,8 @@ const _staticTitles = {
   '/thesis/chapters': 'Chapters',
   '/defence/schedule': 'Schedule a defence',
   '/nominations': 'Nomination inbox',
-  '/invites': 'Faculty',
+  '/invites': 'Invites',
+  '/users': 'Users',
 };
 
 /// Wires [AppShell] to this app's providers and router.

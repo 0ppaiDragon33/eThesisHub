@@ -53,6 +53,13 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   List<String?> _panelUids = [null, null, null];
 
   String? _error;
+
+  /// The exception `_error` was translated from, kept for the code
+  /// underneath the sentence — see the field on `ErrorState`, whose
+  /// reasoning this mirrors: there are no server-side logs on the Spark
+  /// plan, so if the friendly copy is ever wrong the code is the only way
+  /// to tell.
+  Object? _errorCause;
   bool _busy = false;
 
   List<FacultyDirectoryEntry> _exOfficio = const [];
@@ -176,6 +183,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _errorCause = null;
     });
 
     try {
@@ -198,8 +206,9 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     } on FirebaseException catch (e) {
       if (!mounted) return;
       setState(() {
+        _errorCause = e;
         _error = e.code == 'permission-denied'
-            ? 'You do not have permission to submit this nomination.'
+            ? _permissionDeniedMessage(adviser, panelists)
             : 'Could not submit the nomination. Please try again.';
       });
     } catch (_) {
@@ -210,6 +219,67 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Turns a bare `permission-denied` on submit into a sentence naming who
+  /// and what, per spec §4.2.1.
+  ///
+  /// A faculty member invited and designated but who has never signed in
+  /// has no `facultyDirectory` entry yet. Their first sign-in creates one
+  /// through `upsertOwnEntry`, which the rules forbid from writing the
+  /// designation fields at all — so that entry reads as nominable for both
+  /// positions (a missing key defaults to `true`, same as
+  /// [FacultyDirectoryEntry]'s constructor) while `users/{uid}`, which the
+  /// student cannot read, may say otherwise. The picker offers that person
+  /// for a position `firestore.rules` then refuses. Nothing is corrupted
+  /// and nothing is exposed, but the student picked a name off a list this
+  /// screen showed them, so the refusal must say so in plain language —
+  /// never leave them staring at a bare Firestore code and guessing at a
+  /// network problem that was never the cause (the same lesson a
+  /// storage-upload investigation taught this project once already).
+  ///
+  /// A batched write does not report which document a security rule
+  /// refused, so every nominee whose designation the rules actually check
+  /// is a candidate: the adviser — always, office holder or not, because an
+  /// adviser nomination carries `exOfficio: false` and is checked like
+  /// anyone else's — plus every non-ex-officio panelist. Only a panelist
+  /// sitting by office is exempt, and a panel slot never offers one of
+  /// those in the first place. This screen's own floor of at least three
+  /// real panel members means a first submission almost always names
+  /// several. All of them are named together, never guessed at,
+  /// rather than picking one arbitrarily and risking exactly the kind of
+  /// confidently-wrong copy this method exists to avoid. The
+  /// single-sentence form is kept as the general case — not hardcoded to
+  /// "always plural" — so a submission that genuinely has only one
+  /// candidate still reads naturally, matching spec §4.2.1's example.
+  String _permissionDeniedMessage(
+    FacultyDirectoryEntry adviser,
+    List<FacultyDirectoryEntry> panelists,
+  ) {
+    final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
+    final candidates = <(String name, String position)>[
+      // The adviser is ALWAYS a candidate, office holder or not. An
+      // ex-officio office holder picked as adviser is written with
+      // `exOfficio: false`, so the rules check their `nominableAsAdviser`
+      // like anyone else's — excluding them here named the three innocent
+      // panelists and omitted the actual culprit, telling the student to
+      // replace the wrong people.
+      (adviser.fullName, 'adviser'),
+      for (final p in panelists)
+        if (!exOfficioUids.contains(p.uid)) (p.fullName, 'panelist'),
+    ];
+
+    if (candidates.length == 1) {
+      final (name, position) = candidates.first;
+      final article = position == 'adviser' ? 'an adviser' : 'a panelist';
+      return '$name is not available as $article this semester.';
+    }
+
+    final named =
+        candidates.map((c) => '${c.$1} (${c.$2})').join(', ');
+    return 'One of your nominees is not available for the position you '
+        'chose this semester: $named. Please choose someone else, or '
+        'contact your coordinator.';
   }
 
   /// One line in a picker: the name, then whatever actually distinguishes
@@ -256,19 +326,45 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     return taken;
   }
 
-  /// The adviser picker offers everyone; a panel picker hides the ex-officio
-  /// office holders.
+  /// The adviser picker offers everyone designated for that position; a
+  /// panel picker hides the ex-officio office holders and offers everyone
+  /// else designated as a panelist.
   ///
   /// A Research Coordinator or the Dean genuinely can advise a thesis, and
   /// that is a real position: it carries `exOfficio: false`, it needs their
   /// Conforme, and it prints on Form 1 as Thesis Adviser. So the adviser slot
   /// must keep offering them.
   ///
-  /// A panel slot must not. They already sit on every panel by office — the
-  /// "Also on your panel" card below lists them — so choosing one as a panel
-  /// member adds nobody: `submitNominations` resolves that pick into their
-  /// single automatic seat. Offering the choice at all only led to a
-  /// submit-time refusal for something the screen could have ruled out.
+  /// A panel slot must not offer an ex-officio office holder. They already
+  /// sit on every panel by office — the "Also on your panel" card below
+  /// lists them — so choosing one as a panel member adds nobody:
+  /// `submitNominations` resolves that pick into their single automatic
+  /// seat. Offering the choice at all only led to a submit-time refusal for
+  /// something the screen could have ruled out.
+  ///
+  /// D32's exemption covers the ex-officio SEAT and nothing else. An office
+  /// holder chosen in the ADVISER slot is not sitting by office: that
+  /// nomination is written with `exOfficio: false, position: 'adviser'`
+  /// (see `ThesisRepository.submitNominations`), so it lands in the
+  /// non-ex-officio branch of `mayCreateNomination` and IS checked against
+  /// `nominableAsAdviser`. Exempting them here offered a name the rules
+  /// then refused — and made designation and position disagree FORWARDS,
+  /// which D29 says cannot happen. So the adviser slot filters everyone,
+  /// office holders included; only the panel slot's ex-officio exclusion
+  /// above is about the seat.
+  ///
+  /// Everyone else is filtered on [FacultyDirectoryEntry.nominableAsAdviser]
+  /// / `.nominableAsPanelist`, set by a coordinator on the Users screen. A
+  /// missing key on either field reads as `true` — every account predates
+  /// these fields, and "absent means not nominable" would empty the picker
+  /// of the entire existing faculty the moment this deployed.
+  ///
+  /// This is a UX guard, not the authorization boundary: `firestore.rules`
+  /// is what actually refuses a nomination for a position its subject is
+  /// not designated for, on the Spark plan where rules are the only
+  /// enforcement point available. This filter only keeps the ordinary path
+  /// from ever reaching that refusal; [_permissionDeniedMessage] is what
+  /// handles the case where the two can still disagree (spec §4.2.1).
   ///
   /// The effective-panel-size check in [_submit] and the matching invariant
   /// in `submitNominations` both stay. This filter makes that state
@@ -278,9 +374,14 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     bool isAdviserSlot,
     List<FacultyDirectoryEntry> faculty,
   ) {
-    if (isAdviserSlot) return faculty;
     final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
-    return faculty.where((f) => !exOfficioUids.contains(f.uid)).toList();
+    if (isAdviserSlot) {
+      return faculty.where((f) => f.nominableAsAdviser).toList();
+    }
+    return faculty
+        .where((f) => !exOfficioUids.contains(f.uid))
+        .where((f) => f.nominableAsPanelist)
+        .toList();
   }
 
   DropdownButtonFormField<String> _picker(
@@ -471,10 +572,34 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(_error!,
-                          key: const Key('error'),
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_error!,
+                              key: const Key('error'),
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error)),
+                          // The code underneath the sentence, same pattern
+                          // as `ErrorState`: there are no server-side logs
+                          // on the Spark plan, so if the friendly copy is
+                          // ever wrong about the cause, the code is the
+                          // only way left to tell.
+                          if (_errorCause is FirebaseException)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '[${(_errorCause as FirebaseException).code}]',
+                                key: const Key('errorCode'),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                        color:
+                                            Theme.of(context).colorScheme.error),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   FilledButton(
                     key: const Key('submitNomination'),

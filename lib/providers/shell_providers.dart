@@ -31,7 +31,7 @@ final shellDestinationsProvider =
       final isFaculty = profile.role == UserRole.faculty;
       final modeAsync = isFaculty
           ? ref.watch(effectiveFacultyModeProvider)
-          : const AsyncValue<FacultyMode>.data(FacultyMode.adviser);
+          : const AsyncValue<FacultyMode?>.data(FacultyMode.adviser);
 
       // The faculty mode decides whether the sidebar offers Advisees or
       // Panels, so for a faculty member it is not optional detail — it is
@@ -60,10 +60,20 @@ final shellDestinationsProvider =
       // navigation for every role that never has a thesis at all.
       final thesis = ref.watch(myThesisProvider).valueOrNull;
 
+      // A genuinely FAILED mode (as opposed to one still resolving, already
+      // handled above) falls back to adviser so the sidebar stays reachable
+      // rather than stranding a faculty member with none at all -- the
+      // worst case is one wrong label, correctable via the mode switch. A
+      // successfully resolved `null`, by contrast, means "neither" and is
+      // passed straight through: `destinationsFor` is the one that turns it
+      // into "no Advisees, no Panels" rather than an empty screen.
+      final facultyMode =
+          modeAsync.hasError ? FacultyMode.adviser : modeAsync.valueOrNull;
+
       return AsyncValue.data(destinationsFor(
         role: profile.role,
         chaptersUnlocked: thesis?.status == ThesisStatus.titleApproved,
-        facultyMode: modeAsync.valueOrNull ?? FacultyMode.adviser,
+        facultyMode: facultyMode,
       ));
     },
   );
