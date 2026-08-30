@@ -189,7 +189,13 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
         ),
         FilledButton(
           key: const Key('goToGrades'),
-          onPressed: () => context.go('/grades'),
+          // The full path, and `push`, not `go`: '/grades' is not a route
+          // this app has, so it landed the adviser on GoRouter's error
+          // page and took the shell with it; and this is a deep screen
+          // under the Defences destination, so it stacks rather than
+          // replacing.
+          onPressed: () => context
+              .push('/defence/room/${widget.defenceId}/grades'),
           child: const Text('Go to grades'),
         ),
       ]);

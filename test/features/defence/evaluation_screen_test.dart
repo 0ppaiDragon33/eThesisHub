@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -199,6 +200,49 @@ void main() {
 
     expect(find.byKey(const Key('adviserRefusal')), findsOneWidget);
     expect(find.byKey(const Key('submitEvaluation')), findsNothing);
+  });
+
+  // The adviser's only way off this screen. It pointed at '/grades',
+  // which is not a route -- GoRouter answered with its error page and the
+  // shell went with it.
+  testWidgets('the adviser grades link reaches the grades screen',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed();
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(
+          MockFirebaseAuth(signedIn: true, mockUser: MockUser(uid: 'a1')),
+        ),
+      ],
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/defence/room/d1/evaluate',
+          routes: [
+            GoRoute(
+              path: '/defence/room/:defenceId/evaluate',
+              builder: (context, state) => EvaluationScreen(
+                  defenceId: state.pathParameters['defenceId']!),
+            ),
+            GoRoute(
+              path: '/defence/room/:defenceId/grades',
+              builder: (context, state) => Scaffold(
+                appBar: AppBar(
+                    title: Text('Grades ${state.pathParameters['defenceId']}')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('goToGrades')));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Grades d1'), findsOneWidget);
   });
 
   // The distinction D41 depends on staying visible.
