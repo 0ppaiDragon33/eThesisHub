@@ -125,6 +125,18 @@ Widget app(
       ),
     );
 
+/// Grown taller than the default 800x600 test surface, following the same
+/// pattern as `evaluation_screen_test.dart`'s and `title_defence_screen_
+/// test.dart`'s own `useTallSurface`: `goToGrades` sits below the log and
+/// other coordinator-only controls, and a widget below the fold cannot be
+/// found by `find.byKey` without either scrolling to it or growing the
+/// surface to fit it.
+void useTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('the log is live for the panel', (tester) async {
     final db = await seed();
@@ -602,6 +614,25 @@ void main() {
 
     expect(find.byKey(const Key('goToGrades')), findsOneWidget);
     expect(find.byKey(const Key('goToEvaluate')), findsNothing);
+  });
+
+  // Task 11 review, whole-branch: `goToGrades` is offered on two arms --
+  // always to the adviser once completed (covered above), and to a
+  // panelist once evaluations are released -- but only the adviser arm had
+  // a test. This pins the second.
+  testWidgets(
+      'a panelist is offered the grades too, once evaluations are released',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed(status: 'completed');
+    await db.collection('defenses').doc('d1').update({
+      'evaluationsReleasedAt': Timestamp.fromDate(DateTime(2026, 9, 24)),
+    });
+
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades')), findsOneWidget);
   });
 
   // D47. The verdict is the outcome the group must know, and it lives on

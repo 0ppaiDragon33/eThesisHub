@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
@@ -166,6 +167,14 @@ final facultyNeedsYouProvider =
   final chaptersByThesis = <String, List<ThesisChapter>>{};
   final chapterSubs = <String, StreamSubscription<List<ThesisChapter>>>{};
 
+  // defenceId -> this faculty member's own evaluation on it (null once
+  // resolved but not yet submitted), kept live by a subscription
+  // opened/closed as the defence list itself changes -- the same
+  // second-order shape as the chapter fan-in above, applied to
+  // `watchMyEvaluation` instead of `watchChapters`.
+  final evaluationsByDefence = <String, Evaluation?>{};
+  final evaluationSubs = <String, StreamSubscription<Evaluation?>>{};
+
   void emit() {
     // Wait for a real VALUE from each top-level source before emitting --
     // not merely for a non-null AsyncValue, which `fireImmediately` supplies
@@ -185,6 +194,18 @@ final facultyNeedsYouProvider =
     // prevent -- so wait for every open subscription to have reported once.
     for (final id in chapterSubs.keys) {
       if (!chaptersByThesis.containsKey(id)) return;
+    }
+
+    // Same reasoning for the evaluation fan-in: `syncEvaluationSubs` opens a
+    // subscription per relevant defence the moment the defence list
+    // resolves, but those subscriptions have not delivered a first snapshot
+    // yet. Emitting here could read a defence this panelist has already
+    // submitted for as still owed -- exactly the transient false positive
+    // (or, worse, a false "nothing needs you" if it under-counts) this gate
+    // exists to prevent -- so wait for every open subscription to have
+    // reported once.
+    for (final id in evaluationSubs.keys) {
+      if (!evaluationsByDefence.containsKey(id)) return;
     }
 
     final items = <NeedsYouItem>[];
@@ -224,8 +245,35 @@ final facultyNeedsYouProvider =
       }
     }
 
+    final submittedOn = {
+      for (final entry in evaluationsByDefence.entries)
+        if (entry.value != null) entry.key,
+    };
+
     final now = DateTime.now();
     for (final d in defences!.requireValue) {
+      // A panelist owes a sheet on every defence they sat that has closed
+      // and not yet been released. Gates on `evaluationsReleased`, NOT
+      // `isReleased` -- three lines apart in defence.dart and easy to
+      // confuse: `isReleased` is the comment log reaching the group,
+      // `evaluationsReleased` is the grades reaching the panel. The adviser
+      // is barred from scoring at all (D37), so they are never in
+      // `panelUids` here and this row can never nag them.
+      if (d.panelUids.contains(uid) &&
+          d.status == DefenceStatus.completed &&
+          !d.evaluationsReleased &&
+          !submittedOn.contains(d.id)) {
+        items.add(NeedsYouItem(
+          title: d.type.label,
+          detail: 'Score this defence against Form 5c.',
+          route: '/defence/room/${d.id}/evaluate',
+          chipLabel: 'Evaluate',
+          tone: NeedsYouTone.act,
+          deep: isDeepForRole(
+              UserRole.faculty, '/defence/room/${d.id}/evaluate'),
+        ));
+      }
+
       if (d.adviserUid == uid &&
           d.status == DefenceStatus.completed &&
           d.consolidatedAt == null) {
@@ -295,6 +343,38 @@ final facultyNeedsYouProvider =
     fireImmediately: true,
   );
 
+  // Opens an evaluation subscription for every currently relevant defence --
+  // one this faculty member sits on, closed, and not yet released -- and
+  // closes any whose defence fell off that set. Only the defence list
+  // decides which evaluation streams should be open: a defence that gets
+  // scheduled, closes, or is released moves it in or out of `relevant`
+  // without anything else changing.
+  void syncEvaluationSubs(List<Defence> currentDefences) {
+    final relevant = {
+      for (final d in currentDefences)
+        if (d.panelUids.contains(uid) &&
+            d.status == DefenceStatus.completed &&
+            !d.evaluationsReleased)
+          d.id,
+    };
+    for (final id in evaluationSubs.keys.toList()) {
+      if (!relevant.contains(id)) {
+        evaluationSubs.remove(id)?.cancel();
+        evaluationsByDefence.remove(id);
+      }
+    }
+    for (final id in relevant) {
+      if (evaluationSubs.containsKey(id)) continue;
+      evaluationSubs[id] = ref
+          .watch(defenceRepositoryProvider)
+          .watchMyEvaluation(id, uid)
+          .listen((evaluation) {
+        evaluationsByDefence[id] = evaluation;
+        emit();
+      }, onError: controller.addError);
+    }
+  }
+
   ref.listen<AsyncValue<List<Thesis>>>(
     myAdviseesProvider,
     (previous, next) {
@@ -309,6 +389,7 @@ final facultyNeedsYouProvider =
     myDefencesProvider,
     (previous, next) {
       defences = next;
+      next.whenData(syncEvaluationSubs);
       emit();
     },
     fireImmediately: true,
@@ -316,6 +397,9 @@ final facultyNeedsYouProvider =
 
   ref.onDispose(() {
     for (final s in chapterSubs.values) {
+      s.cancel();
+    }
+    for (final s in evaluationSubs.values) {
       s.cancel();
     }
     controller.close();
