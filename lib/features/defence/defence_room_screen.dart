@@ -364,6 +364,30 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                 .go('/defence/room/${widget.defenceId}/consolidated'),
             child: const Text('View consolidated comments'),
           ),
+          // D47's group half. Decided from `defence` alone, same as the
+          // isLeader gate above it: the group's route to the numbers is the
+          // paper grading sheet through the subject professor, and no arm
+          // of the rules grants them a read of any evaluation, so nothing
+          // here links to '/grades' -- the screen would load and then deny.
+          if (defence.status == DefenceStatus.completed)
+            if (defence.hasVerdict)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'Panel verdict: ${defence.panelVerdict!.label}',
+                  key: const Key('leaderVerdict'),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'The panel has not recorded a verdict for this defence '
+                  'yet.',
+                  key: Key('leaderVerdictPending'),
+                ),
+              ),
         ],
       );
     }
@@ -414,6 +438,16 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final thesisTitle =
         ref.watch(thesisByIdProvider(defence.thesisId)).valueOrNull?.workingTitle;
 
+    // The panelist's own sheet, watched only for a panelist on a closed
+    // defence -- the only reader this figure is ever shown to. Watching it
+    // unconditionally for everyone else would open a stream the rules deny
+    // to a role that never asked for it.
+    final isPanelist = uid != null && defence.panelUids.contains(uid);
+    final myEvaluation = isPanelist && defence.status == DefenceStatus.completed
+        ? ref.watch(myEvaluationProvider(widget.defenceId)).valueOrNull
+        : null;
+    final isAdviser = uid != null && uid == defence.adviserUid;
+
     return KeyedSubtree(
       key: const Key('defenceRoom'),
       child: PageShell(
@@ -441,6 +475,45 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             ),
           ),
           const Gap.md(),
+          // Evaluation entry points, only on a closed defence -- Form 5c
+          // exists to score what happened in the room, not one still open.
+          // Above the comment log, since the sheet and the grades are what
+          // brought most panelists and the adviser back to this screen once
+          // the defence is done.
+          if (defence.status == DefenceStatus.completed) ...[
+            if (isPanelist)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton(
+                  key: const Key('goToEvaluate'),
+                  onPressed: () => context
+                      .push('/defence/room/${widget.defenceId}/evaluate'),
+                  child: Text(myEvaluation != null
+                      ? 'Your evaluation — ${myEvaluation.total}/100'
+                      : 'Evaluate'),
+                ),
+              ),
+            // Both the adviser (always, once closed) and a panelist (once
+            // the adviser has released the grades) get a way to the grades
+            // screen -- naming this on `evaluationsReleased`, never
+            // `isReleased`: that flag is the comment log's own release to
+            // the group, three lines away in defence.dart and easy to
+            // reach for by mistake.
+            if (isAdviser || (isPanelist && defence.evaluationsReleased))
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton(
+                    key: const Key('goToGrades'),
+                    onPressed: () => context
+                        .push('/defence/room/${widget.defenceId}/grades'),
+                    child: const Text('Grades'),
+                  ),
+                ),
+              ),
+            const Gap.md(),
+          ],
           for (final c in comments)
             Card(
               key: Key('commentRow-${c.id}'),

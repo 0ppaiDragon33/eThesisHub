@@ -22,8 +22,10 @@ import 'package:ethesishub/features/dashboard/readiness_screen.dart';
 import 'package:ethesishub/features/dashboard/recommendations_screen.dart';
 import 'package:ethesishub/features/dashboard/title_defences_screen.dart';
 import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
+import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
 import 'package:ethesishub/features/defence/defences_screen.dart';
+import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
@@ -519,6 +521,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/defence/room/:defenceId/consolidated',
         builder: (context, state) => ConsolidatedDefenceScreen(
+            defenceId: state.pathParameters['defenceId']!),
+      ),
+      // Both are three segments, so ':defenceId' at position 2 can never
+      // swallow them -- the same reasoning as 'consolidated' above.
+      GoRoute(
+        path: '/defence/room/:defenceId/evaluate',
+        builder: (context, state) => EvaluationScreen(
+            defenceId: state.pathParameters['defenceId']!),
+      ),
+      GoRoute(
+        path: '/defence/room/:defenceId/grades',
+        builder: (context, state) => DefenceGradesScreen(
             defenceId: state.pathParameters['defenceId']!),
       ),
       GoRoute(

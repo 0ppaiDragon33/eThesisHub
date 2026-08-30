@@ -130,6 +130,9 @@ class DefenceRow extends ConsumerWidget {
     final thesisAsync = ref.watch(thesisByIdProvider(d.thesisId));
     final cancelled = d.status == DefenceStatus.cancelled;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final completed = d.status == DefenceStatus.completed;
+    final isPanelist = uid != null && d.panelUids.contains(uid);
+    final isAdviser = uid != null && uid == d.adviserUid;
 
     // A blank string and a real title are visually identical, so a title
     // still in flight must read as "pending", not as nothing at all.
@@ -183,6 +186,31 @@ class DefenceRow extends ConsumerWidget {
                     color: defenceStatusColor(d.status, brightness)),
               ),
             ),
+            // Same affordance as the room screen offers once inside: a
+            // completed defence's panelist gets the sheet, its adviser gets
+            // the grades -- naming this on `evaluationsReleased`, never
+            // `isReleased` (the comment log's own release flag, three lines
+            // away in defence.dart). `push`, not `go`: these are deep
+            // screens under the Defences destination.
+            if (completed && isPanelist) ...[
+              const SizedBox(width: AppTokens.sm),
+              FilledButton(
+                key: Key('goToEvaluate-${d.id}'),
+                onPressed: () =>
+                    context.push('/defence/room/${d.id}/evaluate'),
+                child: const Text('Evaluate'),
+              ),
+            ],
+            if (completed &&
+                (isAdviser || (isPanelist && d.evaluationsReleased))) ...[
+              const SizedBox(width: AppTokens.sm),
+              OutlinedButton(
+                key: Key('goToGrades-${d.id}'),
+                onPressed: () =>
+                    context.push('/defence/room/${d.id}/grades'),
+                child: const Text('Grades'),
+              ),
+            ],
             const SizedBox(width: AppTokens.sm),
             FilledButton(
               key: Key('goToDefence-${d.id}'),

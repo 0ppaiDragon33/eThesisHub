@@ -29,7 +29,7 @@ Future<FakeFirebaseFirestore> _seedDefence({
     'createdBy': 'c1',
     if (evaluationsReleasedAt != null)
       'evaluationsReleasedAt': Timestamp.fromDate(evaluationsReleasedAt),
-    if (verdict != null) 'panelVerdict': verdict,
+    'panelVerdict': ?verdict,
     if (verdict != null) 'verdictRecordedBy': verdictRecordedBy ?? 'a1',
     if (verdict != null)
       'verdictRecordedAt': Timestamp.fromDate(DateTime(2026, 9, 23, 10)),
