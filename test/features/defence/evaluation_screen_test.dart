@@ -190,6 +190,30 @@ void main() {
         tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '100');
   });
 
+  // §5: once a sheet exists the control says Update, and the screen says
+  // the sheet is still changeable until release. It always said Submit,
+  // and never said the second thing at all.
+  testWidgets('an existing sheet reads Update, and says so is editable',
+      (tester) async {
+    useTallSurface(tester);
+    final scores = {for (final c in evaluationCriteria) c.key: c.weight};
+    await tester.pumpWidget(app(await seed(existing: scores), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Update evaluation'), findsOneWidget);
+    expect(find.text('Submit evaluation'), findsNothing);
+    expect(find.byKey(const Key('editableUntilRelease')), findsOneWidget);
+  });
+
+  testWidgets('a first sheet reads Submit, with no edit note', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Submit evaluation'), findsOneWidget);
+    expect(find.byKey(const Key('editableUntilRelease')), findsNothing);
+  });
+
   testWidgets('a released evaluation is read-only', (tester) async {
     useTallSurface(tester);
     final scores = {for (final c in evaluationCriteria) c.key: c.weight};

@@ -258,8 +258,14 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
       ]);
     }
 
-    _seedFrom(evaluationAsync.valueOrNull);
+    final existing = evaluationAsync.valueOrNull;
+    _seedFrom(existing);
 
+    // A sheet already on file. D44: it stays editable right up to the
+    // seal, so the control has to say "Update", not "Submit" -- a
+    // panelist who has already filed one and sees "Submit evaluation"
+    // has no way to tell whether they are about to add a second.
+    final hasSheet = existing != null;
     final released = defence.evaluationsReleased;
     final locked = released || _submitting;
     final complete = _scores.length == evaluationCriteria.length;
@@ -382,14 +388,27 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          if (!released)
+          if (!released) ...[
+            if (hasSheet)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'You submitted this sheet already. It can be changed '
+                  'until the adviser releases the evaluations.',
+                  key: const Key('editableUntilRelease'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             FilledButton(
               key: const Key('submitEvaluation'),
               onPressed: !locked && complete && _rating != null
                   ? () => _submit(uid, myName)
                   : null,
-              child: Text(_submitting ? 'Submitting…' : 'Submit evaluation'),
+              child: Text(_submitting
+                  ? (hasSheet ? 'Updating…' : 'Submitting…')
+                  : (hasSheet ? 'Update evaluation' : 'Submit evaluation')),
             ),
+          ],
         ],
       ),
     );

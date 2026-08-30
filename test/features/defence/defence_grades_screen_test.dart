@@ -76,7 +76,7 @@ Future<void> _writeEvaluation(
       .collection('evaluations')
       .doc(uid)
       .set({
-    if (name != null) 'evaluatorName': name,
+    'evaluatorName': ?name,
     'scores': _scoresFor(total),
     'comments': comments,
     'total': total,
