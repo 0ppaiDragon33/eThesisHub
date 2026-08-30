@@ -1025,6 +1025,44 @@ service cloud.firestore {
                        .hasOnly(['consolidatedAt'])
                     && incoming().consolidatedAt == request.time;
 
+      // Adviser arm 2 -- RELEASE the evaluations to the panel.
+      //
+      // §8b has the panel deliberate over the final grades, so they must
+      // be able to see them: this is what opens the set. It is the same
+      // shape as the consolidation arm above, deliberately -- one pattern
+      // to learn rather than two.
+      //
+      // NOT conditioned on "everyone has submitted": Firestore rules
+      // cannot count the documents in a collection, so that sentence is
+      // not expressible here. The adviser can release at 2 of 3. The
+      // grades screen therefore prints the count on the button itself, so
+      // an early release is a visible choice rather than an accident.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && defence().status == 'completed'
+                    && !('evaluationsReleasedAt' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['evaluationsReleasedAt'])
+                    && incoming().evaluationsReleasedAt == request.time;
+
+      // Adviser arm 3 -- RECORD the §8b verdict.
+      //
+      // Only after release (the panel must see the grades to deliberate),
+      // and only once: a recorded verdict is the panel's decision, not a
+      // draft. `verdictRecordedBy` must be the adviser themselves --
+      // someone barred from scoring at all has to be visibly the scribe,
+      // and a field that could name anyone would record nothing.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && 'evaluationsReleasedAt' in defence()
+                    && !('panelVerdict' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['panelVerdict', 'verdictRecordedBy',
+                                 'verdictRecordedAt'])
+                    && incoming().panelVerdict in ['pass', 'fail']
+                    && incoming().verdictRecordedBy == request.auth.uid
+                    && incoming().verdictRecordedAt == request.time;
+
       // The defence record is evidence.
       allow delete: if false;
 
@@ -1192,6 +1230,19 @@ service cloud.firestore {
         // Editable until the seal, then frozen (D44). Freezing on first
         // submit would make a mistyped 2-instead-of-20 permanent in a
         // record that has no delete.
+        //
+        // CONJUNCT ORDER IS LOAD-BEARING. `wellFormed()` (which calls
+        // `bounded()`, the eleven-weight check the drift test walks) is
+        // evaluated before `submittedAt == resource.data.submittedAt`, and
+        // `&&` short-circuits left to right. The drift test's negative
+        // cases (`weight + 1`, `-1`) run as UPDATES, not creates, and rely
+        // on that ordering: they reuse `evalDoc()`, which regenerates
+        // `submittedAt` via `serverTimestamp()` on every call, so if
+        // `wellFormed()` were moved after the `submittedAt` check, those
+        // writes would already be denied by the (unrelated) `submittedAt`
+        // mismatch, and the test would keep passing while proving nothing
+        // about the weights. Do not reorder these conjuncts without first
+        // checking that the drift test still exercises `bounded()`.
         allow update: if verified()
                       && isPanelistHere()
                       && request.auth.uid == evaluatorUid

@@ -4054,6 +4054,129 @@ test("M4 attack: nobody may delete an evaluation", async () => {
   }
 });
 
+// ---------- M4: release and verdict ----------
+
+test("M4: the adviser releases the evaluations, once", async () => {
+  await seedM4();
+  const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db, "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp() }));
+});
+
+test("M4 attack: nobody but the adviser releases", async () => {
+  await seedM4();
+  for (const uid of ["pan-uid", "coord-uid", "dean-uid", "leader-uid"]) {
+    await assertFails(updateDoc(
+      doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/m4"),
+      { evaluationsReleasedAt: serverTimestamp() }));
+  }
+});
+
+test("M4: a defence still running may not have its grades released",
+  async () => {
+    await seedM4({ status: "inProgress" });
+    await assertFails(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+          "defenses/m4"),
+      { evaluationsReleasedAt: serverTimestamp() }));
+  });
+
+// The affectedKeys guard is what stops either new arm doubling as a
+// status transition -- the same discipline the four coordinator arms use.
+test("M4 attack: a release may not smuggle a status change", async () => {
+  await seedM4();
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp(), status: "cancelled" }));
+});
+
+// D43. §8b has the panel deliberate OVER the final grades, so they must
+// be able to see them first: release precedes the verdict, always.
+test("M4: no verdict may be recorded before release", async () => {
+  await seedM4();
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { panelVerdict: "pass", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+});
+
+test("M4: after release the adviser records the verdict, once", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { panelVerdict: "pass", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db, "defenses/m4"),
+    { panelVerdict: "fail", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+});
+
+test("M4 attack: a panelist may not record the verdict", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  for (const uid of ["pan-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(updateDoc(
+      doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/m4"),
+      { panelVerdict: "pass", verdictRecordedBy: uid,
+        verdictRecordedAt: serverTimestamp() }));
+  }
+});
+
+// The scribe must be named truthfully, or the field records nothing.
+test("M4 attack: the adviser may not record it under another name",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await assertFails(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+          "defenses/m4"),
+      { panelVerdict: "pass", verdictRecordedBy: "pan-uid",
+        verdictRecordedAt: serverTimestamp() }));
+  });
+
+test("M4 attack: a verdict outside pass/fail is denied", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { panelVerdict: "redefend", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+});
+
+test("M4 attack: a partial verdict write is denied", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { panelVerdict: "pass" }));
+});
+
+// Consolidation and release are separate gates on separate things.
+test("M4: releasing the grades does not release the comments", async () => {
+  await seedM4();
+  const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { consolidatedAt: serverTimestamp() }));
+});
+
+// A defence created today must still refuse fields that belong to acts
+// happening after it closes.
+test("M4 attack: a create may not pre-set the seal or the verdict",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    await assertFails(setDoc(
+      doc(asDefUser("coord-uid", "coord@isufst.edu.ph"), "defenses/m4b"),
+      defDoc({ evaluationsReleasedAt: serverTimestamp() })));
+    await assertFails(setDoc(
+      doc(asDefUser("coord-uid", "coord@isufst.edu.ph"), "defenses/m4c"),
+      defDoc({ panelVerdict: "pass" })));
+  });
+
 test.after(async () => {
   await env.cleanup();
 });
