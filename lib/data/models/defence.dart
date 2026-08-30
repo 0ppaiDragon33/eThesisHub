@@ -1,3 +1,5 @@
+import 'package:ethesishub/data/models/evaluation.dart';
+
 /// Which defence this is. The title defence is NOT here: it keeps M1b's own
 /// collection, so that working, field-verified code is untouched.
 enum DefenceType {
@@ -87,6 +89,10 @@ class Defence {
     this.scheduledAt,
     this.createdAt,
     this.consolidatedAt,
+    this.evaluationsReleasedAt,
+    this.panelVerdict,
+    this.verdictRecordedBy,
+    this.verdictRecordedAt,
   });
 
   final String id;
@@ -105,7 +111,41 @@ class Defence {
   /// its presence is exactly what lets the group read the comments.
   final DateTime? consolidatedAt;
 
+  /// When the adviser released the panel's evaluations to each other.
+  ///
+  /// The same shape as [consolidatedAt] and for the same reason: presence
+  /// is the gate, so `firestore.rules` tests `'evaluationsReleasedAt' in
+  /// resource.data` -- a presence check, never a sentinel comparison. The
+  /// coordinator-admin milestone lost time twice to sentinel collisions
+  /// (`.get(k, true)` colliding with a real `true`, then `.get(k, null)`
+  /// with an explicit `null`); presence is value-blind and cannot collide.
+  ///
+  /// SEPARATE from [consolidatedAt]. One releases the room log to the
+  /// group; this releases the grades to the panel. Neither implies the
+  /// other.
+  final DateTime? evaluationsReleasedAt;
+
+  /// Guidelines §8b, deliberated by the panel as a body and recorded once.
+  ///
+  /// NEVER computed from the panelists' individual ratings (D41). §8b
+  /// hands the decision to a conversation; deriving it would be the system
+  /// overruling the body the manual says decides.
+  final PassFail? panelVerdict;
+
+  /// The adviser who recorded [panelVerdict].
+  ///
+  /// Exists so a reader can see the adviser TRANSCRIBED a decision rather
+  /// than made one -- they are barred from scoring at all (D37), so their
+  /// role here has to be visibly that of a scribe.
+  final String? verdictRecordedBy;
+
+  final DateTime? verdictRecordedAt;
+
   bool get isReleased => consolidatedAt != null;
+
+  bool get evaluationsReleased => evaluationsReleasedAt != null;
+
+  bool get hasVerdict => panelVerdict != null;
 
   factory Defence.fromMap(String id, Map<String, dynamic> map) {
     return Defence(
@@ -122,6 +162,10 @@ class Defence {
       createdBy: map['createdBy'] as String? ?? '',
       createdAt: map['createdAt'] as DateTime?,
       consolidatedAt: map['consolidatedAt'] as DateTime?,
+      evaluationsReleasedAt: map['evaluationsReleasedAt'] as DateTime?,
+      panelVerdict: PassFail.fromString(map['panelVerdict'] as String?),
+      verdictRecordedBy: map['verdictRecordedBy'] as String?,
+      verdictRecordedAt: map['verdictRecordedAt'] as DateTime?,
     );
   }
 }
