@@ -89,6 +89,25 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     }
   }
 
+  /// The name the panelist carried when they submitted, denormalized onto
+  /// the evaluation itself. Falls back to the uid only for a sheet written
+  /// before the field existed -- a raw uid is not an identity, but it is
+  /// better than a blank cell in a column that must identify someone.
+  String _evaluatorLabel(Evaluation e) =>
+      e.evaluatorName.isNotEmpty ? e.evaluatorName : e.evaluatorUid;
+
+  /// A fourth private copy of this, matching `defence_room_screen.dart`
+  /// and `schedule_defence_screen.dart`: `intl` for one format string is
+  /// the heavier dependency, and that is the reason already recorded in
+  /// `defences_list.dart`.
+  String _formatDateTime(DateTime t) {
+    final local = t.toLocal();
+    final h = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final m = local.minute.toString().padLeft(2, '0');
+    final ampm = local.hour < 12 ? 'am' : 'pm';
+    return '${local.day}/${local.month}/${local.year} at $h:$m$ampm';
+  }
+
   Widget _framed(List<Widget> children, {String? title, String? subtitle}) =>
       KeyedSubtree(
         key: const Key('grades'),
@@ -119,13 +138,33 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           ),
         ];
       }
-      final count = evalsAsync.valueOrNull?.length ?? 0;
+      final submitted = evalsAsync.valueOrNull ?? const <Evaluation>[];
+      final count = submitted.length;
       return [
         Text(
           '$count of $total panelists have submitted',
           key: const Key('submittedCount'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        // Names, not scores: §6 keeps every number off this screen until
+        // release, and D40's mitigation only works if the adviser can see
+        // WHO the count is missing rather than a bare fraction.
+        //
+        // DELIBERATE OMISSION: §6 asks for who has NOT submitted as well,
+        // and that half is not built. Naming an absent panelist needs
+        // their name, and the defence document carries `panelUids` only
+        // -- no names -- so the missing half would mean either a fan-out
+        // of profile reads per row or another denormalization onto the
+        // defence. Recorded here so the next reader knows it was decided
+        // rather than missed.
+        if (submitted.isNotEmpty) ...[
+          const Gap.sm(),
+          Text(
+            submitted.map(_evaluatorLabel).join(', '),
+            key: const Key('submittedNames'),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
         const Gap.lg(),
         if (_releaseError != null)
           Padding(
@@ -228,7 +267,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
             rows: [
               for (final e in evaluations)
                 DataRow(cells: [
-                  DataCell(Text(e.evaluatorUid)),
+                  DataCell(Text(_evaluatorLabel(e))),
                   for (final c in evaluationCriteria)
                     DataCell(Text('${e.scores[c.key] ?? 0}')),
                   DataCell(Text('${e.total}')),
@@ -243,10 +282,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           style: Theme.of(context).textTheme.labelMedium,
         ),
         Text(
+          // One decimal place, not .round(): 83.5 and 84.4 both rendered
+          // as "84", on the one number the panel deliberates over.
           (evaluations.fold<int>(0, (a, b) => a + b.total) /
                   evaluations.length)
-              .round()
-              .toString(),
+              .toStringAsFixed(1),
           key: const Key('panelMean'),
           style: Theme.of(context).textTheme.titleLarge,
         ),
@@ -265,7 +305,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
                       style: Theme.of(context).textTheme.bodyLarge),
                   for (final e in evaluations)
                     if (e.comments[key] != null)
-                      Text('${e.evaluatorUid}: ${e.comments[key]}'),
+                      Text('${_evaluatorLabel(e)}: ${e.comments[key]}'),
                 ],
               ),
             ),
@@ -288,7 +328,19 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         ),
         const Gap.sm(),
         Text(
-          'Recorded by ${defence.verdictRecordedBy}',
+          // "the adviser", not a name and not a uid. The rules pin
+          // verdictRecordedBy == request.auth.uid on the only arm that
+          // can write it, and only the adviser passes that arm, so the
+          // scribe is always the adviser and needs no second
+          // denormalization to say so. D42 wants a reader to see that
+          // this was transcribed rather than decided -- which is what
+          // this sentence says.
+          defence.verdictRecordedAt != null
+              ? 'Recorded by the adviser on '
+                  '${_formatDateTime(defence.verdictRecordedAt!)}, as the '
+                  'panel deliberated it under §8b.'
+              : 'Recorded by the adviser, as the panel deliberated it '
+                  'under §8b.',
           key: const Key('verdictScribe'),
           style: Theme.of(context).textTheme.bodySmall,
         ),

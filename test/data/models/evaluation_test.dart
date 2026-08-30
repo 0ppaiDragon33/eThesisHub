@@ -6,6 +6,20 @@ Map<String, int> fullScores({int each = 1}) =>
     {for (final c in evaluationCriteria) c.key: each};
 
 void main() {
+  // A sheet written before evaluatorName existed must still read back --
+  // this is a permanent record with no delete and no migration, so a
+  // missing name reads as empty and the screens fall back to the uid.
+  test('a sheet with no stored evaluatorName reads back with an empty one',
+      () {
+    final e = Evaluation.fromMap('p1', const {
+      'scores': {'title': 4},
+      'comments': <String, String>{},
+      'total': 4,
+      'rating': 'pass',
+    });
+    expect(e.evaluatorName, '');
+  });
+
   test('totalOf sums the eleven scores', () {
     expect(totalOf(fullScores()), 11);
   });
@@ -18,6 +32,7 @@ void main() {
   test('sectionTotal splits 50 and 50 on a perfect sheet', () {
     final e = Evaluation(
       evaluatorUid: 'p1',
+      evaluatorName: 'Dr. Panelist',
       scores: {for (final c in evaluationCriteria) c.key: c.weight},
       comments: const {},
       total: 100,
@@ -29,6 +44,7 @@ void main() {
 
   test('fromMap reads scores, comments, total and rating', () {
     final e = Evaluation.fromMap('p1', {
+      'evaluatorName': 'Dr. Panelist',
       'scores': {'title': 4, 'alertness': 21},
       'comments': {'title': 'Narrow it.'},
       'total': 25,
@@ -38,6 +54,7 @@ void main() {
     });
 
     expect(e.evaluatorUid, 'p1');
+    expect(e.evaluatorName, 'Dr. Panelist');
     expect(e.scores['title'], 4);
     expect(e.comments['title'], 'Narrow it.');
     expect(e.total, 25);

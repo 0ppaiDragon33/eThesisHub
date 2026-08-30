@@ -3779,7 +3779,8 @@ function evalDoc(extra = {}) {
   const scores = extra.scores ?? fullScores();
   const total = Object.values(scores).reduce((a, b) => a + b, 0);
   return {
-    scores, comments: { title: "Narrow it." }, total,
+    evaluatorName: "Dr. Panelist", scores,
+    comments: { title: "Narrow it." }, total,
     rating: "pass",
     // serverTimestamp(), not Timestamp.now(): the create rule pins both
     // stamps to request.time, and a client clock is never exactly equal.
@@ -3907,8 +3908,30 @@ test("M4 attack: a sheet missing a criterion is denied", async () => {
   await assertFails(setDoc(
     doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
         "defenses/m4/evaluations/pan-uid"),
-    { scores, comments: {}, total: 90, rating: "pass",
+    { evaluatorName: "Dr. Panelist", scores, comments: {}, total: 90,
+      rating: "pass",
       submittedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+});
+
+// The name is denormalized at the moment of the act, so it is required,
+// not optional: a sheet filed without one names nobody in a record that
+// outlives the account behind the uid.
+test("M4 attack: a sheet with no evaluator name is denied", async () => {
+  await seedM4();
+  const d = evalDoc();
+  delete d.evaluatorName;
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    d));
+});
+
+test("M4 attack: a non-string evaluator name is denied", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { ...evalDoc(), evaluatorName: 42 }));
 });
 
 test("M4 attack: a comment on a Section B criterion is denied", async () => {

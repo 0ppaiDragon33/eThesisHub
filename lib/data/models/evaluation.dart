@@ -40,6 +40,7 @@ int totalOf(Map<String, int> scores) =>
 class Evaluation {
   const Evaluation({
     required this.evaluatorUid,
+    required this.evaluatorName,
     required this.scores,
     required this.comments,
     required this.total,
@@ -49,6 +50,18 @@ class Evaluation {
   });
 
   final String evaluatorUid;
+
+  /// The evaluator's name AS IT STOOD WHEN THEY SUBMITTED, denormalized
+  /// here rather than resolved from `users/{uid}` on read -- the same
+  /// treatment, and the same reason, as `authorName` on a defence
+  /// comment. This is a permanent academic record: who marked this sheet
+  /// must not silently change when the account behind the uid is renamed,
+  /// reassigned or deactivated years later. A raw uid in its place is not
+  /// an identity to anyone reading the grade sheet.
+  ///
+  /// Empty for a document written before this field existed; a screen
+  /// falls back to the uid rather than rendering a blank column.
+  final String evaluatorName;
 
   /// Criterion key -> points, each 0..that criterion's weight (D34).
   final Map<String, int> scores;
@@ -91,6 +104,7 @@ class Evaluation {
 
     return Evaluation(
       evaluatorUid: evaluatorUid,
+      evaluatorName: map['evaluatorName'] as String? ?? '',
       scores: {
         for (final e in rawScores.entries)
           if (e.value is int) e.key as String: e.value as int,

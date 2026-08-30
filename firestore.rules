@@ -1173,10 +1173,17 @@ service cloud.firestore {
         function wellFormed() {
           let d = request.resource.data;
           let s = scores();
-          return d.keys().hasAll(['scores', 'comments', 'total', 'rating',
+          return d.keys().hasAll(['evaluatorName', 'scores', 'comments',
+                                  'total', 'rating',
                                   'submittedAt', 'updatedAt'])
-              && d.keys().hasOnly(['scores', 'comments', 'total', 'rating',
+              && d.keys().hasOnly(['evaluatorName', 'scores', 'comments',
+                                   'total', 'rating',
                                    'submittedAt', 'updatedAt'])
+              // The evaluator's name as it stood when they submitted --
+              // the same denormalization, for the same reason, as
+              // authorName on a defence comment: a grade sheet naming a
+              // uid names nobody, and this record outlives the account.
+              && d.evaluatorName is string
               && bounded()
               // A stored total that could disagree with its own scores
               // would be worse than no stored total, so it is recomputed

@@ -168,6 +168,7 @@ class DefenceRepository {
   Future<void> submitEvaluation({
     required String defenceId,
     required String evaluatorUid,
+    required String evaluatorName,
     required Map<String, int> scores,
     required Map<String, String> comments,
     required PassFail rating,
@@ -235,6 +236,11 @@ class DefenceRepository {
     final existing = await _evaluations(defenceId).doc(evaluatorUid).get();
 
     await _evaluations(defenceId).doc(evaluatorUid).set({
+      // Denormalized at the moment of the act, exactly as addComment
+      // stores authorName: a grade sheet naming a uid names nobody, and
+      // resolving the name on read would let a later rename rewrite who
+      // marked a defence that is already in the record.
+      'evaluatorName': evaluatorName,
       'scores': scores,
       'comments': cleaned,
       'total': totalOf(scores),

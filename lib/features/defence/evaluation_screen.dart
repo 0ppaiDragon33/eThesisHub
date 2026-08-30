@@ -90,7 +90,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     });
   }
 
-  Future<void> _submit(String uid) async {
+  Future<void> _submit(String uid, String name) async {
     if (_submitting) return;
 
     setState(() {
@@ -102,6 +102,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
       await ref.read(defenceRepositoryProvider).submitEvaluation(
             defenceId: widget.defenceId,
             evaluatorUid: uid,
+            evaluatorName: name,
             scores: _scores,
             comments: {
               for (final e in _comments.entries)
@@ -142,6 +143,13 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   Widget build(BuildContext context) {
     final defenceAsync = ref.watch(defenceProvider(widget.defenceId));
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+    // The panelist's own profile, for the name stored on the sheet. Read
+    // through the same `me?.fullName ?? ''` shape `defence_room_screen`
+    // uses for a comment's authorName, and blocked on below for the same
+    // reason: the name goes into a permanent academic record at the
+    // moment of the act, and submitting while the profile is still in
+    // flight would file the sheet under nobody.
+    final meAsync = ref.watch(currentUserProvider);
 
     // Each async source gets its own isLoading/hasError branch, checked
     // apart from the other -- collapsing them would tell a panelist whose
@@ -160,6 +168,24 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
         ),
       ]);
     }
+    if (meAsync.isLoading) {
+      return _framed(
+        const [
+          LoadingState(
+              key: Key('evaluationLoading'), label: 'Loading your profile…'),
+        ],
+      );
+    }
+    if (meAsync.hasError) {
+      return _framed([
+        ErrorState(
+          error: meAsync.error,
+          message: 'Could not load your profile.',
+        ),
+      ]);
+    }
+    final myName = meAsync.valueOrNull?.fullName ?? '';
+
     final defence = defenceAsync.valueOrNull;
     if (defence == null) {
       return _framed(const [
@@ -360,7 +386,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
             FilledButton(
               key: const Key('submitEvaluation'),
               onPressed: !locked && complete && _rating != null
-                  ? () => _submit(uid)
+                  ? () => _submit(uid, myName)
                   : null,
               child: Text(_submitting ? 'Submitting…' : 'Submit evaluation'),
             ),

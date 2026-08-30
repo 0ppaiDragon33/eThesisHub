@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart' hide Evaluation;
+import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -37,19 +38,47 @@ Future<FakeFirebaseFirestore> _seedDefence({
   return db;
 }
 
+/// REAL scores, not an empty map: seeded empty, every cell in the table
+/// rendered through the `?? 0` fallback and the table test proved only
+/// that eleven columns existed, never that a stored score reached the
+/// column it belongs to. Scaled off [total] so the row still sums to what
+/// the panel mean is computed from.
+Map<String, int> _scoresFor(int total) {
+  final scores = <String, int>{};
+  var remaining = total;
+  for (final c in evaluationCriteria) {
+    final v = ((c.weight * total) / 100).floor().clamp(0, c.weight);
+    scores[c.key] = v;
+    remaining -= v;
+  }
+  // Whatever rounding dropped goes onto the first criterion with room, so
+  // totalOf(scores) == total exactly.
+  for (final c in evaluationCriteria) {
+    if (remaining <= 0) break;
+    final room = c.weight - scores[c.key]!;
+    final add = room < remaining ? room : remaining;
+    scores[c.key] = scores[c.key]! + add;
+    remaining -= add;
+  }
+  return scores;
+}
+
 Future<void> _writeEvaluation(
   FakeFirebaseFirestore db,
   String uid,
-  int total,
-) async {
+  int total, {
+  String? name,
+  Map<String, String> comments = const {},
+}) async {
   await db
       .collection('defenses')
       .doc('d1')
       .collection('evaluations')
       .doc(uid)
       .set({
-    'scores': const <String, int>{},
-    'comments': const <String, String>{},
+    if (name != null) 'evaluatorName': name,
+    'scores': _scoresFor(total),
+    'comments': comments,
     'total': total,
     'rating': 'pass',
     'submittedAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9, 30)),
@@ -60,7 +89,7 @@ Future<void> _writeEvaluation(
 /// released.
 Future<FakeFirebaseFirestore> seedWithOne() async {
   final db = await _seedDefence();
-  await _writeEvaluation(db, 'p1', 100);
+  await _writeEvaluation(db, 'p1', 100, name: 'Dr. Panelist One');
   return db;
 }
 
@@ -70,8 +99,9 @@ Future<FakeFirebaseFirestore> seedReleased({int second = 100, String? verdict}) 
     evaluationsReleasedAt: DateTime(2026, 9, 23, 11),
     verdict: verdict,
   );
-  await _writeEvaluation(db, 'p1', 100);
-  await _writeEvaluation(db, 'p2', second);
+  await _writeEvaluation(db, 'p1', 100,
+      name: 'Dr. Panelist One', comments: const {'title': 'Narrow it.'});
+  await _writeEvaluation(db, 'p2', second, name: 'Dr. Panelist Two');
   return db;
 }
 
@@ -159,7 +189,107 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.widget<Text>(find.byKey(const Key('panelMean'))).data,
-        '75');
+        '75.0');
+  });
+
+  // .round() rendered 83.5 and 84.4 identically, on the one number the
+  // panel deliberates over.
+  testWidgets('the panel mean keeps a decimal place', (tester) async {
+    useTallSurface(tester);
+    // p1 at 100, p2 at 67 -- a mean of 83.5.
+    await tester.pumpWidget(app(await seedReleased(second: 67), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Text>(find.byKey(const Key('panelMean'))).data,
+        '83.5');
+  });
+
+  // Seeded with an empty score map, every cell in this table rendered
+  // through the ?? 0 fallback and this proved nothing about the wiring.
+  testWidgets('a stored score reaches its own column', (tester) async {
+    useTallSurface(tester);
+    final db = await seedReleased();
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+
+    // Read straight off the seeded document: Evaluation.fromMap expects
+    // the repository's already-converted DateTimes, and the point here is
+    // what the SCREEN did with what was stored, not the model layer.
+    final storedScores = ((await db
+                .collection('defenses')
+                .doc('d1')
+                .collection('evaluations')
+                .doc('p1')
+                .get())
+            .data()!['scores'] as Map)
+        .cast<String, int>();
+
+    final table =
+        tester.widget<DataTable>(find.byKey(const Key('gradesTable')));
+    final row = table.rows.firstWhere((r) =>
+        ((r.cells.first.child as Text).data ?? '') == 'Dr. Panelist One');
+    for (var i = 0; i < evaluationCriteria.length; i++) {
+      final c = evaluationCriteria[i];
+      expect((row.cells[i + 1].child as Text).data, '${storedScores[c.key]}',
+          reason: c.key);
+      // A perfect sheet, so each column carries its own DIFFERENT weight:
+      // a cell wired to the wrong criterion would show as a mismatch
+      // rather than coincide.
+      expect(storedScores[c.key], c.weight, reason: c.key);
+    }
+  });
+
+  // §6 wants names on this screen, not raw Firebase uids.
+  testWidgets('the table names the panelist, not their uid', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dr. Panelist One'), findsWidgets);
+    expect(find.text('p1'), findsNothing);
+  });
+
+  testWidgets('a per-criterion remark is attributed by name', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dr. Panelist One: Narrow it.'), findsOneWidget);
+  });
+
+  // A sheet written before evaluatorName existed still has to identify
+  // someone -- the uid is a poor identity but it is not a blank cell.
+  testWidgets('a sheet with no stored name falls back to the uid',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await _seedDefence(
+        evaluationsReleasedAt: DateTime(2026, 9, 23, 11));
+    await _writeEvaluation(db, 'p1', 100);
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('p1'), findsOneWidget);
+  });
+
+  // Finding 5. The count alone does not tell the adviser WHO is missing,
+  // which is what makes releasing at 2 of 3 a considered choice.
+  testWidgets('before release the adviser sees who has submitted, by name',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedWithOne(), 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Text>(find.byKey(const Key('submittedNames'))).data,
+        'Dr. Panelist One');
+  });
+
+  testWidgets('with nobody submitted there is no roster, only the count',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedNone(), 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('submittedNames')), findsNothing);
   });
 
   testWidgets('the adviser records the verdict after release',
@@ -187,7 +317,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('verdict')), findsOneWidget);
-    expect(find.byKey(const Key('verdictScribe')), findsOneWidget);
+    // "the adviser", never a uid: the rules pin verdictRecordedBy to the
+    // writer's own uid on the only arm that can set it, and only the
+    // adviser passes that arm, so the role IS the identity here.
+    final scribe =
+        tester.widget<Text>(find.byKey(const Key('verdictScribe'))).data!;
+    expect(scribe, contains('Recorded by the adviser'));
+    expect(scribe, isNot(contains('a1')));
+    // The spec wants the timestamp beside the scribe; it was never shown.
+    expect(scribe, contains('23/9/2026'));
     expect(find.byKey(const Key('recordVerdict')), findsNothing);
   });
 

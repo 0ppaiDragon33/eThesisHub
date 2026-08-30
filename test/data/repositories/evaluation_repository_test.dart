@@ -36,7 +36,7 @@ void main() {
 
     await repo.submitEvaluation(
       defenceId: 'd1',
-      evaluatorUid: 'p1',
+      evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist',
       scores: perfect(),
       comments: const {'title': 'Narrow it.'},
       rating: PassFail.pass,
@@ -49,17 +49,37 @@ void main() {
     expect(mine.sectionTotal(EvaluationSection.content), 50);
   });
 
+  // The denormalization D42's sibling ruling asks for: a grade sheet
+  // naming a uid names nobody, and resolving the name on read would let a
+  // later rename rewrite who marked a defence already in the record.
+  test('a submitted evaluation stores the evaluator name it was given',
+      () async {
+    final repo = DefenceRepository(await seed());
+
+    await repo.submitEvaluation(
+      defenceId: 'd1',
+      evaluatorUid: 'p1',
+      evaluatorName: 'Dr. Ana Reyes',
+      scores: perfect(),
+      comments: const {},
+      rating: PassFail.pass,
+    );
+
+    final mine = await repo.watchMyEvaluation('d1', 'p1').first;
+    expect(mine!.evaluatorName, 'Dr. Ana Reyes');
+  });
+
   test('a second submit edits the same document, not a new one', () async {
     final db = await seed();
     final repo = DefenceRepository(db);
 
     await repo.submitEvaluation(
-      defenceId: 'd1', evaluatorUid: 'p1', scores: perfect(),
+      defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist', scores: perfect(),
       comments: const {}, rating: PassFail.pass);
     final first = await repo.watchMyEvaluation('d1', 'p1').first;
 
     await repo.submitEvaluation(
-      defenceId: 'd1', evaluatorUid: 'p1',
+      defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist',
       scores: {...perfect(), 'title': 1}, comments: const {},
       rating: PassFail.fail);
 
@@ -80,7 +100,7 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'a1', scores: perfect(),
+        defenceId: 'd1', evaluatorUid: 'a1', evaluatorName: 'Dr. Panelist', scores: perfect(),
         comments: const {}, rating: PassFail.pass),
       throwsA(isA<StateError>()),
     );
@@ -91,7 +111,7 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'stranger', scores: perfect(),
+        defenceId: 'd1', evaluatorUid: 'stranger', evaluatorName: 'Dr. Panelist', scores: perfect(),
         comments: const {}, rating: PassFail.pass),
       throwsA(isA<StateError>()),
     );
@@ -104,7 +124,7 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'p1', scores: short,
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist', scores: short,
         comments: const {}, rating: PassFail.pass),
       throwsA(isA<ArgumentError>()),
     );
@@ -115,14 +135,14 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'p1',
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist',
         scores: {...perfect(), 'title': 6}, comments: const {},
         rating: PassFail.pass),
       throwsA(isA<ArgumentError>()),
     );
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'p1',
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist',
         scores: {...perfect(), 'alertness': -1}, comments: const {},
         rating: PassFail.pass),
       throwsA(isA<ArgumentError>()),
@@ -134,7 +154,7 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'p1', scores: perfect(),
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist', scores: perfect(),
         comments: const {'alertness': 'no such field'},
         rating: PassFail.pass),
       throwsA(isA<ArgumentError>()),
@@ -145,7 +165,7 @@ void main() {
     final repo = DefenceRepository(await seed());
 
     await repo.submitEvaluation(
-      defenceId: 'd1', evaluatorUid: 'p1', scores: perfect(),
+      defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist', scores: perfect(),
       comments: const {'title': '   ', 'result': ' ok '},
       rating: PassFail.pass);
 
@@ -161,7 +181,7 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'p1', scores: perfect(),
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist', scores: perfect(),
         comments: const {}, rating: PassFail.pass),
       throwsA(isA<StateError>()),
     );
@@ -173,7 +193,7 @@ void main() {
 
     expect(
       () => repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: 'p1', scores: perfect(),
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'Dr. Panelist', scores: perfect(),
         comments: const {}, rating: PassFail.pass),
       throwsA(isA<StateError>()),
     );
@@ -188,7 +208,7 @@ void main() {
 
     for (final uid in ['p3', 'p1', 'p2']) {
       await repo.submitEvaluation(
-        defenceId: 'd1', evaluatorUid: uid, scores: perfect(),
+        defenceId: 'd1', evaluatorUid: uid, evaluatorName: 'Dr. Panelist', scores: perfect(),
         comments: const {}, rating: PassFail.pass);
     }
 

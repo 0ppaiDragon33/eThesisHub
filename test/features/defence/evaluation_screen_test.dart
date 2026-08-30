@@ -13,8 +13,17 @@ Future<FakeFirebaseFirestore> seed({
   String status = 'completed',
   DateTime? releasedAt,
   Map<String, int>? existing,
+  String panelistName = 'Dr. Ana Reyes',
 }) async {
   final db = FakeFirebaseFirestore();
+  // The screen reads its own profile for the name it denormalizes onto
+  // the sheet, the same way the room screen does for a comment's author.
+  await db.collection('users').doc('p1').set({
+    'fullName': panelistName,
+    'email': 'p1@isufst.edu.ph',
+    'role': 'faculty',
+    'active': true,
+  });
   await db.collection('defenses').doc('d1').set({
     'thesisId': 't1', 'type': 'final',
     'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9)),
@@ -243,6 +252,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(AppBar, 'Grades d1'), findsOneWidget);
+  });
+
+  // §6 renders names, not uids, and the name has to reach the document at
+  // the moment of the act -- resolved on read, a later rename would
+  // rewrite who marked a defence already in the record.
+  testWidgets('submitting stores the panelist name, not just their uid',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed();
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+
+    for (final c in evaluationCriteria) {
+      for (var i = 0; i < c.weight; i++) {
+        await tester.tap(find.byKey(Key('plus_${c.key}')));
+        await tester.pump();
+      }
+    }
+    await tester.tap(find.text('Pass'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submitEvaluation')));
+    await tester.pumpAndSettle();
+
+    final stored = await db
+        .collection('defenses')
+        .doc('d1')
+        .collection('evaluations')
+        .doc('p1')
+        .get();
+    expect(stored.data()!['evaluatorName'], 'Dr. Ana Reyes');
+    expect(stored.data()!['total'], 100);
   });
 
   // The distinction D41 depends on staying visible.
