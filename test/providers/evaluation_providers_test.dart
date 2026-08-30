@@ -39,9 +39,7 @@ ProviderContainer containerFor(FakeFirebaseFirestore db, String uid) {
     firebaseAuthProvider.overrideWithValue(
       MockFirebaseAuth(signedIn: true, mockUser: mockUser),
     ),
-    authStateProvider.overrideWith((ref) {
-      return Stream.value(mockUser as User?);
-    }),
+    signedInUidProvider.overrideWithValue(uid),
   ]);
 }
 
@@ -70,7 +68,7 @@ void main() {
       firestoreProvider.overrideWithValue(db),
       firebaseAuthProvider
           .overrideWithValue(MockFirebaseAuth(signedIn: false)),
-      authStateProvider.overrideWith((ref) => Stream.value(null as User?)),
+      signedInUidProvider.overrideWithValue(null),
     ]);
     addTearDown(c.dispose);
 
