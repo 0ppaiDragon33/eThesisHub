@@ -21,6 +21,9 @@ class DefenceRepository {
       'scheduledAt': (raw['scheduledAt'] as Timestamp?)?.toDate(),
       'createdAt': (raw['createdAt'] as Timestamp?)?.toDate(),
       'consolidatedAt': (raw['consolidatedAt'] as Timestamp?)?.toDate(),
+      'evaluationsReleasedAt':
+          (raw['evaluationsReleasedAt'] as Timestamp?)?.toDate(),
+      'verdictRecordedAt': (raw['verdictRecordedAt'] as Timestamp?)?.toDate(),
     });
   }
 
@@ -365,5 +368,78 @@ class DefenceRepository {
     }
     await _defence(defenceId)
         .update({'consolidatedAt': FieldValue.serverTimestamp()});
+  }
+
+  /// The adviser's release of the panel's evaluations to each other.
+  ///
+  /// Deliberately NOT conditioned on "everyone has submitted". Firestore
+  /// rules cannot count documents in a collection, so that condition is
+  /// unenforceable at the boundary -- and a check here that the rules
+  /// cannot back would be theatre: anyone with the SDK could bypass it.
+  /// The grades screen prints the count on the button instead, so an
+  /// early release is a visible choice.
+  Future<void> releaseEvaluations({
+    required String defenceId,
+    required String adviserUid,
+  }) async {
+    final snap = await _defence(defenceId).get();
+    if (!snap.exists) throw StateError('That defence no longer exists.');
+    final data = snap.data()!;
+
+    // Mirrors firestore.rules: defence().adviserUid == request.auth.uid.
+    // fake_cloud_firestore enforces no rules, so without this check a
+    // coordinator or panelist calling this would appear to succeed in
+    // every Dart test while production denies them.
+    if (data['adviserUid'] != adviserUid) {
+      throw StateError(
+          'Only the adviser for this defence releases its evaluations.');
+    }
+
+    if (DefenceStatus.fromString(data['status'] as String?) !=
+        DefenceStatus.completed) {
+      throw StateError(
+          'Release the evaluations once the defence is closed.');
+    }
+    if (data['evaluationsReleasedAt'] != null) {
+      throw StateError('These evaluations have already been released.');
+    }
+
+    await _defence(defenceId)
+        .update({'evaluationsReleasedAt': FieldValue.serverTimestamp()});
+  }
+
+  /// Records the verdict the panel deliberated under Guidelines §8b.
+  ///
+  /// The adviser is the scribe, not the decider -- they are barred from
+  /// scoring at all. Nothing here derives the verdict from the panelists'
+  /// ratings, and nothing should: §8b hands the decision to a
+  /// conversation between people.
+  Future<void> recordVerdict({
+    required String defenceId,
+    required String adviserUid,
+    required PassFail verdict,
+  }) async {
+    final snap = await _defence(defenceId).get();
+    if (!snap.exists) throw StateError('That defence no longer exists.');
+    final data = snap.data()!;
+
+    if (data['adviserUid'] != adviserUid) {
+      throw StateError(
+          'Only the adviser for this defence records the verdict.');
+    }
+    if (data['evaluationsReleasedAt'] == null) {
+      throw StateError(
+          'Release the evaluations first — the panel deliberates over the '
+          'grades.');
+    }
+    if (data['panelVerdict'] != null) {
+      throw StateError('A verdict has already been recorded.');
+    }
+
+    await _defence(defenceId).update({
+      'panelVerdict': verdict.value,
+      'verdictRecordedBy': adviserUid,
+      'verdictRecordedAt': FieldValue.serverTimestamp(),
+    });
   }
 }

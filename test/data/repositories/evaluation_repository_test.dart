@@ -201,4 +201,84 @@ void main() {
     expect(await repo.watchMyEvaluation('d1', 'p1').first, isNull);
     expect(await repo.watchEvaluations('d1').first, isEmpty);
   });
+
+  test('release marks the defence and cannot be repeated', () async {
+    final repo = DefenceRepository(await seed());
+
+    await repo.releaseEvaluations(defenceId: 'd1', adviserUid: 'a1');
+    final d = await repo.watchDefence('d1').first;
+    expect(d!.evaluationsReleased, isTrue);
+
+    expect(
+        () => repo.releaseEvaluations(defenceId: 'd1', adviserUid: 'a1'),
+        throwsA(isA<StateError>()));
+  });
+
+  test('a defence still running cannot have its grades released',
+      () async {
+    final repo = DefenceRepository(await seed(status: 'inProgress'));
+    expect(
+        () => repo.releaseEvaluations(defenceId: 'd1', adviserUid: 'a1'),
+        throwsA(isA<StateError>()));
+  });
+
+  // Mirrors firestore.rules: defence().adviserUid == request.auth.uid.
+  // fake_cloud_firestore enforces no rules, so without this test a
+  // coordinator or panelist calling releaseEvaluations would appear to
+  // succeed here while production denies them.
+  test('only the adviser of record may release the evaluations', () async {
+    final repo = DefenceRepository(await seed());
+    expect(
+        () => repo.releaseEvaluations(defenceId: 'd1', adviserUid: 'p1'),
+        throwsA(isA<StateError>()));
+  });
+
+  // D43: §8b has the panel deliberate over the grades, so they must be
+  // able to see them first.
+  test('no verdict before release', () async {
+    final repo = DefenceRepository(await seed());
+    expect(
+      () => repo.recordVerdict(
+          defenceId: 'd1', adviserUid: 'a1', verdict: PassFail.pass),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('after release the verdict is recorded with its scribe', () async {
+    final repo =
+        DefenceRepository(await seed(releasedAt: DateTime(2026, 9, 23)));
+
+    await repo.recordVerdict(
+        defenceId: 'd1', adviserUid: 'a1', verdict: PassFail.pass);
+
+    final d = await repo.watchDefence('d1').first;
+    expect(d!.panelVerdict, PassFail.pass);
+    expect(d.verdictRecordedBy, 'a1');
+    expect(d.hasVerdict, isTrue);
+  });
+
+  test('a recorded verdict is final', () async {
+    final repo =
+        DefenceRepository(await seed(releasedAt: DateTime(2026, 9, 23)));
+
+    await repo.recordVerdict(
+        defenceId: 'd1', adviserUid: 'a1', verdict: PassFail.pass);
+
+    expect(
+      () => repo.recordVerdict(
+          defenceId: 'd1', adviserUid: 'a1', verdict: PassFail.fail),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('only the adviser of record may record the verdict', () async {
+    final repo =
+        DefenceRepository(await seed(releasedAt: DateTime(2026, 9, 23)));
+
+    expect(
+      () => repo.recordVerdict(
+          defenceId: 'd1', adviserUid: 'p1', verdict: PassFail.pass),
+      throwsA(isA<StateError>()),
+    );
+  });
 }
