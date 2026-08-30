@@ -46,6 +46,7 @@ Future<void> _seedDefence(
   String status = 'scheduled',
   String type = 'preOral',
   String? thesisId,
+  DateTime? evaluationsReleasedAt,
 }) async {
   await db.collection('defenses').doc(id).set({
     'thesisId': thesisId ?? 't-$id',
@@ -59,6 +60,8 @@ Future<void> _seedDefence(
     'status': status,
     'createdBy': 'c1',
     'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
+    if (evaluationsReleasedAt != null)
+      'evaluationsReleasedAt': Timestamp.fromDate(evaluationsReleasedAt),
   });
 }
 
@@ -269,6 +272,211 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(AppBar, 'Consolidated d1'), findsOneWidget);
+  });
+
+  // ---- M4: the evaluation affordances on a row ----
+  //
+  // These two keys shipped with no test at all. An entry point nothing
+  // asserts is exactly the shape of the M2 leader upload flow that nothing
+  // navigated to, caught only in final review.
+
+  testWidgets('a panelist on a completed defence is offered the sheet',
+      (tester) async {
+    final db = await _seedUser('p1');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+
+    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToEvaluate-d1')), findsOneWidget);
+  });
+
+  testWidgets('the adviser is never offered the sheet -- they cannot score',
+      (tester) async {
+    final db = await _seedUser('a1');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+
+    await tester.pumpWidget(_wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToEvaluate-d1')), findsNothing);
+    // The adviser's own affordance, offered from the moment it closes.
+    expect(find.byKey(const Key('goToGrades-d1')), findsOneWidget);
+  });
+
+  testWidgets('an open defence offers neither affordance', (tester) async {
+    final db = await _seedUser('p1');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'inProgress',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+
+    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToEvaluate-d1')), findsNothing);
+    expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
+  });
+
+  // D39's seal, in the row: a panelist reaches the grades only once the
+  // adviser has released them.
+  testWidgets('a panelist reaches the grades only once they are released',
+      (tester) async {
+    final db = await _seedUser('p1');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+
+    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
+
+    await db.collection('defenses').doc('d1').update({
+      'evaluationsReleasedAt': Timestamp.fromDate(DateTime(2026, 9, 24)),
+    });
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('goToGrades-d1')), findsOneWidget);
+  });
+
+  // Finding 7, in the row. The rules grant both roles the released
+  // evaluations and §6 names both as viewers, but the row offered them
+  // nothing.
+  testWidgets(
+      'the coordinator and the dean reach the grades once released',
+      (tester) async {
+    for (final entry in {'c1': 'coordinator', 'dn1': 'dean'}.entries) {
+      final db = await _seedUser(entry.key, role: entry.value);
+      await _seedDefence(db,
+          id: 'd1',
+          adviserUid: 'a1',
+          panelUids: const ['p1'],
+          status: 'completed',
+          scheduledAt: DateTime(2026, 9, 1, 9),
+          evaluationsReleasedAt: DateTime(2026, 9, 24));
+
+      await tester.pumpWidget(_wrap(db, uid: entry.key));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('goToGrades-d1')), findsOneWidget,
+          reason: entry.key);
+      expect(find.byKey(const Key('goToEvaluate-d1')), findsNothing,
+          reason: entry.key);
+    }
+  });
+
+  testWidgets('the coordinator is offered nothing before release',
+      (tester) async {
+    final db = await _seedUser('c1', role: 'coordinator');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
+  });
+
+  // The leader never reaches either: D47 puts the numbers out of reach
+  // rather than merely unrendered.
+  testWidgets('the thesis leader is offered neither affordance',
+      (tester) async {
+    final db = await _seedUser('l1', role: 'student');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9),
+        evaluationsReleasedAt: DateTime(2026, 9, 24));
+
+    await tester.pumpWidget(_wrap(db, uid: 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToEvaluate-d1')), findsNothing);
+    expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
+  });
+
+  testWidgets('both affordances navigate where they say they do',
+      (tester) async {
+    final db = await _seedUser('p1');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9),
+        evaluationsReleasedAt: DateTime(2026, 9, 24));
+
+    Widget routed() => ProviderScope(
+          overrides: [
+            firestoreProvider.overrideWithValue(db),
+            firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+              signedIn: true,
+              mockUser: MockUser(
+                  uid: 'p1',
+                  email: 'p1@isufst.edu.ph',
+                  isEmailVerified: true),
+            )),
+          ],
+          child: MaterialApp.router(
+            routerConfig: GoRouter(
+              initialLocation: '/defences',
+              routes: [
+                GoRoute(
+                  path: '/defences',
+                  builder: (_, _) => const Scaffold(body: DefencesList()),
+                ),
+                GoRoute(
+                  path: '/defence/room/:defenceId/evaluate',
+                  builder: (context, state) => Scaffold(
+                    appBar: AppBar(
+                        title: Text(
+                            'Evaluate ${state.pathParameters['defenceId']}')),
+                  ),
+                ),
+                GoRoute(
+                  path: '/defence/room/:defenceId/grades',
+                  builder: (context, state) => Scaffold(
+                    appBar: AppBar(
+                        title: Text(
+                            'Grades ${state.pathParameters['defenceId']}')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(routed());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('goToEvaluate-d1')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Evaluate d1'), findsOneWidget);
+
+    await tester.pumpWidget(routed());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('goToGrades-d1')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Grades d1'), findsOneWidget);
   });
 
   testWidgets('a row shows the thesis working title, not the defence type',

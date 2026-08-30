@@ -635,6 +635,41 @@ void main() {
     expect(find.byKey(const Key('goToGrades')), findsOneWidget);
   });
 
+  // Finding 7. The rules grant the coordinator and the dean the released
+  // evaluations and §6 names both as viewers of the grades screen, but
+  // the gate stopped at adviser-or-panelist, so two authorised roles
+  // could reach it only by typing the URL.
+  testWidgets(
+      'the coordinator and the dean are offered the grades once released',
+      (tester) async {
+    for (final uid in ['c1', 'dn1']) {
+      useTallSurface(tester);
+      final db = await seed(status: 'completed');
+      await db.collection('defenses').doc('d1').update({
+        'evaluationsReleasedAt': Timestamp.fromDate(DateTime(2026, 9, 24)),
+      });
+
+      await tester.pumpWidget(app(db, uid));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('goToGrades')), findsOneWidget,
+          reason: uid);
+      expect(find.byKey(const Key('goToEvaluate')), findsNothing, reason: uid);
+    }
+  });
+
+  // The seal cuts the same way for them as for a panelist: before release
+  // there is nothing on that screen they are entitled to.
+  testWidgets(
+      'the coordinator is NOT offered the grades before release',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(status: 'completed'), 'c1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades')), findsNothing);
+  });
+
   // D47. The verdict is the outcome the group must know, and it lives on
   // the defence document they can already read -- so it reaches them
   // without any evaluation ever being readable to them.

@@ -493,13 +493,18 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                       : 'Evaluate'),
                 ),
               ),
-            // Both the adviser (always, once closed) and a panelist (once
-            // the adviser has released the grades) get a way to the grades
-            // screen -- naming this on `evaluationsReleased`, never
-            // `isReleased`: that flag is the comment log's own release to
-            // the group, three lines away in defence.dart and easy to
-            // reach for by mistake.
-            if (isAdviser || (isPanelist && defence.evaluationsReleased))
+            // The adviser always, once closed; the panel, the coordinator
+            // and the dean once the adviser has released the grades. The
+            // rules already grant all four the released evaluations and
+            // §6 names all four as viewers of this screen -- without the
+            // last two, two authorised roles could reach the grades only
+            // by typing the URL. Naming this on `evaluationsReleased`,
+            // never `isReleased`: that flag is the comment log's own
+            // release to the group, three lines away in defence.dart and
+            // easy to reach for by mistake.
+            if (isAdviser ||
+                ((isPanelist || isCoordinator || role == UserRole.dean) &&
+                    defence.evaluationsReleased))
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Align(
