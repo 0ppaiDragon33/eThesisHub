@@ -64,11 +64,13 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     _rating = evaluation.rating;
   }
 
-  /// A stepper control small enough that eleven criteria, each with its own
-  /// minus/score/plus, still fit a phone-height page without turning every
-  /// widget test into one that must inflate the test surface -- the default
-  /// `IconButton` reserves a 48x48 accessible tap target, which is right for
-  /// a lone button but multiplies badly across eleven rows.
+  /// The stepper's whole reason to exist is that a panelist scores eleven
+  /// criteria on a phone without summoning a numeric keypad eleven times --
+  /// which only holds if the +/- controls are themselves comfortable to
+  /// thumb. Kept at Material's own 48x48 minimum tap target rather than
+  /// shrunk to fit a test surface; the test harness grows to fit the
+  /// product, not the other way around (see `useTallSurface` in the test
+  /// file).
   Widget _stepperButton({
     required Key key,
     required IconData icon,
@@ -76,11 +78,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   }) {
     return IconButton(
       key: key,
-      icon: Icon(icon, size: 16),
-      iconSize: 16,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-      padding: EdgeInsets.zero,
+      icon: Icon(icon, size: 20),
       onPressed: onPressed,
     );
   }
@@ -251,28 +249,19 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
               ),
             ),
           for (final section in EvaluationSection.values) ...[
-            Text(section.label, style: Theme.of(context).textTheme.labelLarge),
+            Text(section.label, style: Theme.of(context).textTheme.titleMedium),
+            const Gap.sm(),
             for (final c in evaluationCriteria.where((c) => c.section == section))
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Expanded(
-                          child: Text(
-                            '${c.label} (${c.weight})',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                          child: Text('${c.label} (${c.weight})'),
                         ),
-                        if (c.prompt.isNotEmpty)
-                          Tooltip(
-                            message: c.prompt,
-                            child: const Icon(Icons.info_outline, size: 14),
-                          ),
                         _stepperButton(
                           key: Key('minus_${c.key}'),
                           icon: Icons.remove,
@@ -280,7 +269,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                               locked ? null : () => _adjust(c.key, -1, c.weight),
                         ),
                         SizedBox(
-                          width: 20,
+                          width: 24,
                           child: Text(
                             '${_scores[c.key] ?? 0}',
                             key: Key('score_${c.key}'),
@@ -295,26 +284,35 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                         ),
                       ],
                     ),
-                    if (c.takesComment)
-                      SizedBox(
-                        height: 32,
-                        child: TextField(
-                          key: Key('comment_${c.key}'),
-                          controller: _comments[c.key],
-                          enabled: !locked,
-                          style: Theme.of(context).textTheme.bodySmall,
-                          decoration: const InputDecoration(
-                            labelText: 'Remarks',
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                          ),
-                          maxLines: 1,
-                        ),
+                    if (c.prompt.isNotEmpty)
+                      Text(
+                        c.prompt,
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    if (c.takesComment) ...[
+                      const Gap.sm(),
+                      TextField(
+                        key: Key('comment_${c.key}'),
+                        controller: _comments[c.key],
+                        enabled: !locked,
+                        decoration: const InputDecoration(labelText: 'Remarks'),
+                        minLines: 1,
+                        maxLines: 3,
+                      ),
+                    ],
                   ],
                 ),
               ),
+            Text(
+              '${section.label} subtotal: '
+              '${_scores.entries.where((e) => criterionFor(e.key)?.section == section).fold<int>(0, (a, b) => a + b.value)} '
+              '/ ${EvaluationSection.sectionTotal}',
+              key: Key(
+                'sectionTotal_${section == EvaluationSection.content ? 'content' : 'presentation'}',
+              ),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const Gap.md(),
           ],
           Text('Final grade', style: Theme.of(context).textTheme.labelMedium),
           Text(

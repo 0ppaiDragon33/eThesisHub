@@ -37,6 +37,18 @@ Future<FakeFirebaseFirestore> seed({
   return db;
 }
 
+/// Eleven criteria, each with its own comfortably-sized (48x48) stepper and
+/// its own helper text, exceed the default 800x600 test surface -- the same
+/// reason this helper exists verbatim in `submit_titles_screen_test.dart`
+/// and `title_defence_screen_test.dart`. Grown here rather than the widget
+/// shrunk to fit, so a tap on a criterion below the fold (e.g.
+/// `plus_recommendation`, the 7th of 8 Content criteria) still lands.
+void useTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 Widget app(FakeFirebaseFirestore db, String uid) {
   return ProviderScope(
     overrides: [
@@ -53,6 +65,7 @@ Widget app(FakeFirebaseFirestore db, String uid) {
 
 void main() {
   testWidgets('renders every criterion of Form 5c', (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
@@ -64,6 +77,7 @@ void main() {
 
   testWidgets('only Content criteria carry a comment field',
       (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
@@ -73,6 +87,7 @@ void main() {
 
   testWidgets('the running total sums the scores as they change',
       (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
@@ -90,6 +105,7 @@ void main() {
   // out-of-range rather than accepting then rejecting it.
   testWidgets('a stepper clamps at zero and at its own weight',
       (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
@@ -112,6 +128,7 @@ void main() {
 
   testWidgets('submit is disabled until every criterion is scored',
       (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
@@ -122,7 +139,39 @@ void main() {
         isNull);
   });
 
+  // Pins the OTHER half of the gate: every criterion scored is necessary
+  // but not sufficient -- the rating is a separate, required field, and the
+  // button must not light up on scores alone.
+  testWidgets(
+      'submit stays disabled with every criterion scored but no rating, '
+      'then enables once a rating is picked', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    for (final c in evaluationCriteria) {
+      for (var i = 0; i < c.weight; i++) {
+        await tester.tap(find.byKey(Key('plus_${c.key}')));
+        await tester.pump();
+      }
+    }
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('submitEvaluation')))
+            .onPressed,
+        isNull);
+
+    await tester.tap(find.text('Pass'));
+    await tester.pump();
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('submitEvaluation')))
+            .onPressed,
+        isNotNull);
+  });
+
   testWidgets('an existing sheet loads its scores back', (tester) async {
+    useTallSurface(tester);
     final scores = {for (final c in evaluationCriteria) c.key: c.weight};
     await tester.pumpWidget(app(await seed(existing: scores), 'p1'));
     await tester.pumpAndSettle();
@@ -132,6 +181,7 @@ void main() {
   });
 
   testWidgets('a released evaluation is read-only', (tester) async {
+    useTallSurface(tester);
     final scores = {for (final c in evaluationCriteria) c.key: c.weight};
     await tester.pumpWidget(app(
         await seed(existing: scores, releasedAt: DateTime(2026, 9, 23)),
@@ -143,6 +193,7 @@ void main() {
   });
 
   testWidgets('the adviser is told they do not score', (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'a1'));
     await tester.pumpAndSettle();
 
@@ -153,6 +204,7 @@ void main() {
   // The distinction D41 depends on staying visible.
   testWidgets('the panelist rating is labelled as their own, not the panel\'s',
       (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
@@ -163,6 +215,7 @@ void main() {
   // the assertion becomes vacuous.
   testWidgets('shows a loading state before the defence resolves',
       (tester) async {
+    useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pump();
 
