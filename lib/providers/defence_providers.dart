@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/defence_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -117,4 +118,35 @@ final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
     controller.close();
   });
   yield* controller.stream;
+});
+
+/// Every submitted evaluation for a defence.
+///
+/// Before release the rules let a panelist read only their own, so this
+/// stream ERRORS for them rather than returning an empty list -- which is
+/// correct and must not be smoothed over: an empty list would read as
+/// "nobody has submitted", and the grades screen would then show a
+/// confident, wrong zero. The screen uses [myEvaluationProvider] and the
+/// defence's own release flag to decide whether to open this at all.
+final defenceEvaluationsProvider =
+    StreamProvider.family<List<Evaluation>, String>((ref, defenceId) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
+  return ref.watch(defenceRepositoryProvider).watchEvaluations(defenceId);
+});
+
+/// The signed-in panelist's own sheet for a defence, or null.
+///
+/// Null covers three different things on purpose -- nobody signed in, not
+/// a panelist, or a panelist who has not submitted -- because the screen
+/// treats all three the same way: there is nothing of yours to show. A
+/// FAILED read is not among them; that arrives as an error on the
+/// AsyncValue and must render as one.
+final myEvaluationProvider =
+    StreamProvider.family<Evaluation?, String>((ref, defenceId) {
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return Stream.value(null);
+  return ref
+      .watch(defenceRepositoryProvider)
+      .watchMyEvaluation(defenceId, uid);
 });
