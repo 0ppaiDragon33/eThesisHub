@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/evaluation.dart';
+import 'package:ethesishub/data/models/evaluation_criteria.dart';
 
 class DefenceRepository {
   DefenceRepository(this._db);
@@ -111,6 +113,121 @@ class DefenceRepository {
         return byTime != 0 ? byTime : a.id.compareTo(b.id);
       });
       return list;
+    });
+  }
+
+  CollectionReference<Map<String, dynamic>> _evaluations(String defenceId) =>
+      _defence(defenceId).collection('evaluations');
+
+  Evaluation _toEvaluation(String id, Map<String, dynamic> raw) {
+    return Evaluation.fromMap(id, {
+      ...raw,
+      'submittedAt': (raw['submittedAt'] as Timestamp?)?.toDate(),
+      'updatedAt': (raw['updatedAt'] as Timestamp?)?.toDate(),
+    });
+  }
+
+  /// Every submitted sheet for a defence, ordered by evaluator uid.
+  ///
+  /// Sorted in Dart rather than with `orderBy`: the document id IS the
+  /// evaluator uid, so there is no field to order on, and a stable order
+  /// is what stops the grades table reshuffling its columns between
+  /// snapshots.
+  Stream<List<Evaluation>> watchEvaluations(String defenceId) {
+    return _evaluations(defenceId).snapshots().map((s) {
+      final list =
+          s.docs.map((d) => _toEvaluation(d.id, d.data())).toList();
+      list.sort((a, b) => a.evaluatorUid.compareTo(b.evaluatorUid));
+      return list;
+    });
+  }
+
+  /// One panelist's own sheet, or null if they have not submitted.
+  ///
+  /// Null is a real answer here, not a failure: before release the rules
+  /// let a panelist read only this one document, so this is the only
+  /// evaluation stream they can open at all.
+  Stream<Evaluation?> watchMyEvaluation(String defenceId, String uid) {
+    return _evaluations(defenceId).doc(uid).snapshots().map(
+        (s) => s.exists ? _toEvaluation(s.id, s.data()!) : null);
+  }
+
+  /// Writes or replaces one panelist's Form 5c.
+  ///
+  /// `set` with no merge, so an edit replaces the sheet wholesale rather
+  /// than leaving a criterion from an earlier version behind.
+  ///
+  /// Every check below is ALSO a rule. They are repeated here because
+  /// `fake_cloud_firestore` enforces none of them, so without these the
+  /// whole Dart suite would pass against writes production denies -- and
+  /// because a client-side refusal can say WHY, which a
+  /// `permission-denied` cannot.
+  Future<void> submitEvaluation({
+    required String defenceId,
+    required String evaluatorUid,
+    required Map<String, int> scores,
+    required Map<String, String> comments,
+    required PassFail rating,
+  }) async {
+    for (final c in evaluationCriteria) {
+      final v = scores[c.key];
+      if (v == null) {
+        throw ArgumentError('Score every criterion before submitting.');
+      }
+      if (v < 0 || v > c.weight) {
+        throw ArgumentError(
+            '${c.label} is scored out of ${c.weight}.');
+      }
+    }
+    if (scores.length != evaluationCriteria.length) {
+      throw ArgumentError('That sheet has a criterion this form does not.');
+    }
+    for (final key in comments.keys) {
+      if (!contentKeys.contains(key)) {
+        throw ArgumentError(
+            'Only the Content criteria take a comment on Form 5c.');
+      }
+    }
+
+    final snap = await _defence(defenceId).get();
+    if (!snap.exists) throw StateError('That defence no longer exists.');
+    final data = snap.data()!;
+
+    final status = DefenceStatus.fromString(data['status'] as String?);
+    if (status != DefenceStatus.inProgress &&
+        status != DefenceStatus.completed) {
+      throw StateError(
+          'A defence can only be scored once it is under way.');
+    }
+    if (data['evaluationsReleasedAt'] != null) {
+      throw StateError(
+          'These evaluations have been released and can no longer be '
+          'changed.');
+    }
+
+    // Trimmed, and blanks dropped rather than stored: an empty string is
+    // not a comment, and the rules accept the key either way, so the
+    // distinction has to be made here.
+    final cleaned = <String, String>{};
+    comments.forEach((key, value) {
+      final text = value.trim();
+      if (text.isNotEmpty) cleaned[key] = text;
+    });
+
+    final existing = await _evaluations(defenceId).doc(evaluatorUid).get();
+
+    await _evaluations(defenceId).doc(evaluatorUid).set({
+      'scores': scores,
+      'comments': cleaned,
+      'total': totalOf(scores),
+      'rating': rating.value,
+      // On an edit, submittedAt must survive unchanged -- the rules pin
+      // it to its stored value, so re-stamping it here would be denied in
+      // production while passing against the fake.
+      'submittedAt': existing.exists
+          ? existing.data()!['submittedAt']
+          : FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
