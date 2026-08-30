@@ -296,9 +296,25 @@ sound here because a panelist reading their own document knows its id.
 The second arm is field-blind by design — after release the whole set
 is readable by the four roles named.
 
-Note what the adviser cannot do: read a single evaluation before
-release. They release without seeing the contents, which is correct —
-release is a procedural act on a count, not an editorial one.
+**Amended during implementation — the adviser MAY read before release.**
+This section originally denied them, on the reasoning that release is a
+procedural act on a count rather than an editorial one. That could not
+survive contact with Firestore: a `list` returns documents, so there is
+no query yielding "how many have submitted" without also yielding what
+they said, and the count is what D40's mitigation prints on the release
+button. Something had to give.
+
+What gave was the weaker claim. D39's seal exists to prevent
+**anchoring between panelists** — a panelist who sees two colleagues at
+78 and 81 before marking is anchored, and §8b's deliberation is worth
+less if the numbers converged before anyone spoke. The adviser cannot
+score at all (D37), so an adviser reading early anchors no score that
+exists. "Release without seeing the contents" was an observation about
+what the rule happened to produce, not a requirement drawn from the
+Guidelines.
+
+The panelist seal is untouched, and it is the arm that matters: a
+panelist still reads only their own until release.
 
 **Create and update.** Same shape, so the validation lives in one
 helper:
@@ -441,8 +457,21 @@ release. Once released it renders read-only with a note saying why.
 entirely on release, and it is the same route for everyone.
 
 **Before release** it is a count and nothing else: *2 of 3 panelists
-have submitted*, listing who has and who has not — names, not scores.
-Nobody sees a number here, including the adviser.
+have submitted*, listing who has — names, not scores.
+
+**Amended during implementation: only the "has" half is built.** The
+submitted panelists are named, because each evaluation carries a
+denormalized `evaluatorName` (the same treatment M3 gives `authorName`
+on a defence comment, and for the same reason: the name at the time of
+the act must not change when the account changes later). Naming who has
+**not** submitted would need names for panelists who have written
+nothing, and the defence document carries `panelUids` only. A second
+lookup for the sake of an absence is not worth it; the count already
+says how many are missing. Recorded here as a deliberate omission
+rather than left to look like an oversight.
+
+This screen is also the reason the adviser's pre-release read exists at
+all — see §4.1's amendment.
 
 For the adviser it also carries **Release evaluations**, with the
 count on the button itself. Releasing at 2 of 3 is possible and the
