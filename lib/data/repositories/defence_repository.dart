@@ -193,6 +193,21 @@ class DefenceRepository {
     if (!snap.exists) throw StateError('That defence no longer exists.');
     final data = snap.data()!;
 
+    // Mirrors the rules' isPanelistHere(): request.auth.uid in
+    // parent().panelUids. Duplicated here because fake_cloud_firestore
+    // enforces no rules, and this is the check the milestone's headline
+    // decision rests on -- the adviser is deliberately never in panelUids,
+    // because they cannot mark at arm's length after months on the thesis.
+    // Without this the whole Dart suite would prove nothing about it.
+    final panelUids = (data['panelUids'] as List?)?.cast<String>() ?? const [];
+    if (!panelUids.contains(evaluatorUid)) {
+      if (evaluatorUid == data['adviserUid']) {
+        throw StateError(
+            'An adviser guides the thesis and cannot also score it.');
+      }
+      throw StateError('Only a panelist assigned to this defence can score it.');
+    }
+
     final status = DefenceStatus.fromString(data['status'] as String?);
     if (status != DefenceStatus.inProgress &&
         status != DefenceStatus.completed) {

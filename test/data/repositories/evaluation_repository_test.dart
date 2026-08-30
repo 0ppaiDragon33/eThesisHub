@@ -56,6 +56,8 @@ void main() {
     await repo.submitEvaluation(
       defenceId: 'd1', evaluatorUid: 'p1', scores: perfect(),
       comments: const {}, rating: PassFail.pass);
+    final first = await repo.watchMyEvaluation('d1', 'p1').first;
+
     await repo.submitEvaluation(
       defenceId: 'd1', evaluatorUid: 'p1',
       scores: {...perfect(), 'title': 1}, comments: const {},
@@ -65,6 +67,34 @@ void main() {
     expect(all.length, 1);
     expect(all.single.total, 96);
     expect(all.single.rating, PassFail.fail);
+
+    // The rules pin submittedAt to its stored value on an update. A
+    // regression that re-stamps it on every write would be denied in
+    // production but would still pass here if this were unchecked.
+    expect(all.single.submittedAt, first!.submittedAt);
+    expect(all.single.updatedAt, isNot(first.updatedAt));
+  });
+
+  test('the adviser cannot score the defence they guided', () async {
+    final repo = DefenceRepository(await seed());
+
+    expect(
+      () => repo.submitEvaluation(
+        defenceId: 'd1', evaluatorUid: 'a1', scores: perfect(),
+        comments: const {}, rating: PassFail.pass),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('a uid outside the panel cannot score the defence', () async {
+    final repo = DefenceRepository(await seed());
+
+    expect(
+      () => repo.submitEvaluation(
+        defenceId: 'd1', evaluatorUid: 'stranger', scores: perfect(),
+        comments: const {}, rating: PassFail.pass),
+      throwsA(isA<StateError>()),
+    );
   });
 
   test('a missing criterion is refused before it reaches Firestore',
