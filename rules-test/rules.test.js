@@ -3764,6 +3764,296 @@ test("an EX-OFFICIO nomination ignores designation entirely", async () => {
     }));
 });
 
+// ---------- M4: evaluations ----------
+
+// The full eleven, all at their weight -- a perfect sheet totalling 100.
+function fullScores(extra = {}) {
+  return {
+    title: 5, introduction: 5, materialsAndMethods: 10, result: 10,
+    discussion: 10, conclusion: 5, recommendation: 2, references: 3,
+    preciseness: 15, alertness: 25, personality: 10, ...extra,
+  };
+}
+
+function evalDoc(extra = {}) {
+  const scores = extra.scores ?? fullScores();
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  return {
+    scores, comments: { title: "Narrow it." }, total,
+    rating: "pass",
+    // serverTimestamp(), not Timestamp.now(): the create rule pins both
+    // stamps to request.time, and a client clock is never exactly equal.
+    submittedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    ...extra,
+  };
+}
+
+// Each M4 test seeds through here, and each needs a truly fresh
+// evaluations subcollection: unlike M3's `defenses/df1`, which every test
+// resets by fully overwriting the parent doc, an evaluation is keyed by
+// evaluatorUid and reused as "pan-uid" across tests. Without a clean
+// slate, a doc a prior test created survives into the next test's
+// "create" attempt, which Firestore then evaluates as an "update" --
+// and the update rule correctly (if confusingly, for a test relying on a
+// fresh create) denies it, since evalDoc() regenerates submittedAt on
+// every call and the update arm pins it to the stored value.
+async function seedM4(extra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/dt1"), defThesis());
+    await setDoc(doc(db, "users/coord-uid"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    await setDoc(doc(db, "defenses/m4"),
+      defDoc({ status: "completed", ...extra }));
+  });
+}
+
+test("M4: a panelist writes their own evaluation", async () => {
+  await seedM4();
+  await assertSucceeds(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    evalDoc()));
+});
+
+// D37, and the whole reason it is a rule and not a hidden button: the
+// adviser has spent months on this thesis and cannot mark it at arm's
+// length. They are not in panelUids, so isPanelistHere() refuses them.
+test("M4 attack: the ADVISER may NOT write an evaluation", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+        "defenses/m4/evaluations/adviser-uid"),
+    evalDoc()));
+});
+
+test("M4 attack: a non-panelist may NOT write one", async () => {
+  await seedM4();
+  for (const uid of ["leader-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(setDoc(
+      doc(asDefUser(uid, `${uid}@isufst.edu.ph`),
+          `defenses/m4/evaluations/${uid}`),
+      evalDoc()));
+  }
+});
+
+test("M4 attack: a panelist may NOT score in a colleague's name",
+  async () => {
+    await seedM4();
+    await assertFails(setDoc(
+      doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+          "defenses/m4/evaluations/pan2-uid"),
+      evalDoc()));
+  });
+
+// THE DRIFT TEST. These eleven boundaries are the only thing tying
+// firestore.rules to lib/data/models/evaluation_criteria.dart, which it
+// cannot import. If someone changes a weight on one side only, the pair
+// at that criterion fails here.
+test("M4: each score is bounded by its own criterion's weight",
+  async () => {
+    await seedM4();
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const weights = {
+      title: 5, introduction: 5, materialsAndMethods: 10, result: 10,
+      discussion: 10, conclusion: 5, recommendation: 2, references: 3,
+      preciseness: 15, alertness: 25, personality: 10,
+    };
+    for (const [key, weight] of Object.entries(weights)) {
+      // Reset between keys: evalDoc() regenerates submittedAt on every
+      // call, and the update rule pins submittedAt to the stored value,
+      // so a positive case must hit "create" (a fresh doc), not "update"
+      // against the previous key's leftover doc.
+      await env.withSecurityRulesDisabled((ctx) => deleteDoc(
+        doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid")));
+      await assertSucceeds(setDoc(
+        doc(db, "defenses/m4/evaluations/pan-uid"),
+        evalDoc({ scores: fullScores({ [key]: weight }) })));
+      await assertFails(setDoc(
+        doc(db, "defenses/m4/evaluations/pan-uid"),
+        evalDoc({ scores: fullScores({ [key]: weight + 1 }) })));
+      await assertFails(setDoc(
+        doc(db, "defenses/m4/evaluations/pan-uid"),
+        evalDoc({ scores: fullScores({ [key]: -1 }) })));
+    }
+  });
+
+test("M4 attack: a total that does not equal the scores is denied",
+  async () => {
+    await seedM4();
+    await assertFails(setDoc(
+      doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+          "defenses/m4/evaluations/pan-uid"),
+      { ...evalDoc(), total: 100 - 1 }));
+  });
+
+// D45: a half-scored sheet counting toward the seal would be worse than
+// no sheet, so it is never written at all.
+test("M4 attack: a sheet missing a criterion is denied", async () => {
+  await seedM4();
+  const scores = fullScores();
+  delete scores.personality;
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { scores, comments: {}, total: 90, rating: "pass",
+      submittedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+});
+
+test("M4 attack: a comment on a Section B criterion is denied", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { ...evalDoc(), comments: { alertness: "not a field on the form" } }));
+});
+
+test("M4 attack: a rating outside pass/fail is denied", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { ...evalDoc(), rating: "conditional" }));
+});
+
+test("M4: nothing may be scored before the defence is under way",
+  async () => {
+    for (const status of ["scheduled", "cancelled"]) {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "defenses/m4"),
+          defDoc({ status }));
+      });
+      await assertFails(setDoc(
+        doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+            "defenses/m4/evaluations/pan-uid"),
+        evalDoc()));
+    }
+  });
+
+test("M4: a live defence may be scored", async () => {
+  await seedM4({ status: "inProgress" });
+  await assertSucceeds(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    evalDoc()));
+});
+
+// D39: a panelist who can see two colleagues at 78 and 81 before marking
+// is anchored, and §8b's deliberation is worth less if the numbers
+// converged before anyone spoke.
+test("M4: before release, a panelist reads their own and NOT a colleague's",
+  async () => {
+    await seedM4();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+      await setDoc(doc(db, "defenses/m4/evaluations/pan2-uid"), evalDoc());
+    });
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertSucceeds(
+      getDoc(doc(db, "defenses/m4/evaluations/pan-uid")));
+    await assertFails(
+      getDoc(doc(db, "defenses/m4/evaluations/pan2-uid")));
+    await assertFails(getDocs(collection(db, "defenses/m4/evaluations")));
+  });
+
+// Ruled during execution. The adviser needs the SUBMITTED COUNT before
+// release -- it is printed on the release button so releasing at 2 of 3
+// is a visible choice -- and a Firestore `list` returns documents, so
+// there is no query yielding "how many" without "what". The seal's real
+// purpose is anti-ANCHORING between panelists, and the adviser cannot
+// score at all, so their reading early anchors no score that exists.
+test("M4: the adviser MAY read evaluations before release",
+  async () => {
+    await seedM4();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid"),
+        evalDoc());
+    });
+    await assertSucceeds(getDoc(doc(
+      asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+      "defenses/m4/evaluations/pan-uid")));
+  });
+
+test("M4: after release the panel, adviser, coordinator and dean read all",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan2-uid"),
+        evalDoc());
+    });
+    for (const uid of ["pan-uid", "pan2-uid", "adviser-uid", "coord-uid",
+                       "dean-uid"]) {
+      await assertSucceeds(getDocs(collection(
+        asDefUser(uid, `${uid}@isufst.edu.ph`),
+        "defenses/m4/evaluations")));
+    }
+  });
+
+// D47: the numbers are unreachable for the group, not merely unrendered.
+// §11b routes the grading sheet to the subject professor on paper.
+test("M4 attack: the LEADER may not read evaluations, even after release",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid"),
+        evalDoc());
+    });
+    const db = asDefUser("leader-uid", "leader@isufst.edu.ph");
+    await assertFails(getDoc(doc(db, "defenses/m4/evaluations/pan-uid")));
+    await assertFails(getDocs(collection(db, "defenses/m4/evaluations")));
+  });
+
+// D44: before the seal it is a draft, after it it is the record.
+test("M4: a panelist edits their sheet until release, then cannot",
+  async () => {
+    await seedM4();
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertSucceeds(setDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc()));
+    await assertSucceeds(updateDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"),
+      { scores: fullScores({ title: 3 }), total: 98,
+        updatedAt: serverTimestamp() }));
+
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "defenses/m4"),
+        { evaluationsReleasedAt: Timestamp.now() });
+    });
+    await assertFails(updateDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"),
+      { scores: fullScores({ title: 1 }), total: 96,
+        updatedAt: serverTimestamp() }));
+  });
+
+test("M4 attack: an edit may not rewrite when it was first submitted",
+  async () => {
+    await seedM4();
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertSucceeds(setDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc()));
+    await assertFails(updateDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"),
+      { submittedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+  });
+
+// The record is evidence. Same reasoning as the defence itself, and as
+// M3's append-only comments.
+test("M4 attack: nobody may delete an evaluation", async () => {
+  await seedM4();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid"),
+      evalDoc());
+  });
+  for (const uid of ["pan-uid", "adviser-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(deleteDoc(doc(
+      asDefUser(uid, `${uid}@isufst.edu.ph`),
+      "defenses/m4/evaluations/pan-uid")));
+  }
+});
+
 test.after(async () => {
   await env.cleanup();
 });
