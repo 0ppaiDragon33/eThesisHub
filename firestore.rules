@@ -1231,18 +1231,20 @@ service cloud.firestore {
         // submit would make a mistyped 2-instead-of-20 permanent in a
         // record that has no delete.
         //
-        // CONJUNCT ORDER IS LOAD-BEARING. `wellFormed()` (which calls
-        // `bounded()`, the eleven-weight check the drift test walks) is
-        // evaluated before `submittedAt == resource.data.submittedAt`, and
-        // `&&` short-circuits left to right. The drift test's negative
-        // cases (`weight + 1`, `-1`) run as UPDATES, not creates, and rely
-        // on that ordering: they reuse `evalDoc()`, which regenerates
-        // `submittedAt` via `serverTimestamp()` on every call, so if
-        // `wellFormed()` were moved after the `submittedAt` check, those
-        // writes would already be denied by the (unrelated) `submittedAt`
-        // mismatch, and the test would keep passing while proving nothing
-        // about the weights. Do not reorder these conjuncts without first
-        // checking that the drift test still exercises `bounded()`.
+        // The conjuncts here are order-INDEPENDENT. An earlier note in
+        // this file claimed their order was load-bearing for the drift
+        // test, on the premise that `&&` short-circuits; it does, but
+        // the RESULT of a conjunction is false either way, so no
+        // reordering can change whether a write is allowed. What was
+        // actually true is that the drift test's negative cases ran as
+        // UPDATES against a document its own positive case had just
+        // created, and `evalDoc()` regenerates `submittedAt` on every
+        // call -- so they were denied by the `submittedAt` mismatch
+        // below no matter what `bounded()` said, and the test passed
+        // unchanged with `title <= 50`. That is fixed in the test, which
+        // now deletes the document before all three assertions so every
+        // case is a create. Weight drift is caught there, not by any
+        // ordering here.
         allow update: if verified()
                       && isPanelistHere()
                       && request.auth.uid == evaluatorUid

@@ -3861,19 +3861,28 @@ test("M4: each score is bounded by its own criterion's weight",
       discussion: 10, conclusion: 5, recommendation: 2, references: 3,
       preciseness: 15, alertness: 25, personality: 10,
     };
+    // EVERY case here must run as a CREATE -- the positive one and both
+    // negative ones alike. evalDoc() regenerates submittedAt via
+    // serverTimestamp() on every call, and the update arm pins
+    // submittedAt to its stored value, so a negative case left to run as
+    // an update against the document the positive case just wrote is
+    // denied by that (unrelated) submittedAt mismatch whatever the bound
+    // says. Written that way, this test passed with `title <= 50` --
+    // exactly the D35 mistake it exists to catch -- while proving
+    // nothing at all about the weights. Hence a fresh delete before each
+    // of the three assertions, not one per key.
+    const fresh = () => env.withSecurityRulesDisabled((ctx) => deleteDoc(
+      doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid")));
     for (const [key, weight] of Object.entries(weights)) {
-      // Reset between keys: evalDoc() regenerates submittedAt on every
-      // call, and the update rule pins submittedAt to the stored value,
-      // so a positive case must hit "create" (a fresh doc), not "update"
-      // against the previous key's leftover doc.
-      await env.withSecurityRulesDisabled((ctx) => deleteDoc(
-        doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid")));
+      await fresh();
       await assertSucceeds(setDoc(
         doc(db, "defenses/m4/evaluations/pan-uid"),
         evalDoc({ scores: fullScores({ [key]: weight }) })));
+      await fresh();
       await assertFails(setDoc(
         doc(db, "defenses/m4/evaluations/pan-uid"),
         evalDoc({ scores: fullScores({ [key]: weight + 1 }) })));
+      await fresh();
       await assertFails(setDoc(
         doc(db, "defenses/m4/evaluations/pan-uid"),
         evalDoc({ scores: fullScores({ [key]: -1 }) })));
@@ -3976,6 +3985,31 @@ test("M4: the adviser MAY read evaluations before release",
       asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
       "defenses/m4/evaluations/pan-uid")));
   });
+
+// The LIST, not the get, is what the release flow actually depends on:
+// defence_grades_screen.dart opens defenceEvaluationsProvider -- a
+// collection snapshots(), i.e. a list -- for the adviser BEFORE release,
+// to print the submitted count on the release button. If this were
+// denied the adviser would see an error where the count belongs and
+// could never reach the release control, breaking the chain at the one
+// step the pre-release read exists to enable. A single-document get
+// proving the same rule is not enough: the first arm authorises on the
+// {evaluatorUid} wildcard, which a list cannot bind.
+test("M4: the adviser MAY LIST evaluations before release", async () => {
+  await seedM4();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    // ONE ctx.firestore() for the whole callback: a second call after
+    // the first has issued a request throws "Firestore has already been
+    // started", a harness error assertSucceeds would report as though
+    // the rules had denied the read.
+    const db = ctx.firestore();
+    await setDoc(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+    await setDoc(doc(db, "defenses/m4/evaluations/pan2-uid"), evalDoc());
+  });
+  await assertSucceeds(getDocs(collection(
+    asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+    "defenses/m4/evaluations")));
+});
 
 test("M4: after release the panel, adviser, coordinator and dean read all",
   async () => {
