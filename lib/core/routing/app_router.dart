@@ -664,6 +664,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // literal 'queue' and send a coordinator's Publish Queue link to
       // ArchiveEntryScreen for a thesis whose id is the string "queue" if
       // this route were ever moved below it.
+      //
+      // archive_routes_test.dart drives the real GoRouter and proves this
+      // ordering is load-bearing, not merely conventional: swapping these
+      // two GoRoute entries turns that test red (verified during review;
+      // see task-11-report.md for the failure output).
       GoRoute(
         path: '/archive/queue',
         builder: (_, _) => const ArchiveQueueScreen(),
