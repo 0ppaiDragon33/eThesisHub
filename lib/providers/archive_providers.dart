@@ -81,10 +81,19 @@ AsyncValue<bool>? _queueGate(List<AsyncValue<Object?>?> sources) {
 /// collection is the literal record of what has been published, and
 /// [ArchiveRepository.publish] writes both in the same batch, so the two
 /// can never disagree.
+///
+/// Deliberately does NOT `ref.watch(signedInUidProvider)` the way
+/// [archiveProvider] and [allThesesProvider] each do -- that convention is
+/// for a single-source `StreamProvider` that reads the uid (or needs a
+/// rebuild edge because its OWN query is user-scoped). A fan-in has no such
+/// need of its own: [coordinatorNeedsYouProvider] and [deanNeedsYouProvider]
+/// (`lib/providers/needs_you_providers.dart`) are the same shape as this
+/// provider and do not watch it either -- user-scoping already lives on the
+/// three sources themselves, and this provider inherits it transitively
+/// through the `ref.listen` subscriptions below the moment any of them
+/// rebuilds. Adding a redundant watch here would only add a second,
+/// unrelated rebuild trigger with no data of its own to justify it.
 final archiveQueueProvider = StreamProvider<List<Thesis>>((ref) {
-  // Rebuilt on a change of user: see [signedInUidProvider].
-  ref.watch(signedInUidProvider);
-
   final controller = StreamController<List<Thesis>>();
 
   AsyncValue<List<Thesis>>? theses;

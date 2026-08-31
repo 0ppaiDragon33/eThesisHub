@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -5,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/features/repository/archive_queue_screen.dart';
+import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// A thesis `t1` led by `l1`, with a completed FINAL defence `d1`.
@@ -121,14 +125,17 @@ Future<FakeFirebaseFirestore> emptyCoordinatorDb() async {
 /// this needs is written by [seed] (or [emptyCoordinatorDb]) and fully
 /// awaited by the caller before `app(db)` ever runs -- exactly
 /// `defences_list_test.dart`'s `_seedUser`/`_wrap` split, one seeding
-/// function the caller awaits, then a plain synchronous wrapper. Kept
-/// `app()` itself synchronous rather than adding a second, later await
-/// here: a single `pump()` after `pumpWidget` needs to still catch
-/// [archiveQueueProvider] mid-flight for the loading-state test below, and
-/// an extra await inside `app()` -- between the data settling and the
-/// widget actually mounting -- was observed to let every source resolve
-/// before that one `pump()` returns, collapsing the loading state.
-Widget app(FakeFirebaseFirestore db) {
+/// function the caller awaits, then a plain synchronous wrapper.
+///
+/// [overrides] lets a test add its own provider overrides on top of the
+/// fake Firestore/auth ones below -- the loading-state test uses it to
+/// hold one of [archiveQueueProvider]'s three sources open on a
+/// `StreamController` that never emits, so the queue is DELIBERATELY, not
+/// incidentally, still loading at the point of its assertion.
+Widget app(
+  FakeFirebaseFirestore db, {
+  List<Override> overrides = const [],
+}) {
   return ProviderScope(
     overrides: [
       firestoreProvider.overrideWithValue(db),
@@ -139,6 +146,7 @@ Widget app(FakeFirebaseFirestore db) {
               uid: 'c1', email: 'c1@isufst.edu.ph', isEmailVerified: true),
         ),
       ),
+      ...overrides,
     ],
     child: const MaterialApp(
       home: Scaffold(body: ArchiveQueueScreen()),
@@ -211,12 +219,27 @@ void main() {
     expect(find.byKey(const Key('emptyQueue')), findsOneWidget);
   });
 
+  // Deliberately, not incidentally: [archiveProvider] is overridden with a
+  // StreamController this test owns and never adds to, so the gate inside
+  // [archiveQueueProvider] genuinely has no value from that source at the
+  // point of the single `pump()` below -- not a race against how fast
+  // FakeFirebaseFirestore or MockFirebaseAuth happen to settle. `theses`
+  // and `defences` are free to resolve from the real seeded data; the gate
+  // must still refuse to emit while `archive` never has.
   testWidgets('shows a loading state before the queue resolves',
       (tester) async {
-    await tester.pumpWidget(app(await seed(
-        verdict: 'pass', withManuscript: true)));
+    final heldOpen = StreamController<List<ArchiveEntry>>();
+    addTearDown(heldOpen.close);
+
+    await tester.pumpWidget(app(
+      await seed(verdict: 'pass', withManuscript: true),
+      overrides: [
+        archiveProvider.overrideWith((ref) => heldOpen.stream),
+      ],
+    ));
     await tester.pump();
 
     expect(find.byKey(const Key('queueLoading')), findsOneWidget);
+    expect(find.byKey(const Key('queueRow-t1')), findsNothing);
   });
 }
