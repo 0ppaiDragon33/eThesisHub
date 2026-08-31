@@ -115,7 +115,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       subtitle: 'Every account in the college. Activate, deactivate, and set '
           'who may be nominated as an adviser or a panelist.',
       children: [
-        const UsersTabs(selected: UsersTab.accounts),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const UsersTabs(selected: UsersTab.accounts),
+            // The archive publish queue's one link into the app --
+            // ArchiveQueueScreen is reachable from nowhere else, on
+            // purpose (spec: it is not a shell destination for anyone,
+            // including the coordinator). Living beside the Users tabs
+            // keeps it in the coordinator's admin area rather than
+            // promoting it to a destination the way Task 11 explicitly
+            // avoids.
+            TextButton.icon(
+              key: const Key('archiveQueueLink'),
+              onPressed: () => context.go('/archive/queue'),
+              icon: const Icon(Icons.upload_outlined),
+              label: const Text('Publish queue'),
+            ),
+          ],
+        ),
         const Gap.lg(),
         _Filters(
           roleFilter: _roleFilter,

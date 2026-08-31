@@ -31,6 +31,9 @@ import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
+import 'package:ethesishub/features/repository/archive_entry_screen.dart';
+import 'package:ethesishub/features/repository/archive_queue_screen.dart';
+import 'package:ethesishub/features/repository/archive_screen.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/features/thesis/thesis_status_screen.dart';
@@ -244,6 +247,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               if ((location == '/users' || location == '/invites') &&
                   profile.role != UserRole.coordinator) {
                 return home;
+              }
+              // '/archive/queue' is the coordinator's publish control, not
+              // a destination anyone can navigate to directly -- reachable
+              // only from a link inside '/users' (UsersScreen). Unlike the
+              // other role guards above, `home` is not the right landing
+              // spot for a non-coordinator here: home for every role
+              // already IS '/overview', but the reader who typed this URL
+              // was trying to see the archive, not their dashboard, and
+              // '/archive' is a destination every role gets (see
+              // shell_destination.dart). Sending them there instead of to
+              // '/overview' lands them on the nearest thing they actually
+              // asked for rather than punting to home like every other
+              // guard on this list.
+              if (location == '/archive/queue' &&
+                  profile.role != UserRole.coordinator) {
+                return '/archive';
               }
               // The title defence panel is faculty, coordinators and the
               // dean — never the student whose titles are being judged.
@@ -633,6 +652,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           }
           return ChapterDetailScreen(thesisId: id, chapter: chapter);
         },
+      ),
+      GoRoute(path: '/archive', builder: (_, _) => const ArchiveScreen()),
+      // '/archive/queue' MUST be registered BEFORE '/archive/:thesisId'
+      // below. This is the OPPOSITE situation from '/defence/room/:id' vs
+      // '/defence/room/:id/consolidated' above, where the segment counts
+      // differ (2 vs 3) and order genuinely does not matter -- go_router
+      // never even considers the shorter route for the longer path there.
+      // Here both '/archive/queue' and '/archive/:thesisId' are two
+      // segments, so a dynamic parameter at position 2 WOULD swallow the
+      // literal 'queue' and send a coordinator's Publish Queue link to
+      // ArchiveEntryScreen for a thesis whose id is the string "queue" if
+      // this route were ever moved below it.
+      GoRoute(
+        path: '/archive/queue',
+        builder: (_, _) => const ArchiveQueueScreen(),
+      ),
+      GoRoute(
+        path: '/archive/:thesisId',
+        builder: (context, state) => ArchiveEntryScreen(
+            thesisId: state.pathParameters['thesisId']!),
       ),
         ],
       ),
