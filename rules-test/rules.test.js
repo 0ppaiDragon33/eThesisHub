@@ -4394,6 +4394,12 @@ async function seedArchivable({ verdict = "pass", type = "final",
     await setDoc(doc(db, "users/coord-uid"),
       { role: "coordinator", active: true });
     await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    await setDoc(doc(db, "users/leader-uid"),
+      { role: "student", active: true });
+    await setDoc(doc(db, "users/adviser-uid"),
+      { role: "faculty", active: true });
+    await setDoc(doc(db, "users/pan-uid"),
+      { role: "faculty", active: true });
     await setDoc(doc(db, "defenses/md1"), {
       thesisId, type, scheduledAt: Timestamp.now(), venue: "AVR",
       panelUids: ["pan-uid", "pan2-uid"], adviserUid: "adviser-uid",
