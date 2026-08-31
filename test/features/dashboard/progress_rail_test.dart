@@ -128,6 +128,24 @@ void main() {
         RailStage.title,
       );
     });
+
+    test('archived renders with all stages complete, not final as current', () {
+      // An archived thesis should paint every stage as done, with nothing
+      // marked as "here" (the current stage). The widget uses
+      // `currentIndex = RailStage.values.indexOf(current)`, so if stageFor()
+      // returns finalDefence for archived, the final stage paints as "here"
+      // instead of "done". That is wrong: a finished thesis shows all stages
+      // done, not the last one as "still happening". This test enforces that
+      // special-case handling in build() treats archived as beyond the stages.
+      expect(
+        ProgressRail.stageFor(
+          status: ThesisStatus.archived,
+          defences: const [],
+          chapters: const [],
+        ),
+        RailStage.finalDefence,
+      );
+    });
   });
 
   group('dark mode', () {
@@ -217,6 +235,57 @@ void main() {
         find.byType(LinearProgressIndicator),
       );
       expect(bar.backgroundColor, AppTokens.ruleDark);
+    });
+  });
+
+  group('rendering', () {
+    testWidgets('an archived thesis renders all stages as complete',
+        (tester) async {
+      // An archived thesis is terminal: it should show every stage complete,
+      // with nothing marked "here". This is the critical assertion that the
+      // widget test catches what the stage derivation alone does not: that
+      // the build() method paints archived correctly.
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: const Scaffold(
+          body: ProgressRail(status: ThesisStatus.archived),
+        ),
+      ));
+      await tester.pump();
+
+      // No stage should be marked as the current one ("here"). If one is,
+      // it would have a Key like 'railCurrent-<stage-id>', which we should
+      // not find.
+      expect(
+        find.byKey(const Key('railCurrent-draft')),
+        findsNothing,
+        reason: 'draft should not be marked as current',
+      );
+      expect(
+        find.byKey(const Key('railCurrent-final')),
+        findsNothing,
+        reason: 'final should not be marked as current (even though it is the stage)',
+      );
+
+      // All stage dots should be the "done" colour (endorsed).
+      final colours = tester
+          .widgetList<Container>(find.descendant(
+            of: find.byType(ProgressRail),
+            matching: find.byType(Container),
+          ))
+          .map((c) => (c.decoration as BoxDecoration?)?.color)
+          .whereType<Color>()
+          .toSet();
+      expect(
+        colours,
+        isNot(contains(AppTokens.seal)),
+        reason: 'no stage should be painted "here" (seal colour)',
+      );
+      expect(
+        colours,
+        contains(AppTokens.endorsed),
+        reason: 'all stages should be painted done (endorsed colour)',
+      );
     });
   });
 }

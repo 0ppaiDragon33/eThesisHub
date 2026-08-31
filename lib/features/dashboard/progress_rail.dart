@@ -109,7 +109,11 @@ class ProgressRail extends StatelessWidget {
     final done = dark ? AppTokens.endorsedDark : AppTokens.endorsed;
     final here = dark ? AppTokens.sealDark : AppTokens.seal;
     final ahead = dark ? AppTokens.ruleDark : AppTokens.rule;
-    final currentIndex = RailStage.values.indexOf(current);
+    // Archived is terminal: every stage is complete. Setting currentIndex
+    // to values.length (past the last stage) makes all stages paint as done.
+    final currentIndex = status == ThesisStatus.archived
+        ? RailStage.values.length
+        : RailStage.values.indexOf(current);
 
     return Card(
       child: Padding(
@@ -125,11 +129,15 @@ class ProgressRail extends StatelessWidget {
                 child: Column(
                   children: [
                     Container(
-                      key: stage == current
+                      key: status != ThesisStatus.archived && stage == current
                           ? Key('railCurrent-${stage.id}')
                           : null,
-                      width: stage == current ? 14 : 11,
-                      height: stage == current ? 14 : 11,
+                      width: status != ThesisStatus.archived && stage == current
+                          ? 14
+                          : 11,
+                      height: status != ThesisStatus.archived && stage == current
+                          ? 14
+                          : 11,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: switch (RailStage.values.indexOf(stage)) {
@@ -145,11 +153,14 @@ class ProgressRail extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight: stage == current
-                            ? FontWeight.w700
-                            : FontWeight.w400,
-                        color:
-                            stage == current ? here : scheme.onSurfaceVariant,
+                        fontWeight:
+                            status != ThesisStatus.archived && stage == current
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                        color: status != ThesisStatus.archived &&
+                                stage == current
+                            ? here
+                            : scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
