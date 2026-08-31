@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/defence/defence_status.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -130,6 +131,16 @@ class DefenceRow extends ConsumerWidget {
     final thesisAsync = ref.watch(thesisByIdProvider(d.thesisId));
     final cancelled = d.status == DefenceStatus.cancelled;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final completed = d.status == DefenceStatus.completed;
+    final isPanelist = uid != null && d.panelUids.contains(uid);
+    final isAdviser = uid != null && uid == d.adviserUid;
+    // Read non-blockingly, unlike the room screen: a row must render its
+    // title, status and Open control the instant the defence arrives, and
+    // a profile still in flight simply means the two release-gated
+    // affordances appear a frame later rather than the whole row waiting.
+    final role = ref.watch(currentUserProvider).valueOrNull?.role;
+    final isCoordinator = role == UserRole.coordinator;
+    final isDean = role == UserRole.dean;
 
     // A blank string and a real title are visually identical, so a title
     // still in flight must read as "pending", not as nothing at all.
@@ -183,6 +194,37 @@ class DefenceRow extends ConsumerWidget {
                     color: defenceStatusColor(d.status, brightness)),
               ),
             ),
+            // Same affordance as the room screen offers once inside: a
+            // completed defence's panelist gets the sheet, its adviser gets
+            // the grades -- naming this on `evaluationsReleased`, never
+            // `isReleased` (the comment log's own release flag, three lines
+            // away in defence.dart). `push`, not `go`: these are deep
+            // screens under the Defences destination.
+            if (completed && isPanelist) ...[
+              const SizedBox(width: AppTokens.sm),
+              FilledButton(
+                key: Key('goToEvaluate-${d.id}'),
+                onPressed: () =>
+                    context.push('/defence/room/${d.id}/evaluate'),
+                child: const Text('Evaluate'),
+              ),
+            ],
+            // The coordinator and the dean too, once released: the rules
+            // grant them the released evaluations and §6 names them as
+            // viewers, so leaving them off the row left two authorised
+            // roles with no way in but a typed URL.
+            if (completed &&
+                (isAdviser ||
+                    ((isPanelist || isCoordinator || isDean) &&
+                        d.evaluationsReleased))) ...[
+              const SizedBox(width: AppTokens.sm),
+              OutlinedButton(
+                key: Key('goToGrades-${d.id}'),
+                onPressed: () =>
+                    context.push('/defence/room/${d.id}/grades'),
+                child: const Text('Grades'),
+              ),
+            ],
             const SizedBox(width: AppTokens.sm),
             FilledButton(
               key: Key('goToDefence-${d.id}'),

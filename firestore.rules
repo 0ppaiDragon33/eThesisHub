@@ -1025,6 +1025,44 @@ service cloud.firestore {
                        .hasOnly(['consolidatedAt'])
                     && incoming().consolidatedAt == request.time;
 
+      // Adviser arm 2 -- RELEASE the evaluations to the panel.
+      //
+      // §8b has the panel deliberate over the final grades, so they must
+      // be able to see them: this is what opens the set. It is the same
+      // shape as the consolidation arm above, deliberately -- one pattern
+      // to learn rather than two.
+      //
+      // NOT conditioned on "everyone has submitted": Firestore rules
+      // cannot count the documents in a collection, so that sentence is
+      // not expressible here. The adviser can release at 2 of 3. The
+      // grades screen therefore prints the count on the button itself, so
+      // an early release is a visible choice rather than an accident.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && defence().status == 'completed'
+                    && !('evaluationsReleasedAt' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['evaluationsReleasedAt'])
+                    && incoming().evaluationsReleasedAt == request.time;
+
+      // Adviser arm 3 -- RECORD the §8b verdict.
+      //
+      // Only after release (the panel must see the grades to deliberate),
+      // and only once: a recorded verdict is the panel's decision, not a
+      // draft. `verdictRecordedBy` must be the adviser themselves --
+      // someone barred from scoring at all has to be visibly the scribe,
+      // and a field that could name anyone would record nothing.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && 'evaluationsReleasedAt' in defence()
+                    && !('panelVerdict' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['panelVerdict', 'verdictRecordedBy',
+                                 'verdictRecordedAt'])
+                    && incoming().panelVerdict in ['pass', 'fail']
+                    && incoming().verdictRecordedBy == request.auth.uid
+                    && incoming().verdictRecordedAt == request.time;
+
       // The defence record is evidence.
       allow delete: if false;
 
@@ -1066,6 +1104,168 @@ service cloud.firestore {
         // Append-only, per D10: the defence record is evidence, and
         // editable remarks make consolidated feedback worthless.
         allow update, delete: if false;
+      }
+
+      // ---- M4: Form 5c evaluations ----
+      //
+      // One document per panelist, keyed by their uid so nobody files two.
+      // Guidelines §8a: the panel rates Pass or Fail AND completes Form 5c
+      // so a numerical grade can be given.
+      match /evaluations/{evaluatorUid} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        // The adviser is deliberately NOT here. They advised this thesis
+        // for months and cannot mark it at arm's length, so the rule --
+        // not merely a hidden button -- refuses them. They comment in the
+        // room like everyone else, and they hold the two acts below.
+        function isPanelistHere() {
+          return signedIn() && request.auth.uid in parent().panelUids;
+        }
+        // Presence, never a sentinel: `.get(k, <sentinel>) == <sentinel>`
+        // silently changes meaning the day a legitimate value equals the
+        // sentinel, which cost this project two rounds already.
+        function released() {
+          return 'evaluationsReleasedAt' in parent();
+        }
+        function scores() {
+          return request.resource.data.scores;
+        }
+
+        // THESE ELEVEN NUMBERS EXIST TWICE. The other copy is
+        // `evaluationCriteria` in lib/data/models/evaluation_criteria.dart,
+        // which this cannot import. If they drift, the form accepts a
+        // score this denies -- so rules.test.js walks every boundary at
+        // weight and weight+1.
+        function bounded() {
+          let s = scores();
+          return s.keys().hasAll(['title', 'introduction',
+                    'materialsAndMethods', 'result', 'discussion',
+                    'conclusion', 'recommendation', 'references',
+                    'preciseness', 'alertness', 'personality'])
+              && s.keys().hasOnly(['title', 'introduction',
+                    'materialsAndMethods', 'result', 'discussion',
+                    'conclusion', 'recommendation', 'references',
+                    'preciseness', 'alertness', 'personality'])
+              && s.title is int && s.title >= 0 && s.title <= 5
+              && s.introduction is int
+                 && s.introduction >= 0 && s.introduction <= 5
+              && s.materialsAndMethods is int
+                 && s.materialsAndMethods >= 0
+                 && s.materialsAndMethods <= 10
+              && s.result is int && s.result >= 0 && s.result <= 10
+              && s.discussion is int
+                 && s.discussion >= 0 && s.discussion <= 10
+              && s.conclusion is int
+                 && s.conclusion >= 0 && s.conclusion <= 5
+              && s.recommendation is int
+                 && s.recommendation >= 0 && s.recommendation <= 2
+              && s.references is int
+                 && s.references >= 0 && s.references <= 3
+              && s.preciseness is int
+                 && s.preciseness >= 0 && s.preciseness <= 15
+              && s.alertness is int
+                 && s.alertness >= 0 && s.alertness <= 25
+              && s.personality is int
+                 && s.personality >= 0 && s.personality <= 10;
+        }
+
+        function wellFormed() {
+          let d = request.resource.data;
+          let s = scores();
+          return d.keys().hasAll(['evaluatorName', 'scores', 'comments',
+                                  'total', 'rating',
+                                  'submittedAt', 'updatedAt'])
+              && d.keys().hasOnly(['evaluatorName', 'scores', 'comments',
+                                   'total', 'rating',
+                                   'submittedAt', 'updatedAt'])
+              // The evaluator's name as it stood when they submitted --
+              // the same denormalization, for the same reason, as
+              // authorName on a defence comment: a grade sheet naming a
+              // uid names nobody, and this record outlives the account.
+              && d.evaluatorName is string
+              && bounded()
+              // A stored total that could disagree with its own scores
+              // would be worse than no stored total, so it is recomputed
+              // here on every write rather than trusted.
+              && d.total == s.title + s.introduction
+                          + s.materialsAndMethods + s.result + s.discussion
+                          + s.conclusion + s.recommendation + s.references
+                          + s.preciseness + s.alertness + s.personality
+              && d.rating in ['pass', 'fail']
+              // Section B carries no comment lines on the printed form,
+              // so its three keys are not accepted here.
+              && d.comments.keys().hasOnly(['title', 'introduction',
+                    'materialsAndMethods', 'result', 'discussion',
+                    'conclusion', 'recommendation', 'references']);
+        }
+
+        // Your own always; everyone else's only once released (D39). The
+        // adviser is the one exception to that seal: they cannot score at
+        // all, so an early read anchors no score that exists, and they
+        // need the submitted COUNT before release -- printed on the
+        // release button so releasing at 2 of 3 is a visible choice -- and
+        // a Firestore `list` returns documents, so there is no query
+        // yielding "how many" without "what". The seal's real purpose is
+        // anti-anchoring between panelists, which the adviser cannot do.
+        // The first arm authorises on the {evaluatorUid} wildcard, which
+        // is sound because a panelist reading their own knows its id.
+        //
+        // `parent()` costs one get per document evaluated. Safe here --
+        // an evaluations subcollection holds at most one document per
+        // panelist -- unlike the `list` over `defenses` above, which is
+        // why that one snapshots leaderUid rather than reading the thesis.
+        allow get, list: if (signedIn()
+                             && ((request.auth.uid == evaluatorUid
+                                  && isPanelistHere())
+                                 || parent().adviserUid == request.auth.uid))
+                         || (released()
+                             && (isPanelistHere()
+                                 || isCoordinator() || isDean()));
+
+        // Nothing has been presented to score while the defence is merely
+        // scheduled, and a cancelled one is never scorable.
+        allow create: if verified()
+                      && isPanelistHere()
+                      && request.auth.uid == evaluatorUid
+                      && parent().status in ['inProgress', 'completed']
+                      && !released()
+                      && wellFormed()
+                      && request.resource.data.submittedAt == request.time
+                      && request.resource.data.updatedAt == request.time;
+
+        // Editable until the seal, then frozen (D44). Freezing on first
+        // submit would make a mistyped 2-instead-of-20 permanent in a
+        // record that has no delete.
+        //
+        // The conjuncts here are order-INDEPENDENT. An earlier note in
+        // this file claimed their order was load-bearing for the drift
+        // test, on the premise that `&&` short-circuits; it does, but
+        // the RESULT of a conjunction is false either way, so no
+        // reordering can change whether a write is allowed. What was
+        // actually true is that the drift test's negative cases ran as
+        // UPDATES against a document its own positive case had just
+        // created, and `evalDoc()` regenerates `submittedAt` on every
+        // call -- so they were denied by the `submittedAt` mismatch
+        // below no matter what `bounded()` said, and the test passed
+        // unchanged with `title <= 50`. That is fixed in the test, which
+        // now deletes the document before all three assertions so every
+        // case is a create. Weight drift is caught there, not by any
+        // ordering here.
+        allow update: if verified()
+                      && isPanelistHere()
+                      && request.auth.uid == evaluatorUid
+                      && !released()
+                      && wellFormed()
+                      // "When did this panelist first submit" must stay
+                      // answerable after an edit.
+                      && request.resource.data.submittedAt
+                         == resource.data.submittedAt
+                      && request.resource.data.updatedAt == request.time;
+
+        // A grade entered and withdrawn is exactly the gap in the record
+        // that §8b's deliberation would need to explain.
+        allow delete: if false;
       }
     }
 

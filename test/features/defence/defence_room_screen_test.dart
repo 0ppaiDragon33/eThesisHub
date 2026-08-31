@@ -22,6 +22,7 @@ Future<FakeFirebaseFirestore> seed({
   String status = 'inProgress',
   List<Map<String, String>> comments = const [],
   DateTime? scheduledAt,
+  String? verdict,
 }) async {
   final db = FakeFirebaseFirestore();
   await db.collection('theses').doc('t1').set({
@@ -51,6 +52,10 @@ Future<FakeFirebaseFirestore> seed({
     'status': status,
     'createdBy': 'c1',
     'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
+    'panelVerdict': ?verdict,
+    if (verdict != null) 'verdictRecordedBy': 'a1',
+    if (verdict != null)
+      'verdictRecordedAt': Timestamp.fromDate(DateTime(2026, 8, 20)),
   });
   await db.collection('users').doc('a1').set({
     'fullName': 'Dr. Adviser',
@@ -96,9 +101,9 @@ Future<FakeFirebaseFirestore> seed({
 // settles into AsyncError, and any uid read off it is silently null
 // forever. See schedule_defence_screen_test.dart's `_wrap` for the same
 // pattern.
-Widget _wrap(
-  FakeFirebaseFirestore db, {
-  required String uid,
+Widget app(
+  FakeFirebaseFirestore db,
+  String uid, {
   List<Override> overrides = const [],
 }) =>
     ProviderScope(
@@ -119,6 +124,18 @@ Widget _wrap(
         ),
       ),
     );
+
+/// Grown taller than the default 800x600 test surface, following the same
+/// pattern as `evaluation_screen_test.dart`'s and `title_defence_screen_
+/// test.dart`'s own `useTallSurface`: `goToGrades` sits below the log and
+/// other coordinator-only controls, and a widget below the fold cannot be
+/// found by `find.byKey` without either scrolling to it or growing the
+/// surface to fit it.
+void useTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
 
 void main() {
   testWidgets('the log is live for the panel', (tester) async {
@@ -145,7 +162,7 @@ void main() {
       'createdAt': Timestamp.fromDate(DateTime.utc(2026, 9, 1, 9, 10)),
     });
 
-    await tester.pumpWidget(_wrap(db, uid: 'p2'));
+    await tester.pumpWidget(app(db, 'p2'));
     await tester.pumpAndSettle();
 
     final row0 = find.byKey(const Key('commentRow-cm0'));
@@ -181,7 +198,7 @@ void main() {
       (tester) async {
     final db = await seed(status: 'scheduled');
 
-    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpWidget(app(db, 'p1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('commentBody')), findsNothing);
@@ -192,7 +209,7 @@ void main() {
       (tester) async {
     final db = await seed(status: 'inProgress');
 
-    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpWidget(app(db, 'p1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('commentBody')), findsOneWidget);
@@ -202,7 +219,7 @@ void main() {
   testWidgets('the comment box is gone again once completed', (tester) async {
     final db = await seed(status: 'completed');
 
-    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpWidget(app(db, 'p1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('commentBody')), findsNothing);
@@ -211,23 +228,23 @@ void main() {
 
   testWidgets('only the coordinator sees open and close', (tester) async {
     final scheduled = await seed(status: 'scheduled');
-    await tester.pumpWidget(_wrap(scheduled, uid: 'p1'));
+    await tester.pumpWidget(app(scheduled, 'p1'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('openDefence')), findsNothing);
     expect(find.byKey(const Key('closeDefence')), findsNothing);
 
     final inProgress = await seed(status: 'inProgress');
-    await tester.pumpWidget(_wrap(inProgress, uid: 'p1'));
+    await tester.pumpWidget(app(inProgress, 'p1'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('openDefence')), findsNothing);
     expect(find.byKey(const Key('closeDefence')), findsNothing);
 
-    await tester.pumpWidget(_wrap(scheduled, uid: 'c1'));
+    await tester.pumpWidget(app(scheduled, 'c1'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('openDefence')), findsOneWidget);
     expect(find.byKey(const Key('closeDefence')), findsNothing);
 
-    await tester.pumpWidget(_wrap(inProgress, uid: 'c1'));
+    await tester.pumpWidget(app(inProgress, 'c1'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('openDefence')), findsNothing);
     expect(find.byKey(const Key('closeDefence')), findsOneWidget);
@@ -238,7 +255,7 @@ void main() {
       (tester) async {
     final db = await seed();
 
-    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpWidget(app(db, 'p1'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -272,7 +289,7 @@ void main() {
       'active': true,
     });
 
-    await tester.pumpWidget(_wrap(db, uid: 'l1'));
+    await tester.pumpWidget(app(db, 'l1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('commentBody')), findsNothing);
@@ -290,9 +307,9 @@ void main() {
     final neverDefence = StreamController<Defence?>();
     addTearDown(neverDefence.close);
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(app(
       await seed(),
-      uid: 'p1',
+      'p1',
       overrides: [
         defenceProvider('d1').overrideWith((ref) => neverDefence.stream),
       ],
@@ -311,9 +328,9 @@ void main() {
     final neverComments = StreamController<List<DefenceComment>>();
     addTearDown(neverComments.close);
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(app(
       await seed(),
-      uid: 'p1',
+      'p1',
       overrides: [
         defenceCommentsProvider('d1')
             .overrideWith((ref) => neverComments.stream),
@@ -341,9 +358,9 @@ void main() {
     final neverUser = StreamController<AppUser?>();
     addTearDown(neverUser.close);
 
-    await tester.pumpWidget(_wrap(
+    await tester.pumpWidget(app(
       await seed(),
-      uid: 'p1',
+      'p1',
       overrides: [
         currentUserProvider.overrideWith((ref) => neverUser.stream),
       ],
@@ -424,7 +441,7 @@ void main() {
       'active': true,
     });
 
-    await tester.pumpWidget(_wrap(db, uid: 'l1'));
+    await tester.pumpWidget(app(db, 'l1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
@@ -444,7 +461,7 @@ void main() {
       status: 'scheduled',
       scheduledAt: DateTime.now().add(const Duration(hours: 3)),
     );
-    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
     final open =
@@ -461,7 +478,7 @@ void main() {
       status: 'scheduled',
       scheduledAt: DateTime.now().add(const Duration(minutes: 20)),
     );
-    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
     final open =
@@ -475,7 +492,7 @@ void main() {
     // Before this the schedule was frozen at creation: a coordinator who
     // picked the wrong day could neither fix it nor remove the defence.
     final db = await seed(status: 'scheduled');
-    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
     // The room's link to the consolidated view moved out of the app bar
@@ -504,7 +521,7 @@ void main() {
       status: 'scheduled',
       scheduledAt: DateTime(2026, 12, 1, 9, 0),
     );
-    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
     // The room's link to the consolidated view moved out of the app bar
@@ -546,7 +563,7 @@ void main() {
     // The rules deny them either way, but a control that always fails is
     // worse than no control at all.
     final db = await seed(status: 'scheduled');
-    await tester.pumpWidget(_wrap(db, uid: 'p1'));
+    await tester.pumpWidget(app(db, 'p1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('editSchedule')), findsNothing);
@@ -558,7 +575,7 @@ void main() {
     // Cancelled rather than deleted: the defence record is evidence, and a
     // hard delete leaves nothing to explain a gap in the history.
     final db = await seed(status: 'scheduled');
-    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
     // The three coordinator controls stack below the log, so on the default
@@ -572,5 +589,114 @@ void main() {
 
     final saved = await db.collection('defenses').doc('d1').get();
     expect(saved.data()!['status'], 'cancelled');
+  });
+
+  testWidgets('a panelist on a closed defence is offered the sheet',
+      (tester) async {
+    await tester.pumpWidget(app(await seed(status: 'completed'), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToEvaluate')), findsOneWidget);
+  });
+
+  testWidgets('nobody is offered the sheet before the defence closes',
+      (tester) async {
+    await tester.pumpWidget(app(await seed(status: 'scheduled'), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToEvaluate')), findsNothing);
+  });
+
+  testWidgets('the adviser is offered the grades, not the sheet',
+      (tester) async {
+    await tester.pumpWidget(app(await seed(status: 'completed'), 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades')), findsOneWidget);
+    expect(find.byKey(const Key('goToEvaluate')), findsNothing);
+  });
+
+  // Task 11 review, whole-branch: `goToGrades` is offered on two arms --
+  // always to the adviser once completed (covered above), and to a
+  // panelist once evaluations are released -- but only the adviser arm had
+  // a test. This pins the second.
+  testWidgets(
+      'a panelist is offered the grades too, once evaluations are released',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed(status: 'completed');
+    await db.collection('defenses').doc('d1').update({
+      'evaluationsReleasedAt': Timestamp.fromDate(DateTime(2026, 9, 24)),
+    });
+
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades')), findsOneWidget);
+  });
+
+  // Finding 7. The rules grant the coordinator and the dean the released
+  // evaluations and §6 names both as viewers of the grades screen, but
+  // the gate stopped at adviser-or-panelist, so two authorised roles
+  // could reach it only by typing the URL.
+  testWidgets(
+      'the coordinator and the dean are offered the grades once released',
+      (tester) async {
+    for (final uid in ['c1', 'dn1']) {
+      useTallSurface(tester);
+      final db = await seed(status: 'completed');
+      await db.collection('defenses').doc('d1').update({
+        'evaluationsReleasedAt': Timestamp.fromDate(DateTime(2026, 9, 24)),
+      });
+
+      await tester.pumpWidget(app(db, uid));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('goToGrades')), findsOneWidget,
+          reason: uid);
+      expect(find.byKey(const Key('goToEvaluate')), findsNothing, reason: uid);
+    }
+  });
+
+  // The seal cuts the same way for them as for a panelist: before release
+  // there is nothing on that screen they are entitled to.
+  testWidgets(
+      'the coordinator is NOT offered the grades before release',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(status: 'completed'), 'c1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades')), findsNothing);
+  });
+
+  // D47. The verdict is the outcome the group must know, and it lives on
+  // the defence document they can already read -- so it reaches them
+  // without any evaluation ever being readable to them.
+  testWidgets('the leader is shown their verdict once it is recorded',
+      (tester) async {
+    await tester.pumpWidget(app(
+        await seed(status: 'completed', verdict: 'pass'), 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('leaderVerdict')), findsOneWidget);
+  });
+
+  testWidgets('the leader is shown no grade and no route to one',
+      (tester) async {
+    await tester.pumpWidget(app(
+        await seed(status: 'completed', verdict: 'pass'), 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('goToGrades')), findsNothing);
+    expect(find.byKey(const Key('goToEvaluate')), findsNothing);
+  });
+
+  testWidgets('before a verdict the leader is told it is pending',
+      (tester) async {
+    await tester.pumpWidget(app(await seed(status: 'completed'), 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('leaderVerdictPending')), findsOneWidget);
   });
 }

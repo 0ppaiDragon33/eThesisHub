@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
@@ -76,6 +78,39 @@ Future<void> settle() async {
 /// A stream that is subscribed but never produces anything.
 Stream<T> never<T>() => StreamController<T>().stream;
 
+/// A minimal world for the evaluation-queue-row tests below: just a faculty
+/// profile for `fac-uid`. Each test seeds its own `defenses/d9` document on
+/// top of this, since what varies between them is the defence itself.
+Future<FakeFirebaseFirestore> seedFacultyWorld() async {
+  final db = FakeFirebaseFirestore();
+  await db.collection('users').doc('fac-uid').set({
+    'fullName': 'Dr. Faculty',
+    'email': 'fac-uid@isufst.edu.ph',
+    'role': 'faculty',
+    'active': true,
+  });
+  return db;
+}
+
+/// Drives [facultyNeedsYouProvider] off a real (fake) Firestore for [uid],
+/// with the nomination and advisee sources stubbed empty -- these tests are
+/// only about the evaluation row, so the other three fan-in sources are held
+/// still rather than exercised. [currentUserProvider] is stubbed to `null`
+/// rather than seeded: `myDefencesProvider` only branches on
+/// coordinator/dean/student roles, and a null profile falls through to the
+/// same adviser+panelist fan-in a `faculty` role would, without this helper
+/// needing to know which uid is signed in ahead of seeding `users/{uid}`.
+ProviderContainer facultyContainer(FakeFirebaseFirestore db, String uid) {
+  return ProviderContainer(overrides: [
+    firestoreProvider.overrideWithValue(db),
+    signedInUidProvider.overrideWithValue(uid),
+    currentUserProvider.overrideWith((ref) => Stream.value(null)),
+    myPendingNominationsProvider.overrideWith((ref) =>
+        Stream.value(const <({String thesisId, Nomination nomination})>[])),
+    myAdviseesProvider.overrideWith((ref) => Stream.value(const <Thesis>[])),
+  ]);
+}
+
 void main() {
   group('facultyNeedsYouProvider', () {
     test('stays loading while its sources are loading, never data([])',
@@ -118,6 +153,91 @@ void main() {
       await settle();
 
       expect(container.read(facultyNeedsYouProvider).hasError, isTrue);
+    });
+  });
+
+  group('facultyNeedsYouProvider: the evaluation queue row', () {
+    test('a panelist owes a sheet on a closed, unreleased defence',
+        () async {
+      final db = await seedFacultyWorld();
+      await db.collection('defenses').doc('d9').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9)),
+        'venue': 'AVR', 'panelUids': <String>['fac-uid'],
+        'adviserUid': 'a1', 'leaderUid': 'l1', 'status': 'completed',
+        'createdBy': 'c1',
+      });
+      final c = facultyContainer(db, 'fac-uid');
+      addTearDown(c.dispose);
+
+      final items = await c.read(facultyNeedsYouProvider.future);
+      final row = items.where((i) => i.chipLabel == 'Evaluate');
+
+      expect(row, hasLength(1));
+      expect(row.single.route, '/defence/room/d9/evaluate');
+      expect(row.single.title, 'Final defence');
+    });
+
+    test('the row goes once that panelist has submitted', () async {
+      final db = await seedFacultyWorld();
+      await db.collection('defenses').doc('d9').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9)),
+        'venue': 'AVR', 'panelUids': <String>['fac-uid'],
+        'adviserUid': 'a1', 'leaderUid': 'l1', 'status': 'completed',
+        'createdBy': 'c1',
+      });
+      await db
+          .collection('defenses')
+          .doc('d9')
+          .collection('evaluations')
+          .doc('fac-uid')
+          .set({
+        'scores': {for (final cr in evaluationCriteria) cr.key: cr.weight},
+        'comments': const <String, String>{},
+        'total': 100, 'rating': 'pass',
+      });
+      final c = facultyContainer(db, 'fac-uid');
+      addTearDown(c.dispose);
+
+      final items = await c.read(facultyNeedsYouProvider.future);
+      expect(items.where((i) => i.chipLabel == 'Evaluate'), isEmpty);
+    });
+
+    test('a released defence owes nothing, submitted or not', () async {
+      final db = await seedFacultyWorld();
+      await db.collection('defenses').doc('d9').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9)),
+        'venue': 'AVR', 'panelUids': <String>['fac-uid'],
+        'adviserUid': 'a1', 'leaderUid': 'l1', 'status': 'completed',
+        'createdBy': 'c1',
+        'evaluationsReleasedAt':
+            Timestamp.fromDate(DateTime(2026, 9, 24)),
+      });
+      final c = facultyContainer(db, 'fac-uid');
+      addTearDown(c.dispose);
+
+      final items = await c.read(facultyNeedsYouProvider.future);
+      expect(items.where((i) => i.chipLabel == 'Evaluate'), isEmpty);
+    });
+
+    // The adviser is barred from scoring, so they can never owe a sheet --
+    // and this is the queue that would otherwise nag them forever.
+    test('the adviser is never asked to evaluate', () async {
+      final db = await seedFacultyWorld();
+      await db.collection('defenses').doc('d9').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9)),
+        'venue': 'AVR', 'panelUids': <String>['p1'],
+        'adviserUid': 'fac-uid', 'leaderUid': 'l1', 'status': 'completed',
+        'createdBy': 'c1',
+      });
+      final c = facultyContainer(db, 'fac-uid');
+      addTearDown(c.dispose);
+
+      final items = await c.read(facultyNeedsYouProvider.future);
+      expect(items.where((i) => i.chipLabel == 'Evaluate'), isEmpty);
     });
   });
 

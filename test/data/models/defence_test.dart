@@ -1,6 +1,7 @@
 // test/data/models/defence_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/evaluation.dart';
 
 void main() {
   test('the stored type strings are preOral and final', () {
@@ -111,5 +112,89 @@ void main() {
     // Pinned because firestore.rules carries the same number as a literal.
     // If the two disagree the button looks enabled and the write is denied.
     expect(defenceOpenGrace, const Duration(minutes: 30));
+  });
+
+  // The four M4 fields are absent on every defence created before this
+  // milestone, so absent must read as "not yet", never as an error and
+  // never as a value.
+  test('a defence with no evaluation fields is unreleased and unjudged',
+      () {
+    final d = Defence.fromMap('d1', {
+      'thesisId': 't1',
+      'type': 'final',
+      'venue': 'AVR',
+      'panelUids': <String>['p1'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'completed',
+      'createdBy': 'c1',
+    });
+
+    expect(d.evaluationsReleasedAt, isNull);
+    expect(d.evaluationsReleased, isFalse);
+    expect(d.panelVerdict, isNull);
+    expect(d.hasVerdict, isFalse);
+    expect(d.verdictRecordedBy, isNull);
+    expect(d.verdictRecordedAt, isNull);
+  });
+
+  test('a released, judged defence reads all four back', () {
+    final d = Defence.fromMap('d1', {
+      'thesisId': 't1',
+      'type': 'final',
+      'venue': 'AVR',
+      'panelUids': <String>['p1'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'completed',
+      'createdBy': 'c1',
+      'evaluationsReleasedAt': DateTime(2026, 9, 23, 14),
+      'panelVerdict': 'pass',
+      'verdictRecordedBy': 'a1',
+      'verdictRecordedAt': DateTime(2026, 9, 23, 15),
+    });
+
+    expect(d.evaluationsReleased, isTrue);
+    expect(d.panelVerdict, PassFail.pass);
+    expect(d.hasVerdict, isTrue);
+    expect(d.verdictRecordedBy, 'a1');
+    expect(d.verdictRecordedAt, DateTime(2026, 9, 23, 15));
+  });
+
+  // Release and consolidation are separate acts on separate gates. A
+  // defence whose comments are released has not thereby released its
+  // grades, and vice versa.
+  test('releasing the comments does not release the evaluations', () {
+    final d = Defence.fromMap('d1', {
+      'thesisId': 't1',
+      'type': 'final',
+      'venue': 'AVR',
+      'panelUids': <String>['p1'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'completed',
+      'createdBy': 'c1',
+      'consolidatedAt': DateTime(2026, 9, 23, 13),
+    });
+
+    expect(d.isReleased, isTrue);
+    expect(d.evaluationsReleased, isFalse);
+  });
+
+  test('an unreadable verdict is null rather than a pass', () {
+    final d = Defence.fromMap('d1', {
+      'thesisId': 't1',
+      'type': 'final',
+      'venue': 'AVR',
+      'panelUids': <String>['p1'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'completed',
+      'createdBy': 'c1',
+      'panelVerdict': 'PASSED',
+    });
+
+    expect(d.panelVerdict, isNull);
+    expect(d.hasVerdict, isFalse);
   });
 }
