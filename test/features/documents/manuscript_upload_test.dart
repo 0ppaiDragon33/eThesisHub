@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/documents/manuscript_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// A thesis `t1` led by `l1`, with a completed FINAL defence `d1`.
@@ -20,6 +21,7 @@ Future<FakeFirebaseFirestore> seed({
   String? verdict = 'pass',
   bool withManuscript = false,
   bool alreadyArchived = false,
+  String status = 'titleApproved',
 }) async {
   final db = FakeFirebaseFirestore();
   await db.collection('theses').doc('t1').set({
@@ -32,7 +34,7 @@ Future<FakeFirebaseFirestore> seed({
     'program': 'BSIT',
     'semester': 'First',
     'academicYear': '2026-2027',
-    'status': 'titleApproved',
+    'status': status,
     'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
     if (withManuscript) ...{
       'manuscriptPath': 'theses/t1/manuscript/abc.pdf',
@@ -88,7 +90,7 @@ Future<FakeFirebaseFirestore> seed({
 /// `defences_list_test.dart`'s identical `_seedUser`). `seed()` above is
 /// shared with Task 10 and deliberately carries no `users` collection, so
 /// this suite's own wrapper supplies the leader's profile.
-Widget app(FakeFirebaseFirestore db) {
+Widget app(FakeFirebaseFirestore db, {List<Override> overrides = const []}) {
   // Fire-and-forget: fake_cloud_firestore's write settles on a microtask,
   // well before `pumpAndSettle` finishes resolving the provider chain
   // below, and every test here calls it before making any assertion.
@@ -108,6 +110,7 @@ Widget app(FakeFirebaseFirestore db) {
               uid: 'l1', email: 'l1@isufst.edu.ph', isEmailVerified: true),
         ),
       ),
+      ...overrides,
     ],
     child: const MaterialApp(
       home: Scaffold(body: _ThesisLoader()),
@@ -187,5 +190,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('manuscriptSubmitted')), findsOneWidget);
+  });
+
+  // "Awaiting the coordinator" is a lie once the coordinator has acted --
+  // and it used to persist forever, on the same screen that was already
+  // showing this group an Archived chip.
+  testWidgets('a published thesis says so instead of awaiting the '
+      'coordinator', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(
+        verdict: 'pass', withManuscript: true, status: 'archived',
+        alreadyArchived: true)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('manuscriptPublished')), findsOneWidget);
+    expect(find.byKey(const Key('manuscriptSubmitted')), findsNothing);
+    expect(find.byKey(const Key('replaceManuscript')), findsNothing);
+  });
+
+  // A failed read is NOT "your defence has not passed". Before this branch
+  // existed, `valueOrNull ?? const []` rendered a permission-denied as
+  // SizedBox.shrink(): an eligible leader saw no form, no error, no
+  // explanation -- exactly what a group whose defence has not passed sees.
+  testWidgets('a failed defence read surfaces, and is not silence',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(
+      await seed(verdict: 'pass'),
+      overrides: [
+        myDefencesProvider.overrideWith((ref) => Stream.error(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'permission-denied',
+              ),
+            )),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('manuscriptDefenceError')), findsOneWidget);
+    // The Firestore code itself, because there are no server-side logs.
+    expect(find.byKey(const Key('errorCode')), findsOneWidget);
+    expect(find.text('[permission-denied]'), findsOneWidget);
+    // ...and NOT the "not eligible" silence this used to render as.
+    expect(find.byKey(const Key('manuscriptUpload')), findsNothing);
   });
 }

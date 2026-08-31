@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -23,12 +25,20 @@ const kManuscriptMaxBytes = 40 * 1024 * 1024;
 /// Lets the leader of a group whose final defence passed upload their
 /// consolidated manuscript and its abstract.
 ///
-/// Visibility is decided from [myDefencesProvider], NOT from
-/// `thesis.status` -- nothing in this project ever advances a thesis past
-/// `titleApproved`; the defence record and its panel verdict are the only
+/// ELIGIBILITY is decided from [myDefencesProvider], not from
+/// `thesis.status` -- `titleApproved` is where a thesis sits for the whole
+/// of M2-M4, so the defence record and its panel verdict are the only
 /// place a "the group is done" signal exists. A completed final defence
-/// with no verdict yet, or a `fail`, must show nothing here at all -- both
-/// look identical to "not eligible" from this widget's point of view.
+/// with no verdict yet, or a `fail`, shows nothing here at all -- both are
+/// "not eligible" from this widget's point of view.
+///
+/// The one status this DOES read is `archived`, the terminal state the
+/// coordinator writes when publishing: past that point there is nothing
+/// left to submit, and telling the group they are still "awaiting the
+/// coordinator" would contradict the Archived chip beside this widget.
+///
+/// A FAILED defence read is its own branch and never collapses into "not
+/// eligible" -- see build().
 class ManuscriptUpload extends ConsumerStatefulWidget {
   const ManuscriptUpload({super.key, required this.thesis, this.pickDocument});
 
@@ -200,6 +210,34 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
     );
   }
 
+  /// The end of the line: the coordinator has published this thesis.
+  ///
+  /// Without this branch the group is told "awaiting the coordinator"
+  /// forever -- including on a screen that is simultaneously showing them
+  /// an `Archived` status chip. Gating on `thesis.status` rather than on
+  /// the archive collection keeps this widget reading one document; the
+  /// status and the entry are written in the same batch, so they agree.
+  Widget _publishedView(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.library_books_outlined),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Published to the college archive.',
+                key: const Key('manuscriptPublished'),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _formView(BuildContext context) {
     final canSubmit = _file != null &&
         _abstractController.text.trim().isNotEmpty &&
@@ -263,8 +301,40 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
 
   @override
   Widget build(BuildContext context) {
-    final defences =
-        ref.watch(myDefencesProvider).valueOrNull ?? const <Defence>[];
+    final defencesAsync = ref.watch(myDefencesProvider);
+
+    // A FAILED read is not "you are not eligible yet". `valueOrNull ?? []`
+    // collapsed the two: a permission-denied or a dropped connection made
+    // this widget return SizedBox.shrink(), so an eligible leader saw no
+    // form, no error and no explanation -- identical to a group whose
+    // defence has not passed. That conflation is the exact bug this project
+    // has shipped four times, and there are no server-side logs on the
+    // Spark plan, so the screen is the only place the code can surface.
+    if (defencesAsync.hasError) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 20),
+        child: ErrorState(
+          key: const Key('manuscriptDefenceError'),
+          error: defencesAsync.error,
+          message: 'Could not check whether your final defence has passed, '
+              'so the manuscript upload is not being offered. Retry in a '
+              'moment.',
+        ),
+      );
+    }
+
+    // Already published: the coordinator has archived this thesis, and
+    // nothing further happens to it. Checked before eligibility because it
+    // is the stronger fact -- a thesis cannot reach `archived` without a
+    // passed final defence.
+    if (widget.thesis.status == ThesisStatus.archived) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 20),
+        child: _publishedView(context),
+      );
+    }
+
+    final defences = defencesAsync.valueOrNull ?? const <Defence>[];
     final eligible = defences.any((d) =>
         d.type == DefenceType.final_ &&
         d.status == DefenceStatus.completed &&
