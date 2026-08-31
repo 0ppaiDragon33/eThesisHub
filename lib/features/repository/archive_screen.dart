@@ -111,6 +111,20 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
     final programs = _distinct(entries, (e) => e.program);
     final years = _distinct(entries, (e) => e.academicYear);
 
+    // A selected value can vanish from the live stream out from under the
+    // reader -- most concretely, the Coordinator retracting the one
+    // archive entry left in a college the reader has filtered on
+    // (ArchiveRepository.retract). Left alone, the chip disappears from
+    // the Wrap below while the field still holds the value, so the list
+    // renders `noMatches` with no visible chip left to clear it: a dead
+    // end reachable only by leaving the screen. Pruned here instead, a
+    // plain field mutation rather than setState -- safe during build, and
+    // it makes this build's `filtered` and the next build's chip row
+    // agree, so nothing needs its own recovery affordance.
+    if (_college != null && !colleges.contains(_college)) _college = null;
+    if (_program != null && !programs.contains(_program)) _program = null;
+    if (_year != null && !years.contains(_year)) _year = null;
+
     final filtered = entries
         .where((e) => e.matches(_query))
         .where((e) => _college == null || e.college == _college)

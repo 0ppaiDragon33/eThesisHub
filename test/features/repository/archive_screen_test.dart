@@ -122,19 +122,67 @@ void main() {
     expect(find.byKey(const Key('archiveCard-t1')), findsNothing);
   });
 
+  // Strengthened over the brief's version: that one picked college CICT and
+  // searched "Rice", but t1 and t3 both fail matches('Rice') on their own,
+  // so the assertions passed identically whether or not the college
+  // predicate was even in the .where() chain -- only the
+  // ignore-the-search direction was actually caught. Here the search term
+  // ("Coral") matches entries in TWO colleges, so dropping either
+  // predicate wrongly admits a different decoy: dropping the college
+  // filter admits a2 (COED); dropping the search admits a3 (CICT, but no
+  // "Coral" in its title). Confirmed both failure modes by commenting out
+  // each predicate in turn -- see the fix report.
   testWidgets('a filter and a search combine', (tester) async {
     useTallSurface(tester);
-    await tester.pumpWidget(app(await seed()));
+    final db = FakeFirebaseFirestore();
+    await _put(db, 'a1', title: 'Coral Reef Study', members: const ['Cruz, A.']);
+    await _put(db, 'a2',
+        title: 'Coral Bleaching Patterns',
+        members: const ['Domingo, B.'],
+        college: 'COED');
+    await _put(db, 'a3',
+        title: 'Rice Farming Methods', members: const ['Enriquez, C.']);
+    await tester.pumpWidget(app(db));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('filter-college-CICT')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('archiveSearch')), 'Rice');
+    await tester.enterText(find.byKey(const Key('archiveSearch')), 'Coral');
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('archiveCard-a1')), findsOneWidget);
+    expect(find.byKey(const Key('archiveCard-a2')), findsNothing);
+    expect(find.byKey(const Key('archiveCard-a3')), findsNothing);
+  });
+
+  // D-something-new: retracting the last entry in a filtered-on college
+  // must not strand the reader behind a vanished chip. Reachable in the
+  // real app: ArchiveRepository.retract deletes the doc, archiveProvider
+  // is a live stream, and a student can have COED selected when the
+  // Coordinator retracts Iloilo's only COED thesis.
+  testWidgets(
+      'a filter whose entries all disappear from the live stream clears '
+      'itself, rather than stranding the reader', (tester) async {
+    useTallSurface(tester);
+    final db = await seed();
+    await tester.pumpWidget(app(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('filter-college-COED')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('archiveCard-t3')), findsOneWidget);
+
+    // t3 is the only COED entry -- retract it, as the Coordinator would.
+    await db.collection('archive').doc('t3').delete();
+    await tester.pumpAndSettle();
+
+    // The vanished chip must not leave the reader stuck on `noMatches`
+    // with no way back: the stale selection self-prunes, so the
+    // remaining entries (t1, t2) are visible again.
+    expect(find.byKey(const Key('filter-college-COED')), findsNothing);
+    expect(find.byKey(const Key('noMatches')), findsNothing);
+    expect(find.byKey(const Key('archiveCard-t1')), findsOneWidget);
     expect(find.byKey(const Key('archiveCard-t2')), findsOneWidget);
-    expect(find.byKey(const Key('archiveCard-t1')), findsNothing);
-    expect(find.byKey(const Key('archiveCard-t3')), findsNothing);
   });
 
   testWidgets('a search matching nothing says so, and is not an error',
