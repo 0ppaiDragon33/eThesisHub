@@ -299,6 +299,52 @@ service cloud.firestore {
                     && request.resource.data.get('nominationsSubmittedAt',
                          request.time) == request.time;
 
+      // Leader arm 2 -- THE FINAL MANUSCRIPT.
+      //
+      // A separate arm because the arm above freezes the thesis to the
+      // leader the moment it leaves 'draft', and this write happens right
+      // at the end of the process, long after that.
+      //
+      // NOT gated on a passed final defence, and it cannot be: a thesis
+      // does not know its own defence id, and rules cannot query. Gating
+      // would mean denormalizing that id onto the thesis to prevent
+      // something harmless -- the file sits on the group's own thesis,
+      // readable by exactly the people who could already read everything
+      // there. PUBLISHING is the act that matters, and `match /archive`
+      // gates that properly. The upload button is hidden until the Pass is
+      // recorded, so the UI still tells the truth; this rule simply does
+      // not duplicate a check it cannot express.
+      allow update: if isThesisLeader(thesisId)
+                    && resource.data.status == 'titleApproved'
+                    && onlyChanged(['manuscriptPath', 'manuscriptUrl',
+                                    'manuscriptAbstract',
+                                    'manuscriptUploadedAt'])
+                    && request.resource.data.manuscriptPath is string
+                    && request.resource.data.manuscriptPath.size() > 0
+                    && request.resource.data.manuscriptUrl is string
+                    && request.resource.data.manuscriptUrl.size() > 0
+                    && request.resource.data.manuscriptAbstract is string
+                    && request.resource.data.manuscriptAbstract.size() > 0
+                    && request.resource.data.manuscriptUploadedAt
+                       == request.time;
+
+      // Coordinator arm -- ARCHIVE.
+      //
+      // The terminal state. Forward-only and once: `resource.data.status ==
+      // 'titleApproved'` refuses both a second archiving and any route back
+      // out of it.
+      //
+      // This is one of TWO writes the archiving action makes -- the other
+      // creates `archive/{thesisId}`. Rules evaluate each write in a batch
+      // independently, so neither can require the other; the client sends
+      // them as one batch, and a partial result is possible only if the
+      // batch itself fails. Noted rather than papered over.
+      allow update: if verified()
+                    && isCoordinator()
+                    && resource.data.status == 'titleApproved'
+                    && onlyChanged(['status'])
+                    && request.resource.data.status == 'archived';
+
       // A nominee's acceptance advances the status — but ONLY the caller's
       // own nomination on THIS thesis, and only forward from the exact
       // stage that acceptance belongs to. Ruling 2: the plan's original form

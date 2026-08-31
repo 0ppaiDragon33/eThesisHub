@@ -4234,6 +4234,135 @@ test("M4 attack: a create may not pre-set the seal or the verdict",
       defDoc({ panelVerdict: "pass" })));
   });
 
+// ---------- M5a: the manuscript upload ----------
+
+function m5Thesis(extra = {}) {
+  return {
+    leaderUid: "leader-uid", adviserUid: "adviser-uid",
+    panelistUids: ["pan-uid", "pan2-uid"], memberNames: ["A Student"],
+    workingTitle: "T", college: "CICT", program: "BSIT",
+    semester: "First", academicYear: "2026-2027",
+    status: "titleApproved", ...extra,
+  };
+}
+
+const m5Dbs = new Map();
+function asM5(uid, email) {
+  if (!m5Dbs.has(uid)) {
+    m5Dbs.set(uid,
+      env.authenticatedContext(uid, { email, email_verified: true })
+        .firestore());
+  }
+  return m5Dbs.get(uid);
+}
+
+async function seedM5(extra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/mt1"), m5Thesis(extra));
+    await setDoc(doc(db, "users/coord-uid"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+  });
+}
+
+const manuscript = () => ({
+  manuscriptPath: "theses/mt1/manuscript/abc.pdf",
+  manuscriptUrl: "https://example.test/abc.pdf",
+  manuscriptAbstract: "Fish were counted.",
+  manuscriptUploadedAt: serverTimestamp(),
+});
+
+test("M5a: the leader attaches the final manuscript", async () => {
+  await seedM5();
+  await assertSucceeds(updateDoc(
+    doc(asM5("leader-uid", "leader@isufst.edu.ph"), "theses/mt1"),
+    manuscript()));
+});
+
+test("M5a attack: nobody but the leader attaches one", async () => {
+  await seedM5();
+  for (const uid of ["adviser-uid", "pan-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(updateDoc(
+      doc(asM5(uid, `${uid}@isufst.edu.ph`), "theses/mt1"), manuscript()));
+  }
+});
+
+test("M5a attack: a leader may not attach one to another group's thesis",
+  async () => {
+    await seedM5();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "theses/mt2"),
+        m5Thesis({ leaderUid: "other-uid" }));
+    });
+    await assertFails(updateDoc(
+      doc(asM5("leader-uid", "leader@isufst.edu.ph"), "theses/mt2"),
+      manuscript()));
+  });
+
+test("M5a attack: an empty abstract is denied", async () => {
+  await seedM5();
+  await assertFails(updateDoc(
+    doc(asM5("leader-uid", "leader@isufst.edu.ph"), "theses/mt1"),
+    { ...manuscript(), manuscriptAbstract: "" }));
+});
+
+// The upload must not double as an edit of anything else -- the same
+// affectedKeys discipline every other arm in this file uses.
+test("M5a attack: the upload may not smuggle a title or status change",
+  async () => {
+    await seedM5();
+    const db = asM5("leader-uid", "leader@isufst.edu.ph");
+    await assertFails(updateDoc(doc(db, "theses/mt1"),
+      { ...manuscript(), workingTitle: "Something else" }));
+    await assertFails(updateDoc(doc(db, "theses/mt1"),
+      { ...manuscript(), status: "archived" }));
+  });
+
+test("M5a attack: the upload timestamp cannot be backdated", async () => {
+  await seedM5();
+  await assertFails(updateDoc(
+    doc(asM5("leader-uid", "leader@isufst.edu.ph"), "theses/mt1"),
+    { ...manuscript(), manuscriptUploadedAt: Timestamp.fromDate(
+        new Date("2020-01-01")) }));
+});
+
+// ---------- M5a: the archived status ----------
+
+test("M5a: the coordinator moves a thesis to archived", async () => {
+  await seedM5();
+  await assertSucceeds(updateDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "theses/mt1"),
+    { status: "archived" }));
+});
+
+test("M5a attack: nobody but the coordinator archives", async () => {
+  await seedM5();
+  for (const uid of ["leader-uid", "adviser-uid", "pan-uid", "dean-uid"]) {
+    await assertFails(updateDoc(
+      doc(asM5(uid, `${uid}@isufst.edu.ph`), "theses/mt1"),
+      { status: "archived" }));
+  }
+});
+
+test("M5a attack: archiving is forward-only and once", async () => {
+  await seedM5({ status: "archived" });
+  const db = asM5("coord-uid", "coord@isufst.edu.ph");
+  // Already archived -- no second archiving, and no way back out.
+  await assertFails(updateDoc(doc(db, "theses/mt1"),
+    { status: "archived" }));
+  await assertFails(updateDoc(doc(db, "theses/mt1"),
+    { status: "titleApproved" }));
+});
+
+test("M5a attack: a thesis still in draft cannot be archived", async () => {
+  await seedM5({ status: "draft" });
+  await assertFails(updateDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "theses/mt1"),
+    { status: "archived" }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });
