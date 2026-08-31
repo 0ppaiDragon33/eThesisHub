@@ -76,13 +76,13 @@ Future<void> _writeEvaluation(
       .collection('evaluations')
       .doc(uid)
       .set({
-    'evaluatorName': ?name,
-    'scores': _scoresFor(total),
-    'comments': comments,
-    'total': total,
-    'rating': 'pass',
-    'submittedAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9, 30)),
-  });
+        'evaluatorName': ?name,
+        'scores': _scoresFor(total),
+        'comments': comments,
+        'total': total,
+        'rating': 'pass',
+        'submittedAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9, 30)),
+      });
 }
 
 /// Panel of p1, p2; only p1 has submitted, and the grades are not yet
@@ -94,13 +94,21 @@ Future<FakeFirebaseFirestore> seedWithOne() async {
 }
 
 /// Both panelists have submitted and the adviser has released the grades.
-Future<FakeFirebaseFirestore> seedReleased({int second = 100, String? verdict}) async {
+Future<FakeFirebaseFirestore> seedReleased({
+  int second = 100,
+  String? verdict,
+}) async {
   final db = await _seedDefence(
     evaluationsReleasedAt: DateTime(2026, 9, 23, 11),
     verdict: verdict,
   );
-  await _writeEvaluation(db, 'p1', 100,
-      name: 'Dr. Panelist One', comments: const {'title': 'Narrow it.'});
+  await _writeEvaluation(
+    db,
+    'p1',
+    100,
+    name: 'Dr. Panelist One',
+    comments: const {'title': 'Narrow it.'},
+  );
   await _writeEvaluation(db, 'p2', second, name: 'Dr. Panelist Two');
   return db;
 }
@@ -133,16 +141,18 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('before release it shows the count and no scores',
-      (tester) async {
+  testWidgets('before release it shows the count and no scores', (
+    tester,
+  ) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedWithOne(), 'a1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('submittedCount')), findsOneWidget);
     expect(
-        tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
-        '1 of 2 panelists have submitted');
+      tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
+      '1 of 2 panelists have submitted',
+    );
     expect(find.byKey(const Key('gradesTable')), findsNothing);
   });
 
@@ -160,19 +170,21 @@ void main() {
   // (the rules still deny it to them), so they see only whether THEY have
   // submitted -- never a count of others, and never the release control.
   testWidgets(
-      'before release a panelist sees only their own submission status',
-      (tester) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(app(await seedWithOne(), 'p1'));
-    await tester.pumpAndSettle();
+    'before release a panelist sees only their own submission status',
+    (tester) async {
+      useTallSurface(tester);
+      await tester.pumpWidget(app(await seedWithOne(), 'p1'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('mySubmissionStatus')), findsOneWidget);
-    expect(find.byKey(const Key('submittedCount')), findsNothing);
-    expect(find.byKey(const Key('releaseEvaluations')), findsNothing);
-  });
+      expect(find.byKey(const Key('mySubmissionStatus')), findsOneWidget);
+      expect(find.byKey(const Key('submittedCount')), findsNothing);
+      expect(find.byKey(const Key('releaseEvaluations')), findsNothing);
+    },
+  );
 
-  testWidgets('after release the table shows every panelist\'s total',
-      (tester) async {
+  testWidgets('after release the table shows every panelist\'s total', (
+    tester,
+  ) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedReleased(), 'p1'));
     await tester.pumpAndSettle();
@@ -181,72 +193,82 @@ void main() {
     expect(find.byKey(const Key('panelMean')), findsOneWidget);
   });
 
-  // Fourteen columns overflow every phone and most laptops. The table has
-  // always scrolled; what it lacked was any SIGN of it, so the last
-  // criteria simply looked cut off. These two pin both halves.
-  testWidgets('the grades table scrolls sideways to reach the last columns',
-      (tester) async {
-    useTallSurface(tester);
+  // The transpose exists so this table FITS. Criteria are fixed at eleven
+  // forever and panelists are three, so putting criteria down and
+  // panelists across turns fourteen columns into four. These pin the
+  // result at both ends of the range the app ships to.
+  //
+  // An overflow surfaces as an exception in a widget test, so
+  // `takeException()` is the assertion that nothing is clipped -- laid out
+  // the other way this table was 1260dp wide and threw at every width.
+  testWidgets('the table fits a 360dp phone with nothing clipped', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(app(await seedReleased(), 'p1'));
     await tester.pumpAndSettle();
 
-    // `.first` is the INNERMOST ancestor -- PageShell wraps the whole page
-    // in its own vertical SingleChildScrollView, so an unqualified finder
-    // matches two and would assert against the wrong axis.
-    final view = find
-        .ancestor(
-          of: find.byKey(const Key('gradesTable')),
-          matching: find.byType(SingleChildScrollView),
-        )
-        .first;
-    expect(view, findsOneWidget);
-
-    final before = tester.widget<SingleChildScrollView>(view).controller!;
-    expect(before.offset, 0);
-
-    await tester.drag(view, const Offset(-300, 0));
-    await tester.pumpAndSettle();
-
-    // A table that fit its surface would have nowhere to go, so a non-zero
-    // offset is also the assertion that it genuinely overflows.
-    expect(before.offset, greaterThan(0));
-  });
-
-  testWidgets('the table carries an always-visible scrollbar', (tester) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(app(await seedReleased(), 'p1'));
-    await tester.pumpAndSettle();
-
-    final bar = tester.widget<Scrollbar>(find.ancestor(
-      of: find.byKey(const Key('gradesTable')),
-      matching: find.byType(Scrollbar),
-    ).first);
-
-    expect(bar.thumbVisibility, isTrue);
-    // Same controller as the view it decorates -- a Scrollbar wired to a
-    // different one shows a thumb that never moves.
+    expect(tester.takeException(), isNull);
     expect(
-      bar.controller,
-      same(tester
-          .widget<SingleChildScrollView>(find
-              .ancestor(
-                of: find.byKey(const Key('gradesTable')),
-                matching: find.byType(SingleChildScrollView),
-              )
-              .first)
-          .controller),
+      tester.getSize(find.byKey(const Key('gradesTable'))).width,
+      lessThanOrEqualTo(360),
     );
   });
 
-  testWidgets('the panel mean is the mean of the submitted totals',
-      (tester) async {
+  testWidgets('the table fits a wide screen without clipping either', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  // No horizontal scroll at all, and that is deliberate rather than an
+  // omission: a DataTable handed unbounded width -- which is exactly what a
+  // horizontal SingleChildScrollView gives it -- sizes itself to about
+  // 1260dp whatever it holds, so the scroll view CAUSED the overflow it was
+  // added to rescue. Bounded by the page, the table lays out inside the
+  // width it has.
+  testWidgets('the table is not wrapped in a horizontal scroll view', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    final horizontal = find
+        .ancestor(
+          of: find.byKey(const Key('gradesTable')),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is SingleChildScrollView &&
+                w.scrollDirection == Axis.horizontal,
+          ),
+        )
+        .evaluate();
+    expect(horizontal, isEmpty);
+  });
+
+  testWidgets('the panel mean is the mean of the submitted totals', (
+    tester,
+  ) async {
     useTallSurface(tester);
     // p1 at 100, p2 at 50.
     await tester.pumpWidget(app(await seedReleased(second: 50), 'p1'));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<Text>(find.byKey(const Key('panelMean'))).data,
-        '75.0');
+    expect(
+      tester.widget<Text>(find.byKey(const Key('panelMean'))).data,
+      '75.0',
+    );
   });
 
   // .round() rendered 83.5 and 84.4 identically, on the one number the
@@ -257,8 +279,10 @@ void main() {
     await tester.pumpWidget(app(await seedReleased(second: 67), 'p1'));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<Text>(find.byKey(const Key('panelMean'))).data,
-        '83.5');
+    expect(
+      tester.widget<Text>(find.byKey(const Key('panelMean'))).data,
+      '83.5',
+    );
   });
 
   // Seeded with an empty score map, every cell in this table rendered
@@ -272,28 +296,83 @@ void main() {
     // Read straight off the seeded document: Evaluation.fromMap expects
     // the repository's already-converted DateTimes, and the point here is
     // what the SCREEN did with what was stored, not the model layer.
-    final storedScores = ((await db
-                .collection('defenses')
-                .doc('d1')
-                .collection('evaluations')
-                .doc('p1')
-                .get())
-            .data()!['scores'] as Map)
-        .cast<String, int>();
+    final storedScores =
+        ((await db
+                        .collection('defenses')
+                        .doc('d1')
+                        .collection('evaluations')
+                        .doc('p1')
+                        .get())
+                    .data()!['scores']
+                as Map)
+            .cast<String, int>();
 
-    final table =
-        tester.widget<DataTable>(find.byKey(const Key('gradesTable')));
-    final row = table.rows.firstWhere((r) =>
-        ((r.cells.first.child as Text).data ?? '') == 'Dr. Panelist One');
-    for (var i = 0; i < evaluationCriteria.length; i++) {
-      final c = evaluationCriteria[i];
-      expect((row.cells[i + 1].child as Text).data, '${storedScores[c.key]}',
-          reason: c.key);
-      // A perfect sheet, so each column carries its own DIFFERENT weight:
-      // a cell wired to the wrong criterion would show as a mismatch
+    final table = tester.widget<DataTable>(
+      find.byKey(const Key('gradesTable')),
+    );
+
+    // Criteria are ROWS and panelists are COLUMNS, so find this panelist's
+    // column index by their header, then read down it.
+    // Panelist headings are boxed so a long name wraps to two lines
+    // instead of overflowing a column sized for two digits, so the Text
+    // sits inside a SizedBox rather than being the label itself.
+    final column = table.columns.indexWhere((c) {
+      final label = c.label;
+      if (label is! SizedBox) return false;
+      return (label.child as Text).data == 'Dr. Panelist One';
+    });
+    expect(column, greaterThan(0), reason: 'panelist column not found');
+
+    for (final c in evaluationCriteria) {
+      final row = table.rows.firstWhere(
+        (r) => r.key == ValueKey('criterion_${c.key}'),
+      );
+      expect(
+        (row.cells[column].child as Text).data,
+        '${storedScores[c.key]}',
+        reason: c.key,
+      );
+      // A perfect sheet, so every criterion carries its own DIFFERENT
+      // weight: a cell wired to the wrong row would show as a mismatch
       // rather than coincide.
       expect(storedScores[c.key], c.weight, reason: c.key);
     }
+  });
+
+  testWidgets('every criterion gets a row, under its own section', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    final table = tester.widget<DataTable>(
+      find.byKey(const Key('gradesTable')),
+    );
+
+    for (final c in evaluationCriteria) {
+      expect(
+        table.rows.where((r) => r.key == ValueKey('criterion_${c.key}')),
+        hasLength(1),
+        reason: c.key,
+      );
+    }
+    // Form 5c's own A/B structure, which the previous wide layout flattened.
+    for (final s in EvaluationSection.values) {
+      expect(
+        table.rows.where((r) => r.key == ValueKey('section_${s.name}')),
+        hasLength(1),
+        reason: s.name,
+      );
+    }
+    expect(
+      table.rows.where((r) => r.key == const ValueKey('row_total')),
+      hasLength(1),
+    );
+    expect(
+      table.rows.where((r) => r.key == const ValueKey('row_rating')),
+      hasLength(1),
+    );
   });
 
   // §6 wants names on this screen, not raw Firebase uids.
@@ -316,11 +395,13 @@ void main() {
 
   // A sheet written before evaluatorName existed still has to identify
   // someone -- the uid is a poor identity but it is not a blank cell.
-  testWidgets('a sheet with no stored name falls back to the uid',
-      (tester) async {
+  testWidgets('a sheet with no stored name falls back to the uid', (
+    tester,
+  ) async {
     useTallSurface(tester);
     final db = await _seedDefence(
-        evaluationsReleasedAt: DateTime(2026, 9, 23, 11));
+      evaluationsReleasedAt: DateTime(2026, 9, 23, 11),
+    );
     await _writeEvaluation(db, 'p1', 100);
     await tester.pumpWidget(app(db, 'p1'));
     await tester.pumpAndSettle();
@@ -330,18 +411,22 @@ void main() {
 
   // Finding 5. The count alone does not tell the adviser WHO is missing,
   // which is what makes releasing at 2 of 3 a considered choice.
-  testWidgets('before release the adviser sees who has submitted, by name',
-      (tester) async {
+  testWidgets('before release the adviser sees who has submitted, by name', (
+    tester,
+  ) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedWithOne(), 'a1'));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<Text>(find.byKey(const Key('submittedNames'))).data,
-        'Dr. Panelist One');
+    expect(
+      tester.widget<Text>(find.byKey(const Key('submittedNames'))).data,
+      'Dr. Panelist One',
+    );
   });
 
-  testWidgets('with nobody submitted there is no roster, only the count',
-      (tester) async {
+  testWidgets('with nobody submitted there is no roster, only the count', (
+    tester,
+  ) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedNone(), 'a1'));
     await tester.pumpAndSettle();
@@ -349,8 +434,7 @@ void main() {
     expect(find.byKey(const Key('submittedNames')), findsNothing);
   });
 
-  testWidgets('the adviser records the verdict after release',
-      (tester) async {
+  testWidgets('the adviser records the verdict after release', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedReleased(), 'a1'));
     await tester.pumpAndSettle();
@@ -369,16 +453,16 @@ void main() {
   // D42: the adviser is visibly the scribe.
   testWidgets('a recorded verdict names who recorded it', (tester) async {
     useTallSurface(tester);
-    await tester
-        .pumpWidget(app(await seedReleased(verdict: 'pass'), 'p1'));
+    await tester.pumpWidget(app(await seedReleased(verdict: 'pass'), 'p1'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('verdict')), findsOneWidget);
     // "the adviser", never a uid: the rules pin verdictRecordedBy to the
     // writer's own uid on the only arm that can set it, and only the
     // adviser passes that arm, so the role IS the identity here.
-    final scribe =
-        tester.widget<Text>(find.byKey(const Key('verdictScribe'))).data!;
+    final scribe = tester
+        .widget<Text>(find.byKey(const Key('verdictScribe')))
+        .data!;
     expect(scribe, contains('Recorded by the adviser'));
     expect(scribe, isNot(contains('a1')));
     // The spec wants the timestamp beside the scribe; it was never shown.
@@ -386,22 +470,25 @@ void main() {
     expect(find.byKey(const Key('recordVerdict')), findsNothing);
   });
 
-  testWidgets('no evaluations yet says so, and does not look like a zero',
-      (tester) async {
+  testWidgets('no evaluations yet says so, and does not look like a zero', (
+    tester,
+  ) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedNone(), 'a1'));
     await tester.pumpAndSettle();
 
     expect(
-        tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
-        '0 of 2 panelists have submitted');
+      tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
+      '0 of 2 panelists have submitted',
+    );
     expect(find.byKey(const Key('panelMean')), findsNothing);
   });
 
   // pump() once, NOT pumpAndSettle -- settling resolves the stream and the
   // assertion becomes vacuous.
-  testWidgets('shows a loading state before the defence resolves',
-      (tester) async {
+  testWidgets('shows a loading state before the defence resolves', (
+    tester,
+  ) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedNone(), 'a1'));
     await tester.pump();

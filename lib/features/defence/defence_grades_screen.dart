@@ -33,6 +33,28 @@ class DefenceGradesScreen extends ConsumerStatefulWidget {
       _DefenceGradesScreenState();
 }
 
+/// Preferred width of the grades table's first column.
+///
+/// A hint, not a guarantee: `DataCell` passes its own constraints down, so
+/// on a narrow screen this box is squeezed smaller and the label wraps.
+/// Measured — widening it to 420 changes nothing at 360dp. What it does
+/// buy is a cap on a WIDE screen, where the criterion column would
+/// otherwise stretch to fit "Material and Methods  /10" on one line and
+/// leave the three number columns marooned at the far right.
+const double _labelWidth = 150;
+
+/// Width of each panelist column heading, and THE reason the table fits.
+///
+/// A numeric column's heading is laid out in its own Row that will not
+/// wrap, and it is sized against cells holding one or two digits — so an
+/// unboxed "Dr. Panelist One" overflows a column built for "22". Measured:
+/// remove this box and the table overflows by 113px at 360dp and 39px at
+/// every width above it. Boxed and allowed two lines, nothing clips.
+///
+/// `defence_grades_screen_test.dart` pins this with `takeException()` at
+/// 360dp and at 1400dp.
+const double _panelistWidth = 58;
+
 class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   bool _releasing = false;
   String? _releaseError;
@@ -40,23 +62,6 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   bool _recording = false;
   String? _recordError;
   PassFail? _verdictSelection;
-
-  /// Drives the grades table's horizontal scroll, and the scrollbar above it.
-  ///
-  /// The table is fourteen columns wide -- a panelist, the eleven criteria,
-  /// the total and the rating -- so it overflows any phone and most laptops.
-  /// It has always scrolled; what it lacked was any SIGN that it scrolls. On
-  /// web a scrollbar is hidden until you are already scrolling, so the last
-  /// column simply looked cut off, which is how it was first reported. A
-  /// controller shared by the Scrollbar and the view is what lets the thumb
-  /// stay visible.
-  final _tableScroll = ScrollController();
-
-  @override
-  void dispose() {
-    _tableScroll.dispose();
-    super.dispose();
-  }
 
   Future<void> _release(String defenceId, String adviserUid) async {
     if (_releasing) return;
@@ -287,40 +292,121 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           message: 'These evaluations were released with none on file.',
         )
       else ...[
-        Scrollbar(
-          controller: _tableScroll,
-          // Always visible, not just mid-gesture: the thumb is the only
-          // thing telling a reader there are more criteria to the right.
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            controller: _tableScroll,
-            scrollDirection: Axis.horizontal,
-            // Room beneath the last row so the thumb sits under the table
-            // rather than over its bottom edge.
-            padding: const EdgeInsets.only(bottom: AppTokens.sm),
-            child: DataTable(
-              key: const Key('gradesTable'),
-              columns: [
-                const DataColumn(label: Text('Panelist')),
-                for (final c in evaluationCriteria)
-                  DataColumn(label: Text(c.label)),
-                const DataColumn(label: Text('Total')),
-                const DataColumn(label: Text('Rating')),
-              ],
-              rows: [
-                for (final e in evaluations)
-                  DataRow(
-                    cells: [
-                      DataCell(Text(_evaluatorLabel(e))),
-                      for (final c in evaluationCriteria)
-                        DataCell(Text('${e.scores[c.key] ?? 0}')),
-                      DataCell(Text('${e.total}')),
-                      DataCell(Text(e.rating?.label ?? '—')),
-                    ],
+        // CRITERIA DOWN, PANELISTS ACROSS -- deliberately the transpose of
+        // the obvious layout, and the reason is not just width.
+        //
+        // Criteria are fixed at eleven forever; panelists are three, maybe
+        // four. Putting the fixed-and-large count on the horizontal axis
+        // guaranteed overflow on every device permanently -- fourteen
+        // columns against three rows. This way it is eleven rows against
+        // three columns, which fits a 360dp phone with nothing hidden.
+        //
+        // The stronger reason is §8b. The panel deliberates over where they
+        // DISAGREE, and disagreement lives within a criterion, across
+        // panelists -- which is exactly one row here. "Result: 9, 7, 6"
+        // reads in a glance; laid out the other way those three numbers sat
+        // in three different rows and were off-screen together. The section
+        // rows also restore Form 5c's own A/B structure, which the wide
+        // table flattened away.
+        //
+        // NO horizontal scroll, deliberately. A DataTable given unbounded
+        // width -- which is what a horizontal SingleChildScrollView hands
+        // it -- sizes itself to about 1260dp whatever it contains, so the
+        // scroll view was CAUSING the overflow it existed to rescue.
+        // Bounded by the page instead, the table lays its columns out
+        // inside the width it actually has, and the long criterion labels
+        // wrap rather than push it wider.
+        DataTable(
+          key: const Key('gradesTable'),
+          columnSpacing: AppTokens.md,
+          horizontalMargin: AppTokens.sm,
+          // Row heights allow two lines: both the criterion labels and the
+          // panelist headings wrap rather than push the table wider. See
+          // [_panelistWidth], which is the box that actually decides the fit.
+          dataRowMinHeight: 40,
+          dataRowMaxHeight: 60,
+          // A panelist's NAME is far wider than the one or two digits
+          // beneath it, and a numeric column's heading is laid out in its
+          // own Row that will not wrap -- so an unboxed "Dr. Panelist One"
+          // overflowed a column sized for "22". Boxed and allowed two
+          // lines, with the extra heading height that needs.
+          headingRowHeight: 64,
+          columns: [
+            const DataColumn(label: Text('Criterion')),
+            for (final e in evaluations)
+              DataColumn(
+                label: SizedBox(
+                  width: _panelistWidth,
+                  child: Text(
+                    _evaluatorLabel(e),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
                   ),
+                ),
+                numeric: true,
+              ),
+          ],
+          rows: [
+            for (final section in EvaluationSection.values) ...[
+              // A section header. DataTable gives no spanning cell, so
+              // the label sits in the first column and the rest are
+              // blank -- which reads correctly and keeps the row count
+              // honest for anything counting rows.
+              DataRow(
+                key: ValueKey('section_${section.name}'),
+                cells: [
+                  DataCell(
+                    SizedBox(
+                      width: _labelWidth,
+                      child: Text(
+                        '${section.label} — ${EvaluationSection.sectionTotal}',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                  ),
+                  for (final _ in evaluations) const DataCell(Text('')),
+                ],
+              ),
+              for (final c in evaluationCriteria.where(
+                (c) => c.section == section,
+              ))
+                DataRow(
+                  key: ValueKey('criterion_${c.key}'),
+                  cells: [
+                    // The weight travels with the criterion, so a 6
+                    // beside "/10" and a 6 beside "/25" are not read as
+                    // the same performance.
+                    DataCell(
+                      SizedBox(
+                        width: _labelWidth,
+                        // The weight travels with the criterion, so a 6
+                        // beside /10 and a 6 beside /25 are not read as
+                        // the same performance.
+                        child: Text('${c.label}  /${c.weight}'),
+                      ),
+                    ),
+                    for (final e in evaluations)
+                      DataCell(Text('${e.scores[c.key] ?? 0}')),
+                  ],
+                ),
+            ],
+            DataRow(
+              key: const ValueKey('row_total'),
+              cells: [
+                const DataCell(Text('Final grade')),
+                for (final e in evaluations) DataCell(Text('${e.total}')),
               ],
             ),
-          ),
+            DataRow(
+              key: const ValueKey('row_rating'),
+              cells: [
+                const DataCell(Text('Rating')),
+                for (final e in evaluations)
+                  DataCell(Text(e.rating?.label ?? '—')),
+              ],
+            ),
+          ],
         ),
         const Gap.lg(),
         Text('Panel mean', style: Theme.of(context).textTheme.labelMedium),
