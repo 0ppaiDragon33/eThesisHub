@@ -219,7 +219,36 @@ void main() {
     expect(find.byKey(const Key('emptyQueue')), findsOneWidget);
   });
 
-  // Deliberately, not incidentally: [archiveProvider] is overridden with a
+  // A failed read must never render as "nothing to publish": the queue is
+  // empty most of the time, so a coordinator who cannot tell the two apart
+  // simply believes there is no work. The error is driven in through
+  // [archiveProvider], one of the fan-in's three sources -- which also
+  // proves the gate PROPAGATES a source error rather than swallowing it
+  // into an empty list.
+  testWidgets('a failed read surfaces, and is not an empty queue',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(
+      await seed(verdict: 'pass', withManuscript: true),
+      overrides: [
+        archiveProvider.overrideWith((ref) => Stream.error(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'permission-denied',
+              ),
+            )),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('errorCode')), findsOneWidget);
+    expect(find.text('[permission-denied]'), findsOneWidget);
+    expect(find.byKey(const Key('emptyQueue')), findsNothing);
+    expect(find.byKey(const Key('queueLoading')), findsNothing);
+    expect(find.byKey(const Key('queueRow-t1')), findsNothing);
+  });
+
+  // Deliberately, not incidentally: [archiveProvider] is overridden with a  // Deliberately, not incidentally: [archiveProvider] is overridden with a
   // StreamController this test owns and never adds to, so the gate inside
   // [archiveQueueProvider] genuinely has no value from that source at the
   // point of the single `pump()` below -- not a race against how fast

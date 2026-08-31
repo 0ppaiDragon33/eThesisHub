@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/features/repository/archive_screen.dart';
+import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 Future<void> _put(
@@ -52,13 +53,18 @@ Future<FakeFirebaseFirestore> seed() async {
   return db;
 }
 
-Widget app(FakeFirebaseFirestore db) {
+/// [overrides] lets a test replace one of the screen's providers -- the
+/// failed-read test drives [archiveProvider] into an error state, which
+/// cannot be produced through `fake_cloud_firestore` at all: it enforces
+/// no rules, so nothing there can be denied.
+Widget app(FakeFirebaseFirestore db, {List<Override> overrides = const []}) {
   return ProviderScope(
     overrides: [
       firestoreProvider.overrideWithValue(db),
       firebaseAuthProvider.overrideWithValue(
         MockFirebaseAuth(signedIn: true, mockUser: MockUser(uid: 's1')),
       ),
+      ...overrides,
     ],
     child: const MaterialApp(home: Scaffold(body: ArchiveScreen())),
   );
@@ -206,6 +212,33 @@ void main() {
 
     expect(find.byKey(const Key('emptyArchive')), findsOneWidget);
     expect(find.byKey(const Key('noMatches')), findsNothing);
+  });
+
+  // The other half of "an empty archive and a failed read must never look
+  // the same" (spec section 6). The empty case above is what a student
+  // sees constantly in the early days; this is what they must see instead
+  // when the truth is a denial, and the two must not be confusable.
+  testWidgets('a failed read surfaces, and is not an empty archive',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(
+      await seed(),
+      overrides: [
+        archiveProvider.overrideWith((ref) => Stream.error(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'permission-denied',
+              ),
+            )),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('errorCode')), findsOneWidget);
+    expect(find.text('[permission-denied]'), findsOneWidget);
+    expect(find.byKey(const Key('emptyArchive')), findsNothing);
+    expect(find.byKey(const Key('noMatches')), findsNothing);
+    expect(find.byKey(const Key('archiveCard-t1')), findsNothing);
   });
 
   // pump() once, NOT pumpAndSettle -- settling resolves the stream first
