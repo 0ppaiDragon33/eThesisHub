@@ -4363,6 +4363,173 @@ test("M5a attack: a thesis still in draft cannot be archived", async () => {
     { status: "archived" }));
 });
 
+// ---------- M5a: the archive ----------
+
+function archiveDoc(extra = {}) {
+  return {
+    title: "A Study of Coastal Fisheries",
+    memberNames: ["Santos, J."],
+    abstract: "Fish were counted.",
+    college: "CICT", program: "BSIT", academicYear: "2026-2027",
+    adviserName: "Dr. Zamora", panelNames: ["Dr. Reyes", "Dr. Lim"],
+    manuscriptUrl: "https://example.test/abc.pdf",
+    manuscriptPath: "theses/mt1/manuscript/abc.pdf",
+    finalDefenceId: "md1",
+    uploadedBy: "leader-uid", uploadedAt: Timestamp.now(),
+    archivedBy: "coord-uid", archivedAt: serverTimestamp(),
+    ...extra,
+  };
+}
+
+async function seedArchivable({ verdict = "pass", type = "final",
+                                thesisId = "mt1" } = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/mt1"), m5Thesis({
+      manuscriptPath: "theses/mt1/manuscript/abc.pdf",
+      manuscriptUrl: "https://example.test/abc.pdf",
+      manuscriptAbstract: "Fish were counted.",
+    }));
+    await setDoc(doc(db, "users/coord-uid"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    await setDoc(doc(db, "defenses/md1"), {
+      thesisId, type, scheduledAt: Timestamp.now(), venue: "AVR",
+      panelUids: ["pan-uid", "pan2-uid"], adviserUid: "adviser-uid",
+      leaderUid: "leader-uid", status: "completed", createdBy: "coord-uid",
+      createdAt: Timestamp.now(),
+      evaluationsReleasedAt: Timestamp.now(),
+      panelVerdict: verdict, verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: Timestamp.now(),
+    });
+  });
+}
+
+test("M5a: the coordinator publishes a passed thesis", async () => {
+  await seedArchivable();
+  await assertSucceeds(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc()));
+});
+
+// The whole college reads it -- that is the point of the collection.
+test("M5a: everyone signed in reads the archive", async () => {
+  await seedArchivable();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "archive/mt1"),
+      { ...archiveDoc(), archivedAt: Timestamp.now() });
+  });
+  for (const uid of ["leader-uid", "adviser-uid", "pan-uid", "coord-uid",
+                     "dean-uid", "stranger-uid"]) {
+    const db = asM5(uid, `${uid}@isufst.edu.ph`);
+    await assertSucceeds(getDoc(doc(db, "archive/mt1")));
+    await assertSucceeds(getDocs(collection(db, "archive")));
+  }
+});
+
+test("M5a attack: a signed-out reader gets nothing", async () => {
+  await seedArchivable();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "archive/mt1"),
+      { ...archiveDoc(), archivedAt: Timestamp.now() });
+  });
+  const anon = env.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(anon, "archive/mt1")));
+});
+
+test("M5a attack: nobody but the coordinator publishes", async () => {
+  await seedArchivable();
+  for (const uid of ["leader-uid", "adviser-uid", "pan-uid", "dean-uid"]) {
+    await assertFails(setDoc(
+      doc(asM5(uid, `${uid}@isufst.edu.ph`), "archive/mt1"),
+      archiveDoc({ archivedBy: uid })));
+  }
+});
+
+// D52 -- the gate. A failed thesis cannot be published even by a
+// coordinator who clicks the wrong row.
+test("M5a attack: a FAILED thesis cannot be published", async () => {
+  await seedArchivable({ verdict: "fail" });
+  await assertFails(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc()));
+});
+
+test("M5a attack: a PRE-ORAL defence does not authorise publication",
+  async () => {
+    await seedArchivable({ type: "preOral" });
+    await assertFails(setDoc(
+      doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+      archiveDoc()));
+  });
+
+test("M5a attack: another thesis's defence does not authorise publication",
+  async () => {
+    await seedArchivable({ thesisId: "someone-else" });
+    await assertFails(setDoc(
+      doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+      archiveDoc()));
+  });
+
+test("M5a attack: the published file must be the one the student uploaded",
+  async () => {
+    await seedArchivable();
+    await assertFails(setDoc(
+      doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+      archiveDoc({ manuscriptUrl: "https://evil.test/other.pdf" })));
+  });
+
+test("M5a attack: the archiver must name themselves", async () => {
+  await seedArchivable();
+  await assertFails(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc({ archivedBy: "leader-uid" })));
+});
+
+// D57 -- a publication, not an audit record: a typo in a permanent public
+// title has to be fixable, and a wrongly published thesis retractable.
+test("M5a: the coordinator corrects display metadata", async () => {
+  await seedArchivable();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "archive/mt1"),
+      { ...archiveDoc(), archivedAt: Timestamp.now() });
+  });
+  await assertSucceeds(updateDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    { title: "A Study of Coastal Fisheries in Barotac Nuevo" }));
+});
+
+test("M5a attack: a correction may not swap the manuscript or the stamps",
+  async () => {
+    await seedArchivable();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "archive/mt1"),
+        { ...archiveDoc(), archivedAt: Timestamp.now() });
+    });
+    const db = asM5("coord-uid", "coord@isufst.edu.ph");
+    await assertFails(updateDoc(doc(db, "archive/mt1"),
+      { manuscriptUrl: "https://evil.test/other.pdf" }));
+    await assertFails(updateDoc(doc(db, "archive/mt1"),
+      { archivedBy: "leader-uid" }));
+    await assertFails(updateDoc(doc(db, "archive/mt1"),
+      { archivedAt: serverTimestamp() }));
+  });
+
+test("M5a: the coordinator retracts, and nobody else does", async () => {
+  await seedArchivable();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "archive/mt1"),
+      { ...archiveDoc(), archivedAt: Timestamp.now() });
+  });
+  for (const uid of ["leader-uid", "adviser-uid", "dean-uid"]) {
+    await assertFails(deleteDoc(
+      doc(asM5(uid, `${uid}@isufst.edu.ph`), "archive/mt1")));
+  }
+  await assertSucceeds(deleteDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1")));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

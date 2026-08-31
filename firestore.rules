@@ -946,6 +946,75 @@ service cloud.firestore {
       }
     }
 
+    // ---- M5a: the published archive ----
+    //
+    // A SEPARATE collection, not a view over `theses` (D48). `theses` has
+    // the tightest read rules in the app -- a thesis is visible to its
+    // group, its adviser, its panel, the coordinator and the dean. Serving
+    // the archive from there would mean widening that rule and running
+    // every student's archive query as a `list` over every unarchived
+    // thesis in the college. This collection cannot leak an unarchived
+    // thesis, because unarchived theses are not in it.
+    //
+    // Nothing pending lives here either (D53): a manuscript awaiting
+    // publication sits on its own thesis. That is what lets the read rule
+    // below be a bare `signedIn()` -- a `list` evaluates its rule against
+    // every document returned, so one pending entry would fail a student's
+    // whole query.
+    match /archive/{thesisId} {
+      function thesis() {
+        return get(/databases/$(database)/documents/theses/$(thesisId)).data;
+      }
+      function incoming() {
+        return request.resource.data;
+      }
+      function finalDefence() {
+        return get(/databases/$(database)/documents/defenses/$(incoming().finalDefenceId)).data;
+      }
+
+      allow get, list: if signedIn();
+
+      // Three document reads: the thesis, the defence, and the caller's own
+      // profile inside isCoordinator(). Well inside the budget.
+      allow create: if verified()
+                    && isCoordinator()
+                    && incoming().archivedBy == request.auth.uid
+                    && incoming().archivedAt == request.time
+                    // The published file must be the one the STUDENT
+                    // uploaded -- a coordinator cannot publish a
+                    // substitute.
+                    && incoming().manuscriptUrl == thesis().manuscriptUrl
+                    && incoming().manuscriptPath == thesis().manuscriptPath
+                    // D52. Rules cannot query, so the entry names the
+                    // defence and this verifies it is the right one: a
+                    // FINAL defence, on THIS thesis, with a Pass.
+                    && finalDefence().thesisId == thesisId
+                    && finalDefence().type == 'final'
+                    && finalDefence().panelVerdict == 'pass';
+
+      // D57. Display metadata only -- never the manuscript, never the
+      // stamps. What "manage the archive" means when a permanent public
+      // title has a typo in it.
+      //
+      // NOT verified here: the title text and the names are copied by the
+      // client and checked by nobody. Verifying them would need a get into
+      // the titles subcollection and another into the directory, to defend
+      // against a mistyped display string. These rules stop the wrong
+      // THESIS reaching the wrong AUDIENCE; they are not a spellchecker.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(resource.data).affectedKeys()
+                       .hasOnly(['title', 'abstract', 'memberNames',
+                                 'adviserName', 'panelNames']);
+
+      // A publication, not an audit record. If the wrong thesis is
+      // published -- someone else's work, made readable to the whole
+      // college -- it must be retractable. The honest cost is that a
+      // retraction leaves no trace: `auditLogs` is named in the original
+      // design and built nowhere.
+      allow delete: if verified() && isCoordinator();
+    }
+
     match /defenses/{defenseId} {
       // `defenses` is top level, so the thesis is reached through the id
       // stored on the defence rather than through the path. The helpers
