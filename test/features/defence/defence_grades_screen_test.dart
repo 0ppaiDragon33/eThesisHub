@@ -181,6 +181,63 @@ void main() {
     expect(find.byKey(const Key('panelMean')), findsOneWidget);
   });
 
+  // Fourteen columns overflow every phone and most laptops. The table has
+  // always scrolled; what it lacked was any SIGN of it, so the last
+  // criteria simply looked cut off. These two pin both halves.
+  testWidgets('the grades table scrolls sideways to reach the last columns',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    // `.first` is the INNERMOST ancestor -- PageShell wraps the whole page
+    // in its own vertical SingleChildScrollView, so an unqualified finder
+    // matches two and would assert against the wrong axis.
+    final view = find
+        .ancestor(
+          of: find.byKey(const Key('gradesTable')),
+          matching: find.byType(SingleChildScrollView),
+        )
+        .first;
+    expect(view, findsOneWidget);
+
+    final before = tester.widget<SingleChildScrollView>(view).controller!;
+    expect(before.offset, 0);
+
+    await tester.drag(view, const Offset(-300, 0));
+    await tester.pumpAndSettle();
+
+    // A table that fit its surface would have nowhere to go, so a non-zero
+    // offset is also the assertion that it genuinely overflows.
+    expect(before.offset, greaterThan(0));
+  });
+
+  testWidgets('the table carries an always-visible scrollbar', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    final bar = tester.widget<Scrollbar>(find.ancestor(
+      of: find.byKey(const Key('gradesTable')),
+      matching: find.byType(Scrollbar),
+    ).first);
+
+    expect(bar.thumbVisibility, isTrue);
+    // Same controller as the view it decorates -- a Scrollbar wired to a
+    // different one shows a thumb that never moves.
+    expect(
+      bar.controller,
+      same(tester
+          .widget<SingleChildScrollView>(find
+              .ancestor(
+                of: find.byKey(const Key('gradesTable')),
+                matching: find.byType(SingleChildScrollView),
+              )
+              .first)
+          .controller),
+    );
+  });
+
   testWidgets('the panel mean is the mean of the submitted totals',
       (tester) async {
     useTallSurface(tester);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -40,6 +41,23 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   String? _recordError;
   PassFail? _verdictSelection;
 
+  /// Drives the grades table's horizontal scroll, and the scrollbar above it.
+  ///
+  /// The table is fourteen columns wide -- a panelist, the eleven criteria,
+  /// the total and the rating -- so it overflows any phone and most laptops.
+  /// It has always scrolled; what it lacked was any SIGN that it scrolls. On
+  /// web a scrollbar is hidden until you are already scrolling, so the last
+  /// column simply looked cut off, which is how it was first reported. A
+  /// controller shared by the Scrollbar and the view is what lets the thumb
+  /// stay visible.
+  final _tableScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _tableScroll.dispose();
+    super.dispose();
+  }
+
   Future<void> _release(String defenceId, String adviserUid) async {
     if (_releasing) return;
     setState(() {
@@ -47,17 +65,18 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       _releaseError = null;
     });
     try {
-      await ref.read(defenceRepositoryProvider).releaseEvaluations(
-            defenceId: defenceId,
-            adviserUid: adviserUid,
-          );
+      await ref
+          .read(defenceRepositoryProvider)
+          .releaseEvaluations(defenceId: defenceId, adviserUid: adviserUid);
     } on StateError catch (e) {
       if (mounted) setState(() => _releaseError = e.message);
     } catch (_) {
       if (mounted) {
-        setState(() =>
-            _releaseError = 'Could not release these evaluations. '
-                'Please try again.');
+        setState(
+          () => _releaseError =
+              'Could not release these evaluations. '
+              'Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _releasing = false);
@@ -72,7 +91,9 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       _recordError = null;
     });
     try {
-      await ref.read(defenceRepositoryProvider).recordVerdict(
+      await ref
+          .read(defenceRepositoryProvider)
+          .recordVerdict(
             defenceId: defenceId,
             adviserUid: adviserUid,
             verdict: verdict,
@@ -81,8 +102,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       if (mounted) setState(() => _recordError = e.message);
     } catch (_) {
       if (mounted) {
-        setState(() =>
-            _recordError = 'Could not record the verdict. Please try again.');
+        setState(
+          () =>
+              _recordError = 'Could not record the verdict. Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _recording = false);
@@ -117,17 +140,25 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   /// The pre-release block. Everything here is decided from `defence`
   /// and, for the adviser only, [defenceEvaluationsProvider] -- a
   /// panelist NEVER opens that stream before release (see the class doc).
-  List<Widget> _preRelease(BuildContext context, Defence defence, String? uid,
-      bool isAdviser, bool isPanelist) {
+  List<Widget> _preRelease(
+    BuildContext context,
+    Defence defence,
+    String? uid,
+    bool isAdviser,
+    bool isPanelist,
+  ) {
     final total = defence.panelUids.length;
 
     if (isAdviser) {
-      final evalsAsync =
-          ref.watch(defenceEvaluationsProvider(widget.defenceId));
+      final evalsAsync = ref.watch(
+        defenceEvaluationsProvider(widget.defenceId),
+      );
       if (evalsAsync.isLoading) {
         return const [
           LoadingState(
-              key: Key('gradesLoading'), label: 'Loading evaluations…'),
+            key: Key('gradesLoading'),
+            label: 'Loading evaluations…',
+          ),
         ];
       }
       if (evalsAsync.hasError) {
@@ -177,11 +208,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           ),
         FilledButton(
           key: const Key('releaseEvaluations'),
-          onPressed: _releasing
-              ? null
-              : () => _release(widget.defenceId, uid!),
+          onPressed: _releasing ? null : () => _release(widget.defenceId, uid!),
           child: Text(
-              _releasing ? 'Releasing…' : 'Release $count of $total evaluations'),
+            _releasing ? 'Releasing…' : 'Release $count of $total evaluations',
+          ),
         ),
       ];
     }
@@ -190,8 +220,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       final mineAsync = ref.watch(myEvaluationProvider(widget.defenceId));
       if (mineAsync.isLoading) {
         return const [
-          LoadingState(
-              key: Key('gradesLoading'), label: 'Loading your sheet…'),
+          LoadingState(key: Key('gradesLoading'), label: 'Loading your sheet…'),
         ];
       }
       if (mineAsync.hasError) {
@@ -207,7 +236,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         Text(
           submitted
               ? 'You have submitted your evaluation. The panel\'s grades '
-                  'are released by the adviser once every evaluation is in.'
+                    'are released by the adviser once every evaluation is in.'
               : 'You have not submitted your evaluation yet.',
           key: const Key('mySubmissionStatus'),
           style: Theme.of(context).textTheme.titleMedium,
@@ -226,7 +255,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   /// Post-release: [defenceEvaluationsProvider] is open to everyone with a
   /// stake in the defence, adviser and panel alike.
   List<Widget> _postRelease(
-      BuildContext context, Defence defence, String? uid, bool isAdviser) {
+    BuildContext context,
+    Defence defence,
+    String? uid,
+    bool isAdviser,
+  ) {
     final evalsAsync = ref.watch(defenceEvaluationsProvider(widget.defenceId));
 
     if (evalsAsync.isLoading) {
@@ -254,45 +287,56 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           message: 'These evaluations were released with none on file.',
         )
       else ...[
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            key: const Key('gradesTable'),
-            columns: [
-              const DataColumn(label: Text('Panelist')),
-              for (final c in evaluationCriteria) DataColumn(label: Text(c.label)),
-              const DataColumn(label: Text('Total')),
-              const DataColumn(label: Text('Rating')),
-            ],
-            rows: [
-              for (final e in evaluations)
-                DataRow(cells: [
-                  DataCell(Text(_evaluatorLabel(e))),
-                  for (final c in evaluationCriteria)
-                    DataCell(Text('${e.scores[c.key] ?? 0}')),
-                  DataCell(Text('${e.total}')),
-                  DataCell(Text(e.rating?.label ?? '—')),
-                ]),
-            ],
+        Scrollbar(
+          controller: _tableScroll,
+          // Always visible, not just mid-gesture: the thumb is the only
+          // thing telling a reader there are more criteria to the right.
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _tableScroll,
+            scrollDirection: Axis.horizontal,
+            // Room beneath the last row so the thumb sits under the table
+            // rather than over its bottom edge.
+            padding: const EdgeInsets.only(bottom: AppTokens.sm),
+            child: DataTable(
+              key: const Key('gradesTable'),
+              columns: [
+                const DataColumn(label: Text('Panelist')),
+                for (final c in evaluationCriteria)
+                  DataColumn(label: Text(c.label)),
+                const DataColumn(label: Text('Total')),
+                const DataColumn(label: Text('Rating')),
+              ],
+              rows: [
+                for (final e in evaluations)
+                  DataRow(
+                    cells: [
+                      DataCell(Text(_evaluatorLabel(e))),
+                      for (final c in evaluationCriteria)
+                        DataCell(Text('${e.scores[c.key] ?? 0}')),
+                      DataCell(Text('${e.total}')),
+                      DataCell(Text(e.rating?.label ?? '—')),
+                    ],
+                  ),
+              ],
+            ),
           ),
         ),
         const Gap.lg(),
-        Text(
-          'Panel mean',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
+        Text('Panel mean', style: Theme.of(context).textTheme.labelMedium),
         Text(
           // One decimal place, not .round(): 83.5 and 84.4 both rendered
           // as "84", on the one number the panel deliberates over.
-          (evaluations.fold<int>(0, (a, b) => a + b.total) /
-                  evaluations.length)
+          (evaluations.fold<int>(0, (a, b) => a + b.total) / evaluations.length)
               .toStringAsFixed(1),
           key: const Key('panelMean'),
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const Gap.lg(),
-        Text('Remarks by criterion',
-            style: Theme.of(context).textTheme.labelMedium),
+        Text(
+          'Remarks by criterion',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
         const Gap.sm(),
         for (final key in contentKeys)
           if (evaluations.any((e) => e.comments[key] != null))
@@ -301,8 +345,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(criterionFor(key)?.label ?? key,
-                      style: Theme.of(context).textTheme.bodyLarge),
+                  Text(
+                    criterionFor(key)?.label ?? key,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
                   for (final e in evaluations)
                     if (e.comments[key] != null)
                       Text('${_evaluatorLabel(e)}: ${e.comments[key]}'),
@@ -318,7 +364,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   }
 
   List<Widget> _verdictBlock(
-      BuildContext context, Defence defence, String? uid, bool isAdviser) {
+    BuildContext context,
+    Defence defence,
+    String? uid,
+    bool isAdviser,
+  ) {
     if (defence.hasVerdict) {
       return [
         Text(
@@ -337,10 +387,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           // this sentence says.
           defence.verdictRecordedAt != null
               ? 'Recorded by the adviser on '
-                  '${_formatDateTime(defence.verdictRecordedAt!)}, as the '
-                  'panel deliberated it under §8b.'
+                    '${_formatDateTime(defence.verdictRecordedAt!)}, as the '
+                    'panel deliberated it under §8b.'
               : 'Recorded by the adviser, as the panel deliberated it '
-                  'under §8b.',
+                    'under §8b.',
           key: const Key('verdictScribe'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
@@ -375,7 +425,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         onSelectionChanged: _recording
             ? null
             : (selection) =>
-                setState(() => _verdictSelection = selection.firstOrNull),
+                  setState(() => _verdictSelection = selection.firstOrNull),
       ),
       const Gap.sm(),
       if (_recordError != null)
@@ -434,10 +484,6 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         ? _postRelease(context, defence, uid, isAdviser)
         : _preRelease(context, defence, uid, isAdviser, isPanelist);
 
-    return _framed(
-      children,
-      title: defence.type.label,
-      subtitle: 'Grades',
-    );
+    return _framed(children, title: defence.type.label, subtitle: 'Grades');
   }
 }
