@@ -71,6 +71,7 @@ class ProgressRail extends StatelessWidget {
         ThesisStatus.titleRejected =>
           RailStage.title,
         ThesisStatus.titleApproved => _afterTitle(defences, chapters),
+        ThesisStatus.archived => RailStage.finalDefence,
       };
 
   /// `titleApproved` is the one status that covers three rail stages, so it
