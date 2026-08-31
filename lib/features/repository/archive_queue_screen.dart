@@ -106,6 +106,29 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
     return null;
   }
 
+  /// The title this row will actually PUBLISH: the approved candidate's
+  /// text, not `thesis.workingTitle`.
+  ///
+  /// The two are different strings -- the working title is what the group
+  /// typed when they created the thesis, the approved one is what the panel
+  /// and the dean signed off -- and [publish] writes the approved one. A row
+  /// labelled with the working title therefore had the coordinator approving
+  /// one thing and publishing another.
+  ///
+  /// Returns null when it cannot be resolved (titles still loading, the read
+  /// failed, no approvedTitleId, or the document is gone); the caller falls
+  /// back to the working title, because a row with no title at all is worse
+  /// than a row with the older one. Used by BOTH the label and [_publish],
+  /// so the two can never name different titles.
+  String? _approvedTitle(List<CandidateTitle>? candidates) {
+    final approvedId = widget.thesis.approvedTitleId;
+    if (candidates == null || approvedId == null) return null;
+    for (final c in candidates) {
+      if (c.id == approvedId && c.titleText.isNotEmpty) return c.titleText;
+    }
+    return null;
+  }
+
   /// A directory entry's name, or the uid itself when the directory has
   /// none — a raw uid is not an identity, but it beats a blank field in a
   /// record meant to stay public and correct forever.
@@ -133,12 +156,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
 
       final candidates =
           await ref.read(candidateTitlesProvider(thesis.id).future);
-      final approvedId = thesis.approvedTitleId;
-      final title = candidates
-              .cast<CandidateTitle?>()
-              .firstWhere((c) => c?.id == approvedId, orElse: () => null)
-              ?.titleText ??
-          thesis.workingTitle;
+      final title = _approvedTitle(candidates) ?? thesis.workingTitle;
 
       final directory = await ref.read(allDirectoryProvider.future);
       final adviserUid = thesis.adviserUid;
@@ -179,6 +197,11 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   Widget build(BuildContext context) {
     final thesis = widget.thesis;
     final text = Theme.of(context).textTheme;
+    // The same resolution [_publish] performs, so the label names the title
+    // the button will publish.
+    final title = _approvedTitle(
+            ref.watch(candidateTitlesProvider(thesis.id)).valueOrNull) ??
+        thesis.workingTitle;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final authors = thesis.memberNames.isNotEmpty
         ? thesis.memberNames.join(', ')
@@ -197,7 +220,9 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(thesis.workingTitle, style: text.titleMedium),
+            Text(title,
+                key: Key('queueTitle-${thesis.id}'),
+                style: text.titleMedium),
             const SizedBox(height: AppTokens.xs),
             Text(authors, style: text.bodyMedium?.copyWith(color: muted)),
             const SizedBox(height: AppTokens.xs),

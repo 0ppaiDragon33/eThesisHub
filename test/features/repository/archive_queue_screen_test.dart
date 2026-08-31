@@ -26,6 +26,7 @@ Future<FakeFirebaseFirestore> seed({
   String? verdict = 'pass',
   bool withManuscript = false,
   bool alreadyArchived = false,
+  String? approvedTitle,
 }) async {
   final db = FakeFirebaseFirestore();
   // The brief's given fixture carries no `users` collection at all, and
@@ -50,6 +51,7 @@ Future<FakeFirebaseFirestore> seed({
     'panelistUids': <String>['p1', 'p2'],
     'memberNames': <String>['Santos, J.'],
     'workingTitle': 'Working',
+    if (approvedTitle != null) 'approvedTitleId': 'ct1',
     'college': 'CICT',
     'program': 'BSIT',
     'semester': 'First',
@@ -64,6 +66,21 @@ Future<FakeFirebaseFirestore> seed({
           Timestamp.fromDate(DateTime(2026, 9, 25)),
     },
   });
+  if (approvedTitle != null) {
+    await db
+        .collection('theses')
+        .doc('t1')
+        .collection('candidateTitles')
+        .doc('ct1')
+        .set({
+      'titleText': approvedTitle,
+      'justificationPath': 'p/ct1.pdf',
+      'justificationUrl': 'https://example.test/ct1.pdf',
+      'round': 1,
+      'position': 0,
+      'submittedAt': Timestamp.fromDate(DateTime(2026, 8, 20)),
+    });
+  }
   await db.collection('defenses').doc('d1').set({
     'thesisId': 't1',
     'type': 'final',
@@ -172,6 +189,38 @@ void main() {
     expect(find.byKey(const Key('queueRow-t1')), findsOneWidget);
   });
 
+  // The row used to be labelled `thesis.workingTitle` while publish()
+  // writes the APPROVED candidate title -- so a coordinator approved a row
+  // saying one thing and published another into a permanent public record.
+  testWidgets('the row shows the title that will actually be published',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(
+      verdict: 'pass',
+      withManuscript: true,
+      approvedTitle: 'A Study of Coastal Fisheries in Barotac Nuevo',
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('A Study of Coastal Fisheries in Barotac Nuevo'),
+        findsOneWidget);
+    expect(find.text('Working'), findsNothing);
+  });
+
+  // ...and the working title is still the fallback, for a thesis whose
+  // approved title cannot be resolved (none approved, or the read failed).
+  // A row with no title at all would be worse than one with the older one.
+  testWidgets('falls back to the working title when no approved title '
+      'resolves', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(
+        verdict: 'pass', withManuscript: true)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('queueTitle-t1')), findsOneWidget);
+    expect(find.text('Working'), findsOneWidget);
+  });
+
   testWidgets('omits a thesis with no manuscript yet', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seed(
@@ -248,7 +297,7 @@ void main() {
     expect(find.byKey(const Key('queueRow-t1')), findsNothing);
   });
 
-  // Deliberately, not incidentally: [archiveProvider] is overridden with a  // Deliberately, not incidentally: [archiveProvider] is overridden with a
+  // Deliberately, not incidentally: [archiveProvider] is overridden with a
   // StreamController this test owns and never adds to, so the gate inside
   // [archiveQueueProvider] genuinely has no value from that source at the
   // point of the single `pump()` below -- not a race against how fast
