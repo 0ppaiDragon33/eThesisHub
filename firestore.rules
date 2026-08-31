@@ -345,6 +345,31 @@ service cloud.firestore {
                     && onlyChanged(['status'])
                     && request.resource.data.status == 'archived';
 
+      // Coordinator arm -- RETRACTION.
+      //
+      // The exact inverse of the arm above, and the reason 'archived' is
+      // not a one-way door after all. D57 says a thesis published in error
+      // must be RETRACTABLE; deleting archive/{thesisId} alone does not
+      // retract it, it STRANDS it -- the thesis would sit at 'archived'
+      // forever: out of the archive, back in the coordinator's queue,
+      // unpublishable (the arm above pins 'titleApproved'), and with the
+      // leader's "Replace manuscript" dead too, because the manuscript arm
+      // pins 'titleApproved' as well.
+      //
+      // So a retraction genuinely UNDOES a publication -- it puts the
+      // thesis back exactly where publishing found it. Same
+      // onlyChanged(['status']) discipline as its mirror, so nothing else
+      // can ride along, and only the coordinator, the one role permitted
+      // to publish, may do it. This is the second write of the retract
+      // batch, whose first deletes the archive entry; as with publishing,
+      // rules evaluate each write in a batch independently and neither can
+      // require the other.
+      allow update: if verified()
+                    && isCoordinator()
+                    && resource.data.status == 'archived'
+                    && onlyChanged(['status'])
+                    && request.resource.data.status == 'titleApproved';
+
       // A nominee's acceptance advances the status — but ONLY the caller's
       // own nomination on THIS thesis, and only forward from the exact
       // stage that acceptance belongs to. Ruling 2: the plan's original form

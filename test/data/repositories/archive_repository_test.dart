@@ -116,7 +116,7 @@ void main() {
     expect(entry.manuscriptUrl, 'https://example.test/t1.pdf');
   });
 
-  test('retracting removes the entry', () async {
+  test('retracting removes the entry AND un-archives the thesis', () async {
     final db = await seed();
     final repo = ArchiveRepository(db);
     await publishOne(repo);
@@ -125,6 +125,53 @@ void main() {
 
     expect(await repo.watchEntry('t1').first, isNull);
     expect(await repo.watchArchive().first, isEmpty);
+
+    // The other half of the batch. Without it the thesis is stranded at
+    // `archived`: back in the coordinator's queue (which computes "not
+    // archived" from the `archive` collection), refused by publish() as
+    // already archived, refused by the rules' archive arm which pins
+    // `titleApproved`, and with the leader's manuscript replacement dead
+    // for the same reason. D57's "retractable" has to mean this.
+    final thesis = await ThesisRepository(db).watchThesis('t1').first;
+    expect(thesis!.status, ThesisStatus.titleApproved);
+  });
+
+  // The whole round trip, end to end: published, retracted, published
+  // again. This is the assertion that fails outright against a retract()
+  // that only deletes the entry -- publish() throws
+  // StateError('This thesis is already in the archive.') on the status it
+  // left behind.
+  test('a retracted thesis can be published again', () async {
+    final db = await seed();
+    final repo = ArchiveRepository(db);
+    final theses = ThesisRepository(db);
+
+    await publishOne(repo);
+    expect((await theses.watchThesis('t1').first)!.status,
+        ThesisStatus.archived);
+
+    await repo.retract('t1');
+
+    // Re-read rather than reusing thesisWith(): publish() guards on the
+    // status of the thesis it is HANDED, so a stale literal would prove
+    // nothing about what retract() actually wrote.
+    final reread = await theses.watchThesis('t1').first;
+    expect(reread!.status, ThesisStatus.titleApproved);
+
+    await repo.publish(
+      thesis: reread,
+      title: 'A Study of Coastal Fisheries',
+      adviserName: 'Dr. Zamora',
+      panelNames: const ['Dr. Reyes', 'Dr. Lim'],
+      finalDefenceId: 'd9',
+      coordinatorUid: 'c1',
+    );
+
+    final entry = await repo.watchEntry('t1').first;
+    expect(entry, isNotNull);
+    expect(entry!.title, 'A Study of Coastal Fisheries');
+    expect((await theses.watchThesis('t1').first)!.status,
+        ThesisStatus.archived);
   });
 
   // RULING: the brief's original version of this test wrote three entries

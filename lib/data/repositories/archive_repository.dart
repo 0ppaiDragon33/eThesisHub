@@ -129,13 +129,32 @@ class ArchiveRepository {
     await _entry(thesisId).update(changes);
   }
 
-  /// Removes a published entry.
+  /// Retracts a published entry: deletes it AND puts the thesis back to
+  /// `titleApproved`, as ONE batch — the exact inverse of [publish].
   ///
   /// Deliberately possible, unlike almost everything else in this project:
   /// an archive entry is a publication, not an audit record, and a thesis
   /// published in error — someone else's work, made readable to the whole
-  /// college — has to be retractable. The thesis keeps its `archived`
-  /// status; re-publishing after a retraction is a coordinator decision
-  /// this milestone does not build.
-  Future<void> retract(String thesisId) => _entry(thesisId).delete();
+  /// college — has to be retractable (D57).
+  ///
+  /// The status restore is not optional tidying. Deleting the entry alone
+  /// STRANDS the thesis: it leaves `archived` behind, so the coordinator's
+  /// queue (which reads "not archived" off the `archive` collection) offers
+  /// the row again, [publish] below refuses it as already archived, the
+  /// rules' archive arm refuses it because it pins `titleApproved`, and the
+  /// leader cannot even replace the manuscript, because that arm pins
+  /// `titleApproved` too. A retraction that leaves a thesis permanently
+  /// unpublishable is not a retraction.
+  ///
+  /// Two writes again, for the reason spelled out on [publish]: rules
+  /// evaluate each write in a batch independently and neither can require
+  /// the other, so the batch is what keeps them together.
+  Future<void> retract(String thesisId) async {
+    final batch = _db.batch();
+    batch.delete(_entry(thesisId));
+    batch.update(_db.collection('theses').doc(thesisId), {
+      'status': ThesisStatus.titleApproved.value,
+    });
+    await batch.commit();
+  }
 }

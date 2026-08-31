@@ -4349,12 +4349,78 @@ test("M5a attack: nobody but the coordinator archives", async () => {
 test("M5a attack: archiving is forward-only and once", async () => {
   await seedM5({ status: "archived" });
   const db = asM5("coord-uid", "coord@isufst.edu.ph");
-  // Already archived -- no second archiving, and no way back out.
+  // Already archived -- no second archiving.
   await assertFails(updateDoc(doc(db, "theses/mt1"),
     { status: "archived" }));
-  await assertFails(updateDoc(doc(db, "theses/mt1"),
-    { status: "titleApproved" }));
+  // ...and no route to ANY other status either. The one exception is the
+  // retraction arm below, which is exactly and only archived ->
+  // titleApproved; everything else stays shut.
+  for (const status of ["draft", "titleRejected", "titlePendingDefence",
+                        "nominationApproved"]) {
+    await assertFails(updateDoc(doc(db, "theses/mt1"), { status }));
+  }
 });
+
+// ---------- M5a: retraction restores the thesis ----------
+//
+// D57 says a thesis published in error must be RETRACTABLE. Deleting
+// archive/{thesisId} on its own does not retract it, it strands it: the
+// thesis keeps 'archived', which the archive arm above refuses to leave and
+// which the manuscript arm refuses to accept. This arm is the inverse of the
+// archive arm, and the second write of the retract batch.
+test("M5a: the coordinator retracts a thesis back to titleApproved",
+  async () => {
+    await seedM5({ status: "archived" });
+    await assertSucceeds(updateDoc(
+      doc(asM5("coord-uid", "coord@isufst.edu.ph"), "theses/mt1"),
+      { status: "titleApproved" }));
+  });
+
+test("M5a attack: nobody but the coordinator retracts", async () => {
+  await seedM5({ status: "archived" });
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    // Real profiles with real, WRONG roles -- without them isCoordinator()'s
+    // get() throws and the rule fails closed, which would pass this test for
+    // the wrong reason (see the Task 4 finding on exactly that).
+    await setDoc(doc(db, "users/leader-uid"), { role: "student", active: true });
+    await setDoc(doc(db, "users/adviser-uid"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/pan-uid"), { role: "faculty", active: true });
+  });
+  for (const uid of ["leader-uid", "adviser-uid", "pan-uid", "dean-uid"]) {
+    await assertFails(updateDoc(
+      doc(asM5(uid, `${uid}@isufst.edu.ph`), "theses/mt1"),
+      { status: "titleApproved" }));
+  }
+});
+
+test("M5a attack: retraction reaches titleApproved from 'archived' ONLY",
+  async () => {
+    const db = asM5("coord-uid", "coord@isufst.edu.ph");
+    // Every status that is not 'archived' must not be able to ride this
+    // arm into titleApproved -- otherwise it is a general-purpose approval
+    // shortcut wearing a retraction's clothes.
+    for (const status of ["draft", "nominationPendingConforme",
+                          "nominationPendingCoordinator",
+                          "nominationPendingDean", "nominationApproved",
+                          "titlePendingDefence", "titleRejected"]) {
+      await seedM5({ status });
+      await assertFails(updateDoc(doc(db, "theses/mt1"),
+        { status: "titleApproved" }));
+    }
+  });
+
+test("M5a attack: a retraction may not smuggle another change along",
+  async () => {
+    await seedM5({ status: "archived" });
+    const db = asM5("coord-uid", "coord@isufst.edu.ph");
+    await assertFails(updateDoc(doc(db, "theses/mt1"),
+      { status: "titleApproved", workingTitle: "Something else" }));
+    await assertFails(updateDoc(doc(db, "theses/mt1"),
+      { status: "titleApproved", leaderUid: "coord-uid" }));
+    await assertFails(updateDoc(doc(db, "theses/mt1"),
+      { status: "titleApproved", approvedTitleId: "ct-forged" }));
+  });
 
 test("M5a attack: a thesis still in draft cannot be archived", async () => {
   await seedM5({ status: "draft" });
@@ -4491,6 +4557,18 @@ test("M5a attack: the archiver must name themselves", async () => {
   await assertFails(setDoc(
     doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
     archiveDoc({ archivedBy: "leader-uid" })));
+});
+
+// The stamp is pinned to request.time, so a client-chosen one -- the ONLY
+// way to backdate or forward-date a publication, and the one clause on the
+// create rule that had no adversarial test -- must be refused. Timestamp.now()
+// is the client's clock; serverTimestamp() (used everywhere else here) is
+// the value the rule actually demands.
+test("M5a attack: the archive stamp cannot be client-supplied", async () => {
+  await seedArchivable();
+  await assertFails(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc({ archivedAt: Timestamp.now() })));
 });
 
 // D57 -- a publication, not an audit record: a typo in a permanent public
