@@ -218,6 +218,62 @@ void main() {
     );
   });
 
+  // Reported from a real screen: "Alertness and smartness in answering
+  // question /25" -- the form's own wording -- was cut off mid-word by a
+  // fixed 60dp row height. The row now grows to whatever the label needs.
+  testWidgets('the longest criterion label is drawn in full, not clipped', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    final longest = find.textContaining('Alertness and smartness');
+    expect(longest, findsOneWidget);
+    // It runs to four lines at this column width. A row capped at 60 could
+    // not have drawn them, which is exactly what went wrong.
+    expect(tester.getSize(longest.first).height, greaterThan(60));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the table is a bordered surface, with its structural rows '
+      'set apart', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    // Without the border the section headers and the final-grade row read
+    // as more criteria, and the table stops looking like a form.
+    final bordered = find
+        .ancestor(
+          of: find.byKey(const Key('gradesTable')),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Container &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).border != null,
+          ),
+        )
+        .evaluate();
+    expect(bordered, isNotEmpty);
+
+    final table = tester.widget<DataTable>(
+      find.byKey(const Key('gradesTable')),
+    );
+    for (final key in [
+      const ValueKey('section_content'),
+      const ValueKey('section_presentation'),
+      const ValueKey('row_total'),
+    ]) {
+      final row = table.rows.firstWhere((r) => r.key == key);
+      expect(
+        row.color?.resolve(<WidgetState>{}),
+        isNotNull,
+        reason: '$key should be tinted',
+      );
+    }
+  });
+
   testWidgets('the table fits a wide screen without clipping either', (
     tester,
   ) async {

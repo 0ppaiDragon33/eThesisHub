@@ -41,7 +41,7 @@ class DefenceGradesScreen extends ConsumerStatefulWidget {
 /// buy is a cap on a WIDE screen, where the criterion column would
 /// otherwise stretch to fit "Material and Methods  /10" on one line and
 /// leave the three number columns marooned at the far right.
-const double _labelWidth = 150;
+const double _labelWidth = 230;
 
 /// Width of each panelist column heading, and THE reason the table fits.
 ///
@@ -316,97 +316,142 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         // Bounded by the page instead, the table lays its columns out
         // inside the width it actually has, and the long criterion labels
         // wrap rather than push it wider.
-        DataTable(
-          key: const Key('gradesTable'),
-          columnSpacing: AppTokens.md,
-          horizontalMargin: AppTokens.sm,
-          // Row heights allow two lines: both the criterion labels and the
-          // panelist headings wrap rather than push the table wider. See
-          // [_panelistWidth], which is the box that actually decides the fit.
-          dataRowMinHeight: 40,
-          dataRowMaxHeight: 60,
-          // A panelist's NAME is far wider than the one or two digits
-          // beneath it, and a numeric column's heading is laid out in its
-          // own Row that will not wrap -- so an unboxed "Dr. Panelist One"
-          // overflowed a column sized for "22". Boxed and allowed two
-          // lines, with the extra heading height that needs.
-          headingRowHeight: 64,
-          columns: [
-            const DataColumn(label: Text('Criterion')),
-            for (final e in evaluations)
-              DataColumn(
-                label: SizedBox(
-                  width: _panelistWidth,
-                  child: Text(
-                    _evaluatorLabel(e),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-                numeric: true,
-              ),
-          ],
-          rows: [
-            for (final section in EvaluationSection.values) ...[
-              // A section header. DataTable gives no spanning cell, so
-              // the label sits in the first column and the rest are
-              // blank -- which reads correctly and keeps the row count
-              // honest for anything counting rows.
-              DataRow(
-                key: ValueKey('section_${section.name}'),
-                cells: [
-                  DataCell(
-                    SizedBox(
-                      width: _labelWidth,
-                      child: Text(
-                        '${section.label} — ${EvaluationSection.sectionTotal}',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
+        // The table is a bordered, clipped surface rather than rows adrift
+        // on the page. Without it the section headers and the final-grade
+        // row read as more criteria, and the whole thing loses the shape of
+        // a form -- which is what a panel comparing three columns needs.
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.6),
+            ),
+            borderRadius: BorderRadius.circular(AppTokens.radius),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: DataTable(
+            key: const Key('gradesTable'),
+            columnSpacing: AppTokens.md,
+            horizontalMargin: AppTokens.md,
+            // UNBOUNDED, not a fixed 60: "Alertness and smartness in
+            // answering question /25" is the form's own wording and runs to
+            // three lines at this column width, and a fixed height clipped
+            // it mid-word. The row grows to whatever the label needs.
+            dataRowMinHeight: 44,
+            dataRowMaxHeight: double.infinity,
+            // A panelist's NAME is far wider than the one or two digits
+            // beneath it, and a numeric column's heading is laid out in its
+            // own Row that will not wrap -- so an unboxed "Dr. Panelist One"
+            // overflowed a column sized for "22". Boxed and allowed two
+            // lines, with the extra heading height that needs.
+            headingRowHeight: 64,
+            columns: [
+              const DataColumn(label: Text('Criterion')),
+              for (final e in evaluations)
+                DataColumn(
+                  label: SizedBox(
+                    width: _panelistWidth,
+                    child: Text(
+                      _evaluatorLabel(e),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
                     ),
                   ),
-                  for (final _ in evaluations) const DataCell(Text('')),
-                ],
-              ),
-              for (final c in evaluationCriteria.where(
-                (c) => c.section == section,
-              ))
+                  numeric: true,
+                ),
+            ],
+            rows: [
+              for (final section in EvaluationSection.values) ...[
+                // A section header. DataTable gives no spanning cell, so
+                // the label sits in the first column and the rest are
+                // blank -- which reads correctly and keeps the row count
+                // honest for anything counting rows.
                 DataRow(
-                  key: ValueKey('criterion_${c.key}'),
+                  key: ValueKey('section_${section.name}'),
+                  // Tinted so a section header does not read as a twelfth
+                  // criterion. Theme colours, not literals -- this screen has
+                  // to survive the dark toggle.
+                  color: WidgetStateProperty.all(
+                    Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                  ),
                   cells: [
-                    // The weight travels with the criterion, so a 6
-                    // beside "/10" and a 6 beside "/25" are not read as
-                    // the same performance.
                     DataCell(
                       SizedBox(
                         width: _labelWidth,
-                        // The weight travels with the criterion, so a 6
-                        // beside /10 and a 6 beside /25 are not read as
-                        // the same performance.
-                        child: Text('${c.label}  /${c.weight}'),
+                        child: Text(
+                          '${section.label} — ${EvaluationSection.sectionTotal}',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
                       ),
                     ),
-                    for (final e in evaluations)
-                      DataCell(Text('${e.scores[c.key] ?? 0}')),
+                    for (final _ in evaluations) const DataCell(Text('')),
                   ],
                 ),
+                for (final c in evaluationCriteria.where(
+                  (c) => c.section == section,
+                ))
+                  DataRow(
+                    key: ValueKey('criterion_${c.key}'),
+                    cells: [
+                      // The weight travels with the criterion, so a 6
+                      // beside "/10" and a 6 beside "/25" are not read as
+                      // the same performance.
+                      DataCell(
+                        SizedBox(
+                          width: _labelWidth,
+                          // The weight travels with the criterion, so a 6
+                          // beside /10 and a 6 beside /25 are not read as
+                          // the same performance.
+                          child: Text('${c.label}  /${c.weight}'),
+                        ),
+                      ),
+                      for (final e in evaluations)
+                        DataCell(Text('${e.scores[c.key] ?? 0}')),
+                    ],
+                  ),
+              ],
+              DataRow(
+                key: const ValueKey('row_total'),
+                // The row the whole sheet exists to produce, so it is tinted
+                // and coloured rather than sitting as one more line of digits.
+                color: WidgetStateProperty.all(
+                  Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.35),
+                ),
+                cells: [
+                  DataCell(
+                    Text(
+                      'Final grade',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  for (final e in evaluations)
+                    DataCell(
+                      Text(
+                        '${e.total}',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              DataRow(
+                key: const ValueKey('row_rating'),
+                cells: [
+                  const DataCell(Text('Rating')),
+                  for (final e in evaluations)
+                    DataCell(Text(e.rating?.label ?? '—')),
+                ],
+              ),
             ],
-            DataRow(
-              key: const ValueKey('row_total'),
-              cells: [
-                const DataCell(Text('Final grade')),
-                for (final e in evaluations) DataCell(Text('${e.total}')),
-              ],
-            ),
-            DataRow(
-              key: const ValueKey('row_rating'),
-              cells: [
-                const DataCell(Text('Rating')),
-                for (final e in evaluations)
-                  DataCell(Text(e.rating?.label ?? '—')),
-              ],
-            ),
-          ],
+          ),
         ),
         const Gap.lg(),
         Text('Panel mean', style: Theme.of(context).textTheme.labelMedium),
