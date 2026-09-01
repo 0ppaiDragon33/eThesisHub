@@ -8,7 +8,11 @@ enum ThesisStatus {
   // in_progress belongs to the documents module.
   titlePendingDefence,
   titleApproved,
-  titleRejected;
+  titleRejected,
+  /// Terminal. The manuscript is published in the college archive, and
+  /// nothing further happens to the thesis. Set only by the coordinator,
+  /// in the same batch that writes the `archive/{thesisId}` entry.
+  archived;
 
   String get value => name;
 
@@ -29,7 +33,8 @@ enum ThesisStage {
   titleDefence('Title defence'),
   chapters('Chapters'),
   draft('Draft'),
-  returned('Returned');
+  returned('Returned'),
+  archived('Archived');
 
   const ThesisStage(this.label);
 
@@ -57,5 +62,7 @@ ThesisStage thesisStage(ThesisStatus status) {
       return ThesisStage.draft;
     case ThesisStatus.titleRejected:
       return ThesisStage.returned;
+    case ThesisStatus.archived:
+      return ThesisStage.archived;
   }
 }

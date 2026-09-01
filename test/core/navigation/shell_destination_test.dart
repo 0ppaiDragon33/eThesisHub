@@ -195,6 +195,7 @@ void main() {
         '/overview', '/thesis', '/thesis/chapters', '/defences',
         '/advisees', '/panels', '/nominations', '/approvals',
         '/recommendations', '/title-defences', '/readiness', '/users',
+        '/archive',
       };
       for (final role in UserRole.values) {
         for (final d in destinationsFor(
@@ -204,6 +205,36 @@ void main() {
           expect(known, contains(d.route), reason: '$role → ${d.route}');
         }
       }
+    });
+
+    // The one destination not scoped to what the reader is involved in: a
+    // student browses theses they had nothing to do with. That is the
+    // point.
+    test('every role gets the Archive destination', () {
+      for (final role in UserRole.values) {
+        final routes =
+            destinationsFor(role: role).map((d) => d.route).toList();
+        expect(routes, contains('/archive'), reason: role.name);
+      }
+    });
+
+    test('the archive queue is not a destination for anyone', () {
+      for (final role in UserRole.values) {
+        final routes =
+            destinationsFor(role: role).map((d) => d.route).toList();
+        expect(routes, isNot(contains('/archive/queue')), reason: role.name);
+      }
+    });
+  });
+
+  group('archive depth', () {
+    // '/archive/:thesisId' is a screen below the Archive destination, so it
+    // must push rather than replace it.
+    test('an archive entry is deep for every role', () {
+      for (final role in UserRole.values) {
+        expect(isDeepForRole(role, '/archive/t1'), isTrue, reason: role.name);
+      }
+      expect(isDeepForRole(UserRole.student, '/archive'), isFalse);
     });
   });
 }

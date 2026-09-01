@@ -58,4 +58,81 @@ void main() {
     final restored = Thesis.fromMap('t6', original.toMap());
     expect(restored.nominationsSubmittedAt, submittedAt);
   });
+
+  // The lifecycle in the design doc has always ended `-> archived`, and the
+  // enum has never had it. Adding it makes thesisStage()'s exhaustive
+  // switch fail to compile until handled -- which is the safety net that
+  // function's own comment describes.
+  test('archived is a real status and buckets to its own stage', () {
+    expect(ThesisStatus.fromString('archived'), ThesisStatus.archived);
+    expect(thesisStage(ThesisStatus.archived), ThesisStage.archived);
+    expect(ThesisStage.archived.label, 'Archived');
+  });
+
+  test('a thesis with no manuscript reads as absent, not as an error', () {
+    final t = Thesis.fromMap('t1', {
+      'leaderUid': 'l1',
+      'memberNames': <String>['A Student'],
+      'workingTitle': 'T',
+      'college': 'CICT',
+      'program': 'BSIT',
+      'semester': 'First',
+      'academicYear': '2026-2027',
+      'status': 'titleApproved',
+      'panelistUids': <String>[],
+      'createdAt': DateTime(2026, 8, 1),
+    });
+
+    expect(t.manuscriptPath, isNull);
+    expect(t.manuscriptUrl, isNull);
+    expect(t.manuscriptAbstract, isNull);
+    expect(t.manuscriptUploadedAt, isNull);
+    expect(t.hasManuscript, isFalse);
+  });
+
+  test('a thesis with a manuscript reads all four fields back', () {
+    final t = Thesis.fromMap('t1', {
+      'leaderUid': 'l1',
+      'memberNames': <String>['A Student'],
+      'workingTitle': 'T',
+      'college': 'CICT',
+      'program': 'BSIT',
+      'semester': 'First',
+      'academicYear': '2026-2027',
+      'status': 'titleApproved',
+      'panelistUids': <String>[],
+      'createdAt': DateTime(2026, 8, 1),
+      'manuscriptPath': 'theses/t1/manuscript/abc.pdf',
+      'manuscriptUrl': 'https://example.test/abc.pdf',
+      'manuscriptAbstract': 'A study of things.',
+      'manuscriptUploadedAt': DateTime(2026, 9, 25),
+    });
+
+    expect(t.manuscriptPath, 'theses/t1/manuscript/abc.pdf');
+    expect(t.manuscriptUrl, 'https://example.test/abc.pdf');
+    expect(t.manuscriptAbstract, 'A study of things.');
+    expect(t.manuscriptUploadedAt, DateTime(2026, 9, 25));
+    expect(t.hasManuscript, isTrue);
+  });
+
+  // A URL with no path (or the reverse) is a half-written upload, not a
+  // manuscript. hasManuscript must not report one.
+  test('a half-written manuscript does not count as having one', () {
+    Thesis withOnly(Map<String, dynamic> extra) => Thesis.fromMap('t1', {
+          'leaderUid': 'l1',
+          'memberNames': <String>[],
+          'workingTitle': 'T',
+          'college': 'CICT',
+          'program': 'BSIT',
+          'semester': 'First',
+          'academicYear': '2026-2027',
+          'status': 'titleApproved',
+          'panelistUids': <String>[],
+          'createdAt': DateTime(2026, 8, 1),
+          ...extra,
+        });
+
+    expect(withOnly({'manuscriptUrl': 'https://x'}).hasManuscript, isFalse);
+    expect(withOnly({'manuscriptPath': 'p'}).hasManuscript, isFalse);
+  });
 }

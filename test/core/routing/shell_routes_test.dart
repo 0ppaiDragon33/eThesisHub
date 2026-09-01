@@ -664,6 +664,33 @@ void main() {
     expect(find.byKey(const Key('usersScreen')), findsOneWidget);
   });
 
+  testWidgets(
+      'the Publish queue link on Users reaches /archive/queue, not just '
+      'destinationsFor()', (tester) async {
+    // Task 11 review, Finding 2: the archiveQueueLink button on UsersScreen
+    // had a key but nothing tapped it. '/archive/queue' is deliberately
+    // NOT a shell destination for anyone (see archive_routes_test.dart and
+    // shell_destination_test.dart's "the archive queue is not a
+    // destination for anyone"), so this button is the ONLY door into it --
+    // a screen nothing links to is exactly the failure Task 11 exists to
+    // close, and that applies to this link itself just as much as it did
+    // to the three screens the task registered routes for.
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/users');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('archiveQueueLink')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('archiveQueueLink')));
+    await tester.pumpAndSettle();
+
+    expect(locationOf(c), '/archive/queue');
+    expect(find.byKey(const Key('archiveQueue')), findsOneWidget);
+  });
+
   testWidgets('neither tab draws a back control -- both are top level',
       (tester) async {
     // Populating `alsoOwns` made '/invites' deeper than its owner's route

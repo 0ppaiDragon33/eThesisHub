@@ -9,6 +9,7 @@ import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/documents/manuscript_upload.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
@@ -262,6 +263,16 @@ class ThesisStatusScreen extends ConsumerWidget {
                             context.go('/thesis/chapters?id=${thesis.id}'),
                       ),
                     ),
+                  // Nothing in M2-M4 ever advances the thesis past
+                  // titleApproved -- the final defence's own panel verdict
+                  // is the only signal that the group is done, so
+                  // ManuscriptUpload decides its own visibility off
+                  // myDefencesProvider rather than off thesis.status. It
+                  // renders nothing (a zero-size SizedBox, no stray gap)
+                  // until that verdict is a pass, so it is safe to place
+                  // unconditionally here rather than gating it on
+                  // titleApproved a second time.
+                  ManuscriptUpload(thesis: thesis),
                 ],
               );
             },
