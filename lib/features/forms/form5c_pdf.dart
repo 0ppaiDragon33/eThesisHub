@@ -16,6 +16,18 @@ const _sectionHeaderStyle = pw.TextStyle(
   color: formAccent,
 );
 
+/// The ruled line a missing value prints as. Shared by [_field] and
+/// [_criterionRow] so an absent score and an absent header field look the
+/// same on the page — both say "the system does not hold this", and neither
+/// may be mistaken for a value.
+pw.Widget _rule({double? width}) => pw.Container(
+      width: width,
+      height: 11,
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400)),
+      ),
+    );
+
 /// A "Label: value" row. When [value] is null or empty, a ruled blank
 /// prints instead — the printed form rules a line for fields the app does
 /// not hold (D60, D61), never the literal string "null" or a silent gap.
@@ -31,16 +43,7 @@ pw.Widget _field(String label, String? value) {
           child: pw.Text('$label:', style: _labelStyle),
         ),
         pw.Expanded(
-          child: hasValue
-              ? pw.Text(value, style: _valueStyle)
-              : pw.Container(
-                  height: 11,
-                  decoration: const pw.BoxDecoration(
-                    border: pw.Border(
-                      bottom: pw.BorderSide(color: PdfColors.grey400),
-                    ),
-                  ),
-                ),
+          child: hasValue ? pw.Text(value, style: _valueStyle) : _rule(),
         ),
       ],
     ),
@@ -50,8 +53,14 @@ pw.Widget _field(String label, String? value) {
 /// One rubric row: label + weight, the prompt (Section A only), the score
 /// out of the weight, and a comment line where one was written (Section A
 /// only — Section B takes neither on the printed form).
+///
+/// A criterion absent from [Form5cData.scores] rules a blank rather than
+/// printing a mark. Nothing guarantees all eleven keys are present, and
+/// defaulting to 0 would render "0 / 25" — a genuine zero, indistinguishable
+/// from a panelist who scored the criterion nothing. The denominator still
+/// prints, so the row stays a scoring row with a mark to be written in.
 pw.Widget _criterionRow(Form5cData data, EvaluationCriterion c) {
-  final score = data.scores[c.key] ?? 0;
+  final score = data.scores[c.key];
   final comment = c.takesComment ? data.comments[c.key] : null;
   return pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: 6),
@@ -70,7 +79,18 @@ pw.Widget _criterionRow(Form5cData data, EvaluationCriterion c) {
                 ),
               ),
             ),
-            pw.Text('$score / ${c.weight}', style: _valueStyle),
+            if (score == null)
+              pw.Row(
+                mainAxisSize: pw.MainAxisSize.min,
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  _rule(width: 26),
+                  pw.SizedBox(width: 4),
+                  pw.Text('/ ${c.weight}', style: _valueStyle),
+                ],
+              )
+            else
+              pw.Text('$score / ${c.weight}', style: _valueStyle),
           ],
         ),
         if (c.takesComment && c.prompt.isNotEmpty)

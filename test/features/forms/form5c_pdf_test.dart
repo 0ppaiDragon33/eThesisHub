@@ -23,11 +23,16 @@ Thesis buildThesis({List<String> members = const ['Santos, J.', 'Lim, K.']}) {
   });
 }
 
-Defence buildDefence({DefenceType type = DefenceType.final_}) {
+Defence buildDefence({
+  DefenceType type = DefenceType.final_,
+  /// `Defence.scheduledAt` is nullable; false leaves it unset, which is the
+  /// path Form 5c's `presentedOn` blank exists for.
+  bool scheduled = true,
+}) {
   return Defence.fromMap('d1', {
     'thesisId': 't1',
     'type': type.value,
-    'scheduledAt': DateTime(2026, 9, 23, 9, 30),
+    'scheduledAt': scheduled ? DateTime(2026, 9, 23, 9, 30) : null,
     'venue': 'CICT AVR',
     'panelUids': <String>['p1'],
     'adviserUid': 'a1',
@@ -100,12 +105,17 @@ void main() {
   });
 
   // D61. The app holds neither, and the paper form rules a line for both.
+  // The caption alone is not the assertion: `_field`'s null branch would
+  // pass that even if it rendered nothing at all beside the label. Assert
+  // the caption present AND the literal string "null" absent from the whole
+  // document, as Form 8's null-date test does.
   test('rules blank lines for Academic Rank and the presenter degree',
       () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
 
     expect(text, contains('Academic Rank'));
     expect(text, contains('Degree and Field of Specialization'));
+    expect(text, isNot(contains('null')));
   });
 
   test('prints every criterion with its weight and score', () async {
@@ -155,6 +165,53 @@ void main() {
   test('Average Rating prints as a labelled blank line', () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
     expect(text, contains('Average Rating'));
+    // As above: the label alone would pass even if the null branch rendered
+    // nothing beside it, so also rule out the literal "null".
+    expect(text, isNot(contains('null')));
+  });
+
+  // `presentedOn` comes straight from `Defence.scheduledAt`, which is
+  // nullable. Carried forward explicitly during the milestone and, until
+  // now, never tested: an unscheduled defence must rule blanks for both the
+  // date and the time rather than print "null" on a panelist's sheet.
+  test('a null presentation date rules blanks rather than printing "null"',
+      () async {
+    final bytes =
+        await buildForm5cPdf(assemble(defence: buildDefence(scheduled: false)));
+    final text = extractPdfText(bytes);
+
+    expect(bytes, isNotEmpty);
+    expect(text, isNot(contains('null')));
+    // Both captions are unconditional, so their presence rules out the rows
+    // being dropped wholesale -- distinct from merely not printing "null".
+    expect(text, contains('Date of Presentation'));
+    expect(text, contains('Time of Presentation'));
+    // And the rest of the sheet still renders.
+    expect(text, contains('SUMMARY'));
+  });
+
+  // A missing key must not print a genuine zero: "0 / 25" is
+  // indistinguishable from a panelist who actually scored the criterion
+  // nothing. Nothing guarantees all eleven keys are present.
+  test('a criterion missing from scores rules a blank, not a zero', () async {
+    final full = {for (final c in evaluationCriteria) c.key: c.weight};
+    // 'alertness' is the only criterion weighted 25, so "/ 25" identifies
+    // its row uniquely in the extracted text.
+    final missing = Map<String, int>.from(full)..remove('alertness');
+
+    final text = extractPdfText(await buildForm5cPdf(
+        assemble(evaluation: buildEvaluation(scores: missing))));
+
+    expect(text, contains('Alertness and smartness in answering question'));
+    expect(text, contains('/ 25'));
+    expect(text, isNot(contains('0 / 25')));
+    expect(text, isNot(contains('null')));
+
+    // Control: with the score present, the row does print the mark, so the
+    // assertion above is about the missing key and not about the format.
+    final scored = extractPdfText(await buildForm5cPdf(
+        assemble(evaluation: buildEvaluation(scores: full))));
+    expect(scored, contains('25 / 25'));
   });
 
   test('a sheet with no comments still renders', () async {
