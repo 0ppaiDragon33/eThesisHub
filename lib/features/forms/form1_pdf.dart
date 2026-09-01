@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
+export 'package:ethesishub/features/forms/form_chrome.dart' show panelSentence;
 
 const _green = PdfColor.fromInt(0xFF15803D);
 
@@ -52,14 +53,6 @@ const _boldNameStyle = pw.TextStyle(
   fontSize: 11,
   fontWeight: pw.FontWeight.bold,
 );
-
-/// The panel members read as one comma-joined, "and"-terminated sentence
-/// fragment — shared by the body paragraph and its bold span so the two can
-/// never disagree on wording.
-String panelSentence(List<String> panelNames) => panelNames.length <= 1
-    ? panelNames.join()
-    : '${panelNames.sublist(0, panelNames.length - 1).join(', ')} '
-          'and ${panelNames.last}';
 
 /// §7.3: "the printed form's wording, with nominated names in bold." Built
 /// as a span tree (rather than a single `pw.Text`) specifically so the

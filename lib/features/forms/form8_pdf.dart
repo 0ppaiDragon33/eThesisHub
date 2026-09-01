@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import 'package:ethesishub/features/forms/form1_pdf.dart' show panelSentence;
 import 'package:ethesishub/features/forms/form8_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
 

@@ -81,3 +81,15 @@ String monthName(int m) => const [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December',
     ][m - 1];
+
+/// A list of names read as one comma-joined, "and"-terminated sentence
+/// fragment. Originated in Form 1 (the panel members read as one flowing
+/// clause in the nomination letter) and hoisted here, alongside
+/// `formChrome`, when Form 8 needed the identical join for its certificate
+/// sentence — a pure, side-effect-free string helper belongs with the other
+/// cross-form logic, not behind an import of whichever form happened to
+/// write it first.
+String panelSentence(List<String> panelNames) => panelNames.length <= 1
+    ? panelNames.join()
+    : '${panelNames.sublist(0, panelNames.length - 1).join(', ')} '
+        'and ${panelNames.last}';

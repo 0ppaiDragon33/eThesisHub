@@ -79,4 +79,23 @@ void main() {
     expect(text, contains('Solo, S.'));
     expect(text, contains('has submitted bound copies'));
   });
+
+  // `issuedOn` is nullable (it comes straight from `archivedAt`, which
+  // `ArchiveEntry.fromMap` leaves null when the map omits it). The renderer
+  // must rule a blank rather than print the literal string "null" on a
+  // certification — that's the failure the ruled blank exists to prevent.
+  test('a null issue date rules a blank rather than printing "null"',
+      () async {
+    final data = Form8Data(
+      studentNames: const ['Santos, J.', 'Lim, K.'],
+      title: 'A Study of Coastal Fisheries',
+      issuedOn: null,
+    );
+
+    final bytes = await buildForm8Pdf(data);
+    final text = extractPdfText(bytes);
+
+    expect(bytes, isNotEmpty);
+    expect(text, isNot(contains('null')));
+  });
 }
