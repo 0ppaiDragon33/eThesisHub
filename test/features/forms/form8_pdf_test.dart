@@ -97,5 +97,9 @@ void main() {
 
     expect(bytes, isNotEmpty);
     expect(text, isNot(contains('null')));
+    // The "Date" caption is unconditional text under the date block, so its
+    // presence rules out the block being omitted wholesale when the date is
+    // null — distinct from merely not printing "null" in its place.
+    expect(text, contains('Date'));
   });
 }

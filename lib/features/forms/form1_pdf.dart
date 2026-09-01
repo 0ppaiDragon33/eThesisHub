@@ -5,7 +5,6 @@ import 'package:pdf/widgets.dart' as pw;
 
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
-export 'package:ethesishub/features/forms/form_chrome.dart' show panelSentence;
 
 const _green = PdfColor.fromInt(0xFF15803D);
 

@@ -5,6 +5,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
+import 'package:ethesishub/features/forms/form_chrome.dart' show panelSentence;
 
 import 'pdf_text.dart';
 
