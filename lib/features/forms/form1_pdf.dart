@@ -4,8 +4,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'package:ethesishub/features/forms/form1_data.dart';
+import 'package:ethesishub/features/forms/form_chrome.dart';
 
-const _accent = PdfColor.fromInt(0xFF0B5FA5);
 const _green = PdfColor.fromInt(0xFF15803D);
 
 /// A name with clear space above it to sign into. No rule — the spec
@@ -139,65 +139,18 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(
-              'RD-30-06/24-04',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-            ),
-            pw.SizedBox(height: 6),
-            pw.Center(
-              child: pw.Column(
-                children: [
-                  pw.Text(
-                    'Republic of the Philippines',
-                    style: const pw.TextStyle(fontSize: 10),
-                  ),
-                  pw.Text(
-                    'ILOILO STATE UNIVERSITY OF FISHERIES SCIENCE AND TECHNOLOGY',
-                    textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(
-                      fontSize: 11,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _accent,
-                    ),
-                  ),
-                  pw.Text(
-                    'RESEARCH AND DEVELOPMENT',
-                    style: const pw.TextStyle(fontSize: 10),
-                  ),
-                  pw.Text(
-                    'Tiwi, Barotac Nuevo, Iloilo | research@isufst.edu.ph',
-                    style: const pw.TextStyle(fontSize: 8.5),
-                  ),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 5),
-            pw.Container(height: 2, color: _accent),
-            pw.SizedBox(height: 4),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
+            formChrome(
+              rdCode: 'RD-30-06/24-04',
+              formTitle:
                   'Form 1. Nomination of Thesis Adviser and Panel Members',
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.Text(
-                  'Ref. ${t.id.substring(0, t.id.length.clamp(0, 8)).toUpperCase()}',
-                  style: const pw.TextStyle(
-                    fontSize: 9,
-                    color: PdfColors.grey700,
-                  ),
-                ),
-              ],
+              reference:
+                  t.id.substring(0, t.id.length.clamp(0, 8)).toUpperCase(),
             ),
             pw.SizedBox(height: 12),
             pw.Align(
               alignment: pw.Alignment.centerRight,
               child: pw.Text(
-                '${data.submittedOn.day} ${_month(data.submittedOn.month)} '
+                '${data.submittedOn.day} ${monthName(data.submittedOn.month)} '
                 '${data.submittedOn.year}',
               ),
             ),
@@ -323,24 +276,9 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
   return doc.save();
 }
 
-String _month(int m) => const [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-][m - 1];
-
 String _stampOf(DateTime? d) {
   if (d == null) return '';
   String two(int n) => n.toString().padLeft(2, '0');
-  return '${d.day} ${_month(d.month).substring(0, 3)} ${d.year}, '
+  return '${d.day} ${monthName(d.month).substring(0, 3)} ${d.year}, '
       '${two(d.hour)}:${two(d.minute)}';
 }
