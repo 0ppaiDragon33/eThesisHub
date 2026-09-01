@@ -121,15 +121,11 @@ void main() {
   // weight actually printed beside Title (5%), not merely the absence of
   // "50%" anywhere on the page — the section headers legitimately print
   // "50%" for A. CONTENT and B. PRESENTATION AND DEFENSE.
-  //
-  // `extractPdfText` pulls the raw parenthesized PDF string literal, so a
-  // literal "(" in the rendered text comes back backslash-escaped as it is
-  // written into the content stream — hence `\(5%\)` rather than `(5%)`.
   test('Title prints at 5%, not the paper form\'s 50%', () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
 
-    expect(text, contains('Title \\(5%\\)'));
-    expect(text, isNot(contains('Title \\(50%\\)')));
+    expect(text, contains('Title (5%)'));
+    expect(text, isNot(contains('Title (50%)')));
   });
 
   test('prints the prompts, which are what make the rubric fillable',
