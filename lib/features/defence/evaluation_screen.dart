@@ -2,13 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/data/models/candidate_title.dart';
+import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
+import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/features/forms/form5c_data.dart';
+import 'package:ethesishub/features/forms/form5c_pdf.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
+import 'package:ethesishub/providers/title_providers.dart';
 
 /// Research Form 5c — one panelist's own score sheet for a defence.
 ///
@@ -128,6 +136,67 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// The title this sheet prints: the approved candidate's text, not
+  /// `thesis.workingTitle`. Mirrors `_ArchiveQueueRowState._approvedTitle`
+  /// in `archive_queue_screen.dart` rather than inventing a second
+  /// resolution of the same fact — the working title is what the group
+  /// typed at creation, the approved one is what the panel and the dean
+  /// actually signed off, and only the latter belongs on a signed record.
+  String? _approvedTitle(Thesis thesis, List<CandidateTitle> candidates) {
+    final approvedId = thesis.approvedTitleId;
+    if (approvedId == null) return null;
+    for (final c in candidates) {
+      if (c.id == approvedId && c.titleText.isNotEmpty) return c.titleText;
+    }
+    return null;
+  }
+
+  /// Builds and shares this panelist's own Form 5c.
+  ///
+  /// Reachable both before and after release (D59: a panelist scores their
+  /// own sheet under M4's unconditional access to it — release changes
+  /// nothing about who may read it, only whether it may still be edited).
+  /// Every read here is a one-shot `ref.read(...).future`/`fetch`, not a
+  /// watch: this runs once, on tap, exactly like `ThesisStatusScreen`'s
+  /// Form 1 handler.
+  Future<void> _downloadForm5c(
+      Defence defence, Evaluation evaluation, String uid) async {
+    try {
+      final thesis =
+          await ref.read(thesisByIdProvider(defence.thesisId).future);
+      if (thesis == null) {
+        throw StateError('This thesis could not be found.');
+      }
+
+      final candidates =
+          await ref.read(candidateTitlesProvider(thesis.id).future);
+      final title = _approvedTitle(thesis, candidates) ?? thesis.workingTitle;
+
+      // Empty when the directory has no entry for this panelist —
+      // `Form5cData` and its renderer both treat that as honest, not an
+      // error, so no placeholder is invented here either.
+      final entry =
+          await ref.read(facultyDirectoryRepositoryProvider).fetch(uid);
+
+      final data = Form5cData.assemble(
+        thesis: thesis,
+        defence: defence,
+        evaluation: evaluation,
+        title: title,
+        evaluatorField: entry?.specialization ?? '',
+      );
+      await Printing.sharePdf(
+        bytes: await buildForm5cPdf(data),
+        filename: 'Form5c-${defence.id}-$uid.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not generate Form 5c: $e')),
+      );
     }
   }
 
@@ -399,16 +468,33 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-            FilledButton(
-              key: const Key('submitEvaluation'),
-              onPressed: !locked && complete && _rating != null
-                  ? () => _submit(uid, myName)
-                  : null,
-              child: Text(_submitting
-                  ? (hasSheet ? 'Updating…' : 'Submitting…')
-                  : (hasSheet ? 'Update evaluation' : 'Submit evaluation')),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  key: const Key('submitEvaluation'),
+                  onPressed: !locked && complete && _rating != null
+                      ? () => _submit(uid, myName)
+                      : null,
+                  child: Text(_submitting
+                      ? (hasSheet ? 'Updating…' : 'Submitting…')
+                      : (hasSheet ? 'Update evaluation' : 'Submit evaluation')),
+                ),
+                if (hasSheet)
+                  OutlinedButton(
+                    key: const Key('downloadForm5c'),
+                    onPressed: () => _downloadForm5c(defence, existing, uid),
+                    child: const Text('Download Form 5c'),
+                  ),
+              ],
             ),
-          ],
+          ] else if (hasSheet)
+            OutlinedButton(
+              key: const Key('downloadForm5c'),
+              onPressed: () => _downloadForm5c(defence, existing, uid),
+              child: const Text('Download Form 5c'),
+            ),
         ],
       ),
     );
