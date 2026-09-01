@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/archive_entry.dart';
+import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/forms/form8_data.dart';
+import 'package:ethesishub/features/forms/form8_pdf.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
+import 'package:ethesishub/providers/auth_providers.dart';
 
 /// A single published thesis, in full.
 ///
@@ -61,17 +66,50 @@ class ArchiveEntryScreen extends ConsumerWidget {
       ]);
     }
 
-    return _framed([_EntryView(entry: entry)]);
+    // The archive entry screen is the one screen in this app any signed-in
+    // reader can open. Form 8 certifies that bound copies reached the Dean,
+    // the Library and R&D — issuing it is the coordinator's act (§10b, the
+    // role table), so the control is gated on the READER's role, not on the
+    // entry: nothing about the data changes who may see the button.
+    final isCoordinator =
+        ref.watch(currentUserProvider).valueOrNull?.role == UserRole.coordinator;
+
+    return _framed([_EntryView(entry: entry, isCoordinator: isCoordinator)]);
   }
 }
 
-class _EntryView extends StatelessWidget {
-  const _EntryView({required this.entry});
+class _EntryView extends StatefulWidget {
+  const _EntryView({required this.entry, required this.isCoordinator});
 
   final ArchiveEntry entry;
+  final bool isCoordinator;
+
+  @override
+  State<_EntryView> createState() => _EntryViewState();
+}
+
+class _EntryViewState extends State<_EntryView> {
+  /// Builds and shares Form 8 straight from the [ArchiveEntry] already on
+  /// screen. No further read: a second fetch would be a chance for the
+  /// certificate to disagree with what the reader is looking at.
+  Future<void> _downloadForm8(ArchiveEntry entry) async {
+    try {
+      final data = Form8Data.assemble(entry: entry);
+      await Printing.sharePdf(
+        bytes: await buildForm8Pdf(data),
+        filename: 'Form8-${entry.thesisId}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not generate Form 8: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     // An entry with no members recorded still needs a line here rather than
@@ -126,6 +164,14 @@ class _EntryView extends StatelessWidget {
             key: const Key('manuscriptMissing'),
             style: text.bodyMedium?.copyWith(color: muted),
           ),
+        if (widget.isCoordinator) ...[
+          const Gap.md(),
+          OutlinedButton(
+            key: const Key('downloadForm8'),
+            onPressed: () => _downloadForm8(entry),
+            child: const Text('Download Form 8'),
+          ),
+        ],
       ],
     );
   }
