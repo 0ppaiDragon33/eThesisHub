@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/features/repository/archive_entry_screen.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -178,6 +181,99 @@ void main() {
 
       expect(find.byKey(const Key('downloadForm8')), findsNothing,
           reason: entry.value);
+      expect(find.byKey(const Key('form8RoleUnavailable')), findsNothing,
+          reason: entry.value);
     }
+  });
+
+  // §6: "A certificate with a blank name is worse than no certificate,
+  // because it looks official." The structural gate (you cannot reach this
+  // button unless the thesis is archived) does not cover an ARCHIVED entry
+  // with no members -- `ArchiveEntry.fromMap` defaults `memberNames` to
+  // empty, which is why this screen renders 'Unknown authors' at all.
+  testWidgets('Form 8 refuses for an entry with no members, and says why',
+      (tester) async {
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await _put(db, 't1',
+        title: 'A Study of Coastal Fisheries', members: const []);
+
+    await tester.pumpWidget(await app(db, 'c1', role: 'coordinator'));
+    await tester.pumpAndSettle();
+
+    // The reader sees the entry itself, unknown-authored, and the button.
+    expect(find.text('Unknown authors'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('downloadForm8')));
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(
+      find.textContaining('this archive entry records no student names'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('cannot be issued'), findsOneWidget);
+  });
+
+  testWidgets('an entry with no title is refused too, naming that field',
+      (tester) async {
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await _put(db, 't1', title: '');
+
+    await tester.pumpWidget(await app(db, 'c1', role: 'coordinator'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('downloadForm8')));
+    await tester.pump();
+
+    expect(find.textContaining('no thesis title'), findsOneWidget);
+  });
+
+  // The role gate has three states, not two. A failed profile read must not
+  // be rendered as "you are not a coordinator" -- that is a transient fault
+  // dressed up as an authorization answer.
+  testWidgets('a failed profile read is not silence, and is not a refusal',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(await app(
+      await seed(),
+      'c1',
+      role: 'coordinator',
+      overrides: [
+        currentUserProvider.overrideWith((ref) => Stream.error(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'permission-denied',
+              ),
+            )),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('form8RoleUnavailable')), findsOneWidget);
+    expect(find.byKey(const Key('downloadForm8')), findsNothing);
+    // The entry itself still renders: a profile failure is not an entry
+    // failure.
+    expect(find.text('A Study of Coastal Fisheries in Barotac Nuevo'),
+        findsOneWidget);
+  });
+
+  testWidgets('a profile still loading is distinct from both', (tester) async {
+    useTallSurface(tester);
+    final controller = StreamController<AppUser?>();
+    addTearDown(controller.close);
+
+    await tester.pumpWidget(await app(
+      await seed(),
+      'c1',
+      role: 'coordinator',
+      overrides: [
+        currentUserProvider.overrideWith((ref) => controller.stream),
+      ],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('form8RoleLoading')), findsOneWidget);
+    expect(find.byKey(const Key('form8RoleUnavailable')), findsNothing);
+    expect(find.byKey(const Key('downloadForm8')), findsNothing);
   });
 }
