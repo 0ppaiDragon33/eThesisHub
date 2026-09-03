@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -32,6 +33,28 @@ class DefenceGradesScreen extends ConsumerStatefulWidget {
       _DefenceGradesScreenState();
 }
 
+/// Preferred width of the grades table's first column.
+///
+/// A hint, not a guarantee: `DataCell` passes its own constraints down, so
+/// on a narrow screen this box is squeezed smaller and the label wraps.
+/// Measured — widening it to 420 changes nothing at 360dp. What it does
+/// buy is a cap on a WIDE screen, where the criterion column would
+/// otherwise stretch to fit "Material and Methods  /10" on one line and
+/// leave the three number columns marooned at the far right.
+const double _labelWidth = 230;
+
+/// Width of each panelist column heading, and THE reason the table fits.
+///
+/// A numeric column's heading is laid out in its own Row that will not
+/// wrap, and it is sized against cells holding one or two digits — so an
+/// unboxed "Dr. Panelist One" overflows a column built for "22". Measured:
+/// remove this box and the table overflows by 113px at 360dp and 39px at
+/// every width above it. Boxed and allowed two lines, nothing clips.
+///
+/// `defence_grades_screen_test.dart` pins this with `takeException()` at
+/// 360dp and at 1400dp.
+const double _panelistWidth = 58;
+
 class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   bool _releasing = false;
   String? _releaseError;
@@ -47,17 +70,18 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       _releaseError = null;
     });
     try {
-      await ref.read(defenceRepositoryProvider).releaseEvaluations(
-            defenceId: defenceId,
-            adviserUid: adviserUid,
-          );
+      await ref
+          .read(defenceRepositoryProvider)
+          .releaseEvaluations(defenceId: defenceId, adviserUid: adviserUid);
     } on StateError catch (e) {
       if (mounted) setState(() => _releaseError = e.message);
     } catch (_) {
       if (mounted) {
-        setState(() =>
-            _releaseError = 'Could not release these evaluations. '
-                'Please try again.');
+        setState(
+          () => _releaseError =
+              'Could not release these evaluations. '
+              'Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _releasing = false);
@@ -72,7 +96,9 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       _recordError = null;
     });
     try {
-      await ref.read(defenceRepositoryProvider).recordVerdict(
+      await ref
+          .read(defenceRepositoryProvider)
+          .recordVerdict(
             defenceId: defenceId,
             adviserUid: adviserUid,
             verdict: verdict,
@@ -81,8 +107,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       if (mounted) setState(() => _recordError = e.message);
     } catch (_) {
       if (mounted) {
-        setState(() =>
-            _recordError = 'Could not record the verdict. Please try again.');
+        setState(
+          () =>
+              _recordError = 'Could not record the verdict. Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _recording = false);
@@ -117,17 +145,25 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   /// The pre-release block. Everything here is decided from `defence`
   /// and, for the adviser only, [defenceEvaluationsProvider] -- a
   /// panelist NEVER opens that stream before release (see the class doc).
-  List<Widget> _preRelease(BuildContext context, Defence defence, String? uid,
-      bool isAdviser, bool isPanelist) {
+  List<Widget> _preRelease(
+    BuildContext context,
+    Defence defence,
+    String? uid,
+    bool isAdviser,
+    bool isPanelist,
+  ) {
     final total = defence.panelUids.length;
 
     if (isAdviser) {
-      final evalsAsync =
-          ref.watch(defenceEvaluationsProvider(widget.defenceId));
+      final evalsAsync = ref.watch(
+        defenceEvaluationsProvider(widget.defenceId),
+      );
       if (evalsAsync.isLoading) {
         return const [
           LoadingState(
-              key: Key('gradesLoading'), label: 'Loading evaluations…'),
+            key: Key('gradesLoading'),
+            label: 'Loading evaluations…',
+          ),
         ];
       }
       if (evalsAsync.hasError) {
@@ -177,11 +213,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           ),
         FilledButton(
           key: const Key('releaseEvaluations'),
-          onPressed: _releasing
-              ? null
-              : () => _release(widget.defenceId, uid!),
+          onPressed: _releasing ? null : () => _release(widget.defenceId, uid!),
           child: Text(
-              _releasing ? 'Releasing…' : 'Release $count of $total evaluations'),
+            _releasing ? 'Releasing…' : 'Release $count of $total evaluations',
+          ),
         ),
       ];
     }
@@ -190,8 +225,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       final mineAsync = ref.watch(myEvaluationProvider(widget.defenceId));
       if (mineAsync.isLoading) {
         return const [
-          LoadingState(
-              key: Key('gradesLoading'), label: 'Loading your sheet…'),
+          LoadingState(key: Key('gradesLoading'), label: 'Loading your sheet…'),
         ];
       }
       if (mineAsync.hasError) {
@@ -207,7 +241,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         Text(
           submitted
               ? 'You have submitted your evaluation. The panel\'s grades '
-                  'are released by the adviser once every evaluation is in.'
+                    'are released by the adviser once every evaluation is in.'
               : 'You have not submitted your evaluation yet.',
           key: const Key('mySubmissionStatus'),
           style: Theme.of(context).textTheme.titleMedium,
@@ -226,7 +260,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   /// Post-release: [defenceEvaluationsProvider] is open to everyone with a
   /// stake in the defence, adviser and panel alike.
   List<Widget> _postRelease(
-      BuildContext context, Defence defence, String? uid, bool isAdviser) {
+    BuildContext context,
+    Defence defence,
+    String? uid,
+    bool isAdviser,
+  ) {
     final evalsAsync = ref.watch(defenceEvaluationsProvider(widget.defenceId));
 
     if (evalsAsync.isLoading) {
@@ -254,45 +292,182 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           message: 'These evaluations were released with none on file.',
         )
       else ...[
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        // CRITERIA DOWN, PANELISTS ACROSS -- deliberately the transpose of
+        // the obvious layout, and the reason is not just width.
+        //
+        // Criteria are fixed at eleven forever; panelists are three, maybe
+        // four. Putting the fixed-and-large count on the horizontal axis
+        // guaranteed overflow on every device permanently -- fourteen
+        // columns against three rows. This way it is eleven rows against
+        // three columns, which fits a 360dp phone with nothing hidden.
+        //
+        // The stronger reason is §8b. The panel deliberates over where they
+        // DISAGREE, and disagreement lives within a criterion, across
+        // panelists -- which is exactly one row here. "Result: 9, 7, 6"
+        // reads in a glance; laid out the other way those three numbers sat
+        // in three different rows and were off-screen together. The section
+        // rows also restore Form 5c's own A/B structure, which the wide
+        // table flattened away.
+        //
+        // NO horizontal scroll, deliberately. A DataTable given unbounded
+        // width -- which is what a horizontal SingleChildScrollView hands
+        // it -- sizes itself to about 1260dp whatever it contains, so the
+        // scroll view was CAUSING the overflow it existed to rescue.
+        // Bounded by the page instead, the table lays its columns out
+        // inside the width it actually has, and the long criterion labels
+        // wrap rather than push it wider.
+        // The table is a bordered, clipped surface rather than rows adrift
+        // on the page. Without it the section headers and the final-grade
+        // row read as more criteria, and the whole thing loses the shape of
+        // a form -- which is what a panel comparing three columns needs.
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.6),
+            ),
+            borderRadius: BorderRadius.circular(AppTokens.radius),
+          ),
+          clipBehavior: Clip.antiAlias,
           child: DataTable(
             key: const Key('gradesTable'),
+            columnSpacing: AppTokens.md,
+            horizontalMargin: AppTokens.md,
+            // UNBOUNDED, not a fixed 60: "Alertness and smartness in
+            // answering question /25" is the form's own wording and runs to
+            // three lines at this column width, and a fixed height clipped
+            // it mid-word. The row grows to whatever the label needs.
+            dataRowMinHeight: 44,
+            dataRowMaxHeight: double.infinity,
+            // A panelist's NAME is far wider than the one or two digits
+            // beneath it, and a numeric column's heading is laid out in its
+            // own Row that will not wrap -- so an unboxed "Dr. Panelist One"
+            // overflowed a column sized for "22". Boxed and allowed two
+            // lines, with the extra heading height that needs.
+            headingRowHeight: 64,
             columns: [
-              const DataColumn(label: Text('Panelist')),
-              for (final c in evaluationCriteria) DataColumn(label: Text(c.label)),
-              const DataColumn(label: Text('Total')),
-              const DataColumn(label: Text('Rating')),
+              const DataColumn(label: Text('Criterion')),
+              for (final e in evaluations)
+                DataColumn(
+                  label: SizedBox(
+                    width: _panelistWidth,
+                    child: Text(
+                      _evaluatorLabel(e),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                  numeric: true,
+                ),
             ],
             rows: [
-              for (final e in evaluations)
-                DataRow(cells: [
-                  DataCell(Text(_evaluatorLabel(e))),
-                  for (final c in evaluationCriteria)
-                    DataCell(Text('${e.scores[c.key] ?? 0}')),
-                  DataCell(Text('${e.total}')),
-                  DataCell(Text(e.rating?.label ?? '—')),
-                ]),
+              for (final section in EvaluationSection.values) ...[
+                // A section header. DataTable gives no spanning cell, so
+                // the label sits in the first column and the rest are
+                // blank -- which reads correctly and keeps the row count
+                // honest for anything counting rows.
+                DataRow(
+                  key: ValueKey('section_${section.name}'),
+                  // Tinted so a section header does not read as a twelfth
+                  // criterion. Theme colours, not literals -- this screen has
+                  // to survive the dark toggle.
+                  color: WidgetStateProperty.all(
+                    Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                  ),
+                  cells: [
+                    DataCell(
+                      SizedBox(
+                        width: _labelWidth,
+                        child: Text(
+                          '${section.label} — ${EvaluationSection.sectionTotal}',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ),
+                    ),
+                    for (final _ in evaluations) const DataCell(Text('')),
+                  ],
+                ),
+                for (final c in evaluationCriteria.where(
+                  (c) => c.section == section,
+                ))
+                  DataRow(
+                    key: ValueKey('criterion_${c.key}'),
+                    cells: [
+                      // The weight travels with the criterion, so a 6
+                      // beside "/10" and a 6 beside "/25" are not read as
+                      // the same performance.
+                      DataCell(
+                        SizedBox(
+                          width: _labelWidth,
+                          // The weight travels with the criterion, so a 6
+                          // beside /10 and a 6 beside /25 are not read as
+                          // the same performance.
+                          child: Text('${c.label}  /${c.weight}'),
+                        ),
+                      ),
+                      for (final e in evaluations)
+                        DataCell(Text('${e.scores[c.key] ?? 0}')),
+                    ],
+                  ),
+              ],
+              DataRow(
+                key: const ValueKey('row_total'),
+                // The row the whole sheet exists to produce, so it is tinted
+                // and coloured rather than sitting as one more line of digits.
+                color: WidgetStateProperty.all(
+                  Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.35),
+                ),
+                cells: [
+                  DataCell(
+                    Text(
+                      'Final grade',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  for (final e in evaluations)
+                    DataCell(
+                      Text(
+                        '${e.total}',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              DataRow(
+                key: const ValueKey('row_rating'),
+                cells: [
+                  const DataCell(Text('Rating')),
+                  for (final e in evaluations)
+                    DataCell(Text(e.rating?.label ?? '—')),
+                ],
+              ),
             ],
           ),
         ),
         const Gap.lg(),
-        Text(
-          'Panel mean',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
+        Text('Panel mean', style: Theme.of(context).textTheme.labelMedium),
         Text(
           // One decimal place, not .round(): 83.5 and 84.4 both rendered
           // as "84", on the one number the panel deliberates over.
-          (evaluations.fold<int>(0, (a, b) => a + b.total) /
-                  evaluations.length)
+          (evaluations.fold<int>(0, (a, b) => a + b.total) / evaluations.length)
               .toStringAsFixed(1),
           key: const Key('panelMean'),
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const Gap.lg(),
-        Text('Remarks by criterion',
-            style: Theme.of(context).textTheme.labelMedium),
+        Text(
+          'Remarks by criterion',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
         const Gap.sm(),
         for (final key in contentKeys)
           if (evaluations.any((e) => e.comments[key] != null))
@@ -301,8 +476,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(criterionFor(key)?.label ?? key,
-                      style: Theme.of(context).textTheme.bodyLarge),
+                  Text(
+                    criterionFor(key)?.label ?? key,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
                   for (final e in evaluations)
                     if (e.comments[key] != null)
                       Text('${_evaluatorLabel(e)}: ${e.comments[key]}'),
@@ -318,7 +495,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   }
 
   List<Widget> _verdictBlock(
-      BuildContext context, Defence defence, String? uid, bool isAdviser) {
+    BuildContext context,
+    Defence defence,
+    String? uid,
+    bool isAdviser,
+  ) {
     if (defence.hasVerdict) {
       return [
         Text(
@@ -337,10 +518,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           // this sentence says.
           defence.verdictRecordedAt != null
               ? 'Recorded by the adviser on '
-                  '${_formatDateTime(defence.verdictRecordedAt!)}, as the '
-                  'panel deliberated it under §8b.'
+                    '${_formatDateTime(defence.verdictRecordedAt!)}, as the '
+                    'panel deliberated it under §8b.'
               : 'Recorded by the adviser, as the panel deliberated it '
-                  'under §8b.',
+                    'under §8b.',
           key: const Key('verdictScribe'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
@@ -375,7 +556,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         onSelectionChanged: _recording
             ? null
             : (selection) =>
-                setState(() => _verdictSelection = selection.firstOrNull),
+                  setState(() => _verdictSelection = selection.firstOrNull),
       ),
       const Gap.sm(),
       if (_recordError != null)
@@ -434,10 +615,6 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         ? _postRelease(context, defence, uid, isAdviser)
         : _preRelease(context, defence, uid, isAdviser, isPanelist);
 
-    return _framed(
-      children,
-      title: defence.type.label,
-      subtitle: 'Grades',
-    );
+    return _framed(children, title: defence.type.label, subtitle: 'Grades');
   }
 }

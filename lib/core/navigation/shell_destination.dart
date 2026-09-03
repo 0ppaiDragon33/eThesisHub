@@ -68,6 +68,23 @@ List<ShellDestination> destinationsFor({
     icon: Icons.event_note_outlined,
     route: '/defences',
   );
+  // The one destination not scoped to what the reader is personally
+  // involved in: a student browses theses they had nothing to do with,
+  // and that is the point (see archive_screen.dart's own doc comment).
+  // Every role gets it, unlike everything else on this list.
+  const archive = ShellDestination(
+    label: 'Archive',
+    icon: Icons.local_library_outlined,
+    route: '/archive',
+  );
+  // Blank templates for all three forms are reachable with no data at all
+  // (see forms_screen.dart's own doc comment) — unlike everything else on
+  // this list, nothing gates this destination for any role.
+  const forms = ShellDestination(
+    label: 'Forms',
+    icon: Icons.description_outlined,
+    route: '/forms',
+  );
 
   return switch (role) {
     UserRole.student => [
@@ -87,6 +104,8 @@ List<ShellDestination> destinationsFor({
           ),
           defences,
         ],
+        archive,
+        forms,
       ],
     UserRole.faculty => [
         overview,
@@ -112,6 +131,8 @@ List<ShellDestination> destinationsFor({
           icon: Icons.drafts_outlined,
           route: '/nominations',
         ),
+        archive,
+        forms,
       ],
     UserRole.dean => [
         overview,
@@ -131,6 +152,8 @@ List<ShellDestination> destinationsFor({
           icon: Icons.checklist_outlined,
           route: '/readiness',
         ),
+        archive,
+        forms,
       ],
     UserRole.coordinator => [
         overview,
@@ -156,6 +179,8 @@ List<ShellDestination> destinationsFor({
           route: '/users',
           alsoOwns: ['/invites'],
         ),
+        archive,
+        forms,
       ],
   };
 }

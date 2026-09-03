@@ -16,6 +16,9 @@ class ThesisRepository {
   CollectionReference<Map<String, dynamic>> _nominations(String thesisId) =>
       _theses.doc(thesisId).collection('nominations');
 
+  DocumentReference<Map<String, dynamic>> _thesis(String thesisId) =>
+      _theses.doc(thesisId);
+
   static DateTime? _date(Object? v) =>
       v is Timestamp ? v.toDate() : (v is DateTime ? v : null);
 
@@ -27,6 +30,7 @@ class ThesisRepository {
     raw['nominationsSubmittedAt'] = _date(raw['nominationsSubmittedAt']);
     raw['titlesSubmittedAt'] = _date(raw['titlesSubmittedAt']);
     raw['titleDecidedAt'] = _date(raw['titleDecidedAt']);
+    raw['manuscriptUploadedAt'] = _date(raw['manuscriptUploadedAt']);
     // titleRound (num) and presentationPath/presentationUrl/titleDecidedBy/
     // titleRejectionRemark/approvedTitleId (String) need no conversion —
     // Thesis.fromMap reads them with plain num/String casts, and Firestore
@@ -459,5 +463,69 @@ class ThesisRepository {
                 ))
             .where((r) => r.nomination.conformeStatus == ConformeStatus.pending)
             .toList());
+  }
+
+  /// Attaches the final consolidated manuscript and its abstract.
+  ///
+  /// Replaces any previous upload, so a group that uploaded the wrong file
+  /// can simply upload the right one. The old object is left in the bucket
+  /// — deleting it would need the previous path and a second network call
+  /// that can fail independently, and an orphaned PDF behind an
+  /// unguessable URL is the cheaper problem.
+  ///
+  /// Every check here is ALSO a rule. They are repeated because
+  /// `fake_cloud_firestore` enforces none of them, so without these the
+  /// Dart suite would pass against writes production denies — and because
+  /// a client-side refusal can say WHY, which a `permission-denied`
+  /// cannot.
+  Future<void> attachManuscript({
+    required String thesisId,
+    required String leaderUid,
+    required String storagePath,
+    required String fileUrl,
+    required String abstract,
+  }) async {
+    final text = abstract.trim();
+    if (text.isEmpty) {
+      throw ArgumentError('Add the abstract before submitting.');
+    }
+
+    final path = storagePath.trim();
+    if (path.isEmpty) {
+      throw ArgumentError(
+          'Storage path must not be empty. It comes from StorageService.upload '
+          'and this check only protects against direct method calls.');
+    }
+
+    final url = fileUrl.trim();
+    if (url.isEmpty) {
+      throw ArgumentError(
+          'File URL must not be empty. It comes from StorageService.upload '
+          'and this check only protects against direct method calls.');
+    }
+
+    final snap = await _thesis(thesisId).get();
+    if (!snap.exists) throw StateError('That thesis no longer exists.');
+    final data = snap.data()!;
+
+    if (data['leaderUid'] != leaderUid) {
+      throw StateError('Only the group leader submits the manuscript.');
+    }
+    if (ThesisStatus.fromString(data['status'] as String?) !=
+        ThesisStatus.titleApproved) {
+      throw StateError(
+          'The manuscript is submitted once the thesis has passed its '
+          'final defence and before it is archived.');
+    }
+
+    await _thesis(thesisId).update({
+      'manuscriptPath': path,
+      'manuscriptUrl': url,
+      'manuscriptAbstract': text,
+      // The rule pins this to request.time, so it must be the server's
+      // clock. A client Timestamp.now() is denied in production while
+      // passing against the fake.
+      'manuscriptUploadedAt': FieldValue.serverTimestamp(),
+    });
   }
 }
