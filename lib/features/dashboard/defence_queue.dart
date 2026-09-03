@@ -51,7 +51,7 @@ class DefenceQueue extends ConsumerWidget {
                   subtitle: Text('${t.program} · ${t.college}'),
                   trailing: FilledButton(
                     key: Key('goToDefence-${t.id}'),
-                    onPressed: () => context.go('/defence/${t.id}'),
+                    onPressed: () => context.push('/defence/${t.id}'),
                     child: const Text('Open'),
                   ),
                 ),

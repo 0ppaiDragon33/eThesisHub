@@ -56,23 +56,49 @@ List<ConsolidatedCandidate> consolidate({
     for (final c in shown)
       ConsolidatedCandidate(
         candidate: c,
-        blocks: _blocksFor(
-            comments.where((m) => m.candidateTitleId == c.id).toList()),
+        blocks: blocksFor([
+          for (final m in comments.where((m) => m.candidateTitleId == c.id))
+            (
+              authorUid: m.authorUid,
+              authorName: m.authorName,
+              authorRole: m.authorRole,
+              body: m.body,
+            ),
+        ]),
       ),
   ];
 }
 
-List<CommentBlock> _blocksFor(List<TitleComment> comments) {
-  final order = <String>[];
-  final grouped = <String, List<TitleComment>>{};
+/// One remark, reduced to the four things grouping needs. A record rather
+/// than an interface so both M1b's `TitleComment` and M3's `DefenceComment`
+/// can be mapped into it without either model knowing about the other.
+typedef Remark = ({
+  String authorUid,
+  String authorName,
+  String authorRole,
+  String body,
+});
 
-  for (final c in comments) {
-    final key = '${c.authorUid}|${c.authorRole}';
+/// Groups remarks per commenter — parent design §5.3, Guidelines §4d.
+///
+/// Ordering is the record: authors in the order they first commented, and
+/// each author's remarks in the order made. Alphabetising anything here
+/// would misrepresent a transcript.
+///
+/// Blocks are keyed by author AND role. The same person commenting under two
+/// different positions gets two blocks, because merging them would file a
+/// remark under a title its author did not hold at the time.
+List<CommentBlock> blocksFor(List<Remark> remarks) {
+  final order = <String>[];
+  final grouped = <String, List<Remark>>{};
+
+  for (final r in remarks) {
+    final key = '${r.authorUid}|${r.authorRole}';
     if (!grouped.containsKey(key)) {
       order.add(key);
       grouped[key] = [];
     }
-    grouped[key]!.add(c);
+    grouped[key]!.add(r);
   }
 
   return [
@@ -80,7 +106,7 @@ List<CommentBlock> _blocksFor(List<TitleComment> comments) {
       CommentBlock(
         authorName: grouped[key]!.first.authorName,
         authorRole: grouped[key]!.first.authorRole,
-        bodies: grouped[key]!.map((c) => c.body).toList(),
+        bodies: grouped[key]!.map((r) => r.body).toList(),
       ),
   ];
 }

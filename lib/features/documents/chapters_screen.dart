@@ -12,18 +12,21 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Chapters I–V for one thesis, whether or not any have been uploaded.
 class ChaptersScreen extends ConsumerWidget {
-  const ChaptersScreen({super.key, required this.thesisId});
+  const ChaptersScreen({
+    super.key,
+    required this.thesisId,
+  });
 
   final String thesisId;
 
-  /// Every state renders inside this frame. A bare [PageShell] has no
-  /// Scaffold, so a refusal had no app bar and no way back at all.
-  Widget _framed(List<Widget> children) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chapters')),
-      body: PageShell(children: children),
-    );
-  }
+  /// Every state renders inside this frame.
+  ///
+  /// No Scaffold and no AppBar of its own any more: the app shell supplies
+  /// both for every signed-in route, so a refusal here still has an app
+  /// bar, a sidebar and a way back — which is what the old `embedded` flag
+  /// existed to arrange when a dashboard was hosting this screen, and what
+  /// nothing arranged when the router was.
+  Widget _framed(List<Widget> children) => PageShell(children: children);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,10 +91,8 @@ class ChaptersScreen extends ConsumerWidget {
     };
     final brightness = Theme.of(context).brightness;
 
-    return Scaffold(
+    final page = PageShell(
       key: const Key('chaptersScreen'),
-      appBar: AppBar(title: const Text('Chapters')),
-      body: PageShell(
         title: 'Chapters',
         subtitle: 'Upload each chapter for your adviser to review. Every '
             'upload is kept, so nothing is ever overwritten.',
@@ -111,12 +112,13 @@ class ChaptersScreen extends ConsumerWidget {
                         color: ChapterStatusWords.colorFor(
                             uploaded[id]!.status, brightness)),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.go(
+                onTap: () => context.push(
                     '/thesis/chapters/${id.value}?id=$thesisId'),
               ),
             ),
         ],
-      ),
     );
+
+    return page;
   }
 }

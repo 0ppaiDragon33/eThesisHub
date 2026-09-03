@@ -76,3 +76,15 @@ final myAdviseesProvider = StreamProvider<List<Thesis>>((ref) {
   if (uid == null) return Stream.value(const []);
   return ref.watch(thesisRepositoryProvider).watchAdvisedTheses(uid);
 });
+
+/// Every thesis in the college.
+///
+/// Watched ONLY by the dean and coordinator dashboards. The rules admit an
+/// unfiltered list for those two roles and deny it to everyone else, so any
+/// other screen watching this surfaces a permission error its reader cannot
+/// act on.
+final allThesesProvider = StreamProvider<List<Thesis>>((ref) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
+  return ref.watch(thesisRepositoryProvider).watchAll();
+});

@@ -93,4 +93,27 @@ class FacultyDirectoryRepository {
       return list;
     });
   }
+
+  /// Mirrors a coordinator's designation onto this uid's directory entry.
+  ///
+  /// Hand-built, exactly like [upsertOwnEntry] above -- never routed through
+  /// `FacultyDirectoryEntry.toMap`, which deliberately omits these two
+  /// fields, because the subject's own sign-in write must never touch them.
+  ///
+  /// Always an `update`, never a `set`. The security rules let a coordinator
+  /// update an existing entry's two designation fields and nothing else, and
+  /// explicitly forbid a coordinator creating one -- a coordinator-created
+  /// entry would have no name and show as a blank row in the nomination
+  /// picker. `update` on a missing document throws rather than silently
+  /// creating one, which is exactly the failure mode the caller needs.
+  Future<void> setDesignation({
+    required String uid,
+    required bool adviser,
+    required bool panelist,
+  }) {
+    return _col.doc(uid).update({
+      'nominableAsAdviser': adviser,
+      'nominableAsPanelist': panelist,
+    });
+  }
 }

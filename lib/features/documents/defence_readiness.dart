@@ -6,6 +6,8 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -97,6 +99,12 @@ class _ReadinessRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chaptersAsync = ref.watch(chaptersProvider(thesis.id));
+    // Coordinator only -- the rules already deny anyone else the write that
+    // schedules a defence, but a control that always fails is worse than no
+    // control, so it is hidden rather than merely disabled for a dean, who
+    // reaches this same list to monitor readiness without scheduling it.
+    final isCoordinator =
+        ref.watch(currentUserProvider).valueOrNull?.role == UserRole.coordinator;
 
     return Card(
       child: ListTile(
@@ -107,7 +115,13 @@ class _ReadinessRow extends ConsumerWidget {
         // but until this tap, nothing in `lib/` ever linked here. The
         // router's `isChapterRoute` exemption already lets a non-student
         // through to this route.
-        onTap: () => context.go('/thesis/chapters?id=${thesis.id}'),
+        // '/thesis/chapters' is a destination for a student, but no
+        // coordinator or dean destination owns it -- both roles reach
+        // this list -- so for either reader it is a screen below nothing
+        // of their own and must be pushed (D23), not gone to: `go` would
+        // drop this readiness list off the stack, and the shell's back
+        // control would fall through to '/overview' instead of here.
+        onTap: () => context.push('/thesis/chapters?id=${thesis.id}'),
         title: Text(thesis.workingTitle),
         subtitle: chaptersAsync.when(
           loading: () => const Text('Chapters still loading…'),
@@ -120,14 +134,29 @@ class _ReadinessRow extends ConsumerWidget {
             return Text('$approvedCount of 5 chapters approved');
           },
         ),
-        trailing: chaptersAsync.when(
-          loading: () => const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          error: (e, _) => const Icon(Icons.error_outline),
-          data: (chapters) => Text(_labelFor(readinessOf(chapters))),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            chaptersAsync.when(
+              loading: () => const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              error: (e, _) => const Icon(Icons.error_outline),
+              data: (chapters) => Text(_labelFor(readinessOf(chapters))),
+            ),
+            if (isCoordinator) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                key: Key('schedule-${thesis.id}'),
+                icon: const Icon(Icons.event_outlined),
+                tooltip: 'Schedule a defence',
+                onPressed: () =>
+                    context.push('/defence/schedule?id=${thesis.id}'),
+              ),
+            ],
+          ],
         ),
       ),
     );

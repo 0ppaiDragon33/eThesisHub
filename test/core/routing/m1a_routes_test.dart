@@ -35,13 +35,29 @@ Future<ProviderContainer> containerFor(String role, String uid,
   ]);
 }
 
+/// Pumps the app wide enough (1000px) for the shell to draw its rail.
+///
+/// Every "reaches X by tapping" case below taps a sidebar destination or a
+/// link on the page one destination across. Those destinations used to be
+/// a dashboard's own bar; they belong to the one app shell now, which
+/// hides them behind a hamburger below 900px -- so on the default 800px
+/// test surface the drawer would be shut and every such tap would find
+/// nothing.
+Future<void> pumpApp(WidgetTester tester, ProviderContainer c) async {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+      UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('a student can reach the create-thesis screen', (tester) async {
     final c = await containerFor('student', 'u1');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, c);
 
     c.read(goRouterProvider).go('/thesis/create');
     await tester.pumpAndSettle();
@@ -49,19 +65,27 @@ void main() {
   });
 
   testWidgets(
-      'a student reaches create-thesis from the dashboard by tapping, not '
-      'just by knowing the URL', (tester) async {
+      'a student reaches create-thesis by tapping, not just by knowing '
+      'the URL', (tester) async {
+    // The only in-app door to '/thesis/create' used to be a button on the
+    // student dashboard, which this milestone deletes. It moved onto the
+    // 'My thesis' destination that replaced that dashboard's Thesis tab,
+    // so the tap is one destination across rather than on first paint --
+    // and this test still fails if that door disappears entirely, which is
+    // the whole point of it existing.
     final c = await containerFor('student', 'u1');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await pumpApp(tester, c);
+
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('My thesis')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToCreateThesis')), findsOneWidget);
     await tester.tap(find.byKey(const Key('goToCreateThesis')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create thesis group'), findsOneWidget);
+    expect(find.text('Create thesis group'), findsWidgets);
   });
 
   testWidgets('a student reaches their thesis status screen from the dashboard',
@@ -78,29 +102,28 @@ void main() {
     });
     final c = await containerFor('student', 'u1', db: db);
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await pumpApp(tester, c);
+
+    // The 'goToThesis' button lived on the student dashboard, which this
+    // milestone deletes; the thesis status screen is a sidebar destination
+    // of its own now. The property is unchanged -- a student reaches their
+    // thesis by TAPPING, not only by typing the URL -- and the tap is on
+    // the destination rather than on a button that pointed at it.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('My thesis')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('goToThesis')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('goToThesis')));
-    await tester.pumpAndSettle();
-
-    // 'My thesis' is both the button's label and the destination's AppBar
-    // title, so it would match whether or not navigation happened. Assert
-    // on the destination screen's own Key instead, and that the dashboard
-    // button is actually gone.
+    // The destination screen's own Key, never a heading the origin shares
+    // -- that is what made four M1a navigation tests pass without
+    // navigating.
     expect(find.byKey(const Key('thesisStatusScreen')), findsOneWidget);
-    expect(find.byKey(const Key('goToThesis')), findsNothing);
   });
 
   testWidgets('a faculty member can reach the nomination inbox',
       (tester) async {
     final c = await containerFor('faculty', 'u2');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, c);
 
     c.read(goRouterProvider).go('/nominations');
     await tester.pumpAndSettle();
@@ -112,32 +135,32 @@ void main() {
       (tester) async {
     final c = await containerFor('faculty', 'u2');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await pumpApp(tester, c);
+
+    // The Conforme inbox is its own destination now, in both faculty
+    // modes -- a nomination belongs to neither role, it is how you acquire
+    // one. The 'goToInbox' button lived on the deleted faculty dashboard's
+    // Nominations tab and pointed at this same route; the destination goes
+    // there directly.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('Nominations')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('goToInbox')), findsOneWidget);
-    // The advisee list (Task 9) now renders above this button, so on the
-    // default 800x600 test surface it sits below the fold; PageShell
-    // scrolls, but tester.tap() does not auto-scroll a target into view.
-    await tester.ensureVisible(find.byKey(const Key('goToInbox')));
-    await tester.tap(find.byKey(const Key('goToInbox')));
-    await tester.pumpAndSettle();
-
-    // 'Nomination inbox' is both the button's label and the destination's
-    // AppBar title, so it would match whether or not navigation happened.
-    // Assert on the destination screen's own Key instead, and that the
-    // dashboard button is actually gone.
+    // The destination screen's own Key, never a heading the origin shares.
     expect(find.byKey(const Key('nominationInboxScreen')), findsOneWidget);
-    expect(find.byKey(const Key('goToInbox')), findsNothing);
   });
 
   testWidgets('a coordinator reaches the review queue from the dashboard link',
       (tester) async {
     final c = await containerFor('coordinator', 'u5');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await pumpApp(tester, c);
+
+    // Overview lands first for the coordinator; the review-queue link with
+    // its own key sits on the Recommendations destination, which is a
+    // sidebar entry in the shell now rather than a dashboard tab.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('Recommendations')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToReview')), findsOneWidget);
@@ -161,11 +184,17 @@ void main() {
     // navigation test can see this.
     final c = await containerFor('coordinator', 'u5');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await pumpApp(tester, c);
+
+    // Overview lands first; the link with its own key sits on the
+    // Recommendations destination.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('Recommendations')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToFaculty')), findsOneWidget);
+    // PageShell scrolls but tester.tap() does not scroll for you.
+    await tester.ensureVisible(find.byKey(const Key('goToFaculty')));
     await tester.tap(find.byKey(const Key('goToFaculty')));
     await tester.pumpAndSettle();
 
@@ -173,12 +202,40 @@ void main() {
     expect(find.byKey(const Key('goToFaculty')), findsNothing);
   });
 
+  testWidgets(
+      'the coordinator Users destination reaches /users after the '
+      'Overview shift', (tester) async {
+    // Prepending Overview shifted every other coordinator destination's
+    // index by one -- this destination (Faculty, now Users) moved from
+    // index 4 to index 5. The dashboard used to jump on a hard-coded
+    // `if (i == 4)`, which would have silently routed this exact tap (now
+    // index 5) to whatever destination 4 (Readiness) renders instead, with
+    // no error. This is the regression test for that literal, exercised
+    // through the real router the way the bug actually shipped.
+    final c = await containerFor('coordinator', 'u5');
+    addTearDown(c.dispose);
+    await pumpApp(tester, c);
+
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('Users')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('usersScreen')), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
+    expect(find.byKey(const Key('readinessScreen')), findsNothing);
+  });
+
   testWidgets('a dean reaches the review (approval) queue from the dashboard link',
       (tester) async {
     final c = await containerFor('dean', 'u4');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
+    await pumpApp(tester, c);
+
+    // Overview lands first for the dean; the approval-queue link with its
+    // own key sits on the Approvals destination, which is a sidebar entry
+    // in the shell now rather than a dashboard tab.
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.text('Approvals')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToReview')), findsOneWidget);
@@ -196,41 +253,35 @@ void main() {
   testWidgets('a student cannot reach the review queue', (tester) async {
     final c = await containerFor('student', 'u3');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, c);
 
     c.read(goRouterProvider).go('/review');
     await tester.pumpAndSettle();
-    expect(find.text('Nomination recommendations'), findsNothing);
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('reviewQueueScreen')), findsNothing);
+    expect(find.byKey(const Key('studentOverview')), findsOneWidget);
   });
 
   testWidgets('a student cannot reach the nomination inbox', (tester) async {
     final c = await containerFor('student', 'u3');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, c);
 
     c.read(goRouterProvider).go('/nominations');
     await tester.pumpAndSettle();
-    expect(find.text('Nomination inbox'), findsNothing);
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('nominationInboxScreen')), findsNothing);
+    expect(find.byKey(const Key('studentOverview')), findsOneWidget);
   });
 
   testWidgets('a faculty member cannot reach the create-thesis screen',
       (tester) async {
     final c = await containerFor('faculty', 'u2');
     addTearDown(c.dispose);
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, c);
 
     c.read(goRouterProvider).go('/thesis/create');
     await tester.pumpAndSettle();
     expect(find.text('Create thesis group'), findsNothing);
-    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
   });
 
   testWidgets(
@@ -246,15 +297,15 @@ void main() {
       'semester': 'First', 'academicYear': '2026-2027',
     });
 
-    await tester.pumpWidget(
-        UncontrolledProviderScope(container: c, child: const EThesisHubApp()));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, c);
 
     c.read(goRouterProvider).go('/thesis/nominate');
     await tester.pumpAndSettle();
 
     // No crash, and it lands on the nominate screen for the leader's own
-    // thesis rather than an unhandled null-check error.
+    // thesis rather than an unhandled null-check error. The heading is the
+    // shell's app bar title for this route now (see shellTitleFor), the
+    // screen having given up its own AppBar to the shell.
     expect(find.text('Nominate adviser and panel'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

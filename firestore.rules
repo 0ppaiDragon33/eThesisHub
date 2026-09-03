@@ -90,10 +90,18 @@ service cloud.firestore {
       // below). The beneficiary of an elevation can never remove its
       // facultyInvites record (only mark it consumed) — but coordinators can
       // delete or overwrite invites, so this is not a permanent guarantee.
+      //
+      // `nominableAsAdviser` and `nominableAsPanelist` are designation: set
+      // from the Users screen to mark an account eligible to be nominated as
+      // an adviser, a panelist, both, or neither. They ride the same
+      // `onlyChanged` list as the rest of this arm, so a write touching
+      // `role` alongside them still fails the whole update — `role` remains
+      // unwritable here no matter what else is in the payload.
       allow update: if isCoordinator()
                     && request.auth.uid != uid
                     && onlyChanged(['fullName', 'college', 'program',
-                                    'specialization', 'active']);
+                                    'specialization', 'active',
+                                    'nominableAsAdviser', 'nominableAsPanelist']);
 
       allow delete: if false;
     }
@@ -503,6 +511,25 @@ service cloud.firestore {
         // faculty inbox's collection-group query filters on the field while
         // the collection-group read rule authorises on the id; if they could
         // disagree, one nominee's seat could be filed under another's query.
+        //
+        // Designation — a coordinator marks, per account, whether it may be
+        // nominated as adviser and/or as panelist. Like the role above, this
+        // is read from `users/{nomineeUid}` rather than `facultyDirectory`:
+        // the directory is that same client-written, self-maintained mirror,
+        // so trusting it would make designation self-declarable too. The
+        // field defaults to `true` on absence because every account that
+        // predates this milestone has neither field set — reading absence as
+        // "not nominable" would silently lock out the entire existing
+        // faculty. This is confined to the non-ex-officio branch: an
+        // ex-officio seat is conferred by office, not by a coordinator's
+        // checkbox, and must never be blocked by a missed designation.
+        function nomineeDesignatedFor(uid, position) {
+          let u = get(/databases/$(database)/documents/users/$(uid)).data;
+          return position == 'adviser'
+                 ? u.get('nominableAsAdviser', true)
+                 : u.get('nominableAsPanelist', true);
+        }
+
         function mayCreateNomination() {
           let t = thesisData(thesisId);
           let role = roleOf(nomineeUid);
@@ -515,7 +542,8 @@ service cloud.firestore {
                  && role in ['faculty', 'coordinator', 'dean']
                  && d.nomineeUid == nomineeUid
                  && (
-                      (d.exOfficio == false && d.conformeStatus == 'pending')
+                      (d.exOfficio == false && d.conformeStatus == 'pending'
+                       && nomineeDesignatedFor(nomineeUid, d.position))
                       ||
                       (d.exOfficio == true
                        && d.conformeStatus == 'exOfficio'
@@ -763,7 +791,7 @@ service cloud.firestore {
         // college-wide progress visibility, not chapter review. The split
         // falls on the collection boundary, so no field filtering is needed.
         allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                         || isCoordinator() || isDean();
+                         || isOnPanel() || isCoordinator() || isDean();
 
         allow create: if verified()
                       && isThesisLeader(thesisId)
@@ -810,7 +838,7 @@ service cloud.firestore {
         match /versions/{versionNo} {
           // No dean: they see that a chapter is approved, never its files.
           allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                           || isCoordinator();
+                           || isOnPanel() || isCoordinator();
 
           // Written in the SAME batch as the parent's version bump, and a
           // batch is evaluated against the state BEFORE it -- so the parent
@@ -848,7 +876,7 @@ service cloud.firestore {
 
         match /feedback/{feedbackId} {
           allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                           || isCoordinator();
+                           || isOnPanel() || isCoordinator();
 
           allow create: if verified()
                         && isAdviser(thesisId)
@@ -869,6 +897,375 @@ service cloud.firestore {
           // have acted on the original wording.
           allow update, delete: if false;
         }
+      }
+    }
+
+    match /defenses/{defenseId} {
+      // `defenses` is top level, so the thesis is reached through the id
+      // stored on the defence rather than through the path. The helpers
+      // inside `match /theses/{thesisId}` are not in scope here.
+      //
+      // `leaderUid` is a snapshot field on the defence document itself
+      // (validated against the live thesis at `create`, below), not a
+      // live cross-document read: `onThisDefence()` and the leader arm of
+      // `allow list` would otherwise call `thesisOf()` once per document
+      // evaluated, and Firestore caps the number of document accesses a
+      // single rule evaluation may make -- a `list` over many defences
+      // would blow that budget.
+      function defence() {
+        return resource.data;
+      }
+      function incoming() {
+        return request.resource.data;
+      }
+      function thesisOf(thesisId) {
+        return get(/databases/$(database)/documents/theses/$(thesisId)).data;
+      }
+
+      function onThisDefence() {
+        let d = defence();
+        return signedIn() && (
+          d.adviserUid == request.auth.uid ||
+          request.auth.uid in d.panelUids ||
+          d.leaderUid == request.auth.uid
+        );
+      }
+
+      allow get: if onThisDefence() || isCoordinator() || isDean();
+
+      // One arm per role, each evaluated per returned document, so none can
+      // return a defence the caller does not belong to. The coordinator and
+      // dean monitor college-wide, so their arm is unfiltered by design.
+      allow list: if (signedIn()
+                      && resource.data.adviserUid == request.auth.uid)
+                  || (signedIn()
+                      && request.auth.uid in resource.data.panelUids)
+                  || (signedIn()
+                      && resource.data.leaderUid == request.auth.uid)
+                  || isCoordinator() || isDean();
+
+      allow create: if verified()
+                    && isCoordinator()
+                    && incoming().keys().hasOnly(
+                         ['thesisId', 'type', 'scheduledAt', 'venue',
+                          'panelUids', 'adviserUid', 'leaderUid', 'status',
+                          'createdBy', 'createdAt'])
+                    && incoming().type in ['preOral', 'final']
+                    && incoming().status == 'scheduled'
+                    && incoming().createdBy == request.auth.uid
+                    && incoming().createdAt == request.time
+                    // Snapshots, not claims: a forged panel would grant
+                    // comment rights to someone the group never nominated.
+                    && incoming().panelUids
+                       == thesisOf(incoming().thesisId).panelistUids
+                    && incoming().adviserUid
+                       == thesisOf(incoming().thesisId).adviserUid
+                    && incoming().leaderUid
+                       == thesisOf(incoming().thesisId).leaderUid;
+
+      // Coordinator arm 1 -- OPEN. Forward only, and not before the window.
+      //
+      // The 30 minutes is the same number as `defenceOpenGrace` in
+      // lib/data/models/defence.dart, which cannot be imported here. If the
+      // two ever disagree the button looks enabled and this denies the
+      // write, so rules.test.js pins the boundary at 29 and 31 minutes.
+      //
+      // Why gate it at all: the lifecycle is forward-only and a defence has
+      // no delete, so opening one by accident and closing it freezes an
+      // empty log into the permanent record.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['status'])
+                    && defence().status == 'scheduled'
+                    && incoming().status == 'inProgress'
+                    && request.time >= defence().scheduledAt
+                                       - duration.value(30, 'm');
+
+      // Coordinator arm 2 -- CLOSE. No window: a defence ends when it ends.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['status'])
+                    && defence().status == 'inProgress'
+                    && incoming().status == 'completed';
+
+      // Coordinator arm 3 -- CANCEL, for a defence created by mistake.
+      // Only while it is still scheduled: one under way is closed instead,
+      // so its log stays a record of what was said. Cancelled rather than
+      // deleted, because the record is evidence.
+      allow update: if verified()
+                    && isCoordinator()
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['status'])
+                    && defence().status == 'scheduled'
+                    && incoming().status == 'cancelled';
+
+      // Coordinator arm 4 -- EDIT the date, time or venue.
+      //
+      // Without this the schedule was frozen at creation: a coordinator who
+      // picked the wrong day could neither fix it nor remove the defence,
+      // and the only way forward was opening it anyway. The status is NOT
+      // in the key set, so an edit can never double as a transition.
+      allow update: if verified()
+                    && isCoordinator()
+                    && defence().status == 'scheduled'
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['scheduledAt', 'venue'])
+                    && incoming().venue is string
+                    && incoming().venue.size() > 0;
+
+      // Adviser arm: the release, once, and only after it is closed.
+      // Guidelines §4d makes consolidation the adviser's act.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && defence().status == 'completed'
+                    && !('consolidatedAt' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['consolidatedAt'])
+                    && incoming().consolidatedAt == request.time;
+
+      // Adviser arm 2 -- RELEASE the evaluations to the panel.
+      //
+      // §8b has the panel deliberate over the final grades, so they must
+      // be able to see them: this is what opens the set. It is the same
+      // shape as the consolidation arm above, deliberately -- one pattern
+      // to learn rather than two.
+      //
+      // NOT conditioned on "everyone has submitted": Firestore rules
+      // cannot count the documents in a collection, so that sentence is
+      // not expressible here. The adviser can release at 2 of 3. The
+      // grades screen therefore prints the count on the button itself, so
+      // an early release is a visible choice rather than an accident.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && defence().status == 'completed'
+                    && !('evaluationsReleasedAt' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['evaluationsReleasedAt'])
+                    && incoming().evaluationsReleasedAt == request.time;
+
+      // Adviser arm 3 -- RECORD the §8b verdict.
+      //
+      // Only after release (the panel must see the grades to deliberate),
+      // and only once: a recorded verdict is the panel's decision, not a
+      // draft. `verdictRecordedBy` must be the adviser themselves --
+      // someone barred from scoring at all has to be visibly the scribe,
+      // and a field that could name anyone would record nothing.
+      allow update: if verified()
+                    && defence().adviserUid == request.auth.uid
+                    && 'evaluationsReleasedAt' in defence()
+                    && !('panelVerdict' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['panelVerdict', 'verdictRecordedBy',
+                                 'verdictRecordedAt'])
+                    && incoming().panelVerdict in ['pass', 'fail']
+                    && incoming().verdictRecordedBy == request.auth.uid
+                    && incoming().verdictRecordedAt == request.time;
+
+      // The defence record is evidence.
+      allow delete: if false;
+
+      match /comments/{commentId} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        function mayComment() {
+          let d = parent();
+          return signedIn() && (
+            d.adviserUid == request.auth.uid ||
+            request.auth.uid in d.panelUids
+          );
+        }
+
+        // The panel reads throughout. The group reads only once the adviser
+        // has released the consolidation -- Guidelines §4d. The leader
+        // check uses `leaderUid`, the snapshot field on the defence itself
+        // (see the note above `defence()`), not a second read of the
+        // thesis -- one `get` on `parent()` covers both `mayComment()` and
+        // this arm.
+        allow get, list: if mayComment() || isCoordinator() || isDean()
+                         || (signedIn()
+                             && 'consolidatedAt' in parent()
+                             && parent().leaderUid == request.auth.uid);
+
+        // Only while the defence is open, and only in your own name.
+        allow create: if verified()
+                      && (mayComment() || isCoordinator() || isDean())
+                      && parent().status == 'inProgress'
+                      && request.resource.data.keys().hasOnly(
+                           ['authorUid', 'authorName', 'authorPosition',
+                            'body', 'createdAt'])
+                      && request.resource.data.authorUid == request.auth.uid
+                      && request.resource.data.body is string
+                      && request.resource.data.body.size() > 0
+                      && request.resource.data.createdAt == request.time;
+
+        // Append-only, per D10: the defence record is evidence, and
+        // editable remarks make consolidated feedback worthless.
+        allow update, delete: if false;
+      }
+
+      // ---- M4: Form 5c evaluations ----
+      //
+      // One document per panelist, keyed by their uid so nobody files two.
+      // Guidelines §8a: the panel rates Pass or Fail AND completes Form 5c
+      // so a numerical grade can be given.
+      match /evaluations/{evaluatorUid} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        // The adviser is deliberately NOT here. They advised this thesis
+        // for months and cannot mark it at arm's length, so the rule --
+        // not merely a hidden button -- refuses them. They comment in the
+        // room like everyone else, and they hold the two acts below.
+        function isPanelistHere() {
+          return signedIn() && request.auth.uid in parent().panelUids;
+        }
+        // Presence, never a sentinel: `.get(k, <sentinel>) == <sentinel>`
+        // silently changes meaning the day a legitimate value equals the
+        // sentinel, which cost this project two rounds already.
+        function released() {
+          return 'evaluationsReleasedAt' in parent();
+        }
+        function scores() {
+          return request.resource.data.scores;
+        }
+
+        // THESE ELEVEN NUMBERS EXIST TWICE. The other copy is
+        // `evaluationCriteria` in lib/data/models/evaluation_criteria.dart,
+        // which this cannot import. If they drift, the form accepts a
+        // score this denies -- so rules.test.js walks every boundary at
+        // weight and weight+1.
+        function bounded() {
+          let s = scores();
+          return s.keys().hasAll(['title', 'introduction',
+                    'materialsAndMethods', 'result', 'discussion',
+                    'conclusion', 'recommendation', 'references',
+                    'preciseness', 'alertness', 'personality'])
+              && s.keys().hasOnly(['title', 'introduction',
+                    'materialsAndMethods', 'result', 'discussion',
+                    'conclusion', 'recommendation', 'references',
+                    'preciseness', 'alertness', 'personality'])
+              && s.title is int && s.title >= 0 && s.title <= 5
+              && s.introduction is int
+                 && s.introduction >= 0 && s.introduction <= 5
+              && s.materialsAndMethods is int
+                 && s.materialsAndMethods >= 0
+                 && s.materialsAndMethods <= 10
+              && s.result is int && s.result >= 0 && s.result <= 10
+              && s.discussion is int
+                 && s.discussion >= 0 && s.discussion <= 10
+              && s.conclusion is int
+                 && s.conclusion >= 0 && s.conclusion <= 5
+              && s.recommendation is int
+                 && s.recommendation >= 0 && s.recommendation <= 2
+              && s.references is int
+                 && s.references >= 0 && s.references <= 3
+              && s.preciseness is int
+                 && s.preciseness >= 0 && s.preciseness <= 15
+              && s.alertness is int
+                 && s.alertness >= 0 && s.alertness <= 25
+              && s.personality is int
+                 && s.personality >= 0 && s.personality <= 10;
+        }
+
+        function wellFormed() {
+          let d = request.resource.data;
+          let s = scores();
+          return d.keys().hasAll(['evaluatorName', 'scores', 'comments',
+                                  'total', 'rating',
+                                  'submittedAt', 'updatedAt'])
+              && d.keys().hasOnly(['evaluatorName', 'scores', 'comments',
+                                   'total', 'rating',
+                                   'submittedAt', 'updatedAt'])
+              // The evaluator's name as it stood when they submitted --
+              // the same denormalization, for the same reason, as
+              // authorName on a defence comment: a grade sheet naming a
+              // uid names nobody, and this record outlives the account.
+              && d.evaluatorName is string
+              && bounded()
+              // A stored total that could disagree with its own scores
+              // would be worse than no stored total, so it is recomputed
+              // here on every write rather than trusted.
+              && d.total == s.title + s.introduction
+                          + s.materialsAndMethods + s.result + s.discussion
+                          + s.conclusion + s.recommendation + s.references
+                          + s.preciseness + s.alertness + s.personality
+              && d.rating in ['pass', 'fail']
+              // Section B carries no comment lines on the printed form,
+              // so its three keys are not accepted here.
+              && d.comments.keys().hasOnly(['title', 'introduction',
+                    'materialsAndMethods', 'result', 'discussion',
+                    'conclusion', 'recommendation', 'references']);
+        }
+
+        // Your own always; everyone else's only once released (D39). The
+        // adviser is the one exception to that seal: they cannot score at
+        // all, so an early read anchors no score that exists, and they
+        // need the submitted COUNT before release -- printed on the
+        // release button so releasing at 2 of 3 is a visible choice -- and
+        // a Firestore `list` returns documents, so there is no query
+        // yielding "how many" without "what". The seal's real purpose is
+        // anti-anchoring between panelists, which the adviser cannot do.
+        // The first arm authorises on the {evaluatorUid} wildcard, which
+        // is sound because a panelist reading their own knows its id.
+        //
+        // `parent()` costs one get per document evaluated. Safe here --
+        // an evaluations subcollection holds at most one document per
+        // panelist -- unlike the `list` over `defenses` above, which is
+        // why that one snapshots leaderUid rather than reading the thesis.
+        allow get, list: if (signedIn()
+                             && ((request.auth.uid == evaluatorUid
+                                  && isPanelistHere())
+                                 || parent().adviserUid == request.auth.uid))
+                         || (released()
+                             && (isPanelistHere()
+                                 || isCoordinator() || isDean()));
+
+        // Nothing has been presented to score while the defence is merely
+        // scheduled, and a cancelled one is never scorable.
+        allow create: if verified()
+                      && isPanelistHere()
+                      && request.auth.uid == evaluatorUid
+                      && parent().status in ['inProgress', 'completed']
+                      && !released()
+                      && wellFormed()
+                      && request.resource.data.submittedAt == request.time
+                      && request.resource.data.updatedAt == request.time;
+
+        // Editable until the seal, then frozen (D44). Freezing on first
+        // submit would make a mistyped 2-instead-of-20 permanent in a
+        // record that has no delete.
+        //
+        // The conjuncts here are order-INDEPENDENT. An earlier note in
+        // this file claimed their order was load-bearing for the drift
+        // test, on the premise that `&&` short-circuits; it does, but
+        // the RESULT of a conjunction is false either way, so no
+        // reordering can change whether a write is allowed. What was
+        // actually true is that the drift test's negative cases ran as
+        // UPDATES against a document its own positive case had just
+        // created, and `evalDoc()` regenerates `submittedAt` on every
+        // call -- so they were denied by the `submittedAt` mismatch
+        // below no matter what `bounded()` said, and the test passed
+        // unchanged with `title <= 50`. That is fixed in the test, which
+        // now deletes the document before all three assertions so every
+        // case is a create. Weight drift is caught there, not by any
+        // ordering here.
+        allow update: if verified()
+                      && isPanelistHere()
+                      && request.auth.uid == evaluatorUid
+                      && !released()
+                      && wellFormed()
+                      // "When did this panelist first submit" must stay
+                      // answerable after an edit.
+                      && request.resource.data.submittedAt
+                         == resource.data.submittedAt
+                      && request.resource.data.updatedAt == request.time;
+
+        // A grade entered and withdrawn is exactly the gap in the record
+        // that §8b's deliberation would need to explain.
+        allow delete: if false;
       }
     }
 
@@ -904,18 +1301,76 @@ service cloud.firestore {
       // nomination path itself. The written role must now equal the caller's
       // real role from `users/{uid}`, and only the four keys
       // `upsertOwnEntry` actually writes are accepted.
+      //
+      // D27 (coordinator admin): the directory now also mirrors
+      // `nominableAsAdviser`/`nominableAsPanelist` from `users/{uid}` so the
+      // student-facing nomination picker — which cannot read `users` — can
+      // filter on them. `upsertOwnEntry` writes with `SetOptions(merge:
+      // true)`, under which `request.resource.data` is the merged *result*,
+      // not the written subset (see the comment at
+      // `faculty_directory_repository.dart:43-46`). So once an entry carries
+      // either designation field, the subject's ordinary sign-in write
+      // becomes a six-key document, and `hasOnly` must accept six keys or
+      // every subsequent sign-in for a designated account is refused. That
+      // widening, by itself, would also let the subject set their own
+      // designation through the same merge — making it self-declarable,
+      // which is exactly what living on `users` (not `facultyDirectory`) is
+      // meant to prevent. So the widening is fenced: `subjectDesignationUntouched`
+      // below requires that this write does not affect either designation
+      // key at all, on every write this function allows, and only
+      // `mayCoordinatorSetDesignation` — a separate arm, update-only,
+      // touching only those two keys — may actually change them.
+      //
+      // This is a presence check, not a value check, and deliberately so:
+      // an earlier version compared `request.resource.data.get(field,
+      // <sentinel>)` against a sentinel default to make "absent" compare
+      // equal to "absent" — first with `true` as the sentinel, then with
+      // `null`. Both were wrong the same way: whatever sentinel is chosen
+      // is *also* a value a subject can write, so a subject writing that
+      // exact value collides with "absent" and is wrongly admitted (`true`
+      // via a `create` carrying `nominableAsAdviser: true`; `null` via a
+      // `create` or merge-`update` carrying `nominableAsAdviser: null`).
+      // There is no sentinel immune to this — any fixed value is itself a
+      // legal write. So the check below never inspects values at all: on
+      // create it asks whether either key is present in the incoming
+      // document; on update it asks whether either key is among the keys
+      // `diff()` reports as affected between the stored and incoming
+      // documents (the same `diff().affectedKeys()` reasoning `onlyChanged`
+      // above already uses). Neither question can be defeated by a choice
+      // of value, because neither one looks at a value.
+      function subjectDesignationUntouched() {
+        return resource == null
+               ? !request.resource.data.keys()
+                    .hasAny(['nominableAsAdviser', 'nominableAsPanelist'])
+               : !request.resource.data.diff(resource.data).affectedKeys()
+                    .hasAny(['nominableAsAdviser', 'nominableAsPanelist']);
+      }
+
       function mayWriteOwnDirectoryEntry() {
         let role = myRole();
         return signedIn()
                && request.auth.uid == uid
                && role != 'student'
                && request.resource.data.keys().hasOnly(
-                    ['fullName', 'role', 'college', 'specialization'])
-               && request.resource.data.role == role;
+                    ['fullName', 'role', 'college', 'specialization',
+                     'nominableAsAdviser', 'nominableAsPanelist'])
+               && request.resource.data.role == role
+               && subjectDesignationUntouched();
+      }
+
+      // Update-only: a coordinator-created entry would have no name (it
+      // never runs `upsertOwnEntry`) and would appear as a blank row in the
+      // nomination picker, so this arm may only touch an entry that already
+      // exists, and only the two designation fields.
+      function mayCoordinatorSetDesignation() {
+        return isCoordinator()
+               && resource != null
+               && onlyChanged(['nominableAsAdviser', 'nominableAsPanelist']);
       }
 
       allow read: if verified();
-      allow create, update: if mayWriteOwnDirectoryEntry();
+      allow create, update: if mayWriteOwnDirectoryEntry()
+                             || mayCoordinatorSetDesignation();
       // Nobody removes a directory entry: a deleted entry would silently
       // drop an office holder out of the ex-officio picker. Deactivation
       // lives on `users.active` instead.

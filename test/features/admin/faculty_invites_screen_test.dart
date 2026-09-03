@@ -18,7 +18,10 @@ Widget wrap(FakeFirebaseFirestore db,
               uid: 'coord-1', email: email, isEmailVerified: true),
         )),
       ],
-      child: const MaterialApp(home: FacultyInvitesScreen()),
+      // the app shell supplies the Scaffold in the real app.
+      child: const MaterialApp(
+        home: Scaffold(body: FacultyInvitesScreen()),
+      ),
     );
 
 /// The form plus the invite list exceeds the default 800x600 test surface.

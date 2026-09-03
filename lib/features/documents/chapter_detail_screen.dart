@@ -245,15 +245,18 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         '$hour12:$minute $period';
   }
 
-  /// Every state renders inside this frame. A bare [PageShell] has no
-  /// Scaffold, so a refusal had no app bar and no way back at all -- see
-  /// chapters_screen.dart, which this mirrors.
-  Widget _framed(List<Widget> children) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.chapter.label)),
-      body: PageShell(children: children),
-    );
-  }
+  /// Every state renders inside this frame.
+  ///
+  /// No Scaffold and no AppBar of its own: the app shell supplies both,
+  /// and names the bar for this chapter too — `shellTitleFor` reads the
+  /// same [ChapterId] out of the path, so the title survives the move.
+  /// Keyed the same as the loaded screen, so a test (and a reader) can tell
+  /// this screen apart from the router's own "No such chapter" refusal
+  /// whichever state it is in.
+  Widget _framed(List<Widget> children) => KeyedSubtree(
+        key: const Key('chapterDetailScreen'),
+        child: PageShell(children: children),
+      );
 
   Widget _uploadControl({required bool disabled, String? disabledReason}) {
     return Column(
@@ -505,10 +508,9 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     final brightness = Theme.of(context).brightness;
     final status = thisChapter.status;
 
-    return Scaffold(
+    return KeyedSubtree(
       key: const Key('chapterDetailScreen'),
-      appBar: AppBar(title: Text(widget.chapter.label)),
-      body: PageShell(
+      child: PageShell(
         title: widget.chapter.label,
         subtitle: ChapterStatusWords.detailFor(status),
         children: [

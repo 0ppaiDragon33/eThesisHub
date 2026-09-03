@@ -93,4 +93,43 @@ void main() {
     expect(result.single.blocks.map((b) => b.authorRole),
         ['Panel Member', 'Research Coordinator']);
   });
+
+  group('blocksFor', () {
+    test('groups per commenter, in the order they first spoke', () {
+      // Ordering IS the record. Alphabetising would misrepresent a
+      // transcript, so the test seeds an order that alphabetising breaks.
+      final blocks = blocksFor(const [
+        (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',
+         body: 'First remark.'),
+        (authorUid: 'a1', authorName: 'Dr. Armada', authorRole: 'Panel Member',
+         body: 'Second remark.'),
+        (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',
+         body: 'Third remark, same speaker.'),
+      ]);
+
+      expect(blocks.map((b) => b.authorName), ['Dr. Zamora', 'Dr. Armada']);
+      expect(blocks.first.bodies,
+          ['First remark.', 'Third remark, same speaker.']);
+      expect(blocks.first.header, '[Dr. Zamora — Adviser]');
+    });
+
+    test('the same person under two positions gets two blocks', () {
+      // Merging them would file a remark under a title its author did not
+      // hold at the time.
+      final blocks = blocksFor(const [
+        (authorUid: 'c1', authorName: 'Dr. Cruz', authorRole: 'Coordinator',
+         body: 'As coordinator.'),
+        (authorUid: 'c1', authorName: 'Dr. Cruz', authorRole: 'Panel Member',
+         body: 'As panel member.'),
+      ]);
+
+      expect(blocks, hasLength(2));
+      expect(blocks.map((b) => b.authorRole),
+          ['Coordinator', 'Panel Member']);
+    });
+
+    test('no remarks is no blocks, not an empty block', () {
+      expect(blocksFor(const []), isEmpty);
+    });
+  });
 }

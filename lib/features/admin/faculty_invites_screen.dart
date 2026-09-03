@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/faculty_invite.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// Lets a Research Coordinator promote someone to faculty, coordinator or
@@ -138,18 +139,26 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
     final me = ref.watch(authStateProvider).valueOrNull;
     final invitesAsync = ref.watch(facultyInvitesProvider);
 
-    return Scaffold(
+    // No Scaffold and no AppBar: the app shell owns both for every
+    // signed-in route now, and a second Scaffold here would stack a second
+    // app bar with a back button that goes nowhere.
+    return KeyedSubtree(
       // Identifies the destination for reachability tests. Asserting on the
-      // AppBar title instead would match the dashboard button that opens
-      // this screen, and so would pass whether or not navigation happened.
+      // AppBar title instead would match the sidebar entry that opens this
+      // screen, and so would pass whether or not navigation happened.
       key: const Key('facultyInvitesScreen'),
-      appBar: AppBar(title: const Text('Faculty')),
-      body: Center(
+      child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
+              // The Invites half of the Users destination's two tabs. Both
+              // tabs carry the same strip: without it this route rendered
+              // with the rail highlighting "Users" and no way back to
+              // Accounts anywhere on the screen (spec §5).
+              const UsersTabs(selected: UsersTab.invites),
+              const SizedBox(height: 16),
               const Text('Invite a faculty member',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),

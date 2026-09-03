@@ -478,6 +478,8 @@ Changes required in `Revised- eThesisHub Capstonemain 1-4.docx`, parked by decis
 - Database Design: comments collection, nomination fields, generatedForms, auditLogs
 - **Database Design: `documents/revisions` becomes `documents/versions` plus `documents/feedback`** (M2, decision M2-1). One version has many reviewers; the bundled shape duplicated the file across rows with nothing marking the authoritative copy
 - **Database Design: `candidateTitles` carries an explicit `position`** (M1b). Firestore returns an unordered collection sorted by random auto-generated id, and a single batch write gives every candidate the identical `submittedAt`, so nothing else records the order the group chose
+- **Database Design: `defenses/comments` drops `editedAt`** (M3, decision M3-7). The field recorded an edit that §5.3 and §6.4 forbid outright
+- **Database Design: `defenses` gains `adviserUid` and `consolidatedAt`** (M3). The first is the historical snapshot of who advised; the second is what releases the consolidated comments to the group
 - Prototype: "Adviser and Panelist Assignment Module" → "Adviser and Panel Nomination Module"; add Defense Comment Module and Form Generation Module
 
 ---

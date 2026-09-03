@@ -41,9 +41,13 @@ Widget wrap(FakeFirebaseFirestore db, {List<Override> overrides = const []}) =>
         firestoreProvider.overrideWithValue(db),
         ...overrides,
       ],
-      child: const MaterialApp(
-        home: ChapterDetailScreen(
-            thesisId: 't1', chapter: ChapterId.chapterI),
+      child: MaterialApp(
+        // the app shell supplies the Scaffold in the real app.
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Chapter I')),
+          body: ChapterDetailScreen(
+              thesisId: 't1', chapter: ChapterId.chapterI),
+        ),
       ),
     );
 

@@ -178,4 +178,94 @@ void main() {
 
     expect(find.widgetWithText(AppBar, 'Chapters for t1'), findsOneWidget);
   });
+
+  Widget wrapWithRoles(FakeFirebaseFirestore db, {required String uid}) {
+    return ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(
+              uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
+        )),
+      ],
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/defences',
+          routes: [
+            GoRoute(
+              path: '/defences',
+              builder: (_, _) => const Scaffold(
+                body: SingleChildScrollView(child: DefenceReadinessList()),
+              ),
+            ),
+            GoRoute(
+              path: '/defence/schedule',
+              builder: (context, state) => Scaffold(
+                key: const Key('scheduleDefenceScreen'),
+                appBar: AppBar(
+                  title: Text(
+                      'Schedule for ${state.uri.queryParameters['id']}'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  testWidgets(
+      'a coordinator sees the schedule action and reaches the schedule '
+      'screen by tapping it', (tester) async {
+    // FIX 1: nothing in `lib/` navigated to `/defence/schedule` before this
+    // -- a coordinator seeing a ready thesis had no control anywhere that
+    // scheduled its defence. This is that door being connected.
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('coord1').set({
+      'fullName': 'Coord One',
+      'email': 'coord1@isufst.edu.ph',
+      'role': 'coordinator',
+      'active': true,
+    });
+    await _seedThesis(db, 't1', workingTitle: 'Schedulable Thesis', chapters: {
+      'chapterI': 'approved',
+      'chapterII': 'approved',
+      'chapterIII': 'approved',
+    });
+
+    await tester.pumpWidget(wrapWithRoles(db, uid: 'coord1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('schedule-t1')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('schedule-t1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scheduleDefenceScreen')), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Schedule for t1'), findsOneWidget);
+  });
+
+  testWidgets('a dean does not see the schedule action', (tester) async {
+    // Hiding is not access control -- the rules deny a dean the write
+    // regardless -- but a control that always fails is worse than no
+    // control, so it must not even render for them.
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('dean1').set({
+      'fullName': 'Dean One',
+      'email': 'dean1@isufst.edu.ph',
+      'role': 'dean',
+      'active': true,
+    });
+    await _seedThesis(db, 't1', workingTitle: 'Schedulable Thesis', chapters: {
+      'chapterI': 'approved',
+      'chapterII': 'approved',
+      'chapterIII': 'approved',
+    });
+
+    await tester.pumpWidget(wrapWithRoles(db, uid: 'dean1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('schedule-t1')), findsNothing);
+  });
 }

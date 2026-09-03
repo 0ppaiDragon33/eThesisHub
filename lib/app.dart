@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/routing/app_router.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/theme_provider.dart';
 
 class EThesisHubApp extends ConsumerWidget {
   const EThesisHubApp({super.key});
@@ -18,7 +19,7 @@ class EThesisHubApp extends ConsumerWidget {
       title: 'eThesisHub',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: ref.watch(goRouterProvider),
     );
   }

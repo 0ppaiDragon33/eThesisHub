@@ -124,84 +124,83 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
     // event and see a stale `null`.
     final signedIn = ref.watch(authStateProvider).valueOrNull != null;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create thesis group')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  key: const Key('workingTitle'),
-                  controller: _workingTitle,
-                  decoration: const InputDecoration(
-                    labelText: 'Working title',
-                    helperText:
-                        'Your initial idea. Candidate titles come later.',
+    // No Scaffold and no AppBar: the app shell owns both for every
+    // signed-in route now.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                key: const Key('workingTitle'),
+                controller: _workingTitle,
+                decoration: const InputDecoration(
+                  labelText: 'Working title',
+                  helperText:
+                      'Your initial idea. Candidate titles come later.',
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Your groupmates'),
+              // Says plainly that the leader is already counted. Labelled
+              // "Group members", this read as "list the group", and a
+              // leader added themselves again — which printed them twice
+              // on Form 1 and pushed a five-person group onto a second
+              // sheet.
+              Text(
+                'You are already listed as the group leader. Add everyone '
+                'else here.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              for (var i = 0; i < _members.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextField(
+                    key: Key('member$i'),
+                    controller: _members[i],
+                    decoration: const InputDecoration(
+                        labelText: 'Surname, First name'),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Text('Your groupmates'),
-                // Says plainly that the leader is already counted. Labelled
-                // "Group members", this read as "list the group", and a
-                // leader added themselves again — which printed them twice
-                // on Form 1 and pushed a five-person group onto a second
-                // sheet.
-                Text(
-                  'You are already listed as the group leader. Add everyone '
-                  'else here.',
-                  style: Theme.of(context).textTheme.bodySmall,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const Key('addMember'),
+                  onPressed: () => setState(
+                      () => _members.add(TextEditingController())),
+                  child: const Text('+ Add member'),
                 ),
-                for (var i = 0; i < _members.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: TextField(
-                      key: Key('member$i'),
-                      controller: _members[i],
-                      decoration: const InputDecoration(
-                          labelText: 'Surname, First name'),
-                    ),
-                  ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    key: const Key('addMember'),
-                    onPressed: () => setState(
-                        () => _members.add(TextEditingController())),
-                    child: const Text('+ Add member'),
-                  ),
+              ),
+              const SizedBox(height: 8),
+              _dropdown('college', 'College', _college, kColleges,
+                  (v) => setState(() => _college = v)),
+              const SizedBox(height: 12),
+              _dropdown('program', 'Program', _program, kPrograms,
+                  (v) => setState(() => _program = v)),
+              const SizedBox(height: 12),
+              _dropdown('semester', 'Semester', _semester, kSemesters,
+                  (v) => setState(() => _semester = v)),
+              const SizedBox(height: 12),
+              _dropdown('academicYear', 'Academic year', _academicYear,
+                  kAcademicYears, (v) => setState(() => _academicYear = v)),
+              const SizedBox(height: 20),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(_error!,
+                      key: const Key('error'),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
                 ),
-                const SizedBox(height: 8),
-                _dropdown('college', 'College', _college, kColleges,
-                    (v) => setState(() => _college = v)),
-                const SizedBox(height: 12),
-                _dropdown('program', 'Program', _program, kPrograms,
-                    (v) => setState(() => _program = v)),
-                const SizedBox(height: 12),
-                _dropdown('semester', 'Semester', _semester, kSemesters,
-                    (v) => setState(() => _semester = v)),
-                const SizedBox(height: 12),
-                _dropdown('academicYear', 'Academic year', _academicYear,
-                    kAcademicYears, (v) => setState(() => _academicYear = v)),
-                const SizedBox(height: 20),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(_error!,
-                        key: const Key('error'),
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.error)),
-                  ),
-                FilledButton(
-                  key: const Key('submit'),
-                  onPressed: (_busy || !signedIn) ? null : _submit,
-                  child: Text(_busy ? 'Creating…' : 'Create group'),
-                ),
-              ],
-            ),
+              FilledButton(
+                key: const Key('submit'),
+                onPressed: (_busy || !signedIn) ? null : _submit,
+                child: Text(_busy ? 'Creating…' : 'Create group'),
+              ),
+            ],
           ),
         ),
       ),

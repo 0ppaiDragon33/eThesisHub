@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/nomination.dart';
@@ -95,17 +96,38 @@ class ThesisStatusScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final thesisAsync = ref.watch(myThesisProvider);
 
-    return Scaffold(
+    // No Scaffold and no AppBar: the app shell owns both for every
+    // signed-in route now.
+    return KeyedSubtree(
       key: const Key('thesisStatusScreen'),
-      appBar: AppBar(title: const Text('My thesis')),
-      body: thesisAsync.when(
+      child: thesisAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) =>
             const Center(child: Text('Could not load your thesis.')),
         data: (thesis) {
           if (thesis == null) {
-            return const Center(
-                child: Text('You have not created a thesis group yet.'));
+            // The only in-app door to '/thesis/create' used to be a button
+            // on the student dashboard, which this milestone deletes. Left
+            // as the bare sentence it was, a leader with no group could
+            // reach the create screen only by typing its URL — the exact
+            // "the link exists nowhere but the route does" failure the
+            // router's own exemptions were written to close. So the door
+            // moves here, onto the destination that replaced that
+            // dashboard tab.
+            return PageShell(children: [
+              EmptyState(
+                icon: Icons.groups_outlined,
+                title: 'No thesis group yet',
+                message: 'Create your group to name your working title and '
+                    'list your members. You will nominate an adviser and '
+                    'panel next.',
+                action: FilledButton(
+                  key: const Key('goToCreateThesis'),
+                  onPressed: () => context.go('/thesis/create'),
+                  child: const Text('Create thesis group'),
+                ),
+              ),
+            ]);
           }
           return StreamBuilder<List<Nomination>>(
             stream: ref

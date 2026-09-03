@@ -2589,9 +2589,10 @@ test("M2: the leader, adviser, coordinator and dean read a chapter", async () =>
   }
 });
 
-test("M2: a panelist may NOT read a chapter, its versions or its feedback",
+test("M2: an outsider may NOT read a chapter, its versions or its feedback",
   async () => {
-    // The panel meets the document at the pre-oral defence, which is M3.
+    // Anyone not on the thesis (leader, adviser, coordinator, dean, or panel)
+    // is denied. The panel's access comes later in M3.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -2601,12 +2602,12 @@ test("M2: a panelist may NOT read a chapter, its versions or its feedback",
         createdAt: Timestamp.now(),
       });
     });
-    const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
-    await assertFails(getDoc(doc(pan, "theses/m2/documents/chapterI")));
+    const outsider = asDocUser("outsider-uid", "outsider@isufst.edu.ph");
+    await assertFails(getDoc(doc(outsider, "theses/m2/documents/chapterI")));
     await assertFails(
-      getDoc(doc(pan, "theses/m2/documents/chapterI/versions/1")));
+      getDoc(doc(outsider, "theses/m2/documents/chapterI/versions/1")));
     await assertFails(
-      getDoc(doc(pan, "theses/m2/documents/chapterI/feedback/f1")));
+      getDoc(doc(outsider, "theses/m2/documents/chapterI/feedback/f1")));
     // Control: the adviser, same paths.
     const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(adv, "theses/m2/documents/chapterI")));
@@ -2910,6 +2911,1327 @@ test("M2: an adviser lists the theses they advise, and only those",
       where("adviserUid", "==", "adviser-uid"))));
     // Control: the same adviser may NOT list the whole collection.
     await assertFails(getDocs(collection(adv, "theses")));
+  });
+
+test("M3: a panelist reads the chapters they are about to hear defended",
+  async () => {
+    // M2 deferred this deliberately. Widening is one arm; the dean's split
+    // -- status but not contents -- is unchanged.
+    await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
+    const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
+
+    await assertSucceeds(getDoc(doc(pan, "theses/m2/documents/chapterI")));
+    await assertSucceeds(
+      getDoc(doc(pan, "theses/m2/documents/chapterI/versions/1")));
+
+    // Reading is not writing: a panelist does not upload or mark a chapter.
+    await assertFails(updateDoc(doc(pan, "theses/m2/documents/chapterI"),
+      { status: "approved", updatedAt: serverTimestamp() }));
+    // Control: the adviser may.
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+    await assertSucceeds(updateDoc(doc(adv, "theses/m2/documents/chapterI"),
+      { status: "approved", updatedAt: serverTimestamp() }));
+  });
+
+test("M3: the dean still reads chapter STATUS but not its versions",
+  async () => {
+    // Widening for the panel must not widen for the dean -- M2-8.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedChapters(db);
+      await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    });
+    const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
+    await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
+    await assertFails(
+      getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+  });
+
+// ---------- M3: defence scheduling ----------
+
+function defThesis(extra = {}) {
+  return {
+    leaderUid: "leader-uid", adviserUid: "adviser-uid",
+    panelistUids: ["pan-uid", "pan2-uid"], memberNames: [],
+    workingTitle: "T", college: "CICT", program: "BSIT",
+    semester: "First", academicYear: "2026-2027",
+    status: "titleApproved", ...extra,
+  };
+}
+
+function defDoc(extra = {}) {
+  return {
+    thesisId: "dt1", type: "preOral", scheduledAt: Timestamp.now(),
+    venue: "CICT AVR", panelUids: ["pan-uid", "pan2-uid"],
+    adviserUid: "adviser-uid", leaderUid: "leader-uid", status: "scheduled",
+    createdBy: "coord-uid",
+    // `serverTimestamp()`, not `Timestamp.now()`: the `create` rule pins
+    // `createdAt == request.time`, and a client-clock `Timestamp.now()`
+    // is never exactly equal to the server's commit time -- the mismatch
+    // is usually too small to see, which is what makes it dangerous: it
+    // surfaces as an intermittent, load-dependent denial of the very
+    // control case a test relies on to prove the deny arms are denying
+    // for the right reason, not a coincidence.
+    createdAt: serverTimestamp(), ...extra,
+  };
+}
+
+// Memoised for the same reason `asDefenceUser` above is: re-deriving a
+// Firestore instance for a uid that already issued a request throws
+// "Firestore has already been started and its settings can no longer be
+// changed" -- a harness error, not a rules denial, that `assertFails` would
+// otherwise swallow as though it were one.
+const m3DefDbs = new Map();
+function asDefUser(uid, email) {
+  if (!m3DefDbs.has(uid)) {
+    m3DefDbs.set(
+      uid,
+      env.authenticatedContext(uid, { email, email_verified: true }).firestore()
+    );
+  }
+  return m3DefDbs.get(uid);
+}
+
+async function seedM3Defence(db, extra = {}) {
+  await setDoc(doc(db, "theses/dt1"), defThesis());
+  await setDoc(doc(db, "users/coord-uid"),
+    { role: "coordinator", active: true });
+  await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+  await setDoc(doc(db, "defenses/df1"), defDoc(extra));
+}
+
+test("M3: everyone on the thesis reads the defence", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  for (const uid of ["leader-uid", "adviser-uid", "pan-uid", "coord-uid",
+                     "dean-uid"]) {
+    await assertSucceeds(
+      getDoc(doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/df1")));
+  }
+});
+
+test("M3: an outsider may NOT read the defence", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  const outsider = asDefUser("outsider-uid", "out@isufst.edu.ph");
+  await assertFails(getDoc(doc(outsider, "defenses/df1")));
+  // Control: the adviser, same path.
+  await assertSucceeds(
+    getDoc(doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+      "defenses/df1")));
+});
+
+test("M3: only the coordinator schedules, and only as 'scheduled'",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    await assertFails(setDoc(doc(adv, "defenses/dfA"),
+      defDoc({ createdBy: "adviser-uid" })));
+    // Already open at creation would skip the lifecycle entirely.
+    await assertFails(setDoc(doc(coord, "defenses/dfB"),
+      defDoc({ status: "inProgress" })));
+    // Releasing at creation would open the log before anyone spoke.
+    await assertFails(setDoc(doc(coord, "defenses/dfC"),
+      defDoc({ consolidatedAt: Timestamp.now() })));
+    // Control.
+    await assertSucceeds(setDoc(doc(coord, "defenses/dfD"), defDoc()));
+  });
+
+test("M3: the panel snapshot must match the thesis at scheduling",
+  async () => {
+    // A forged snapshot would grant comment rights to someone the group
+    // never nominated, and the defence record is the historical evidence
+    // of who sat.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    await assertFails(setDoc(doc(coord, "defenses/dfE"),
+      defDoc({ panelUids: ["pan-uid", "smuggled-uid"] })));
+    await assertFails(setDoc(doc(coord, "defenses/dfF"),
+      defDoc({ adviserUid: "smuggled-uid" })));
+    await assertFails(setDoc(doc(coord, "defenses/dfH"),
+      defDoc({ leaderUid: "smuggled-uid" })));
+    // Control: the real panel and adviser.
+    await assertSucceeds(setDoc(doc(coord, "defenses/dfG"), defDoc()));
+  });
+
+test("M3: the lifecycle moves forward only, and only by the coordinator",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    // Nobody else drives it.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { status: "inProgress" }));
+    // No skipping.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    // Control: the legal step.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+    // And no going back.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { status: "scheduled" }));
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+  });
+
+test("M3: only the adviser releases, only once, only when completed",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    // Not while it is still running.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    // Not the coordinator -- §4d makes this the adviser's act.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    // Control.
+    await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    // Releasing twice would let a re-release hide comments the group read.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+  });
+
+test("M3: a defence may never be deleted", async () => {
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(deleteDoc(doc(coord, "defenses/df1")));
+});
+
+test("M3: each role lists only the defences they belong to", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedM3Defence(db);
+    await setDoc(doc(db, "theses/dt2"),
+      defThesis({ leaderUid: "other-leader", adviserUid: "other-adviser",
+                  panelistUids: ["other-pan"] }));
+    await setDoc(doc(db, "defenses/df2"),
+      defDoc({ thesisId: "dt2", adviserUid: "other-adviser",
+               leaderUid: "other-leader", panelUids: ["other-pan"] }));
+  });
+
+  const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(getDocs(query(collection(adv, "defenses"),
+    where("adviserUid", "==", "adviser-uid"))));
+  await assertFails(getDocs(collection(adv, "defenses")));
+
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(getDocs(query(collection(pan, "defenses"),
+    where("panelUids", "array-contains", "pan-uid"))));
+  await assertFails(getDocs(collection(pan, "defenses")));
+
+  const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+  // Filtered on `leaderUid`, the exact field the leader arm of `allow list`
+  // checks -- not on `thesisId`. Firestore can only serve a `list` request
+  // it can PROVE is safe from the query's own constraints; a filter on an
+  // unrelated field (even one that happens to correlate 1:1 with thesisId
+  // here) is not enough; probed against the emulator, where such a query
+  // is denied outright regardless of the documents' actual content.
+  await assertSucceeds(getDocs(query(collection(leader, "defenses"),
+    where("leaderUid", "==", "leader-uid"))));
+
+  // The coordinator and dean monitor college-wide, so an unfiltered list
+  // is theirs by design.
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(coord, "defenses")));
+});
+
+// ---------- M3: defence comments ----------
+
+test("M3: comments may be written ONLY while the defence is in progress",
+  async () => {
+    // This is what makes the log a record of the room rather than a
+    // document anyone can append to days later.
+    await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    const remark = {
+      authorUid: "pan-uid", authorName: "Dr. Panel",
+      authorPosition: "Panel Member", body: "Justify the respondents.",
+      createdAt: serverTimestamp(),
+    };
+
+    // scheduled -- not open yet.
+    await assertFails(
+      setDoc(doc(pan, "defenses/df1/comments/c1"), remark));
+
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+    // Control: the identical write, once open.
+    await assertSucceeds(
+      setDoc(doc(pan, "defenses/df1/comments/c1"), remark));
+
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    // completed -- the log is frozen.
+    await assertFails(
+      setDoc(doc(pan, "defenses/df1/comments/c2"), remark));
+  });
+
+test("M3: the group may NOT read comments until the adviser releases them",
+  async () => {
+    // Guidelines §4d: the adviser consolidates and furnishes the copy. A
+    // half-finished remark, or one the panel withdrew, is not the record.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedM3Defence(db, { status: "completed" });
+      await setDoc(doc(db, "defenses/df1/comments/c1"), {
+        authorUid: "pan-uid", authorName: "Dr. Panel",
+        authorPosition: "Panel Member", body: "Justify the respondents.",
+        createdAt: Timestamp.now(),
+      });
+    });
+    const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    await assertFails(getDoc(doc(leader, "defenses/df1/comments/c1")));
+    // Control: the adviser reads it throughout.
+    await assertSucceeds(getDoc(doc(adv, "defenses/df1/comments/c1")));
+
+    await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    // Released -- now the group reads it.
+    await assertSucceeds(getDoc(doc(leader, "defenses/df1/comments/c1")));
+  });
+
+test("M3: a comment is filed in its author's own name, and never edited",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+
+    // Not under someone else's uid.
+    await assertFails(setDoc(doc(pan, "defenses/df1/comments/x1"), {
+      authorUid: "adviser-uid", authorName: "Dr. Adviser",
+      authorPosition: "Adviser", body: "Not mine.",
+      createdAt: serverTimestamp(),
+    }));
+    // The group presents; it does not comment on its own defence.
+    await assertFails(setDoc(doc(leader, "defenses/df1/comments/x2"), {
+      authorUid: "leader-uid", authorName: "Student",
+      authorPosition: "Panel Member", body: "We agree.",
+      createdAt: serverTimestamp(),
+    }));
+    // An empty remark is not a remark.
+    await assertFails(setDoc(doc(pan, "defenses/df1/comments/x3"), {
+      authorUid: "pan-uid", authorName: "Dr. Panel",
+      authorPosition: "Panel Member", body: "",
+      createdAt: serverTimestamp(),
+    }));
+    // Control.
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/comments/x4"), {
+      authorUid: "pan-uid", authorName: "Dr. Panel",
+      authorPosition: "Panel Member", body: "A real remark.",
+      createdAt: serverTimestamp(),
+    }));
+    // Append-only: the record is evidence.
+    await assertFails(updateDoc(doc(pan, "defenses/df1/comments/x4"),
+      { body: "Actually, never mind." }));
+    await assertFails(deleteDoc(doc(pan, "defenses/df1/comments/x4")));
+  });
+
+
+// ---------- M3: the open window, cancel, and editing the schedule ----------
+
+/// Minutes from now, as a Firestore Timestamp.
+function inMinutes(m) {
+  return Timestamp.fromMillis(Date.now() + m * 60 * 1000);
+}
+
+test("M3: a defence may NOT be opened before its window", async () => {
+  // The accident this prevents: the lifecycle is forward-only and a defence
+  // has no delete, so opening one early and closing it freezes an empty log
+  // into the permanent record.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { scheduledAt: inMinutes(31) }));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "defenses/df1"),
+    { status: "inProgress" }));
+});
+
+test("M3: a defence opens inside the 30-minute grace window", async () => {
+  // The control for the test above, and the pin on the boundary: 31 minutes
+  // out is refused, 29 is allowed. The same 30 lives in defence.dart as
+  // `defenceOpenGrace`, which the rules cannot import -- if the two drift,
+  // one of these two tests fails.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { scheduledAt: inMinutes(29) }));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "inProgress" }));
+});
+
+test("M3: a scheduled defence may be cancelled, an open one may not",
+  async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore()));
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    // Not the adviser's call.
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { status: "cancelled" }));
+    // Control: the coordinator, same write.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "cancelled" }));
+    // Cancelled is terminal -- it cannot be walked back into the lifecycle.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+  });
+
+test("M3: a defence under way is closed, never cancelled", async () => {
+  // Cancelling is for mistakes. One that actually happened is closed, so its
+  // log stays a record of what was said in the room.
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "defenses/df1"),
+    { status: "cancelled" }));
+  // Control: the legal close.
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "completed" }));
+});
+
+test("M3: the schedule may be edited while scheduled, and never after",
+  async () => {
+    // Before this the date and venue were frozen at creation: a coordinator
+    // who picked the wrong day could neither fix it nor remove the defence.
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore()));
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    await assertFails(updateDoc(doc(adv, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "Board Room" }));
+    // An empty venue is not a venue.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "" }));
+    // An edit must never double as a transition.
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "Board Room",
+        status: "inProgress" }));
+    // Control.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(-5), venue: "Board Room" }));
+
+    // Once it starts, the schedule is history.
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "inProgress" }));
+    await assertFails(updateDoc(doc(coord, "defenses/df1"),
+      { scheduledAt: inMinutes(120), venue: "Somewhere else" }));
+  });
+
+// --- Dashboards: the coordinator and dean whole-college read ---
+//
+// The overview donut and the All-theses table both need an UNFILTERED list
+// of every thesis. The existing arm reads no field off `resource` for these
+// two roles, so unlike the M3 defence listing there is no filter the query
+// must carry. That is a claim about rules, and fake_cloud_firestore enforces
+// none, so it can only be proven here.
+
+async function seedRole(uid, role) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}`), {
+      fullName: "A Person", email: `${uid}@isufst.edu.ph`, role,
+      college: null, program: null, specialization: null,
+      active: true, createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+}
+
+test("a coordinator may list every thesis, unfiltered", async () => {
+  await seedRole("dash-coord-uid", "coordinator");
+  await seedThesis("t-dash-1", "someone-else", "draft");
+  await seedThesis("t-dash-2", "another-person", "titleApproved");
+
+  const coordinator = env
+    .authenticatedContext("dash-coord-uid", {
+      email: "dash-coord-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  const snap = await assertSucceeds(getDocs(collection(coordinator, "theses")));
+  assert.ok(snap.size >= 2, "the coordinator saw fewer theses than were seeded");
+});
+
+test("a dean may list every thesis, unfiltered", async () => {
+  await seedRole("dash-dean-uid", "dean");
+  await seedThesis("t-dash-3", "someone-else", "draft");
+
+  const dean = env
+    .authenticatedContext("dash-dean-uid", {
+      email: "dash-dean-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(getDocs(collection(dean, "theses")));
+});
+
+// The control. Without this the two tests above would pass for a rule that
+// admitted everyone, and the dashboards would leak every thesis in the
+// college to any signed-in student.
+test("a student may NOT list every thesis", async () => {
+  await seedRole("dash-student-uid", "student");
+  await seedThesis("t-dash-4", "someone-else", "draft");
+
+  const s = env
+    .authenticatedContext("dash-student-uid", {
+      email: "dash-student-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(getDocs(collection(s, "theses")));
+});
+
+// ...and the narrow query a student IS allowed, proving the denial above is
+// about the missing filter rather than about the student being blocked from
+// `theses` outright.
+test("a student may still list their own thesis", async () => {
+  await seedRole("dash-leader-uid", "student");
+  await seedThesis("t-dash-5", "dash-leader-uid", "draft");
+
+  const s = env
+    .authenticatedContext("dash-leader-uid", {
+      email: "dash-leader-uid@isufst.edu.ph",
+      email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(getDocs(query(
+    collection(s, "theses"),
+    where("leaderUid", "==", "dash-leader-uid"),
+  )));
+});
+
+// --- Coordinator admin: designation on users ---
+
+test("a coordinator may set nomination designation on another account", async () => {
+  await seedRole("desig-coord-uid", "coordinator");
+  await seedRole("desig-faculty-uid", "faculty");
+
+  const coordinator = env
+    .authenticatedContext("desig-coord-uid", {
+      email: "desig-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(doc(coordinator, "users/desig-faculty-uid"), {
+    nominableAsAdviser: true,
+    nominableAsPanelist: false,
+  }));
+});
+
+// The control. Without it the test above would pass for a rule that let
+// anyone write anything.
+test("a faculty member may NOT set their own designation", async () => {
+  await seedRole("self-desig-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("self-desig-uid", {
+      email: "self-desig-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(doc(self, "users/self-desig-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("a coordinator may NOT set designation on their OWN account", async () => {
+  // request.auth.uid != uid is already in the rule; this keeps it there.
+  await seedRole("selfcoord-uid", "coordinator");
+
+  const coordinator = env
+    .authenticatedContext("selfcoord-uid", {
+      email: "selfcoord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(doc(coordinator, "users/selfcoord-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("a coordinator may NOT smuggle a role change alongside designation",
+  async () => {
+    // onlyChanged() is a hasOnly over affected keys, so a write touching
+    // role as well must fail entirely. This is the test that proves
+    // widening the list did not widen it too far.
+    await seedRole("smuggle-coord-uid", "coordinator");
+    await seedRole("smuggle-target-uid", "faculty");
+
+    const coordinator = env
+      .authenticatedContext("smuggle-coord-uid", {
+        email: "smuggle-coord-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(updateDoc(doc(coordinator, "users/smuggle-target-uid"), {
+      nominableAsAdviser: false,
+      role: "dean",
+    }));
+  });
+
+test("a coordinator may still deactivate an account", async () => {
+  // The pre-existing capability this milestone finally surfaces in the UI.
+  await seedRole("deact-coord-uid", "coordinator");
+  await seedRole("deact-target-uid", "faculty");
+
+  const coordinator = env
+    .authenticatedContext("deact-coord-uid", {
+      email: "deact-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(doc(coordinator, "users/deact-target-uid"), {
+    active: false,
+  }));
+});
+
+// --- Coordinator admin: designation on the directory mirror ---
+
+async function seedDirectory(uid, extra = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `facultyDirectory/${uid}`), {
+      fullName: "Dr. X", role: "faculty", ...extra,
+    });
+  });
+}
+
+test("an ordinary sign-in upsert still succeeds on an entry that carries designation",
+  async () => {
+    // THE regression this task exists to avoid. Under merge:true the
+    // hasOnly pin applies to the merged RESULT, so without widening it,
+    // designating someone breaks their sign-in housekeeping.
+    await seedRole("dir-signin-uid", "faculty");
+    await seedDirectory("dir-signin-uid", { nominableAsPanelist: false });
+
+    const self = env
+      .authenticatedContext("dir-signin-uid", {
+        email: "dir-signin-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertSucceeds(setDoc(
+      doc(self, "facultyDirectory/dir-signin-uid"),
+      { fullName: "Dr. X", role: "faculty", college: "CICT" },
+      { merge: true },
+    ));
+  });
+
+test("a faculty member may NOT change their own designation in the directory",
+  async () => {
+    // Widening hasOnly is exactly what would open this. D27's whole point.
+    await seedRole("dir-self-uid", "faculty");
+    await seedDirectory("dir-self-uid", { nominableAsAdviser: false });
+
+    const self = env
+      .authenticatedContext("dir-self-uid", {
+        email: "dir-self-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(self, "facultyDirectory/dir-self-uid"),
+      { nominableAsAdviser: true },
+      { merge: true },
+    ));
+  });
+
+test("a faculty member may NOT introduce designation on create", async () => {
+  await seedRole("dir-create-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("dir-create-uid", {
+      email: "dir-create-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(self, "facultyDirectory/dir-create-uid"), {
+    fullName: "Dr. X", role: "faculty", nominableAsAdviser: true,
+  }));
+});
+
+test("a coordinator may change designation on an existing entry", async () => {
+  await seedRole("dir-coord-uid", "coordinator");
+  await seedRole("dir-target-uid", "faculty");
+  await seedDirectory("dir-target-uid");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord-uid", {
+      email: "dir-coord-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(updateDoc(
+    doc(coordinator, "facultyDirectory/dir-target-uid"),
+    { nominableAsPanelist: false },
+  ));
+});
+
+test("a coordinator may NOT change a name in the directory", async () => {
+  // The coordinator writes designation and nothing else; the subject
+  // owns their own name. Neither may write the other's fields.
+  await seedRole("dir-coord2-uid", "coordinator");
+  await seedDirectory("dir-target2-uid");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord2-uid", {
+      email: "dir-coord2-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(updateDoc(
+    doc(coordinator, "facultyDirectory/dir-target2-uid"),
+    { fullName: "Someone Else" },
+  ));
+});
+
+test("a coordinator may NOT create a directory entry", async () => {
+  // A coordinator-created entry would have no name and would appear as a
+  // blank row in the nomination picker.
+  await seedRole("dir-coord3-uid", "coordinator");
+
+  const coordinator = env
+    .authenticatedContext("dir-coord3-uid", {
+      email: "dir-coord3-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(coordinator, "facultyDirectory/nobody-uid"), {
+    nominableAsAdviser: false,
+  }));
+});
+
+test("PROBE: subject creates entry with explicit null designation", async () => {
+  // Round-1 fix: a sentinel-comparison pin (whatever the sentinel) collides
+  // with a subject who writes that exact sentinel value. `null` collides
+  // just as `true` did. The pin must be a presence check, not a value
+  // check, so this must fail regardless of what value accompanies the key.
+  await seedRole("dir-null-create-uid", "faculty");
+
+  const self = env
+    .authenticatedContext("dir-null-create-uid", {
+      email: "dir-null-create-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertFails(setDoc(doc(self, "facultyDirectory/dir-null-create-uid"), {
+    fullName: "Dr. X", role: "faculty", nominableAsAdviser: null,
+  }));
+});
+
+test("PROBE: subject update-injects explicit null designation onto an existing undesignated entry",
+  async () => {
+    await seedRole("dir-null-update-uid", "faculty");
+    await seedDirectory("dir-null-update-uid");
+
+    const self = env
+      .authenticatedContext("dir-null-update-uid", {
+        email: "dir-null-update-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(self, "facultyDirectory/dir-null-update-uid"),
+      { nominableAsAdviser: null },
+      { merge: true },
+    ));
+  });
+
+test("a nomination naming an adviser-only nominee as PANELIST is refused",
+  async () => {
+    await seedRole("nom-leader-uid", "student");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/nom-adviser-only-uid"), {
+        fullName: "Dr. A", email: "ao@isufst.edu.ph", role: "faculty",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+        nominableAsAdviser: true, nominableAsPanelist: false,
+      });
+    });
+    await seedThesis("t-nom-desig", "nom-leader-uid", "draft");
+
+    const leader = env
+      .authenticatedContext("nom-leader-uid", {
+        email: "nom-leader-uid@isufst.edu.ph", email_verified: true,
+      })
+      .firestore();
+
+    await assertFails(setDoc(
+      doc(leader, "theses/t-nom-desig/nominations/nom-adviser-only-uid"), {
+        nomineeUid: "nom-adviser-only-uid", nomineeName: "Dr. A",
+        position: "panelist", exOfficio: false,
+        conformeStatus: "pending", respondedAt: null, declineReason: null,
+      }));
+  });
+
+// The control: the same nominee, the position they ARE designated for.
+test("the same nominee succeeds as ADVISER", async () => {
+  await seedRole("nom-leader2-uid", "student");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/nom-adviser-only2-uid"), {
+      fullName: "Dr. A", email: "ao2@isufst.edu.ph", role: "faculty",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+      nominableAsAdviser: true, nominableAsPanelist: false,
+    });
+  });
+  await seedThesis("t-nom-desig2", "nom-leader2-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader2-uid", {
+      email: "nom-leader2-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-desig2/nominations/nom-adviser-only2-uid"), {
+      nomineeUid: "nom-adviser-only2-uid", nomineeName: "Dr. A",
+      position: "adviser", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+    }));
+});
+
+test("an account with NO designation fields is still nominable", async () => {
+  // Every account predates these fields. If this fails, deploying the
+  // milestone makes the entire existing faculty unpickable.
+  await seedRole("nom-leader3-uid", "student");
+  await seedRole("nom-legacy-uid", "faculty");   // no designation written
+  await seedThesis("t-nom-legacy", "nom-leader3-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader3-uid", {
+      email: "nom-leader3-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-legacy/nominations/nom-legacy-uid"), {
+      nomineeUid: "nom-legacy-uid", nomineeName: "Dr. L",
+      position: "panelist", exOfficio: false,
+      conformeStatus: "pending", respondedAt: null, declineReason: null,
+    }));
+});
+
+test("an EX-OFFICIO nomination ignores designation entirely", async () => {
+  // Spec D32: that seat comes from the office, not from a list.
+  await seedRole("nom-leader4-uid", "student");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/nom-dean-uid"), {
+      fullName: "Dean B", email: "dean-nom@isufst.edu.ph", role: "dean",
+      college: null, program: null, specialization: null, active: true,
+      createdAt: serverTimestamp(), createdBy: null,
+      nominableAsAdviser: false, nominableAsPanelist: false,
+    });
+  });
+  await seedThesis("t-nom-exof", "nom-leader4-uid", "draft");
+
+  const leader = env
+    .authenticatedContext("nom-leader4-uid", {
+      email: "nom-leader4-uid@isufst.edu.ph", email_verified: true,
+    })
+    .firestore();
+
+  await assertSucceeds(setDoc(
+    doc(leader, "theses/t-nom-exof/nominations/nom-dean-uid"), {
+      nomineeUid: "nom-dean-uid", nomineeName: "Dean B",
+      position: "panelist", exOfficio: true,
+      conformeStatus: "exOfficio", respondedAt: null, declineReason: null,
+    }));
+});
+
+// ---------- M4: evaluations ----------
+
+// The full eleven, all at their weight -- a perfect sheet totalling 100.
+function fullScores(extra = {}) {
+  return {
+    title: 5, introduction: 5, materialsAndMethods: 10, result: 10,
+    discussion: 10, conclusion: 5, recommendation: 2, references: 3,
+    preciseness: 15, alertness: 25, personality: 10, ...extra,
+  };
+}
+
+function evalDoc(extra = {}) {
+  const scores = extra.scores ?? fullScores();
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  return {
+    evaluatorName: "Dr. Panelist", scores,
+    comments: { title: "Narrow it." }, total,
+    rating: "pass",
+    // serverTimestamp(), not Timestamp.now(): the create rule pins both
+    // stamps to request.time, and a client clock is never exactly equal.
+    submittedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    ...extra,
+  };
+}
+
+// Each M4 test seeds through here, and each needs a truly fresh
+// evaluations subcollection: unlike M3's `defenses/df1`, which every test
+// resets by fully overwriting the parent doc, an evaluation is keyed by
+// evaluatorUid and reused as "pan-uid" across tests. Without a clean
+// slate, a doc a prior test created survives into the next test's
+// "create" attempt, which Firestore then evaluates as an "update" --
+// and the update rule correctly (if confusingly, for a test relying on a
+// fresh create) denies it, since evalDoc() regenerates submittedAt on
+// every call and the update arm pins it to the stored value.
+async function seedM4(extra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/dt1"), defThesis());
+    await setDoc(doc(db, "users/coord-uid"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-uid"), { role: "dean", active: true });
+    await setDoc(doc(db, "defenses/m4"),
+      defDoc({ status: "completed", ...extra }));
+  });
+}
+
+test("M4: a panelist writes their own evaluation", async () => {
+  await seedM4();
+  await assertSucceeds(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    evalDoc()));
+});
+
+// D37, and the whole reason it is a rule and not a hidden button: the
+// adviser has spent months on this thesis and cannot mark it at arm's
+// length. They are not in panelUids, so isPanelistHere() refuses them.
+test("M4 attack: the ADVISER may NOT write an evaluation", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+        "defenses/m4/evaluations/adviser-uid"),
+    evalDoc()));
+});
+
+test("M4 attack: a non-panelist may NOT write one", async () => {
+  await seedM4();
+  for (const uid of ["leader-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(setDoc(
+      doc(asDefUser(uid, `${uid}@isufst.edu.ph`),
+          `defenses/m4/evaluations/${uid}`),
+      evalDoc()));
+  }
+});
+
+test("M4 attack: a panelist may NOT score in a colleague's name",
+  async () => {
+    await seedM4();
+    await assertFails(setDoc(
+      doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+          "defenses/m4/evaluations/pan2-uid"),
+      evalDoc()));
+  });
+
+// THE DRIFT TEST. These eleven boundaries are the only thing tying
+// firestore.rules to lib/data/models/evaluation_criteria.dart, which it
+// cannot import. If someone changes a weight on one side only, the pair
+// at that criterion fails here.
+test("M4: each score is bounded by its own criterion's weight",
+  async () => {
+    await seedM4();
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const weights = {
+      title: 5, introduction: 5, materialsAndMethods: 10, result: 10,
+      discussion: 10, conclusion: 5, recommendation: 2, references: 3,
+      preciseness: 15, alertness: 25, personality: 10,
+    };
+    // EVERY case here must run as a CREATE -- the positive one and both
+    // negative ones alike. evalDoc() regenerates submittedAt via
+    // serverTimestamp() on every call, and the update arm pins
+    // submittedAt to its stored value, so a negative case left to run as
+    // an update against the document the positive case just wrote is
+    // denied by that (unrelated) submittedAt mismatch whatever the bound
+    // says. Written that way, this test passed with `title <= 50` --
+    // exactly the D35 mistake it exists to catch -- while proving
+    // nothing at all about the weights. Hence a fresh delete before each
+    // of the three assertions, not one per key.
+    const fresh = () => env.withSecurityRulesDisabled((ctx) => deleteDoc(
+      doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid")));
+    for (const [key, weight] of Object.entries(weights)) {
+      await fresh();
+      await assertSucceeds(setDoc(
+        doc(db, "defenses/m4/evaluations/pan-uid"),
+        evalDoc({ scores: fullScores({ [key]: weight }) })));
+      await fresh();
+      await assertFails(setDoc(
+        doc(db, "defenses/m4/evaluations/pan-uid"),
+        evalDoc({ scores: fullScores({ [key]: weight + 1 }) })));
+      await fresh();
+      await assertFails(setDoc(
+        doc(db, "defenses/m4/evaluations/pan-uid"),
+        evalDoc({ scores: fullScores({ [key]: -1 }) })));
+    }
+  });
+
+test("M4 attack: a total that does not equal the scores is denied",
+  async () => {
+    await seedM4();
+    await assertFails(setDoc(
+      doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+          "defenses/m4/evaluations/pan-uid"),
+      { ...evalDoc(), total: 100 - 1 }));
+  });
+
+// D45: a half-scored sheet counting toward the seal would be worse than
+// no sheet, so it is never written at all.
+test("M4 attack: a sheet missing a criterion is denied", async () => {
+  await seedM4();
+  const scores = fullScores();
+  delete scores.personality;
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { evaluatorName: "Dr. Panelist", scores, comments: {}, total: 90,
+      rating: "pass",
+      submittedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+});
+
+// The name is denormalized at the moment of the act, so it is required,
+// not optional: a sheet filed without one names nobody in a record that
+// outlives the account behind the uid.
+test("M4 attack: a sheet with no evaluator name is denied", async () => {
+  await seedM4();
+  const d = evalDoc();
+  delete d.evaluatorName;
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    d));
+});
+
+test("M4 attack: a non-string evaluator name is denied", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { ...evalDoc(), evaluatorName: 42 }));
+});
+
+test("M4 attack: a comment on a Section B criterion is denied", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { ...evalDoc(), comments: { alertness: "not a field on the form" } }));
+});
+
+test("M4 attack: a rating outside pass/fail is denied", async () => {
+  await seedM4();
+  await assertFails(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    { ...evalDoc(), rating: "conditional" }));
+});
+
+test("M4: nothing may be scored before the defence is under way",
+  async () => {
+    for (const status of ["scheduled", "cancelled"]) {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "defenses/m4"),
+          defDoc({ status }));
+      });
+      await assertFails(setDoc(
+        doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+            "defenses/m4/evaluations/pan-uid"),
+        evalDoc()));
+    }
+  });
+
+test("M4: a live defence may be scored", async () => {
+  await seedM4({ status: "inProgress" });
+  await assertSucceeds(setDoc(
+    doc(asDefUser("pan-uid", "pan@isufst.edu.ph"),
+        "defenses/m4/evaluations/pan-uid"),
+    evalDoc()));
+});
+
+// D39: a panelist who can see two colleagues at 78 and 81 before marking
+// is anchored, and §8b's deliberation is worth less if the numbers
+// converged before anyone spoke.
+test("M4: before release, a panelist reads their own and NOT a colleague's",
+  async () => {
+    await seedM4();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+      await setDoc(doc(db, "defenses/m4/evaluations/pan2-uid"), evalDoc());
+    });
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertSucceeds(
+      getDoc(doc(db, "defenses/m4/evaluations/pan-uid")));
+    await assertFails(
+      getDoc(doc(db, "defenses/m4/evaluations/pan2-uid")));
+    await assertFails(getDocs(collection(db, "defenses/m4/evaluations")));
+  });
+
+// Ruled during execution. The adviser needs the SUBMITTED COUNT before
+// release -- it is printed on the release button so releasing at 2 of 3
+// is a visible choice -- and a Firestore `list` returns documents, so
+// there is no query yielding "how many" without "what". The seal's real
+// purpose is anti-ANCHORING between panelists, and the adviser cannot
+// score at all, so their reading early anchors no score that exists.
+test("M4: the adviser MAY read evaluations before release",
+  async () => {
+    await seedM4();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid"),
+        evalDoc());
+    });
+    await assertSucceeds(getDoc(doc(
+      asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+      "defenses/m4/evaluations/pan-uid")));
+  });
+
+// The LIST, not the get, is what the release flow actually depends on:
+// defence_grades_screen.dart opens defenceEvaluationsProvider -- a
+// collection snapshots(), i.e. a list -- for the adviser BEFORE release,
+// to print the submitted count on the release button. If this were
+// denied the adviser would see an error where the count belongs and
+// could never reach the release control, breaking the chain at the one
+// step the pre-release read exists to enable. A single-document get
+// proving the same rule is not enough: the first arm authorises on the
+// {evaluatorUid} wildcard, which a list cannot bind.
+test("M4: the adviser MAY LIST evaluations before release", async () => {
+  await seedM4();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    // ONE ctx.firestore() for the whole callback: a second call after
+    // the first has issued a request throws "Firestore has already been
+    // started", a harness error assertSucceeds would report as though
+    // the rules had denied the read.
+    const db = ctx.firestore();
+    await setDoc(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+    await setDoc(doc(db, "defenses/m4/evaluations/pan2-uid"), evalDoc());
+  });
+  await assertSucceeds(getDocs(collection(
+    asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+    "defenses/m4/evaluations")));
+});
+
+test("M4: after release the panel, adviser, coordinator and dean read all",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan2-uid"),
+        evalDoc());
+    });
+    for (const uid of ["pan-uid", "pan2-uid", "adviser-uid", "coord-uid",
+                       "dean-uid"]) {
+      await assertSucceeds(getDocs(collection(
+        asDefUser(uid, `${uid}@isufst.edu.ph`),
+        "defenses/m4/evaluations")));
+    }
+  });
+
+// D47: the numbers are unreachable for the group, not merely unrendered.
+// §11b routes the grading sheet to the subject professor on paper.
+test("M4 attack: the LEADER may not read evaluations, even after release",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid"),
+        evalDoc());
+    });
+    const db = asDefUser("leader-uid", "leader@isufst.edu.ph");
+    await assertFails(getDoc(doc(db, "defenses/m4/evaluations/pan-uid")));
+    await assertFails(getDocs(collection(db, "defenses/m4/evaluations")));
+  });
+
+// D44: before the seal it is a draft, after it it is the record.
+test("M4: a panelist edits their sheet until release, then cannot",
+  async () => {
+    await seedM4();
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertSucceeds(setDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc()));
+    await assertSucceeds(updateDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"),
+      { scores: fullScores({ title: 3 }), total: 98,
+        updatedAt: serverTimestamp() }));
+
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "defenses/m4"),
+        { evaluationsReleasedAt: Timestamp.now() });
+    });
+    await assertFails(updateDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"),
+      { scores: fullScores({ title: 1 }), total: 96,
+        updatedAt: serverTimestamp() }));
+  });
+
+test("M4 attack: an edit may not rewrite when it was first submitted",
+  async () => {
+    await seedM4();
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertSucceeds(setDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc()));
+    await assertFails(updateDoc(
+      doc(db, "defenses/m4/evaluations/pan-uid"),
+      { submittedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+  });
+
+// The record is evidence. Same reasoning as the defence itself, and as
+// M3's append-only comments.
+test("M4 attack: nobody may delete an evaluation", async () => {
+  await seedM4();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "defenses/m4/evaluations/pan-uid"),
+      evalDoc());
+  });
+  for (const uid of ["pan-uid", "adviser-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(deleteDoc(doc(
+      asDefUser(uid, `${uid}@isufst.edu.ph`),
+      "defenses/m4/evaluations/pan-uid")));
+  }
+});
+
+// ---------- M4: release and verdict ----------
+
+test("M4: the adviser releases the evaluations, once", async () => {
+  await seedM4();
+  const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db, "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp() }));
+});
+
+test("M4 attack: nobody but the adviser releases", async () => {
+  await seedM4();
+  for (const uid of ["pan-uid", "coord-uid", "dean-uid", "leader-uid"]) {
+    await assertFails(updateDoc(
+      doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/m4"),
+      { evaluationsReleasedAt: serverTimestamp() }));
+  }
+});
+
+test("M4: a defence still running may not have its grades released",
+  async () => {
+    await seedM4({ status: "inProgress" });
+    await assertFails(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+          "defenses/m4"),
+      { evaluationsReleasedAt: serverTimestamp() }));
+  });
+
+// The affectedKeys guard is what stops either new arm doubling as a
+// status transition -- the same discipline the four coordinator arms use.
+test("M4 attack: a release may not smuggle a status change", async () => {
+  await seedM4();
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp(), status: "cancelled" }));
+});
+
+// D43. §8b has the panel deliberate OVER the final grades, so they must
+// be able to see them first: release precedes the verdict, always.
+test("M4: no verdict may be recorded before release", async () => {
+  await seedM4();
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { panelVerdict: "pass", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+});
+
+test("M4: after release the adviser records the verdict, once", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { panelVerdict: "pass", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db, "defenses/m4"),
+    { panelVerdict: "fail", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+});
+
+test("M4 attack: a panelist may not record the verdict", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  for (const uid of ["pan-uid", "coord-uid", "dean-uid"]) {
+    await assertFails(updateDoc(
+      doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/m4"),
+      { panelVerdict: "pass", verdictRecordedBy: uid,
+        verdictRecordedAt: serverTimestamp() }));
+  }
+});
+
+// The scribe must be named truthfully, or the field records nothing.
+test("M4 attack: the adviser may not record it under another name",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await assertFails(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
+          "defenses/m4"),
+      { panelVerdict: "pass", verdictRecordedBy: "pan-uid",
+        verdictRecordedAt: serverTimestamp() }));
+  });
+
+test("M4 attack: a verdict outside pass/fail is denied", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { panelVerdict: "redefend", verdictRecordedBy: "adviser-uid",
+      verdictRecordedAt: serverTimestamp() }));
+});
+
+test("M4 attack: a partial verdict write is denied", async () => {
+  await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+  await assertFails(updateDoc(
+    doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+    { panelVerdict: "pass" }));
+});
+
+// Consolidation and release are separate gates on separate things.
+test("M4: releasing the grades does not release the comments", async () => {
+  await seedM4();
+  const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { evaluationsReleasedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
+    { consolidatedAt: serverTimestamp() }));
+});
+
+// A defence created today must still refuse fields that belong to acts
+// happening after it closes.
+test("M4 attack: a create may not pre-set the seal or the verdict",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    await assertFails(setDoc(
+      doc(asDefUser("coord-uid", "coord@isufst.edu.ph"), "defenses/m4b"),
+      defDoc({ evaluationsReleasedAt: serverTimestamp() })));
+    await assertFails(setDoc(
+      doc(asDefUser("coord-uid", "coord@isufst.edu.ph"), "defenses/m4c"),
+      defDoc({ panelVerdict: "pass" })));
   });
 
 test.after(async () => {

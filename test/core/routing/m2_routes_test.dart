@@ -104,14 +104,40 @@ void main() {
 
   testWidgets('a missing id query parameter is refused, with a way back',
       (tester) async {
-    final c = await setUpApprovedThesis(tester);
+    // Signed in as the ADVISER, not the leader. A bare '/thesis/chapters'
+    // from a STUDENT now falls back to their own thesis, because the
+    // sidebar's Chapters destination is exactly that bare path and cannot
+    // carry a query parameter (see bareVisitFallbackPaths in
+    // app_router.dart). An adviser has no such fallback -- 'the leader's
+    // own thesis' means nothing for them -- so they are the reader who can
+    // still land here, and the refusal must still be somewhere they can
+    // leave from.
+    final c = await setUpApprovedThesis(tester, role: 'faculty', uid: 'a1');
 
     c.read(goRouterProvider).go('/thesis/chapters');
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chaptersScreen')), findsNothing);
+    // Exactly one app bar -- the shell's, which also carries the sidebar
+    // and so the way out.
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.text('No thesis given'), findsOneWidget);
+  });
+
+  testWidgets('the sidebar Chapters destination resolves to the leader\'s '
+      'own thesis', (tester) async {
+    // The destination is a bare '/thesis/chapters': a sidebar entry is one
+    // fixed route and cannot carry the thesis id only the signed-in leader
+    // supplies. Without the fallback, tapping Chapters would land every
+    // student on "No thesis given" -- a control that does nothing, which
+    // is precisely what the destination list is curated to avoid.
+    final c = await setUpApprovedThesis(tester);
+
+    c.read(goRouterProvider).go('/thesis/chapters');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
+    expect(find.text('No thesis given'), findsNothing);
   });
 
   // The scenario the studentOnly-guard exemption in app_router.dart's

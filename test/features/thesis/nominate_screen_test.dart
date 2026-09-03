@@ -7,8 +7,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
+
+/// Rejects every submission with `permission-denied`, as the real security
+/// rules would when a nominee's `users/{uid}` designation disagrees with
+/// the (client-written, self-maintained) `facultyDirectory` mirror the
+/// picker actually reads — the sync window spec §4.2.1 describes.
+class PermissionDeniedThesisRepository extends ThesisRepository {
+  PermissionDeniedThesisRepository(super.db);
+
+  @override
+  Future<void> submitNominations({
+    required String thesisId,
+    required FacultyDirectoryEntry adviser,
+    required List<FacultyDirectoryEntry> panelists,
+    required List<FacultyDirectoryEntry> exOfficio,
+  }) {
+    throw FirebaseException(
+      plugin: 'cloud_firestore',
+      code: 'permission-denied',
+      message: 'Missing or insufficient permissions.',
+    );
+  }
+}
 
 Future<void> seedFaculty(FakeFirebaseFirestore db, List<String> names) async {
   for (final f in names) {
@@ -67,7 +92,9 @@ Widget wrap(FakeFirebaseFirestore db,
           routes: [
             GoRoute(
               path: '/thesis/nominate',
-              builder: (_, _) => const NominateScreen(thesisId: 't1'),
+              // the app shell supplies the Scaffold in the real app.
+              builder: (_, _) =>
+                  const Scaffold(body: NominateScreen(thesisId: 't1')),
             ),
             GoRoute(
               path: '/thesis',
@@ -486,5 +513,253 @@ void main() {
     final panel = noms.docs.where((d) =>
         d.data()['position'] == 'panelist' && d.data()['exOfficio'] == false);
     expect(panel, hasLength(3));
+  });
+
+  testWidgets(
+      'an adviser-only entry appears in the adviser picker and not the '
+      'panel picker', (tester) async {
+    useTallSurface(tester);
+    final db = await seeded();
+    // Designated for adviser only — a coordinator ticked one box and left
+    // the other unticked on the Users screen.
+    await db.collection('facultyDirectory').doc('Armada').update({
+      'nominableAsAdviser': true,
+      'nominableAsPanelist': false,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, contains('Armada'));
+
+    final panel = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel, isNot(contains('Armada')),
+        reason: 'not designated as a panelist, so the panel picker must '
+            'not offer them');
+  });
+
+  testWidgets(
+      'a panelist-only entry appears in the panel picker and not the '
+      'adviser picker', (tester) async {
+    useTallSurface(tester);
+    final db = await seeded();
+    // Designated for panel only — the reverse of the case above.
+    await db.collection('facultyDirectory').doc('Armada').update({
+      'nominableAsAdviser': false,
+      'nominableAsPanelist': true,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, isNot(contains('Armada')),
+        reason: 'not designated as an adviser, so the adviser picker must '
+            'not offer them');
+
+    final panel = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel, contains('Armada'));
+  });
+
+  testWidgets(
+      'an entry with no designation fields at all is offered for both '
+      'positions', (tester) async {
+    // Every account predates these two fields, and the sync window in spec
+    // §4.2.1 produces the same shape for a brand-new one: absence must
+    // default to nominable, or the deploy would empty the picker of the
+    // entire existing faculty. `seedFaculty` never sets either field, so
+    // this is the ordinary case, asserted explicitly.
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpAndSettle();
+
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, contains('Armada'));
+
+    final panel = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel, contains('Armada'));
+  });
+
+  testWidgets(
+      'an office holder narrowed out of adviser is absent from the adviser '
+      'picker, and their panel-seat exemption is untouched', (tester) async {
+    // D32 exempts the ex-officio SEAT, not the adviser slot. An office
+    // holder chosen as ADVISER is written `exOfficio: false,
+    // position: 'adviser'`, so `mayCreateNomination` checks their
+    // `nominableAsAdviser` like anyone else's — offering them here would
+    // hand the student a name the rules then refuse, which is D29's
+    // "cannot disagree forwards" broken. D31's own motivating case: a
+    // college coordinator who holds no advisees, narrowed by unticking
+    // Adviser.
+    useTallSurface(tester);
+    final db = await seeded();
+    await db.collection('facultyDirectory').doc('coord').update({
+      'nominableAsAdviser': false,
+      'nominableAsPanelist': false,
+    });
+    await db.collection('facultyDirectory').doc('dean').update({
+      'nominableAsAdviser': false,
+      'nominableAsPanelist': false,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, isNot(contains('coord')),
+        reason: 'the adviser slot is not the ex-officio seat, so the '
+            'nomination rule checks nominableAsAdviser and refuses');
+    expect(adviser, isNot(contains('dean')));
+
+    // Absent from the panel slot too, same as always — but that exclusion
+    // is the pre-existing ex-officio-seat rule, not the designation
+    // filter, which the next test proves by leaving designation alone.
+    final panel = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel, isNot(contains('coord')));
+    expect(panel, isNot(contains('dean')));
+  });
+
+  testWidgets(
+      'an office holder still designated as an adviser is offered on the '
+      'adviser slot', (tester) async {
+    // The control for the test above: office holders are not excluded from
+    // the adviser slot as a class — a Research Coordinator or Dean who
+    // genuinely advises still appears. Without this, hiding every office
+    // holder from the adviser picker would pass the test above too.
+    useTallSurface(tester);
+    final db = await seeded();
+    await db.collection('facultyDirectory').doc('coord').update({
+      'nominableAsAdviser': true,
+      'nominableAsPanelist': false,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = await openDropdownValues(tester, const Key('adviser'));
+    expect(adviser, contains('coord'));
+
+    // And the panel slot still excludes them by office, regardless of the
+    // panelist designation just written — D32's seat exemption intact.
+    final panel = await openDropdownValues(tester, const Key('panel0'));
+    expect(panel, isNot(contains('coord')));
+  });
+
+  testWidgets(
+      'the refusal message names an office holder picked as adviser',
+      (tester) async {
+    // The other half of the same defect: when an office holder IS the
+    // cause of the refusal, excluding them from the candidate list named
+    // the three innocent panelists and told the student to replace the
+    // wrong people. The adviser is always a candidate.
+    useTallSurface(tester);
+    final db = await seeded();
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      thesisRepositoryProvider
+          .overrideWithValue(PermissionDeniedThesisRepository(db)),
+    ]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Bito-onon — coordinator · CICT').last);
+    await tester.pumpAndSettle();
+
+    for (final pick in [
+      ('panel0', 'Dr. Diamante — CICT'),
+      ('panel1', 'Dr. Padojinog — CICT'),
+      ('panel2', 'Dr. Braganza — CICT'),
+    ]) {
+      await tester.tap(find.byKey(Key(pick.$1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(pick.$2).last);
+      await tester.pumpAndSettle();
+    }
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('submitNomination')));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+
+    final error = tester.widget<Text>(find.byKey(const Key('error')));
+    expect(error.data, contains('Dr. Bito-onon'),
+        reason: 'the office holder in the adviser slot is exactly the '
+            'nominee the rules check, so they must be named');
+    expect(error.data, contains('adviser'));
+  });
+
+  testWidgets(
+      'a permission-denied on submit names the person and the position, '
+      'not a bare Firestore code', (tester) async {
+    // Reproduces spec §4.2.1's sync window: the picker offers a nominee
+    // because their directory entry carries no designation key (absence
+    // reads as nominable), but `users/{uid}` — which the student cannot
+    // read — says otherwise, and `firestore.rules` refuses the write. A
+    // student who picked a name off a list this screen showed them must
+    // not be handed a bare permission code and left to guess.
+    useTallSurface(tester);
+    final db = await seeded();
+
+    await tester.pumpWidget(wrap(db, extraOverrides: [
+      thesisRepositoryProvider
+          .overrideWithValue(PermissionDeniedThesisRepository(db)),
+    ]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Armada — CICT').last);
+    await tester.pumpAndSettle();
+
+    for (final pick in [
+      ('panel0', 'Dr. Diamante — CICT'),
+      ('panel1', 'Dr. Padojinog — CICT'),
+      ('panel2', 'Dr. Braganza — CICT'),
+    ]) {
+      await tester.tap(find.byKey(Key(pick.$1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(pick.$2).last);
+      await tester.pumpAndSettle();
+    }
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('submitNomination')));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+
+    // The point of this test: assert on the actual sentence, not merely
+    // that some error appeared. A batched write does not report which
+    // document a security rule refused, and a full submission always
+    // carries an adviser plus at least three real panelists (the panel
+    // picker never offers an ex-officio office holder in the first
+    // place), so every one of those four is a named candidate here —
+    // naming all of them, in plain language, is what the screen can
+    // honestly say without guessing at a single culprit it cannot know.
+    expect(find.byKey(const Key('error')), findsOneWidget);
+    final error = tester.widget<Text>(find.byKey(const Key('error')));
+    expect(error.data, isNot(contains('permission-denied')),
+        reason: 'the raw Firestore code must not leak into the sentence '
+            'meant for a student');
+    for (final name in ['Dr. Armada', 'Dr. Diamante', 'Dr. Padojinog',
+        'Dr. Braganza']) {
+      expect(error.data, contains(name));
+    }
+    expect(error.data, contains('adviser'));
+    expect(error.data, contains('panelist'));
+    expect(error.data, contains('this semester'));
+
+    // And the Firestore code must still be visible underneath — it helps
+    // whoever debugs this next, same as `ErrorState`.
+    expect(find.byKey(const Key('errorCode')), findsOneWidget);
+    final code = tester.widget<Text>(find.byKey(const Key('errorCode')));
+    expect(code.data, '[permission-denied]');
+
+    // And the submission must not have gone through.
+    final noms = await db.collection('theses/t1/nominations').get();
+    expect(noms.docs, isEmpty);
   });
 }

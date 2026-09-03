@@ -12,6 +12,11 @@ import 'package:flutter/material.dart';
 /// on. Approval and refusal get their own colours because they are the two
 /// outcomes the whole system exists to record, and they must be legible at a
 /// glance in a list of thirty theses.
+///
+/// A second, separate palette — `accents` — exists for tile badges and
+/// chart series. Those identify rather than judge, so they carry no
+/// meaning and must never be derived from a status. See the note above
+/// the declarations.
 class AppTokens {
   const AppTokens._();
 
@@ -50,6 +55,56 @@ class AppTokens {
   static const endorsedDark = Color(0xFF6FCFA0);
   static const returnedDark = Color(0xFFE89078);
   static const awaitingDark = Color(0xFFD8C48A);
+
+  // --- Accents -----------------------------------------------------------
+  // A second palette, for the one job the meaning colours above cannot do:
+  // telling one thing from another without saying anything about it. A tile
+  // badge and a chart segment identify; they do not judge.
+  //
+  // Three of these share a hue with a meaning colour on purpose — inventing
+  // five unrelated hues would make the app look like a different product.
+  // What keeps that safe is not separation on screen (a pine badge and an
+  // `endorsed` chip do appear together) but separation by component: accents
+  // live only in tile badges and chart segments, meaning colours only in
+  // chips, buttons and text, and a badge's colour is fixed by its position
+  // rather than derived from any status. Badges also carry an icon and chips
+  // carry a word, so colour is never read alone.
+  static const accentPlum = Color(0xFF5B4C8A);
+  static const accentSeal = seal;
+  static const accentPine = Color(0xFF1F6B4A);
+  static const accentOchre = Color(0xFFB8722E);
+  static const accentBrick = Color(0xFFB4472F);
+
+  static const accentPlumDark = Color(0xFFA99AD4);
+  static const accentSealDark = sealDark;
+  static const accentPineDark = Color(0xFF6FCFA0);
+  static const accentOchreDark = Color(0xFFDFA867);
+  static const accentBrickDark = Color(0xFFE89078);
+
+  /// Ordered, so a chart with n series indexes in rather than hard-coding.
+  static const List<Color> accents = [
+    accentPlum,
+    accentSeal,
+    accentPine,
+    accentOchre,
+    accentBrick,
+  ];
+
+  static const List<Color> accentsDark = [
+    accentPlumDark,
+    accentSealDark,
+    accentPineDark,
+    accentOchreDark,
+    accentBrickDark,
+  ];
+
+  /// The accent for position [i] in the current brightness, wrapping if a
+  /// caller asks for more series than there are accents.
+  static Color accentFor(int i, Brightness brightness) {
+    final list = brightness == Brightness.dark ? accentsDark : accents;
+    return list[i % list.length];
+  }
+
   static const paperDark = Color(0xFF161A20);
   static const surfaceDark = Color(0xFF1D222A);
   static const ruleDark = Color(0xFF2E3540);
@@ -67,6 +122,10 @@ class AppTokens {
   /// Forms and documents read badly at full width. Everything sits in one
   /// measure so a screen does not change shape as you move through the flow.
   static const double measure = 620;
+
+  /// Dashboards need more room than forms. Four tiles at the form measure
+  /// would be 150px each, which is the compact step on a desktop.
+  static const double measureWide = 1440;
 
   static const double radius = 10;
   static const double radiusSm = 6;

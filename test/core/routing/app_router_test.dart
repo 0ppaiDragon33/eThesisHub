@@ -82,7 +82,12 @@ Future<ProviderContainer> containerForSignedOut() async {
 }
 
 void main() {
-  testWidgets('student lands on the student dashboard', (tester) async {
+  // Every role lands on '/overview' now rather than on a dashboard of its
+  // own. What each test below asserts is unchanged -- that the signed-in
+  // account is shown ITS role's overview and no other's -- but the
+  // per-role dashboards that used to answer that are gone, so the
+  // assertion is on the overview body's own key.
+  testWidgets('student lands on their own overview', (tester) async {
     final container = await containerFor(UserRole.student, uid: 'u1');
     addTearDown(container.dispose);
 
@@ -93,10 +98,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    expect(find.byKey(const Key('studentOverview')), findsOneWidget);
   });
 
-  testWidgets('faculty lands on the faculty dashboard', (tester) async {
+  testWidgets('faculty lands on their own overview', (tester) async {
     final container = await containerFor(UserRole.faculty, uid: 'u2');
     addTearDown(container.dispose);
 
@@ -107,10 +113,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
   });
 
-  testWidgets('coordinator lands on the coordinator dashboard',
+  testWidgets('coordinator lands on their own overview',
       (tester) async {
     final container = await containerFor(UserRole.coordinator, uid: 'u3');
     addTearDown(container.dispose);
@@ -122,10 +129,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('coordinatorDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorOverview')), findsOneWidget);
   });
 
-  testWidgets('dean lands on the dean dashboard', (tester) async {
+  testWidgets('dean lands on their own overview', (tester) async {
     final container = await containerFor(UserRole.dean, uid: 'u4');
     addTearDown(container.dispose);
 
@@ -136,10 +144,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('deanDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    expect(find.byKey(const Key('deanOverview')), findsOneWidget);
   });
 
-  testWidgets('student cannot reach the dean dashboard', (tester) async {
+  testWidgets('a student typing the old /dean path never sees a dean view',
+      (tester) async {
     final container = await containerFor(UserRole.student, uid: 'u1');
     addTearDown(container.dispose);
 
@@ -150,18 +160,23 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('studentOverview')), findsOneWidget);
 
-    // Attempt to reach another role's dashboard by route.
+    // '/dean' is a bookmarkable URL that used to be the dean's dashboard.
+    // It redirects to '/overview' now, which is itself role-scoped: the
+    // guard is no longer "refuse the path" but "the one overview only ever
+    // renders the signed-in account's own role" -- which is the property
+    // that actually mattered.
     container.read(goRouterProvider).go('/dean');
     await tester.pumpAndSettle();
 
-    // Should be redirected back to student dashboard
-    expect(find.byKey(const Key('deanDashboard')), findsNothing);
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('deanOverview')), findsNothing);
+    expect(find.byKey(const Key('studentOverview')), findsOneWidget);
   });
 
-  testWidgets('faculty cannot reach the coordinator dashboard', (tester) async {
+  testWidgets(
+      'a faculty member typing the old /coordinator path never sees a '
+      'coordinator view', (tester) async {
     final container = await containerFor(UserRole.faculty, uid: 'u2');
     addTearDown(container.dispose);
 
@@ -172,15 +187,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
 
-    // Attempt to reach another role's dashboard by route.
     container.read(goRouterProvider).go('/coordinator');
     await tester.pumpAndSettle();
 
-    // Should be redirected back to faculty dashboard
-    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
-    expect(find.byKey(const Key('facultyDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
+    expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
   });
 
   testWidgets('signed-out user can reach registration from sign-in',
@@ -240,8 +253,15 @@ void main() {
     expect(find.text('Sign in'), findsWidgets);
   });
 
-  testWidgets('signing out from a dashboard returns to the login screen',
+  testWidgets('signing out from a signed-in screen returns to the login screen',
       (tester) async {
+    // Sign-out used to be repeated in four dashboards' app bars; it is one
+    // control in the shell's account footer now. Wide, because on the
+    // narrow layout that footer sits inside the drawer.
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final container = await containerFor(UserRole.student, uid: 'u1');
     addTearDown(container.dispose);
 
@@ -252,13 +272,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('studentDashboard')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
 
+    expect(find.byKey(const Key('signOut')), findsOneWidget,
+        reason: 'exactly one sign-out, in the shell, not one per screen');
     await tester.tap(find.byKey(const Key('signOut')));
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in'), findsWidgets);
-    expect(find.byKey(const Key('studentDashboard')), findsNothing);
+    expect(find.byKey(const Key('overviewScreen')), findsNothing);
   });
 
   // --- BLOCKING 4: guard coverage for the two primary auth redirects ---
@@ -280,7 +302,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in'), findsWidgets);
-    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
+    expect(find.byKey(const Key('overviewScreen')), findsNothing);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
   });
 
   testWidgets(
@@ -302,6 +325,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Verify your email'), findsOneWidget);
-    expect(find.byKey(const Key('coordinatorDashboard')), findsNothing);
+    expect(find.byKey(const Key('overviewScreen')), findsNothing);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
   });
 }
