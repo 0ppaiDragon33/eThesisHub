@@ -233,4 +233,69 @@ void main() {
       expect(items.any((i) => i.type.name == 'defenceScheduled'), isTrue);
     });
   });
+
+  group('evaluationAwaitsDetectorProvider', () {
+    test('a completed defence with no evaluation on file from this panelist writes one', () async {
+      final container = await containerFor('faculty1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 1',
+        'panelUids': ['faculty1'],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'completed',
+        'createdBy': 'coord1',
+      });
+
+      container.read(evaluationAwaitsDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('faculty1').first;
+      expect(items.any((i) => i.type.name == 'evaluationAwaits'), isTrue);
+    });
+
+    test('a completed defence this panelist already scored writes nothing', () async {
+      final container = await containerFor('faculty1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 1',
+        'panelUids': ['faculty1'],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'completed',
+        'createdBy': 'coord1',
+      });
+      await firestore
+          .collection('defenses')
+          .doc('d1')
+          .collection('evaluations')
+          .doc('faculty1')
+          .set({
+        'evaluatorName': 'Dr. Reyes',
+        'scores': <String, int>{},
+        'comments': <String, String>{},
+        'total': 90,
+        'rating': 'pass',
+        'submittedAt': Timestamp.fromDate(DateTime(2026, 5, 2)),
+      });
+
+      container.read(evaluationAwaitsDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('faculty1').first;
+      expect(items.where((i) => i.type.name == 'evaluationAwaits'), isEmpty);
+    });
+  });
 }

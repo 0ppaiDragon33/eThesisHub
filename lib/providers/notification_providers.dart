@@ -256,3 +256,42 @@ final defenceDetectorProvider = Provider<void>((ref) {
     }
   });
 });
+
+/// A completed defence where the reader sits on the panel but has not yet
+/// filed their Form 5c. Only "awaits" is covered (not "submitted") --
+/// brainstorming found no concrete recipient for a submission event that
+/// is not already covered by one of the other four categories, and adding
+/// one with no real use case would be exactly the kind of speculative
+/// scope the spec's Out of Scope section already rules out.
+///
+/// The role check is read fresh with `ref.read` INSIDE the `_detect`
+/// callback -- see [defenceDetectorProvider]'s doc comment for why a
+/// `ref.watch` at the top of the provider body would never actually run
+/// this detector, and why reading it here (after `myDefencesProvider` has
+/// already awaited `currentUserProvider.future` internally) is safe.
+final evaluationAwaitsDetectorProvider = Provider<void>((ref) {
+  _detect<List<Defence>>(ref, myDefencesProvider, (defences, repo, uid) async {
+    final role = ref.read(currentUserProvider).valueOrNull?.role;
+    if (role != UserRole.faculty) return;
+
+    for (final defence in defences) {
+      if (defence.status != DefenceStatus.completed) continue;
+      if (!defence.panelUids.contains(uid)) continue;
+
+      final mine = await ref.read(myEvaluationProvider(defence.id).future);
+      if (mine != null) continue;
+
+      await repo.upsertIfAbsent(
+        uid,
+        AppNotification(
+          id: notificationId(NotificationType.evaluationAwaits, defence.id),
+          type: NotificationType.evaluationAwaits,
+          thesisId: defence.thesisId,
+          message: 'A defence has completed and is waiting on your Form 5c.',
+          read: false,
+          createdAt: defence.createdAt ?? DateTime.now(),
+        ),
+      );
+    }
+  });
+});
