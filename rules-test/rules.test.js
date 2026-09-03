@@ -4614,6 +4614,57 @@ test("M5a: the coordinator retracts, and nobody else does", async () => {
     doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1")));
 });
 
+// --- Task 3: notifications -- owner-only ---
+
+function notifDoc(overrides = {}) {
+  return {
+    type: "archivePublished",
+    thesisId: "t1",
+    message: "Your thesis was published to the archive.",
+    read: false,
+    createdAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+test("notifications: the owner can read their own items", async () => {
+  const owner = asUser("student1", "student1@isufst.edu.ph");
+  await assertSucceeds(
+    setDoc(doc(owner, "notifications/student1/items/a"), notifDoc())
+  );
+  await assertSucceeds(getDoc(doc(owner, "notifications/student1/items/a")));
+});
+
+test("notifications: the owner can mark their own item read", async () => {
+  const owner = asUser("student1b", "student1b@isufst.edu.ph");
+  await setDoc(doc(owner, "notifications/student1b/items/a"), notifDoc());
+  await assertSucceeds(
+    updateDoc(doc(owner, "notifications/student1b/items/a"), { read: true })
+  );
+});
+
+test("notifications: another signed-in user cannot read or write into someone else's feed", async () => {
+  const owner = asUser("student2", "student2@isufst.edu.ph");
+  await setDoc(doc(owner, "notifications/student2/items/a"), notifDoc());
+
+  const intruder = asUser("student3", "student3@isufst.edu.ph");
+  await assertFails(getDoc(doc(intruder, "notifications/student2/items/a")));
+  await assertFails(
+    setDoc(doc(intruder, "notifications/student2/items/b"), notifDoc({ message: "planted" }))
+  );
+  await assertFails(
+    updateDoc(doc(intruder, "notifications/student2/items/a"), { read: true })
+  );
+});
+
+test("notifications: an anonymous reader is denied both directions", async () => {
+  const anon = env.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(anon, "notifications/student2/items/a")));
+  await assertFails(
+    setDoc(doc(anon, "notifications/student2/items/a"), notifDoc())
+  );
+});
+
 test.after(async () => {
   await env.cleanup();
 });
