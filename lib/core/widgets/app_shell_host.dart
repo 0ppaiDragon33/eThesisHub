@@ -94,6 +94,7 @@ const _staticTitles = {
   '/nominations': 'Nomination inbox',
   '/invites': 'Invites',
   '/users': 'Users',
+  '/notifications': 'Notifications',
 };
 
 /// Wires [AppShell] to this app's providers and router.
