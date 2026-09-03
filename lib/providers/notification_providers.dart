@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/app_notification.dart';
+import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/nomination.dart';
@@ -8,6 +9,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/notification_repository.dart';
+import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
@@ -293,5 +295,35 @@ final evaluationAwaitsDetectorProvider = Provider<void>((ref) {
         ),
       );
     }
+  });
+});
+
+/// The reader's own thesis appearing in the archive.
+///
+/// Scoped to the group leader only (via [myThesisProvider]) for this first
+/// pass -- notifying the adviser and panel too would mean resolving "which
+/// theses is this faculty member attached to" from [myAdviseesProvider]
+/// and [myDefencesProvider] and cross-referencing both against
+/// [archiveProvider], which is a second, more expensive fan-in for an
+/// event advisers and panelists already see reflected on their own
+/// dashboards the moment it happens. The group leader has no such standing
+/// view, which is why they are the one this detector covers.
+final archivePublishedDetectorProvider = Provider<void>((ref) {
+  _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
+    if (thesis == null) return;
+    final entry = await ref.read(archiveEntryProvider(thesis.id).future);
+    if (entry == null) return;
+
+    await repo.upsertIfAbsent(
+      uid,
+      AppNotification(
+        id: notificationId(NotificationType.archivePublished, thesis.id),
+        type: NotificationType.archivePublished,
+        thesisId: thesis.id,
+        message: 'Your thesis "${entry.title}" was published to the archive.',
+        read: false,
+        createdAt: entry.archivedAt ?? DateTime.now(),
+      ),
+    );
   });
 });

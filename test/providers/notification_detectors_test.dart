@@ -298,4 +298,47 @@ void main() {
       expect(items.where((i) => i.type.name == 'evaluationAwaits'), isEmpty);
     });
   });
+
+  group('archivePublishedDetectorProvider', () {
+    test("the thesis leader's own client sees an archivePublished item", () async {
+      final container = await containerFor('student1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('theses').doc('t1').set({
+        'leaderUid': 'student1',
+        'memberNames': ['Santos, J.'],
+        'workingTitle': 'A Study',
+        'college': 'CICT',
+        'program': 'BSIT',
+        'semester': '1',
+        'academicYear': '2026-2027',
+        'status': 'titleApproved',
+        'panelistUids': <String>[],
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+      });
+      await firestore.collection('archive').doc('t1').set({
+        'title': 'A Study of Coastal Fisheries',
+        'memberNames': ['Santos, J.'],
+        'abstract': 'Fish were counted.',
+        'college': 'CICT',
+        'program': 'BSIT',
+        'academicYear': '2026-2027',
+        'adviserName': 'Dr. Cruz',
+        'panelNames': <String>['Dr. Reyes'],
+        'manuscriptUrl': 'https://example.test/m.pdf',
+        'manuscriptPath': 'p/m.pdf',
+        'finalDefenceId': 'd1',
+        'uploadedBy': 'student1',
+        'archivedBy': 'coord1',
+        'archivedAt': Timestamp.fromDate(DateTime(2026, 9, 1)),
+      });
+
+      container.read(archivePublishedDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
+      expect(items.any((i) => i.type.name == 'archivePublished'), isTrue);
+    });
+  });
 }
