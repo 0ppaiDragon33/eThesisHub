@@ -25,7 +25,10 @@ Future<void> pump(
       ],
       child: MaterialApp.router(
         routerConfig: GoRouter(routes: [
-          GoRoute(path: '/', builder: (_, _) => const NotificationsScreen()),
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const Scaffold(body: NotificationsScreen()),
+          ),
           GoRoute(path: '/thesis', builder: (_, _) => const Scaffold(body: Text('My thesis'))),
         ]),
       ),

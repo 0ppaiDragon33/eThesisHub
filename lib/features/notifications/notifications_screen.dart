@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/app_notification.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/user_role.dart';
@@ -43,42 +44,46 @@ class NotificationsScreen extends ConsumerWidget {
     final items = ref.watch(notificationsProvider).valueOrNull ?? const [];
     final role = ref.watch(currentUserProvider).valueOrNull?.role;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          IconButton(
+    return PageShell(
+      title: 'Notifications',
+      scrollable: false,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
             key: const Key('markAllRead'),
-            tooltip: 'Mark all read',
-            icon: const Icon(Icons.done_all),
             onPressed: () => markAllNotificationsRead(ref),
+            icon: const Icon(Icons.done_all),
+            label: const Text('Mark all read'),
           ),
-        ],
-      ),
-      body: items.isEmpty
-          ? const Center(child: Text('Nothing yet'))
-          : ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (context, i) {
-                final n = items[i];
-                return ListTile(
-                  leading: Icon(n.read ? Icons.circle_outlined : Icons.circle, size: 10),
-                  title: Text(n.message),
-                  subtitle: Text('${n.createdAt.day}/${n.createdAt.month}/${n.createdAt.year}'),
-                  onTap: () async {
-                    await markNotificationRead(ref, n.id);
-                    final dest = _destinationFor(n);
-                    // Switch mode first (D75): a faculty member opening a
-                    // panelist-only notification while in Adviser mode must
-                    // not land on a screen their current mode hides.
-                    if (dest.mode != null && role == UserRole.faculty) {
-                      ref.read(facultyModeProvider.notifier).set(dest.mode!);
-                    }
-                    if (context.mounted) context.push(dest.route);
+        ),
+        Expanded(
+          child: items.isEmpty
+              ? const Center(child: Text('Nothing yet'))
+              : ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final n = items[i];
+                    return ListTile(
+                      leading: Icon(n.read ? Icons.circle_outlined : Icons.circle, size: 10),
+                      title: Text(n.message),
+                      subtitle: Text('${n.createdAt.day}/${n.createdAt.month}/${n.createdAt.year}'),
+                      onTap: () async {
+                        await markNotificationRead(ref, n.id);
+                        final dest = _destinationFor(n);
+                        // Switch mode first (D75): a faculty member opening a
+                        // panelist-only notification while in Adviser mode must
+                        // not land on a screen their current mode hides.
+                        if (dest.mode != null && role == UserRole.faculty) {
+                          ref.read(facultyModeProvider.notifier).set(dest.mode!);
+                        }
+                        if (context.mounted) context.push(dest.route);
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+        ),
+      ],
     );
   }
 }

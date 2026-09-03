@@ -1,7 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/app_notification.dart';
-import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/nomination.dart';
@@ -67,9 +67,11 @@ Future<void> markAllNotificationsRead(dynamic ref) async {
 /// idempotent per source key (D71) -- this is not a "first emission only"
 /// cursor, and does not need to be one.
 ///
-/// Failures are swallowed (D73): a missed notification is a degraded
-/// convenience, not a hidden fact -- the source event is still visible
-/// wherever it actually lives.
+/// Failures are logged, not surfaced (D73): a missed notification is a
+/// degraded convenience, not a hidden fact -- the source event is still
+/// visible wherever it actually lives -- but a silent swallow with zero
+/// trace makes a rules misconfiguration or malformed document
+/// undiagnosable, so the error still reaches debug output.
 void _detect<T>(
   Ref ref,
   ProviderListenable<AsyncValue<T>> source,
@@ -79,7 +81,9 @@ void _detect<T>(
     final uid = ref.read(signedInUidProvider);
     final value = next.valueOrNull;
     if (uid == null || value == null) return;
-    onValue(value, ref.read(notificationRepositoryProvider), uid).catchError((_) {});
+    onValue(value, ref.read(notificationRepositoryProvider), uid).catchError((e) {
+      debugPrint('notification detector failed: $e');
+    });
   }, fireImmediately: true);
 }
 
@@ -172,27 +176,40 @@ final nominationLifecycleDetectorProvider = Provider<void>((ref) {
 /// per-chapter feedback subscriptions are opened once the thesis id is
 /// known, not fixed at provider-build time.
 final chapterFeedbackDetectorProvider = Provider<void>((ref) {
+  final registeredThesisIds = <String>{};
+
   _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
     if (thesis == null) return;
+    if (!registeredThesisIds.add(thesis.id)) return;
+
+    // A standing subscription per chapter, not a one-shot read: opened
+    // once the thesis id is known and kept alive for the life of that
+    // thesis, so new feedback arriving mid-session notifies without
+    // waiting for `myThesisProvider` to re-emit for an unrelated reason.
+    // `registeredThesisIds` guards against re-registering all five
+    // chapters' listeners on a later `myThesisProvider` re-emission for
+    // the same thesis.
     for (final chapter in ChapterId.values) {
-      final feedback = ref.read(
-        chapterFeedbackProvider((thesisId: thesis.id, chapter: chapter)).future,
+      _detect<List<ChapterFeedback>>(
+        ref,
+        chapterFeedbackProvider((thesisId: thesis.id, chapter: chapter)),
+        (entries, repo, uid) async {
+          for (final f in entries) {
+            if (f.reviewerUid == uid) continue;
+            await repo.upsertIfAbsent(
+              uid,
+              AppNotification(
+                id: notificationId(NotificationType.chapterFeedback, f.id),
+                type: NotificationType.chapterFeedback,
+                thesisId: thesis.id,
+                message: '${f.reviewerName} left feedback on ${chapter.label}.',
+                read: false,
+                createdAt: f.createdAt ?? DateTime.now(),
+              ),
+            );
+          }
+        },
       );
-      final entries = await feedback;
-      for (final f in entries) {
-        if (f.reviewerUid == uid) continue;
-        await repo.upsertIfAbsent(
-          uid,
-          AppNotification(
-            id: notificationId(NotificationType.chapterFeedback, f.id),
-            type: NotificationType.chapterFeedback,
-            thesisId: thesis.id,
-            message: '${f.reviewerName} left feedback on ${chapter.label}.',
-            read: false,
-            createdAt: f.createdAt ?? DateTime.now(),
-          ),
-        );
-      }
     }
   });
 });
@@ -219,6 +236,8 @@ final chapterFeedbackDetectorProvider = Provider<void>((ref) {
 /// -- it awaits `currentUserProvider.future` itself before choosing a
 /// query -- so by the time this callback runs, the role is already known.
 final defenceDetectorProvider = Provider<void>((ref) {
+  final registeredCommentDefenceIds = <String>{};
+
   _detect<List<Defence>>(ref, myDefencesProvider, (defences, repo, uid) async {
     final role = ref.read(currentUserProvider).valueOrNull?.role;
     if (role != UserRole.student && role != UserRole.faculty) return;
@@ -235,24 +254,38 @@ final defenceDetectorProvider = Provider<void>((ref) {
             message: 'Your defence is scheduled for ${defence.venue} on '
                 '${defence.scheduledAt!.day}/${defence.scheduledAt!.month}/${defence.scheduledAt!.year}.',
             read: false,
-            createdAt: defence.createdAt ?? DateTime.now(),
+            createdAt: defence.scheduledAt!,
           ),
         );
       }
 
-      final comments = await ref.read(defenceCommentsProvider(defence.id).future);
-      for (final c in comments) {
-        if (c.authorUid == uid) continue;
-        await repo.upsertIfAbsent(
-          uid,
-          AppNotification(
-            id: notificationId(NotificationType.defenceComment, c.id),
-            type: NotificationType.defenceComment,
-            thesisId: defence.thesisId,
-            message: '${c.authorName} commented on your defence.',
-            read: false,
-            createdAt: c.createdAt ?? DateTime.now(),
-          ),
+      // A standing subscription, not a one-shot read: opened once per
+      // defence id and kept alive for the life of that defence so a new
+      // comment arriving mid-session notifies without waiting for
+      // `myDefencesProvider` to re-emit for an unrelated reason. Guarded
+      // by `registeredCommentDefenceIds` so a re-emission of the outer
+      // source does not stack up duplicate `_detect` listeners for a
+      // defence already covered.
+      if (registeredCommentDefenceIds.add(defence.id)) {
+        _detect<List<DefenceComment>>(
+          ref,
+          defenceCommentsProvider(defence.id),
+          (comments, repo, uid) async {
+            for (final c in comments) {
+              if (c.authorUid == uid) continue;
+              await repo.upsertIfAbsent(
+                uid,
+                AppNotification(
+                  id: notificationId(NotificationType.defenceComment, c.id),
+                  type: NotificationType.defenceComment,
+                  thesisId: defence.thesisId,
+                  message: '${c.authorName} commented on your defence.',
+                  read: false,
+                  createdAt: c.createdAt ?? DateTime.now(),
+                ),
+              );
+            }
+          },
         );
       }
     }
