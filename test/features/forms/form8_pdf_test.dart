@@ -32,29 +32,39 @@ ArchiveEntry entry({
 void main() {
   test('carries the chrome and the form title', () async {
     final text = extractPdfText(
-        await buildForm8Pdf(Form8Data.assemble(entry: entry())));
+      await buildForm8Pdf(Form8Data.assemble(entry: entry())),
+    );
 
     expect(text, contains('RD-39-06/24-04'));
-    expect(text, contains('Form 8. Certification of Submission of Bound Copies'));
+    expect(
+      text,
+      contains('Form 8. Certification of Submission of Bound Copies'),
+    );
     expect(text, contains('ILOILO STATE UNIVERSITY'));
   });
 
-  test('prints the certification sentence with the names and the title',
-      () async {
-    final text = extractPdfText(
-        await buildForm8Pdf(Form8Data.assemble(entry: entry())));
+  test(
+    'prints the certification sentence with the names and the title',
+    () async {
+      final text = extractPdfText(
+        await buildForm8Pdf(Form8Data.assemble(entry: entry())),
+      );
 
-    expect(text, contains('CERTIFICATION'));
-    expect(text, contains('This is to certify that'));
-    expect(text, contains('Santos, J.'));
-    expect(text, contains('Lim, K.'));
-    expect(text, contains('has submitted bound copies'));
-    expect(text, contains('A Study of Coastal Fisheries'));
-  });
+      expect(text, contains('CERTIFICATION'));
+      expect(text, contains('This is to certify that'));
+      expect(text, contains('Santos, J.'));
+      expect(text, contains('Lim, K.'));
+      expect(text, contains('has submitted bound copies'));
+      expect(text, contains('A Study of Coastal Fisheries'));
+    },
+  );
 
   test('prints the issue date', () async {
-    final text = extractPdfText(await buildForm8Pdf(
-        Form8Data.assemble(entry: entry(archivedAt: DateTime(2026, 9, 30)))));
+    final text = extractPdfText(
+      await buildForm8Pdf(
+        Form8Data.assemble(entry: entry(archivedAt: DateTime(2026, 9, 30))),
+      ),
+    );
 
     expect(text, contains('30'));
     expect(text, contains('September'));
@@ -63,18 +73,21 @@ void main() {
 
   // D66: the printed form ends in a ruled line for a wet signature, so
   // `archivedBy` is never resolved to a name.
-  test('rules a blank signature line labelled for the coordinator',
-      () async {
+  test('rules a blank signature line labelled for the coordinator', () async {
     final text = extractPdfText(
-        await buildForm8Pdf(Form8Data.assemble(entry: entry())));
+      await buildForm8Pdf(Form8Data.assemble(entry: entry())),
+    );
 
     expect(text, contains('Research Coordinator'));
     expect(text, isNot(contains('c1')));
   });
 
   test('a one-member group reads naturally', () async {
-    final text = extractPdfText(await buildForm8Pdf(
-        Form8Data.assemble(entry: entry(members: const ['Solo, S.']))));
+    final text = extractPdfText(
+      await buildForm8Pdf(
+        Form8Data.assemble(entry: entry(members: const ['Solo, S.'])),
+      ),
+    );
 
     expect(text, contains('Solo, S.'));
     expect(text, contains('has submitted bound copies'));
@@ -84,8 +97,7 @@ void main() {
   // `ArchiveEntry.fromMap` leaves null when the map omits it). The renderer
   // must rule a blank rather than print the literal string "null" on a
   // certification — that's the failure the ruled blank exists to prevent.
-  test('a null issue date rules a blank rather than printing "null"',
-      () async {
+  test('a null issue date rules a blank rather than printing "null"', () async {
     final data = Form8Data(
       studentNames: const ['Santos, J.', 'Lim, K.'],
       title: 'A Study of Coastal Fisheries',
@@ -104,32 +116,43 @@ void main() {
   });
 
   group('buildForm8Blank', () {
-    // Requirement test 3, first direction: the blank renders and carries
-    // the template marking. §6's Form8Unissuable exists precisely because
-    // a blank-looking certificate reads as official -- this is the mark
-    // that keeps a printed blank from being that.
-    test('renders and contains the template marking', () async {
+    test('renders the whole form, ready to complete by hand', () async {
       final bytes = await buildForm8Blank();
       final text = extractPdfText(bytes);
 
       expect(bytes, isNotEmpty);
       expect(text, contains('RD-39-06/24-04'));
       expect(text, contains('CERTIFICATION'));
-      expect(text, contains('BLANK TEMPLATE'));
-      expect(text, contains('not an issued certification'));
-      expect(text, contains('TEMPLATE'));
+      // The prose and the signature line are the point: a blank is the
+      // real form with its two clauses ruled, not a stripped-down one.
+      expect(text, contains('has submitted bound copies'));
+      expect(text, contains('Research Coordinator/Chair'));
+      expect(text, contains('Date'));
+      expect(text, isNot(contains('null')));
+    });
+
+    // A watermark and a "BLANK TEMPLATE — not an issued certification"
+    // banner were built here and then removed. The reasoning that put them
+    // there treated the blank as a FILE someone might mistake for a real
+    // certificate; it is a SHEET someone prints and fills in. A watermark
+    // means writing over grey letterforms, and the banner becomes untrue
+    // the moment the form is used as intended — once completed and signed,
+    // the paper IS an issued certification while still saying it is not.
+    //
+    // This test pins the removal so neither comes back by accident.
+    test('carries no template marking to write around or contradict', () async {
+      final text = extractPdfText(await buildForm8Blank());
+
+      expect(text, isNot(contains('TEMPLATE')));
+      expect(text, isNot(contains('not an issued certification')));
     });
   });
 
-  // Requirement test 3, second direction: a real, filled certificate must
-  // never carry the marking a blank does -- the two must not contradict
-  // each other.
-  test('a filled certificate does not contain the template marking',
-      () async {
+  test('a filled certificate carries no template marking either', () async {
     final text = extractPdfText(
-        await buildForm8Pdf(Form8Data.assemble(entry: entry())));
+      await buildForm8Pdf(Form8Data.assemble(entry: entry())),
+    );
 
-    expect(text, isNot(contains('BLANK TEMPLATE')));
     expect(text, isNot(contains('TEMPLATE')));
     expect(text, isNot(contains('not an issued certification')));
   });
