@@ -48,47 +48,46 @@ void main() {
   // nowhere to look. On a completely empty database -- no thesis, no
   // defence, no evaluation, no archive entry -- all three forms must
   // still be listed, and every Blank template button must be enabled.
-  testWidgets(
-    'lists all eight forms on a completely empty database, with every '
-    'Blank template button enabled',
-    (tester) async {
-      useTallSurface(tester);
-      final db = await seedUser('s1');
-      await tester.pumpWidget(app(db, 's1'));
-      await tester.pumpAndSettle();
+  testWidgets('lists all nine forms on a completely empty database, with every '
+      'Blank template button enabled', (tester) async {
+    useTallSurface(tester);
+    final db = await seedUser('s1');
+    await tester.pumpWidget(app(db, 's1'));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('forms')), findsOneWidget);
-      expect(find.byKey(const Key('form1Card')), findsOneWidget);
-      expect(find.byKey(const Key('form5cCard')), findsOneWidget);
-      expect(find.byKey(const Key('form8Card')), findsOneWidget);
-      expect(find.byKey(const Key('form3Card')), findsOneWidget);
-      expect(find.byKey(const Key('form4aCard')), findsOneWidget);
-      expect(find.byKey(const Key('form4bCard')), findsOneWidget);
-      expect(find.byKey(const Key('form5aCard')), findsOneWidget);
-      expect(find.byKey(const Key('form5bCard')), findsOneWidget);
+    expect(find.byKey(const Key('forms')), findsOneWidget);
+    expect(find.byKey(const Key('form1Card')), findsOneWidget);
+    expect(find.byKey(const Key('form5cCard')), findsOneWidget);
+    expect(find.byKey(const Key('form8Card')), findsOneWidget);
+    expect(find.byKey(const Key('form3Card')), findsOneWidget);
+    expect(find.byKey(const Key('form4aCard')), findsOneWidget);
+    expect(find.byKey(const Key('form4bCard')), findsOneWidget);
+    expect(find.byKey(const Key('form5aCard')), findsOneWidget);
+    expect(find.byKey(const Key('form5bCard')), findsOneWidget);
+    expect(find.byKey(const Key('form7Card')), findsOneWidget);
 
-      final form5cButton = tester.widget<OutlinedButton>(
-        find.byKey(const Key('form5cBlankButton')),
-      );
-      expect(form5cButton.onPressed, isNotNull);
+    final form5cButton = tester.widget<OutlinedButton>(
+      find.byKey(const Key('form5cBlankButton')),
+    );
+    expect(form5cButton.onPressed, isNotNull);
 
-      final form8Button = tester.widget<OutlinedButton>(
-        find.byKey(const Key('form8BlankButton')),
-      );
-      expect(form8Button.onPressed, isNotNull);
+    final form8Button = tester.widget<OutlinedButton>(
+      find.byKey(const Key('form8BlankButton')),
+    );
+    expect(form8Button.onPressed, isNotNull);
 
-      for (final key in [
-        'form3BlankButton',
-        'form4aBlankButton',
-        'form4bBlankButton',
-        'form5aBlankButton',
-        'form5bBlankButton',
-      ]) {
-        final button = tester.widget<OutlinedButton>(find.byKey(Key(key)));
-        expect(button.onPressed, isNotNull, reason: key);
-      }
-    },
-  );
+    for (final key in [
+      'form3BlankButton',
+      'form4aBlankButton',
+      'form4bBlankButton',
+      'form5aBlankButton',
+      'form5bBlankButton',
+      'form7BlankButton',
+    ]) {
+      final button = tester.widget<OutlinedButton>(find.byKey(Key(key)));
+      expect(button.onPressed, isNotNull, reason: key);
+    }
+  });
 
   // Form 1 deliberately has no blank template button (Form1Data requires a
   // whole Thesis) -- confirm the screen does not fabricate one.

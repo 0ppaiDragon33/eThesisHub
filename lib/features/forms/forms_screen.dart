@@ -13,6 +13,7 @@ import 'package:ethesishub/features/forms/form4a_pdf.dart';
 import 'package:ethesishub/features/forms/form4b_pdf.dart';
 import 'package:ethesishub/features/forms/form5a_pdf.dart';
 import 'package:ethesishub/features/forms/form5b_pdf.dart';
+import 'package:ethesishub/features/forms/form7_pdf.dart';
 import 'package:ethesishub/features/forms/form8_data.dart';
 import 'package:ethesishub/features/forms/form8_pdf.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
@@ -62,6 +63,8 @@ class FormsScreen extends StatelessWidget {
       _Form5bCard(),
       Gap.md(),
       _Form5cCard(),
+      Gap.md(),
+      _Form7Card(),
       Gap.md(),
       _Form8Card(),
     ]);
@@ -500,6 +503,41 @@ class _Form4bCard extends StatelessWidget {
       actions: [
         OutlinedButton(
           key: const Key('form4bBlankButton'),
+          onPressed: () => _download(context),
+          child: const Text('Blank template'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Form 7 — Certificate of Review. Blank template only, on this screen,
+/// for the same reason as Forms 3/5a/5b: there is no picker here for
+/// which thesis's certificate to fill. The review table itself is
+/// blank in every rendering regardless — see `form7_data.dart`.
+class _Form7Card extends StatelessWidget {
+  const _Form7Card();
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = await buildForm7Blank();
+      await Printing.sharePdf(bytes: bytes, filename: 'Form7-blank.pdf');
+    } catch (e) {
+      if (!context.mounted) return;
+      _reportFailure(context, 'Form 7', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FormCard(
+      cardKey: const Key('form7Card'),
+      name: 'Form 7 — Certificate of Review',
+      purpose: 'The panel\'s sign-off before the manuscript is '
+          'reproduced for binding.',
+      actions: [
+        OutlinedButton(
+          key: const Key('form7BlankButton'),
           onPressed: () => _download(context),
           child: const Text('Blank template'),
         ),
