@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/app_notification.dart';
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/notification_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 final notificationRepositoryProvider = Provider<NotificationRepository>(
@@ -152,6 +154,40 @@ final nominationLifecycleDetectorProvider = Provider<void>((ref) {
           createdAt: thesis.titleDecidedAt!,
         ),
       );
+    }
+  });
+});
+
+/// New feedback on any of the reader's own five chapters, from anyone but
+/// themselves.
+///
+/// A nested fan-in (the chapter source is only known once [myThesisProvider]
+/// resolves), the same shape `facultyNeedsYouProvider`'s own doc comment in
+/// `needs_you_providers.dart` describes for its chapter source: the five
+/// per-chapter feedback subscriptions are opened once the thesis id is
+/// known, not fixed at provider-build time.
+final chapterFeedbackDetectorProvider = Provider<void>((ref) {
+  _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
+    if (thesis == null) return;
+    for (final chapter in ChapterId.values) {
+      final feedback = ref.read(
+        chapterFeedbackProvider((thesisId: thesis.id, chapter: chapter)).future,
+      );
+      final entries = await feedback;
+      for (final f in entries) {
+        if (f.reviewerUid == uid) continue;
+        await repo.upsertIfAbsent(
+          uid,
+          AppNotification(
+            id: notificationId(NotificationType.chapterFeedback, f.id),
+            type: NotificationType.chapterFeedback,
+            thesisId: thesis.id,
+            message: '${f.reviewerName} left feedback on ${chapter.label}.',
+            read: false,
+            createdAt: f.createdAt ?? DateTime.now(),
+          ),
+        );
+      }
     }
   });
 });

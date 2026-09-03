@@ -89,4 +89,88 @@ void main() {
       expect(items.any((i) => i.type.name == 'nominationRecommended'), isTrue);
     });
   });
+
+  group('chapterFeedbackDetectorProvider', () {
+    test('feedback from someone else on my own chapter writes a notification', () async {
+      final container = await containerFor('student1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('theses').doc('t1').set({
+        'leaderUid': 'student1',
+        'memberNames': ['Santos, J.'],
+        'workingTitle': 'A Study',
+        'college': 'CICT',
+        'program': 'BSIT',
+        'semester': '1',
+        'academicYear': '2026-2027',
+        'status': 'titleApproved',
+        'panelistUids': <String>[],
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+      });
+      await firestore
+          .collection('theses')
+          .doc('t1')
+          .collection('documents')
+          .doc('chapterI')
+          .collection('feedback')
+          .doc('f1')
+          .set({
+        'version': 1,
+        'reviewerUid': 'adviser1',
+        'reviewerName': 'Dr. Cruz',
+        'reviewerRole': 'adviser',
+        'body': 'Please revise the statement of the problem.',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 3, 1)),
+      });
+
+      container.read(chapterFeedbackDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
+      expect(items.any((i) => i.type.name == 'chapterFeedback'), isTrue);
+    });
+
+    test('feedback the reader wrote about their own chapter does not notify them', () async {
+      final container = await containerFor('student1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('theses').doc('t1').set({
+        'leaderUid': 'student1',
+        'memberNames': ['Santos, J.'],
+        'workingTitle': 'A Study',
+        'college': 'CICT',
+        'program': 'BSIT',
+        'semester': '1',
+        'academicYear': '2026-2027',
+        'status': 'titleApproved',
+        'panelistUids': <String>[],
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+      });
+      await firestore
+          .collection('theses')
+          .doc('t1')
+          .collection('documents')
+          .doc('chapterI')
+          .collection('feedback')
+          .doc('f1')
+          .set({
+        'version': 1,
+        'reviewerUid': 'student1',
+        'reviewerName': 'Santos, J.',
+        'reviewerRole': 'student',
+        'body': 'Fixed the typo.',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 3, 1)),
+      });
+
+      container.read(chapterFeedbackDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
+      expect(items.where((i) => i.type.name == 'chapterFeedback'), isEmpty);
+    });
+  });
 }
