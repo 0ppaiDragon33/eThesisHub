@@ -9,6 +9,7 @@ import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/dashboard/faculty_mode_switch.dart';
+import 'package:ethesishub/features/notifications/notification_bell.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/notification_providers.dart';
 import 'package:ethesishub/providers/shell_providers.dart';
@@ -128,8 +129,13 @@ class AppShellHost extends ConsumerWidget {
       // The mode switch is faculty-only and hides itself further when the
       // member holds no adviser position. Passing it for other roles would
       // start two position-count queries they have no rules arm for.
-      trailing:
-          role == UserRole.faculty ? FacultyModeSwitch(location: location) : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const NotificationBell(),
+          if (role == UserRole.faculty) FacultyModeSwitch(location: location),
+        ],
+      ),
       // Name, role and sign-out at the foot of the sidebar (spec §5.3),
       // where it used to be a bare `SignOutButton` repeated in four
       // dashboards' app bars with no identity shown anywhere but the
