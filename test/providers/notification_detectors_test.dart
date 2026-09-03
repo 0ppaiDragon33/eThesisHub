@@ -173,4 +173,64 @@ void main() {
       expect(items.where((i) => i.type.name == 'chapterFeedback'), isEmpty);
     });
   });
+
+  group('defenceDetectorProvider', () {
+    test('a comment from someone else writes a notification', () async {
+      final container = await containerFor('student1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('student1').set({'role': 'student'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 1',
+        'panelUids': <String>[],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'scheduled',
+        'createdBy': 'coord1',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
+      });
+      await firestore.collection('defenses').doc('d1').collection('comments').doc('c1').set({
+        'authorUid': 'adviser1',
+        'authorName': 'Dr. Cruz',
+        'authorPosition': 'adviser',
+        'body': 'Please prepare the slides.',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
+      });
+
+      container.read(defenceDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
+      expect(items.any((i) => i.type.name == 'defenceComment'), isTrue);
+    });
+
+    test('a schedule change writes a notification keyed by the new value', () async {
+      final container = await containerFor('student1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('student1').set({'role': 'student'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 2',
+        'panelUids': <String>[],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'scheduled',
+        'createdBy': 'coord1',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 15)),
+      });
+
+      container.read(defenceDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
+      expect(items.any((i) => i.type.name == 'defenceScheduled'), isTrue);
+    });
+  });
 }

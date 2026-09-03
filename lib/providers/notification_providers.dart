@@ -2,11 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/app_notification.dart';
 import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/notification_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -185,6 +188,68 @@ final chapterFeedbackDetectorProvider = Provider<void>((ref) {
             message: '${f.reviewerName} left feedback on ${chapter.label}.',
             read: false,
             createdAt: f.createdAt ?? DateTime.now(),
+          ),
+        );
+      }
+    }
+  });
+});
+
+/// New comments and schedule changes on every defence the reader is party
+/// to.
+///
+/// Restricted to student and faculty readers. `myDefencesProvider` returns
+/// EVERY defence in the college for a coordinator or dean (their own
+/// `allow list` arm has no per-thesis restriction), and this detector is
+/// about a defence's own parties knowing what happened on their defence,
+/// not a college-wide comment firehose for the two roles who already have
+/// a dedicated overview of every defence's status.
+///
+/// The role check is read fresh with `ref.read` INSIDE the `_detect`
+/// callback, not with `ref.watch` at the top of the provider body. A
+/// `ref.watch` there would capture `currentUserProvider`'s value at the
+/// moment this provider first builds -- almost always still loading, since
+/// `currentUserProvider` is itself async -- and a plain `Provider` does not
+/// eagerly re-run its body just because a watched dependency later
+/// resolves; nothing here re-reads it, so `_detect` would never end up
+/// registered at all. Reading it inside the callback is safe because
+/// `myDefencesProvider` cannot emit before `currentUserProvider` resolves
+/// -- it awaits `currentUserProvider.future` itself before choosing a
+/// query -- so by the time this callback runs, the role is already known.
+final defenceDetectorProvider = Provider<void>((ref) {
+  _detect<List<Defence>>(ref, myDefencesProvider, (defences, repo, uid) async {
+    final role = ref.read(currentUserProvider).valueOrNull?.role;
+    if (role != UserRole.student && role != UserRole.faculty) return;
+
+    for (final defence in defences) {
+      if (defence.scheduledAt != null) {
+        final key = '${defence.id}_${defence.scheduledAt!.millisecondsSinceEpoch}_${defence.venue}';
+        await repo.upsertIfAbsent(
+          uid,
+          AppNotification(
+            id: notificationId(NotificationType.defenceScheduled, key),
+            type: NotificationType.defenceScheduled,
+            thesisId: defence.thesisId,
+            message: 'Your defence is scheduled for ${defence.venue} on '
+                '${defence.scheduledAt!.day}/${defence.scheduledAt!.month}/${defence.scheduledAt!.year}.',
+            read: false,
+            createdAt: defence.createdAt ?? DateTime.now(),
+          ),
+        );
+      }
+
+      final comments = await ref.read(defenceCommentsProvider(defence.id).future);
+      for (final c in comments) {
+        if (c.authorUid == uid) continue;
+        await repo.upsertIfAbsent(
+          uid,
+          AppNotification(
+            id: notificationId(NotificationType.defenceComment, c.id),
+            type: NotificationType.defenceComment,
+            thesisId: defence.thesisId,
+            message: '${c.authorName} commented on your defence.',
+            read: false,
+            createdAt: c.createdAt ?? DateTime.now(),
           ),
         );
       }
