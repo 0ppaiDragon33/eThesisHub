@@ -327,3 +327,14 @@ final archivePublishedDetectorProvider = Provider<void>((ref) {
     );
   });
 });
+
+/// Keeps every detector's `ref.listen` subscription alive for as long as
+/// something watches this -- see `AppShellHost.build`, the one place that
+/// does, for the whole life of a signed-in session.
+final notificationDetectorsProvider = Provider<void>((ref) {
+  ref.watch(nominationLifecycleDetectorProvider);
+  ref.watch(chapterFeedbackDetectorProvider);
+  ref.watch(defenceDetectorProvider);
+  ref.watch(evaluationAwaitsDetectorProvider);
+  ref.watch(archivePublishedDetectorProvider);
+});

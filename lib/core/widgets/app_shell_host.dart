@@ -10,6 +10,7 @@ import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/dashboard/faculty_mode_switch.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/notification_providers.dart';
 import 'package:ethesishub/providers/shell_providers.dart';
 import 'package:ethesishub/providers/sidebar_provider.dart';
 import 'package:ethesishub/providers/theme_provider.dart';
@@ -115,6 +116,7 @@ class AppShellHost extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(notificationDetectorsProvider);
     final destinations = ref.watch(shellDestinationsProvider);
     final role = ref.watch(currentUserProvider).valueOrNull?.role;
     final list = destinations.valueOrNull ?? const <ShellDestination>[];

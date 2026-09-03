@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -313,6 +316,73 @@ void main() {
         'not the app name (spec §5.4)', () {
       expect(shellTitleFor('/overview', const {}, UserRole.student),
           'Overview');
+    });
+  });
+
+  group('AppShellHost', () {
+    // Task 10: `AppShellHost.build` now also watches
+    // `notificationDetectorsProvider`, which pulls in all five notification
+    // detectors (Tasks 5-9). Those detectors need more than the bare
+    // `currentUserProvider`/`sharedPrefsProvider` overrides the file's
+    // existing `pump()` helper sets up for `AccountFooter` -- they read
+    // `firebaseAuthProvider` and `firestoreProvider` all the way down (see
+    // `signedInUidProvider`, `myThesisProvider`, `myDefencesProvider`, etc),
+    // so this is a small, separate helper scoped to exactly this one test:
+    // a real `MockFirebaseAuth`/`FakeFirebaseFirestore` pair, the same
+    // pattern `test/providers/notification_detectors_test.dart`'s
+    // `containerFor` uses, plus a seeded `users/{uid}` doc so
+    // `currentUserProvider` resolves to a real (student) role instead of
+    // sitting in `AsyncLoading` forever.
+    Future<void> pumpAppShellHost(WidgetTester tester, {required String uid}) async {
+      final mockUser =
+          MockUser(uid: uid, isEmailVerified: true, email: 'reader@isufst.edu.ph');
+      final auth = MockFirebaseAuth(signedIn: true, mockUser: mockUser);
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('users').doc(uid).set({
+        'fullName': 'Reader Dela Cruz',
+        'email': 'reader@isufst.edu.ph',
+        'role': UserRole.student.value,
+        'active': true,
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      final store = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(auth),
+            firestoreProvider.overrideWithValue(firestore),
+            sharedPrefsProvider.overrideWithValue(store),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            // `AppShellHost.build` never calls `context.go`/`context.pop`
+            // itself -- those only fire from inside the `onBack` callback,
+            // which this test never taps -- so a plain `MaterialApp` (no
+            // real `GoRouter`) is enough to render it once.
+            home: const AppShellHost(
+              location: '/overview',
+              pathParameters: {},
+              child: Text('PAGE BODY'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('watching the shell keeps every notification detector alive',
+        (tester) async {
+      // Confirms that wiring `notificationDetectorsProvider` into
+      // `AppShellHost.build` (Task 10) does not crash shell rendering for a
+      // signed-in reader -- a regression here would mean one detector's own
+      // bug (e.g. a null role read) breaks shell rendering for every
+      // signed-in reader, not just the detector itself.
+      await pumpAppShellHost(tester, uid: 'student1');
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
   });
 }
