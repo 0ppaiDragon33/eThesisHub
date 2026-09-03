@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/app_notification.dart';
+import 'package:ethesishub/data/models/nomination.dart';
+import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/notification_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 final notificationRepositoryProvider = Provider<NotificationRepository>(
   (ref) => NotificationRepository(ref.watch(firestoreProvider)),
@@ -44,3 +48,110 @@ Future<void> markAllNotificationsRead(dynamic ref) async {
   if (unreadIds.isEmpty) return;
   await ref.read(notificationRepositoryProvider).markAllRead(uid, unreadIds);
 }
+
+/// Runs [onValue] every time [source] resolves to a real value, handing it
+/// the reader's own repository and uid.
+///
+/// `fireImmediately: true` on purpose: a detector must also catch up on
+/// whatever already happened before this session started (a Conforme
+/// request sitting there since before the reader last opened the app is
+/// still a notification they have not seen). Re-running against the same
+/// source event on every emission is safe because every write below is
+/// idempotent per source key (D71) -- this is not a "first emission only"
+/// cursor, and does not need to be one.
+///
+/// Failures are swallowed (D73): a missed notification is a degraded
+/// convenience, not a hidden fact -- the source event is still visible
+/// wherever it actually lives.
+void _detect<T>(
+  Ref ref,
+  ProviderListenable<AsyncValue<T>> source,
+  Future<void> Function(T value, NotificationRepository repo, String uid) onValue,
+) {
+  ref.listen<AsyncValue<T>>(source, (previous, next) {
+    final uid = ref.read(signedInUidProvider);
+    final value = next.valueOrNull;
+    if (uid == null || value == null) return;
+    onValue(value, ref.read(notificationRepositoryProvider), uid).catchError((_) {});
+  }, fireImmediately: true);
+}
+
+/// Conforme requests, coordinator recommendation, dean nomination approval,
+/// and the M1b title-round verdict — every thesis-status-driven event a
+/// nominee or a group leader needs to know about.
+final nominationLifecycleDetectorProvider = Provider<void>((ref) {
+  _detect<List<({String thesisId, Nomination nomination})>>(
+    ref,
+    myPendingNominationsProvider,
+    (pending, repo, uid) async {
+      for (final p in pending) {
+        if (p.nomination.conformeStatus != ConformeStatus.pending) continue;
+        await repo.upsertIfAbsent(
+          uid,
+          AppNotification(
+            id: notificationId(NotificationType.conformeRequested, p.thesisId),
+            type: NotificationType.conformeRequested,
+            thesisId: p.thesisId,
+            message: 'A Conforme is waiting on you for a thesis nomination.',
+            read: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+    },
+  );
+
+  _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
+    if (thesis == null) return;
+
+    if (thesis.coordinatorRecommendedAt != null) {
+      await repo.upsertIfAbsent(
+        uid,
+        AppNotification(
+          id: notificationId(NotificationType.nominationRecommended, thesis.id),
+          type: NotificationType.nominationRecommended,
+          thesisId: thesis.id,
+          message:
+              'The Research Coordinator recommended your nomination for '
+              '"${thesis.workingTitle}".',
+          read: false,
+          createdAt: thesis.coordinatorRecommendedAt!,
+        ),
+      );
+    }
+
+    if (thesis.deanApprovedAt != null) {
+      await repo.upsertIfAbsent(
+        uid,
+        AppNotification(
+          id: notificationId(NotificationType.nominationApproved, thesis.id),
+          type: NotificationType.nominationApproved,
+          thesisId: thesis.id,
+          message:
+              'The Dean approved your adviser and panel nomination for '
+              '"${thesis.workingTitle}".',
+          read: false,
+          createdAt: thesis.deanApprovedAt!,
+        ),
+      );
+    }
+
+    if (thesis.titleDecidedAt != null) {
+      final approved = thesis.status == ThesisStatus.titleApproved;
+      final type = approved ? NotificationType.titleApproved : NotificationType.titleRejected;
+      await repo.upsertIfAbsent(
+        uid,
+        AppNotification(
+          id: notificationId(type, thesis.id),
+          type: type,
+          thesisId: thesis.id,
+          message: approved
+              ? 'Your candidate title was approved.'
+              : 'Your candidate title was returned for revision.',
+          read: false,
+          createdAt: thesis.titleDecidedAt!,
+        ),
+      );
+    }
+  });
+});
