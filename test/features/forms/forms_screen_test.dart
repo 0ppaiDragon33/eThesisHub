@@ -49,26 +49,46 @@ void main() {
   // defence, no evaluation, no archive entry -- all three forms must
   // still be listed, and every Blank template button must be enabled.
   testWidgets(
-      'lists all three forms on a completely empty database, with every '
-      'Blank template button enabled', (tester) async {
-    useTallSurface(tester);
-    final db = await seedUser('s1');
-    await tester.pumpWidget(app(db, 's1'));
-    await tester.pumpAndSettle();
+    'lists all eight forms on a completely empty database, with every '
+    'Blank template button enabled',
+    (tester) async {
+      useTallSurface(tester);
+      final db = await seedUser('s1');
+      await tester.pumpWidget(app(db, 's1'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('forms')), findsOneWidget);
-    expect(find.byKey(const Key('form1Card')), findsOneWidget);
-    expect(find.byKey(const Key('form5cCard')), findsOneWidget);
-    expect(find.byKey(const Key('form8Card')), findsOneWidget);
+      expect(find.byKey(const Key('forms')), findsOneWidget);
+      expect(find.byKey(const Key('form1Card')), findsOneWidget);
+      expect(find.byKey(const Key('form5cCard')), findsOneWidget);
+      expect(find.byKey(const Key('form8Card')), findsOneWidget);
+      expect(find.byKey(const Key('form3Card')), findsOneWidget);
+      expect(find.byKey(const Key('form4aCard')), findsOneWidget);
+      expect(find.byKey(const Key('form4bCard')), findsOneWidget);
+      expect(find.byKey(const Key('form5aCard')), findsOneWidget);
+      expect(find.byKey(const Key('form5bCard')), findsOneWidget);
 
-    final form5cButton =
-        tester.widget<OutlinedButton>(find.byKey(const Key('form5cBlankButton')));
-    expect(form5cButton.onPressed, isNotNull);
+      final form5cButton = tester.widget<OutlinedButton>(
+        find.byKey(const Key('form5cBlankButton')),
+      );
+      expect(form5cButton.onPressed, isNotNull);
 
-    final form8Button =
-        tester.widget<OutlinedButton>(find.byKey(const Key('form8BlankButton')));
-    expect(form8Button.onPressed, isNotNull);
-  });
+      final form8Button = tester.widget<OutlinedButton>(
+        find.byKey(const Key('form8BlankButton')),
+      );
+      expect(form8Button.onPressed, isNotNull);
+
+      for (final key in [
+        'form3BlankButton',
+        'form4aBlankButton',
+        'form4bBlankButton',
+        'form5aBlankButton',
+        'form5bBlankButton',
+      ]) {
+        final button = tester.widget<OutlinedButton>(find.byKey(Key(key)));
+        expect(button.onPressed, isNotNull, reason: key);
+      }
+    },
+  );
 
   // Form 1 deliberately has no blank template button (Form1Data requires a
   // whole Thesis) -- confirm the screen does not fabricate one.
@@ -84,8 +104,9 @@ void main() {
   // A student with no thesis of their own must not get a dead "Open my
   // thesis" link -- the empty-database case again, this time for Form 1's
   // convenience link specifically.
-  testWidgets('a student with no thesis gets no "Open my thesis" link',
-      (tester) async {
+  testWidgets('a student with no thesis gets no "Open my thesis" link', (
+    tester,
+  ) async {
     useTallSurface(tester);
     final db = await seedUser('s1');
     await tester.pumpWidget(app(db, 's1'));
@@ -95,8 +116,9 @@ void main() {
   });
 
   // A student who does have a thesis gets the convenience link to it.
-  testWidgets('a student with a thesis gets an "Open my thesis" link',
-      (tester) async {
+  testWidgets('a student with a thesis gets an "Open my thesis" link', (
+    tester,
+  ) async {
     useTallSurface(tester);
     final db = await seedUser('s1');
     await db.collection('theses').doc('t1').set({
@@ -119,37 +141,39 @@ void main() {
   // A non-coordinator must never see the archived-theses list under Form
   // 8, even when entries exist -- issuing Form 8 is the coordinator's act.
   testWidgets(
-      'a non-coordinator with archived theses gets the blank but no list',
-      (tester) async {
-    useTallSurface(tester);
-    final db = await seedUser('f1', role: 'faculty');
-    await db.collection('archive').doc('t1').set({
-      'title': 'A Study of Coastal Fisheries',
-      'memberNames': <String>['Santos, J.'],
-      'abstract': 'Fish were counted.',
-      'college': 'CICT',
-      'program': 'BSIT',
-      'academicYear': '2026-2027',
-      'adviserName': 'Dr. Zamora',
-      'panelNames': <String>['Dr. Reyes'],
-      'manuscriptUrl': 'https://example.test/m.pdf',
-      'manuscriptPath': 'p/m.pdf',
-      'finalDefenceId': 'd9',
-      'uploadedBy': 'l1',
-      'archivedBy': 'c1',
-      'archivedAt': Timestamp.fromDate(DateTime(2026, 9, 30)),
-    });
-    await tester.pumpWidget(app(db, 'f1'));
-    await tester.pumpAndSettle();
+    'a non-coordinator with archived theses gets the blank but no list',
+    (tester) async {
+      useTallSurface(tester);
+      final db = await seedUser('f1', role: 'faculty');
+      await db.collection('archive').doc('t1').set({
+        'title': 'A Study of Coastal Fisheries',
+        'memberNames': <String>['Santos, J.'],
+        'abstract': 'Fish were counted.',
+        'college': 'CICT',
+        'program': 'BSIT',
+        'academicYear': '2026-2027',
+        'adviserName': 'Dr. Zamora',
+        'panelNames': <String>['Dr. Reyes'],
+        'manuscriptUrl': 'https://example.test/m.pdf',
+        'manuscriptPath': 'p/m.pdf',
+        'finalDefenceId': 'd9',
+        'uploadedBy': 'l1',
+        'archivedBy': 'c1',
+        'archivedAt': Timestamp.fromDate(DateTime(2026, 9, 30)),
+      });
+      await tester.pumpWidget(app(db, 'f1'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('form8BlankButton')), findsOneWidget);
-    expect(find.byKey(const Key('form8Download-t1')), findsNothing);
-  });
+      expect(find.byKey(const Key('form8BlankButton')), findsOneWidget);
+      expect(find.byKey(const Key('form8Download-t1')), findsNothing);
+    },
+  );
 
   // A coordinator with an archived thesis gets both the blank and the
   // filled convenience link.
-  testWidgets('a coordinator with an archived thesis gets a download row',
-      (tester) async {
+  testWidgets('a coordinator with an archived thesis gets a download row', (
+    tester,
+  ) async {
     useTallSurface(tester);
     final db = await seedUser('c1', role: 'coordinator');
     await db.collection('archive').doc('t1').set({

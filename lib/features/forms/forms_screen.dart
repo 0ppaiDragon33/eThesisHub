@@ -8,6 +8,11 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/forms/form5c_pdf.dart';
+import 'package:ethesishub/features/forms/form3_pdf.dart';
+import 'package:ethesishub/features/forms/form4a_pdf.dart';
+import 'package:ethesishub/features/forms/form4b_pdf.dart';
+import 'package:ethesishub/features/forms/form5a_pdf.dart';
+import 'package:ethesishub/features/forms/form5b_pdf.dart';
 import 'package:ethesishub/features/forms/form8_data.dart';
 import 'package:ethesishub/features/forms/form8_pdf.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
@@ -31,19 +36,30 @@ class FormsScreen extends StatelessWidget {
   const FormsScreen({super.key});
 
   Widget _framed(List<Widget> children) => KeyedSubtree(
-        key: const Key('forms'),
-        child: PageShell(
-          title: 'Forms',
-          subtitle: 'Blank templates for every research form, and the '
-              'filled versions you have on file.',
-          children: children,
-        ),
-      );
+    key: const Key('forms'),
+    child: PageShell(
+      title: 'Forms',
+      subtitle:
+          'Blank templates for every research form, and the '
+          'filled versions you have on file.',
+      children: children,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     return _framed(const [
       _Form1Card(),
+      Gap.md(),
+      _Form3Card(),
+      Gap.md(),
+      _Form4aCard(),
+      Gap.md(),
+      _Form4bCard(),
+      Gap.md(),
+      _Form5aCard(),
+      Gap.md(),
+      _Form5bCard(),
       Gap.md(),
       _Form5cCard(),
       Gap.md(),
@@ -97,9 +113,9 @@ class _FormCard extends StatelessWidget {
 /// reports one, in a SnackBar rather than a dialog that would need its
 /// own dismissal.
 void _reportFailure(BuildContext context, String form, Object error) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Could not generate $form: $error')),
-  );
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text('Could not generate $form: $error')));
 }
 
 /// Form 1 — Nomination of Thesis Adviser and Panel Members.
@@ -121,15 +137,16 @@ class _Form1Card extends ConsumerWidget {
     return _FormCard(
       cardKey: const Key('form1Card'),
       name: 'Form 1 — Nomination of Thesis Adviser and Panel Members',
-      purpose: 'The letter that starts a thesis\'s approval chain, naming '
+      purpose:
+          'The letter that starts a thesis\'s approval chain, naming '
           'its adviser and panel.',
       actions: [
         Text(
           'Generated from a thesis\'s own nominations, so there is no '
           'blank template — open your thesis to download it filled in.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         if (thesis != null) ...[
           const Gap.sm(),
@@ -175,7 +192,8 @@ class _Form5cCardState extends State<_Form5cCard> {
     return _FormCard(
       cardKey: const Key('form5cCard'),
       name: 'Form 5c — Evaluation Guide',
-      purpose: 'The rubric a panelist scores a title or final defence '
+      purpose:
+          'The rubric a panelist scores a title or final defence '
           'with, eleven criteria across content and presentation.',
       actions: [
         OutlinedButton(
@@ -188,8 +206,8 @@ class _Form5cCardState extends State<_Form5cCard> {
           'Sheets you have already submitted are attached to the defence '
           'they were scored at.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const Gap.sm(),
         OutlinedButton(
@@ -261,7 +279,8 @@ class _Form8CardState extends State<_Form8Card> {
         return _FormCard(
           cardKey: const Key('form8Card'),
           name: 'Form 8 — Certification of Submission of Bound Copies',
-          purpose: 'The coordinator\'s certificate that bound copies of a '
+          purpose:
+              'The coordinator\'s certificate that bound copies of a '
               'thesis reached the Dean, the Library and R&D.',
           actions: [
             OutlinedButton(
@@ -301,6 +320,190 @@ class _Form8CardState extends State<_Form8Card> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Form 3 — Request to Convene the Thesis Panel Members for Pre-Oral
+/// Defense.
+///
+/// Blank template only, on this screen: a filled letter needs a specific
+/// pre-oral defence's own context (its panel, its schedule, its venue),
+/// which this screen has no picker for. `buildForm3Blank` takes no data
+/// at all, so the guarantee this whole screen exists for still holds.
+class _Form3Card extends StatelessWidget {
+  const _Form3Card();
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = await buildForm3Blank();
+      await Printing.sharePdf(bytes: bytes, filename: 'Form3-blank.pdf');
+    } catch (e) {
+      if (!context.mounted) return;
+      _reportFailure(context, 'Form 3', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FormCard(
+      cardKey: const Key('form3Card'),
+      name: 'Form 3 — Request to Convene the Panel for Pre-Oral Defense',
+      purpose:
+          'The adviser\'s letter asking the Dean to convene the '
+          'panel for a group\'s pre-oral defence.',
+      actions: [
+        OutlinedButton(
+          key: const Key('form3BlankButton'),
+          onPressed: () => _download(context),
+          child: const Text('Blank template'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Form 5a — Request for Final Oral Defense. Same shape as Form 3's
+/// card, one defence type later.
+class _Form5aCard extends StatelessWidget {
+  const _Form5aCard();
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = await buildForm5aBlank();
+      await Printing.sharePdf(bytes: bytes, filename: 'Form5a-blank.pdf');
+    } catch (e) {
+      if (!context.mounted) return;
+      _reportFailure(context, 'Form 5a', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FormCard(
+      cardKey: const Key('form5aCard'),
+      name: 'Form 5a — Request for Final Oral Defense',
+      purpose:
+          'The student\'s letter requesting the final oral defence '
+          'of an approved thesis.',
+      actions: [
+        OutlinedButton(
+          key: const Key('form5aBlankButton'),
+          onPressed: () => _download(context),
+          child: const Text('Blank template'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Form 5b — Presenter and Evaluator Profile. Every field this needs is
+/// already resolved wherever Form 5c is generated (D60) — this card
+/// still offers only the blank, for the same reason Form 3 and Form 5a
+/// do: there is no picker here for which defence's profile to fill.
+class _Form5bCard extends StatelessWidget {
+  const _Form5bCard();
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = await buildForm5bBlank();
+      await Printing.sharePdf(bytes: bytes, filename: 'Form5b-blank.pdf');
+    } catch (e) {
+      if (!context.mounted) return;
+      _reportFailure(context, 'Form 5b', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FormCard(
+      cardKey: const Key('form5bCard'),
+      name: 'Form 5b — Presenter and Evaluator Profile',
+      purpose:
+          'Identifies the presenter and the evaluator ahead of a '
+          'defence\'s Form 5c scoring.',
+      actions: [
+        OutlinedButton(
+          key: const Key('form5bBlankButton'),
+          onPressed: () => _download(context),
+          child: const Text('Blank template'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Form 4a — Change of Undergraduate Thesis Adviser.
+///
+/// Blank template ONLY, and permanently — not a gap this screen's
+/// picker will one day close. The app tracks no adviser-reassignment
+/// workflow at all: `Thesis.adviserUid` is set once at nomination
+/// approval, with no "former adviser" / "nominated adviser" / reason
+/// anywhere in the data model. See `form4a_pdf.dart` for the fuller
+/// reasoning.
+class _Form4aCard extends StatelessWidget {
+  const _Form4aCard();
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = await buildForm4aBlank();
+      await Printing.sharePdf(bytes: bytes, filename: 'Form4a-blank.pdf');
+    } catch (e) {
+      if (!context.mounted) return;
+      _reportFailure(context, 'Form 4a', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FormCard(
+      cardKey: const Key('form4aCard'),
+      name: 'Form 4a — Change of Undergraduate Thesis Adviser',
+      purpose:
+          'A request to change a group\'s adviser. Not a workflow '
+          'this app tracks — print, complete and route by hand.',
+      actions: [
+        OutlinedButton(
+          key: const Key('form4aBlankButton'),
+          onPressed: () => _download(context),
+          child: const Text('Blank template'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Form 4b — Change of Undergraduate Thesis Title. Blank template only,
+/// for the same reason as Form 4a: title changes here go through the
+/// multi-round title defence, not an approved-title-to-new-title letter.
+class _Form4bCard extends StatelessWidget {
+  const _Form4bCard();
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = await buildForm4bBlank();
+      await Printing.sharePdf(bytes: bytes, filename: 'Form4b-blank.pdf');
+    } catch (e) {
+      if (!context.mounted) return;
+      _reportFailure(context, 'Form 4b', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FormCard(
+      cardKey: const Key('form4bCard'),
+      name: 'Form 4b — Change of Undergraduate Thesis Title',
+      purpose:
+          'A request to change an approved thesis title. Not a '
+          'workflow this app tracks — print, complete and route by hand.',
+      actions: [
+        OutlinedButton(
+          key: const Key('form4bBlankButton'),
+          onPressed: () => _download(context),
+          child: const Text('Blank template'),
+        ),
+      ],
     );
   }
 }

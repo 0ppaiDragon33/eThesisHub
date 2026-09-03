@@ -7,7 +7,6 @@ import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/forms/form5c_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
 
-const _labelStyle = pw.TextStyle(fontSize: 9, color: PdfColors.grey700);
 const _valueStyle = pw.TextStyle(fontSize: 10.5);
 const _promptStyle = pw.TextStyle(fontSize: 8.5, color: PdfColors.grey600);
 const _sectionHeaderStyle = pw.TextStyle(
@@ -15,44 +14,6 @@ const _sectionHeaderStyle = pw.TextStyle(
   fontWeight: pw.FontWeight.bold,
   color: formAccent,
 );
-
-/// The ruled line a missing value prints as. Shared by [_field] and
-/// [_criterionRow] so an absent score and an absent header field look the
-/// same on the page — both say "the system does not hold this", and neither
-/// may be mistaken for a value.
-pw.Widget _rule({double? width}) => pw.Container(
-      width: width,
-      height: 11,
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400)),
-      ),
-    );
-
-/// A "Label: value" row. When [value] is null or empty, a ruled blank
-/// prints instead — the printed form rules a line for fields the app does
-/// not hold (D60, D61), never the literal string "null" or a silent gap.
-/// A blank template (built with no [Form5cData] at all — see
-/// [buildForm5cBlank]) rules every one of these the same way: a template
-/// is nothing but a page that rules a blank for every field it would
-/// otherwise print.
-pw.Widget _field(String label, String? value) {
-  final hasValue = value != null && value.trim().isNotEmpty;
-  return pw.Padding(
-    padding: const pw.EdgeInsets.only(bottom: 4),
-    child: pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.end,
-      children: [
-        pw.SizedBox(
-          width: 170,
-          child: pw.Text('$label:', style: _labelStyle),
-        ),
-        pw.Expanded(
-          child: hasValue ? pw.Text(value, style: _valueStyle) : _rule(),
-        ),
-      ],
-    ),
-  );
-}
 
 /// One rubric row: label + weight, the prompt (Section A only), the score
 /// out of the weight, and a comment line where one was written (Section A
@@ -95,7 +56,7 @@ pw.Widget _criterionRow(
                 mainAxisSize: pw.MainAxisSize.min,
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
-                  _rule(width: 26),
+                  formRule(width: 26),
                   pw.SizedBox(width: 4),
                   pw.Text('/ ${c.weight}', style: _valueStyle),
                 ],
@@ -127,7 +88,7 @@ pw.Widget _summaryRow(String label, int? value) {
       children: [
         pw.Text(label, style: _valueStyle),
         value == null
-            ? _rule(width: 40)
+            ? formRule(width: 40)
             : pw.Text('$value', style: _valueStyle),
       ],
     ),
@@ -164,10 +125,7 @@ List<pw.Widget> _page({Form5cData? data}) {
         children: [
           pw.Text(
             'EVALUATION GUIDE',
-            style: pw.TextStyle(
-              fontSize: 12,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
             'FOR REPORTS ON RESEARCHES AND TECHNICAL PAPERS',
@@ -179,30 +137,30 @@ List<pw.Widget> _page({Form5cData? data}) {
     pw.SizedBox(height: 12),
 
     // D60: the 5b-style identifying header the printed 5c lacks.
-    _field('Name of Presenter', data?.presenterNames.join(', ')),
+    formField('Name of Presenter', data?.presenterNames.join(', ')),
     // D61: the app holds neither. Ruled blank.
-    _field('Degree and Field of Specialization', null),
-    _field(
+    formField('Degree and Field of Specialization', null),
+    formField(
       'Date of Presentation',
       presentedOn == null
           ? null
           : '${presentedOn.day} ${monthName(presentedOn.month)} '
-              '${presentedOn.year}',
+                '${presentedOn.year}',
     ),
-    _field(
+    formField(
       'Time of Presentation',
       presentedOn == null
           ? null
           : '${presentedOn.hour.toString().padLeft(2, '0')}:'
-              '${presentedOn.minute.toString().padLeft(2, '0')}',
+                '${presentedOn.minute.toString().padLeft(2, '0')}',
     ),
-    _field('Venue', data?.venue),
-    _field('Title of the Study', data?.title),
-    _field('Defence', data?.defenceType.label),
-    _field('Evaluator', data?.evaluatorName),
+    formField('Venue', data?.venue),
+    formField('Title of the Study', data?.title),
+    formField('Defence', data?.defenceType.label),
+    formField('Evaluator', data?.evaluatorName),
     // D61: the app holds neither. Ruled blank.
-    _field('Academic Rank', null),
-    _field('Field of Specialization', data?.evaluatorField),
+    formField('Academic Rank', null),
+    formField('Field of Specialization', data?.evaluatorField),
 
     pw.SizedBox(height: 14),
     pw.Container(height: 1, color: PdfColors.grey400),
@@ -213,10 +171,7 @@ List<pw.Widget> _page({Form5cData? data}) {
     for (final c in contentCriteria) _criterionRow(scores, comments, c),
 
     pw.SizedBox(height: 8),
-    pw.Text(
-      'B. PRESENTATION AND DEFENSE (50%)',
-      style: _sectionHeaderStyle,
-    ),
+    pw.Text('B. PRESENTATION AND DEFENSE (50%)', style: _sectionHeaderStyle),
     pw.SizedBox(height: 4),
     for (final c in presentationCriteria) _criterionRow(scores, comments, c),
 
@@ -232,7 +187,7 @@ List<pw.Widget> _page({Form5cData? data}) {
     _summaryRow('B. PRESENTATION AND DEFENSE', data?.sectionBTotal),
     // D62: M4 deliberately does not compute this. A labelled blank line
     // says so; deleting the row would silently alter the office's form.
-    _field('Average Rating', null),
+    formField('Average Rating', null),
     _summaryRow('Final Grade', data?.finalGrade),
     pw.SizedBox(height: 6),
     pw.Text(

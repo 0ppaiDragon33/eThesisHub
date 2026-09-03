@@ -6,47 +6,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
 
-const _green = PdfColor.fromInt(0xFF15803D);
-
-/// A name with clear space above it to sign into. No rule — the spec
-/// deliberately leaves the signing area blank.
-pw.Widget _signable(String name, String role, {String? status}) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.only(bottom: 10),
-    child: pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.end,
-      children: [
-        pw.Expanded(
-          flex: 58,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.SizedBox(height: 22),
-              pw.Text(name, style: const pw.TextStyle(fontSize: 11.5)),
-              pw.Text(
-                role,
-                style: const pw.TextStyle(
-                  fontSize: 9,
-                  color: PdfColors.grey700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (status != null)
-          pw.Expanded(
-            flex: 42,
-            child: pw.Text(
-              status,
-              textAlign: pw.TextAlign.right,
-              style: const pw.TextStyle(fontSize: 9, color: _green),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
 const _bodyStyle = pw.TextStyle(fontSize: 11);
 const _boldNameStyle = pw.TextStyle(
   fontSize: 11,
@@ -135,8 +94,9 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
               rdCode: 'RD-30-06/24-04',
               formTitle:
                   'Form 1. Nomination of Thesis Adviser and Panel Members',
-              reference:
-                  t.id.substring(0, t.id.length.clamp(0, 8)).toUpperCase(),
+              reference: t.id
+                  .substring(0, t.id.length.clamp(0, 8))
+                  .toUpperCase(),
             ),
             pw.SizedBox(height: 12),
             pw.Align(
@@ -216,13 +176,13 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
             for (final row in data.conformeRows)
-              _signable(row.name, row.role, status: row.status),
+              signableLine(row.name, row.role, status: row.status),
             if (data.coordinatorName != null) ...[
               pw.Text(
                 'Recommending Approval:',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
-              _signable(
+              signableLine(
                 data.coordinatorName!,
                 'College Research Coordinator',
                 status:
@@ -235,7 +195,7 @@ Future<Uint8List> buildForm1Pdf(Form1Data data) async {
                 'Approved:',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
-              _signable(
+              signableLine(
                 data.deanName!,
                 'Dean, College of ${t.college}',
                 status: 'Approved · ${_stampOf(t.deanApprovedAt)}',
