@@ -195,7 +195,7 @@ void main() {
         '/overview', '/thesis', '/thesis/chapters', '/defences',
         '/advisees', '/panels', '/nominations', '/approvals',
         '/recommendations', '/title-defences', '/readiness', '/users',
-        '/archive',
+        '/archive', '/forms',
       };
       for (final role in UserRole.values) {
         for (final d in destinationsFor(
@@ -215,6 +215,18 @@ void main() {
         final routes =
             destinationsFor(role: role).map((d) => d.route).toList();
         expect(routes, contains('/archive'), reason: role.name);
+      }
+    });
+
+    // A blank template is reachable with no data at all (forms_screen.dart),
+    // so the destination that leads to it must never be gated on anything
+    // either -- every role, unconditionally, the same guarantee Archive
+    // gets.
+    test('every role gets the Forms destination', () {
+      for (final role in UserRole.values) {
+        final routes =
+            destinationsFor(role: role).map((d) => d.route).toList();
+        expect(routes, contains('/forms'), reason: role.name);
       }
     });
 

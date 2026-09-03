@@ -106,13 +106,14 @@ Future<void> tapDestination(WidgetTester tester, String label) async {
 void main() {
   group('student', () {
     testWidgets(
-        'shows only Overview, My thesis and Archive before the title is '
-        'approved', (tester) async {
+        'shows only Overview, My thesis, Archive and Forms before the '
+        'title is approved', (tester) async {
       // Chapters and Defences stay gated on the Dean approving a title:
       // before then Chapters leads straight to "Chapters are not open yet"
-      // and no defence can have been scheduled. Archive is unaffected by
-      // that gate -- it is the one destination not scoped to what the
-      // reader is involved in (Task 11).
+      // and no defence can have been scheduled. Archive and Forms are
+      // unaffected by that gate -- neither is scoped to what the reader is
+      // involved in (Task 11 for Archive; Forms guarantees a blank
+      // template with no data at all).
       final db = FakeFirebaseFirestore();
       await db
           .collection('theses')
@@ -123,7 +124,10 @@ void main() {
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      expect(railLabels(tester), ['Overview', 'My thesis', 'Archive']);
+      expect(
+        railLabels(tester),
+        ['Overview', 'My thesis', 'Archive', 'Forms'],
+      );
     });
 
     testWidgets('gets a Chapters destination once the title is approved',

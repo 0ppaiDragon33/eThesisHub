@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:ethesishub/data/models/nomination.dart';
@@ -8,25 +5,9 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
+import 'package:ethesishub/features/forms/form_chrome.dart' show panelSentence;
 
-/// The `pdf` package is a generator, not a parser — there is no
-/// `PdfDocument.load`/text-extraction API in `pdf` or `printing`. What makes
-/// text assertions possible at all is that `buildForm1Pdf` builds its
-/// `pw.Document` with `compress: false`, so the content stream's `Tj`/`TJ`
-/// text-showing operators are plain bytes rather than Flate-compressed ones.
-/// This pulls every parenthesized literal string out of those operators, in
-/// document order, and joins them with a space — a real (if crude) text
-/// extraction, not a re-assertion of the smoke test.
-String _extractText(Uint8List bytes) {
-  final raw = latin1.decode(bytes, allowInvalid: true);
-  final literal = RegExp(r'\(((?:\\.|[^()\\])*)\)');
-  final buffer = StringBuffer();
-  for (final match in literal.allMatches(raw)) {
-    buffer.write(match.group(1));
-    buffer.write(' ');
-  }
-  return buffer.toString();
-}
+import 'pdf_text.dart';
 
 void main() {
   Thesis buildThesis({
@@ -105,7 +86,7 @@ void main() {
     );
 
     final bytes = await buildForm1Pdf(data);
-    final text = _extractText(bytes);
+    final text = extractPdfText(bytes);
 
     // Adviser and panel names appear (uppercased, per the brief's layout).
     expect(text, contains('ARMADA'));
@@ -145,7 +126,7 @@ void main() {
     );
 
     final bytes = await buildForm1Pdf(data);
-    final text = _extractText(bytes);
+    final text = extractPdfText(bytes);
 
     expect(text, contains('14 August 2026'));
     expect(text, isNot(contains('1 June 2026')));
@@ -167,7 +148,7 @@ void main() {
     );
 
     final bytes = await buildForm1Pdf(data);
-    final text = _extractText(bytes);
+    final text = extractPdfText(bytes);
 
     expect(text, contains('I have the honor'));
     expect(text, isNot(contains('We have the honor')));
@@ -175,7 +156,7 @@ void main() {
 
   // --- §7.3: "nominated names in bold" -------------------------------
   //
-  // `_extractText` pulls literal strings out of `Tj`/`TJ` operators, but the
+  // `extractPdfText` pulls literal strings out of `Tj`/`TJ` operators, but the
   // font-weight distinction between a Helvetica and a Helvetica-Bold glyph
   // run lives in the graphics-state operators around the text-showing ops,
   // not in the parenthesized string literals themselves — the extractor
@@ -264,7 +245,7 @@ void main() {
       directoryNames: const {'c1': 'Dr. Bito-onon', 'd1': 'Dr. Siason'},
     );
 
-    final text = _extractText(await buildForm1Pdf(data));
+    final text = extractPdfText(await buildForm1Pdf(data));
 
     // The last researcher must survive, and so must everything after them.
     expect(text, contains('VARGAS, KARL JOSHUA'));
