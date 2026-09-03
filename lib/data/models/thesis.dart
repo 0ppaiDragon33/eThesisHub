@@ -27,6 +27,10 @@ class Thesis {
     this.titleDecidedAt,
     this.titleDecidedBy,
     this.titleRejectionRemark,
+    this.manuscriptPath,
+    this.manuscriptUrl,
+    this.manuscriptAbstract,
+    this.manuscriptUploadedAt,
   });
 
   final String id;
@@ -59,6 +63,28 @@ class Thesis {
   final String? titleDecidedBy;
   final String? titleRejectionRemark;
 
+  /// The final consolidated manuscript — one PDF, not the five chapters.
+  ///
+  /// Chapters are working artifacts with revision history and feedback
+  /// attached; this is the finished publication, the thing §9c has the
+  /// student reproduce and §10a has them bind. Kept separate so the
+  /// archive's contents cannot change when someone uploads a chapter
+  /// revision (D50).
+  final String? manuscriptPath;
+  final String? manuscriptUrl;
+
+  /// Supplied by the student at upload. What makes the archive browsable
+  /// rather than a list of filenames (D56).
+  final String? manuscriptAbstract;
+
+  final DateTime? manuscriptUploadedAt;
+
+  /// Both halves, or neither. A URL without its storage path is a
+  /// half-written upload that cannot be replaced or deleted later.
+  bool get hasManuscript =>
+      (manuscriptPath?.isNotEmpty ?? false) &&
+      (manuscriptUrl?.isNotEmpty ?? false);
+
   factory Thesis.fromMap(String id, Map<String, dynamic> map) {
     return Thesis(
       id: id,
@@ -86,6 +112,10 @@ class Thesis {
       titleDecidedAt: map['titleDecidedAt'] as DateTime?,
       titleDecidedBy: map['titleDecidedBy'] as String?,
       titleRejectionRemark: map['titleRejectionRemark'] as String?,
+      manuscriptPath: map['manuscriptPath'] as String?,
+      manuscriptUrl: map['manuscriptUrl'] as String?,
+      manuscriptAbstract: map['manuscriptAbstract'] as String?,
+      manuscriptUploadedAt: map['manuscriptUploadedAt'] as DateTime?,
     );
   }
 

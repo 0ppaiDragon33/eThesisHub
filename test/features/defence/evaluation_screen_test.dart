@@ -329,4 +329,35 @@ void main() {
 
     expect(find.byKey(const Key('evaluationLoading')), findsOneWidget);
   });
+
+  // D59: a panelist generates their OWN sheet. This needs no new access
+  // rule — M4 grants a panelist their own evaluation unconditionally — so
+  // the seal is untouched.
+  testWidgets('a submitted sheet offers the Form 5c download',
+      (tester) async {
+    useTallSurface(tester);
+    final scores = {for (final c in evaluationCriteria) c.key: c.weight};
+    await tester.pumpWidget(app(await seed(existing: scores), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('downloadForm5c')), findsOneWidget);
+  });
+
+  testWidgets('nothing to download before the sheet is submitted',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('downloadForm5c')), findsNothing);
+  });
+
+  testWidgets('the adviser, who cannot score, is offered no sheet',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('downloadForm5c')), findsNothing);
+  });
 }

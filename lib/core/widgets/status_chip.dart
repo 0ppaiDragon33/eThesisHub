@@ -33,6 +33,7 @@ class StatusChip extends StatelessWidget {
         ThesisStatus.titlePendingDefence => 'Title defence',
         ThesisStatus.titleApproved => 'Title approved',
         ThesisStatus.titleRejected => 'Titles returned',
+        ThesisStatus.archived => 'Archived',
       };
 
   /// One sentence saying what happens next, for the screens that have room.
@@ -55,6 +56,8 @@ class StatusChip extends StatelessWidget {
         ThesisStatus.titleRejected =>
           'The panel returned your candidates. Read the remark and submit a '
           'new set.',
+        ThesisStatus.archived => 'Your thesis manuscript is published in the '
+          'college archive.',
       };
 
   static Color _colorFor(ThesisStatus status, Brightness brightness) {
@@ -69,7 +72,8 @@ class StatusChip extends StatelessWidget {
       ThesisStatus.nominationPendingDean ||
       ThesisStatus.titlePendingDefence =>
         light ? AppTokens.awaiting : AppTokens.awaitingDark,
-      ThesisStatus.nominationApproved || ThesisStatus.titleApproved =>
+      ThesisStatus.nominationApproved || ThesisStatus.titleApproved ||
+      ThesisStatus.archived =>
         light ? AppTokens.endorsed : AppTokens.endorsedDark,
       ThesisStatus.titleRejected =>
         light ? AppTokens.returned : AppTokens.returnedDark,
