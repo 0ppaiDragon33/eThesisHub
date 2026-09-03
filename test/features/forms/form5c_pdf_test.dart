@@ -219,4 +219,43 @@ void main() {
         assemble(evaluation: buildEvaluation(comments: const {})));
     expect(bytes.lengthInBytes, greaterThan(1000));
   });
+
+  group('buildForm5cBlank', () {
+    // Requirement test 2: the blank renders the chrome, all eleven
+    // criteria, both section headings, and never prints the literal
+    // string "null" -- a template is nothing but a page where every one
+    // of Form 5c's existing null-safe renderers (_field, _criterionRow,
+    // _summaryRow) is handed nothing to fill in.
+    test('renders the chrome, all eleven criteria, the section headings, '
+        'and no "null" anywhere', () async {
+      final bytes = await buildForm5cBlank();
+      final text = extractPdfText(bytes);
+
+      expect(bytes, isNotEmpty);
+      expect(text, contains('RD-37-06/24-04'));
+      expect(text, contains('Form 5c. Evaluation Guide'));
+      expect(text, contains('ILOILO STATE UNIVERSITY'));
+
+      for (final c in evaluationCriteria) {
+        expect(text, contains(c.label), reason: c.key);
+      }
+      expect(text, contains('A. CONTENT (50%)'));
+      expect(text, contains('B. PRESENTATION AND DEFENSE (50%)'));
+      expect(text, contains('SUMMARY'));
+
+      expect(text, isNot(contains('null')));
+    });
+
+    test('rules a blank rather than a zero mark for every criterion',
+        () async {
+      final text = extractPdfText(await buildForm5cBlank());
+      // A genuine zero score would print "0 / <weight>", indistinguishable
+      // from a panelist who actually scored the criterion nothing -- the
+      // same reasoning `form5c_pdf.dart`'s missing-key handling documents.
+      // A blank template must print none of those.
+      for (final c in evaluationCriteria) {
+        expect(text, isNot(contains('0 / ${c.weight}')), reason: c.key);
+      }
+    });
+  });
 }

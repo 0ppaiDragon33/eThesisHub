@@ -102,4 +102,35 @@ void main() {
     // null — distinct from merely not printing "null" in its place.
     expect(text, contains('Date'));
   });
+
+  group('buildForm8Blank', () {
+    // Requirement test 3, first direction: the blank renders and carries
+    // the template marking. §6's Form8Unissuable exists precisely because
+    // a blank-looking certificate reads as official -- this is the mark
+    // that keeps a printed blank from being that.
+    test('renders and contains the template marking', () async {
+      final bytes = await buildForm8Blank();
+      final text = extractPdfText(bytes);
+
+      expect(bytes, isNotEmpty);
+      expect(text, contains('RD-39-06/24-04'));
+      expect(text, contains('CERTIFICATION'));
+      expect(text, contains('BLANK TEMPLATE'));
+      expect(text, contains('not an issued certification'));
+      expect(text, contains('TEMPLATE'));
+    });
+  });
+
+  // Requirement test 3, second direction: a real, filled certificate must
+  // never carry the marking a blank does -- the two must not contradict
+  // each other.
+  test('a filled certificate does not contain the template marking',
+      () async {
+    final text = extractPdfText(
+        await buildForm8Pdf(Form8Data.assemble(entry: entry())));
+
+    expect(text, isNot(contains('BLANK TEMPLATE')));
+    expect(text, isNot(contains('TEMPLATE')));
+    expect(text, isNot(contains('not an issued certification')));
+  });
 }
