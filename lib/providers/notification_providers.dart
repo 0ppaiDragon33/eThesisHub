@@ -25,12 +25,17 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
   return items.where((i) => !i.read).length;
 });
 
+/// Marks a single notification as read. Accepts both `Ref` (from `WidgetRef` in UI)
+/// and `ProviderContainer` (from tests), though Dart's type system requires `dynamic`
+/// due to ProviderContainer not explicitly implementing the `Ref` interface despite
+/// having compatible methods.
 Future<void> markNotificationRead(dynamic ref, String itemId) async {
   final uid = ref.read(signedInUidProvider);
   if (uid == null) return;
   await ref.read(notificationRepositoryProvider).markRead(uid, itemId);
 }
 
+/// Marks all notifications as read. See [markNotificationRead] for type annotation note.
 Future<void> markAllNotificationsRead(dynamic ref) async {
   final uid = ref.read(signedInUidProvider);
   if (uid == null) return;
