@@ -135,3 +135,84 @@ class RecordRow extends StatelessWidget {
     return InkWell(onTap: onTap, child: row);
   }
 }
+
+/// A labelled field: an overline label above the input, not floating inside
+/// it.
+///
+/// Screens previously passed their own `InputDecoration(labelText: ...)` per
+/// field, which is why no two forms in this app look alike. The label moves
+/// out of the decoration and into the layout, so every form shares one
+/// rhythm and the field itself is free to be a TextField, a dropdown or a
+/// date picker without the label treatment changing.
+class FormRow extends StatelessWidget {
+  const FormRow({super.key, required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTokens.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  letterSpacing: 0.8,
+                  color: dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
+                ),
+          ),
+          const SizedBox(height: 4),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Label-and-value pairs for stating facts about a record.
+///
+/// Takes an ordered list rather than a Map: these are read in a deliberate
+/// order (program before academic year), and a Map's iteration order is an
+/// implementation detail to rely on by accident.
+class KeyFacts extends StatelessWidget {
+  const KeyFacts(this.facts, {super.key});
+
+  final List<({String label, String value})> facts;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final fact in facts)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppTokens.sm),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 130,
+                  child: Text(
+                    fact.label,
+                    style: text.bodySmall?.copyWith(
+                      color:
+                          dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
+                    ),
+                  ),
+                ),
+                Expanded(child: Text(fact.value, style: text.bodyMedium)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}

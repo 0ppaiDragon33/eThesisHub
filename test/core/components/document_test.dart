@@ -65,4 +65,49 @@ void main() {
       expect(find.byType(InkWell), findsNothing);
     });
   });
+
+  group('FormRow', () {
+    testWidgets('labels its field and renders the field itself', (tester) async {
+      await pump(tester, const FormRow(
+        label: 'Institutional email',
+        child: TextField(key: Key('email')),
+      ));
+
+      expect(find.text('INSTITUTIONAL EMAIL'), findsOneWidget);
+      expect(find.byKey(const Key('email')), findsOneWidget);
+    });
+
+    testWidgets('the label is not a TextField label', (tester) async {
+      // The overline sits ABOVE the input rather than floating inside it —
+      // that is the whole point of the treatment, and a labelText would
+      // silently reintroduce the old look.
+      await pump(tester, const FormRow(
+        label: 'Password',
+        child: TextField(key: Key('pw')),
+      ));
+
+      final field = tester.widget<TextField>(find.byKey(const Key('pw')));
+      expect(field.decoration?.labelText, isNull);
+    });
+  });
+
+  group('KeyFacts', () {
+    testWidgets('renders each label and value in order', (tester) async {
+      await pump(tester, const KeyFacts([
+        (label: 'Program', value: 'BSIT'),
+        (label: 'Academic year', value: '2026-2027'),
+      ]));
+
+      expect(find.text('Program'), findsOneWidget);
+      expect(find.text('BSIT'), findsOneWidget);
+      expect(find.text('Academic year'), findsOneWidget);
+      expect(find.text('2026-2027'), findsOneWidget);
+    });
+
+    testWidgets('an empty list renders nothing rather than throwing',
+        (tester) async {
+      await pump(tester, const KeyFacts([]));
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
