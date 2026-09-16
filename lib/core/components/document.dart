@@ -178,6 +178,11 @@ class FormRow extends StatelessWidget {
 /// Takes an ordered list rather than a Map: these are read in a deliberate
 /// order (program before academic year), and a Map's iteration order is an
 /// implementation detail to rely on by accident.
+///
+/// Unlike `SectionRule` and `FormRow`, these labels are NOT uppercased. Those
+/// two open something — a band, a field — and their overline is a signpost.
+/// A key fact is read as a sentence beside its value, and shouting half of
+/// every pair makes the pairs harder to scan, not easier.
 class KeyFacts extends StatelessWidget {
   const KeyFacts(this.facts, {super.key});
 

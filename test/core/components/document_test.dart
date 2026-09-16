@@ -77,7 +77,7 @@ void main() {
       expect(find.byKey(const Key('email')), findsOneWidget);
     });
 
-    testWidgets('the label is not a TextField label', (tester) async {
+    testWidgets('the overline sits above the field, not inside it', (tester) async {
       // The overline sits ABOVE the input rather than floating inside it —
       // that is the whole point of the treatment, and a labelText would
       // silently reintroduce the old look.
