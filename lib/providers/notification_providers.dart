@@ -260,6 +260,15 @@ final defenceDetectorProvider = Provider<void>((ref) {
         );
       }
 
+      // A defence comment reaches the student group leader alone. The
+      // adviser's consolidation and every panel remark are the group's to
+      // act on; the faculty parties authored or heard them live in the
+      // defence room and must not get a bell for a comment on their own
+      // defence. `myDefencesProvider` returns a faculty member every defence
+      // they advise or sit on, so without this guard the whole panel was
+      // pinged. Gated here, before the subscription is even opened, so a
+      // non-leader reader never registers a comment listener at all.
+      //
       // A standing subscription, not a one-shot read: opened once per
       // defence id and kept alive for the life of that defence so a new
       // comment arriving mid-session notifies without waiting for
@@ -267,7 +276,8 @@ final defenceDetectorProvider = Provider<void>((ref) {
       // by `registeredCommentDefenceIds` so a re-emission of the outer
       // source does not stack up duplicate `_detect` listeners for a
       // defence already covered.
-      if (registeredCommentDefenceIds.add(defence.id)) {
+      if (defence.leaderUid == uid &&
+          registeredCommentDefenceIds.add(defence.id)) {
         _detect<List<DefenceComment>>(
           ref,
           defenceCommentsProvider(defence.id),
