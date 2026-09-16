@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:ethesishub/core/components/brand.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 
 /// Shown to a signed-in, verified account whose `users/{uid}.active` is
@@ -20,36 +21,23 @@ class DeactivatedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return AuthScaffold(
       key: const Key('deactivatedScreen'),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.no_accounts_outlined,
-                    size: 48, color: theme.colorScheme.error),
-                const SizedBox(height: 16),
-                Text('Account deactivated',
-                    style: theme.textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                const Text(
-                  'Your account has been deactivated by the College Research '
-                  'Coordinator, so it can no longer be used to sign in. If you '
-                  'think this is a mistake, contact the coordinator to have it '
-                  'restored.',
-                ),
-                const SizedBox(height: 24),
-                const SignOutButton(),
-              ],
-            ),
-          ),
+      title: 'Account deactivated',
+      subtitle: 'This account has been deactivated by the college.',
+      children: [
+        Icon(Icons.no_accounts_outlined,
+            size: 48, color: theme.colorScheme.error),
+        const SizedBox(height: 16),
+        const Text(
+          'Your account has been deactivated by the College Research '
+          'Coordinator, so it can no longer be used to sign in. If you '
+          'think this is a mistake, contact the coordinator to have it '
+          'restored.',
         ),
-      ),
+        const SizedBox(height: 24),
+        const SignOutButton(),
+      ],
     );
   }
 }

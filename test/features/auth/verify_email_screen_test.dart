@@ -428,4 +428,30 @@ void main() {
             '/verify-email');
     expect(find.textContaining('Verification failed'), findsNothing);
   });
+
+  testWidgets('renders at a phone width and at a desktop width',
+      (tester) async {
+    for (final size in [const Size(400, 900), const Size(1200, 900)]) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+            firebaseAuthProvider.overrideWithValue(MockFirebaseAuth()),
+          ],
+          child: const MaterialApp(home: VerifyEmailScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Verify your email'), findsOneWidget);
+      expect(find.byKey(const Key('reload')), findsOneWidget);
+      expect(find.byKey(const Key('resend')), findsOneWidget);
+      expect(find.byKey(const Key('signout')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
 }
