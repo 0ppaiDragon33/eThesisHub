@@ -86,8 +86,12 @@ void main() {
         child: TextField(key: Key('pw')),
       ));
 
-      final field = tester.widget<TextField>(find.byKey(const Key('pw')));
-      expect(field.decoration?.labelText, isNull);
+      // Asserting the caller's own TextField has no labelText would prove
+      // nothing — the test constructed it that way. What has to be true of
+      // FormRow is that the overline it draws sits ABOVE the field.
+      final label = tester.getTopLeft(find.text('PASSWORD'));
+      final field = tester.getTopLeft(find.byKey(const Key('pw')));
+      expect(label.dy, lessThan(field.dy));
     });
   });
 

@@ -165,7 +165,7 @@ class FormRow extends StatelessWidget {
                   color: dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
                 ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppTokens.sm),
           child,
         ],
       ),
