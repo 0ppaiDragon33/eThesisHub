@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart' hide Evaluation;
+import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -550,5 +551,85 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('gradesLoading')), findsOneWidget);
+  });
+
+  // ISUFST's passing mark is 75. D77 supersedes D41's blanket "never
+  // computed" for this one guard: the panel still decides, but the system
+  // refuses to record a Pass the numbers cannot carry. Only the adviser
+  // (a1) sees these controls at all.
+  SegmentedButton<PassFail> verdictControl(WidgetTester tester) =>
+      tester.widget<SegmentedButton<PassFail>>(
+        find.byType(SegmentedButton<PassFail>),
+      );
+
+  bool segmentEnabled(SegmentedButton<PassFail> seg, PassFail value) =>
+      seg.segments.firstWhere((s) => s.value == value).enabled;
+
+  testWidgets('a sub-75 panel mean locks Pass and leaves Fail selectable', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    // p1 at 100, p2 at 48 -- a mean of 74.0, below the passing mark.
+    await tester.pumpWidget(app(await seedReleased(second: 48), 'a1'));
+    await tester.pumpAndSettle();
+
+    final seg = verdictControl(tester);
+    expect(segmentEnabled(seg, PassFail.pass), isFalse);
+    expect(segmentEnabled(seg, PassFail.fail), isTrue);
+    // The lock explains itself, so a mean that DISPLAYS as 75.0 while
+    // actually sitting at 74.96 never looks like a broken button.
+    expect(find.byKey(const Key('verdictLocked')), findsOneWidget);
+  });
+
+  // The boundary: 75 is a pass, not a fail.
+  testWidgets('a mean of exactly 75 still admits Pass', (tester) async {
+    useTallSurface(tester);
+    // p1 at 100, p2 at 50 -- a mean of exactly 75.0.
+    await tester.pumpWidget(app(await seedReleased(second: 50), 'a1'));
+    await tester.pumpAndSettle();
+
+    final seg = verdictControl(tester);
+    expect(segmentEnabled(seg, PassFail.pass), isTrue);
+    expect(segmentEnabled(seg, PassFail.fail), isTrue);
+    expect(find.byKey(const Key('verdictLocked')), findsNothing);
+  });
+
+  testWidgets('a comfortably passing mean leaves both verdicts open', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    // p1 at 100, p2 at 100 -- a mean of 100.
+    await tester.pumpWidget(app(await seedReleased(), 'a1'));
+    await tester.pumpAndSettle();
+
+    final seg = verdictControl(tester);
+    expect(segmentEnabled(seg, PassFail.pass), isTrue);
+    expect(segmentEnabled(seg, PassFail.fail), isTrue);
+  });
+
+  // Defence in depth: the record button must not act on a Pass the gate
+  // forbids, even if selection state drifted there somehow.
+  testWidgets('under 75, tapping Pass never arms the record button', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(second: 48), 'a1'));
+    await tester.pumpAndSettle();
+
+    // Scoped to the verdict control: "Pass" also renders once per panelist
+    // in the rating column, so a bare find.text is ambiguous.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<PassFail>),
+        matching: find.text('Pass'),
+      ),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('recordVerdict')),
+    );
+    expect(button.onPressed, isNull);
   });
 }

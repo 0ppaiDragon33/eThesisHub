@@ -33,6 +33,25 @@ enum PassFail {
 int totalOf(Map<String, int> scores) =>
     scores.values.fold<int>(0, (sum, v) => sum + v);
 
+/// ISUFST's passing mark for the thesis final grade, confirmed by the
+/// institution as a hard floor rather than a guideline.
+///
+/// A panel mean below this admits only a Fail verdict (D77). That is the
+/// single place the system constrains §8b's deliberation, and it is why
+/// D41's blanket "never computed — not by a majority of the ratings, nor by
+/// a threshold on the mean" no longer holds without qualification. The
+/// panel still decides; the system refuses to record a Pass the numbers
+/// cannot carry.
+const passingMark = 75;
+
+/// Whether [mean] clears [passingMark]. Exactly 75 passes.
+///
+/// Takes the mean as a double and compares it unrounded: a mean of 74.96
+/// DISPLAYS as "75.0" at one decimal place but does not clear the mark, so
+/// the screen states the precise value when it locks rather than leaving a
+/// button that looks broken.
+bool meanClearsPassingMark(double mean) => mean >= passingMark;
+
 /// One panelist's completed Form 5c for one defence.
 ///
 /// Keyed in Firestore by the evaluator's uid, so a panelist has exactly
