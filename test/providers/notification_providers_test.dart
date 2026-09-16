@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/notification_providers.dart';
-import 'package:ethesishub/providers/service_providers.dart';
 
 void main() {
   Future<ProviderContainer> containerFor(String uid) async {
