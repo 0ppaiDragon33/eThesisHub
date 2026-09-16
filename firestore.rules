@@ -25,6 +25,22 @@ service cloud.firestore {
       return !exists(path) || get(path).data.get('active', true) != false;
     }
 
+    // Signed in AND not deactivated.
+    //
+    // The read arms that scope by a field on the document itself
+    // (`resource.data.leaderUid == request.auth.uid` and friends) never pass
+    // through a named helper, so folding isActive() into those helpers left
+    // them open: a deactivated leader could still LIST their own theses even
+    // though every get and every write was closed. These arms use this
+    // instead of bare signedIn(), which closes the asymmetry.
+    //
+    // NOT used by the users self-read or the registration create arm — those
+    // stay on bare signedIn() so a deactivated account can still read its own
+    // doc and discover why everything else refuses it.
+    function activeUser() {
+      return signedIn() && isActive();
+    }
+
     function myEmail() {
       return request.auth.token.email.lower();
     }
@@ -241,8 +257,8 @@ service cloud.firestore {
       // adviser must be able to find the theses whose chapters they review.
       // Narrow by construction -- the arm is evaluated per returned
       // document, so it can only ever return theses naming this adviser.
-      allow list: if (signedIn() && resource.data.leaderUid == request.auth.uid)
-                  || (signedIn() && resource.data.adviserUid == request.auth.uid)
+      allow list: if (activeUser() && resource.data.leaderUid == request.auth.uid)
+                  || (activeUser() && resource.data.adviserUid == request.auth.uid)
                   || isCoordinator() || isDean();
 
       // A leader creates their own thesis, always as a draft with an empty
@@ -695,10 +711,10 @@ service cloud.firestore {
         //
         // This is a READ widening only. No write rule is touched.
         function isNomineeOnThisThesis() {
-          return signedIn() && hasNomination(thesisId, request.auth.uid);
+          return activeUser() && hasNomination(thesisId, request.auth.uid);
         }
 
-        allow get, list: if request.auth.uid == nomineeUid
+        allow get, list: if (activeUser() && request.auth.uid == nomineeUid)
                          || isNomineeOnThisThesis()
                          || isThesisLeader(thesisId)
                          || isCoordinator() || isDean();
@@ -1014,7 +1030,7 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/defenses/$(incoming().finalDefenceId)).data;
       }
 
-      allow get, list: if signedIn();
+      allow get, list: if activeUser();
 
       // Three document reads: the thesis, the defence, and the caller's own
       // profile inside isCoordinator(). Well inside the budget.
@@ -1093,11 +1109,11 @@ service cloud.firestore {
       // One arm per role, each evaluated per returned document, so none can
       // return a defence the caller does not belong to. The coordinator and
       // dean monitor college-wide, so their arm is unfiltered by design.
-      allow list: if (signedIn()
+      allow list: if (activeUser()
                       && resource.data.adviserUid == request.auth.uid)
-                  || (signedIn()
+                  || (activeUser()
                       && request.auth.uid in resource.data.panelUids)
-                  || (signedIn()
+                  || (activeUser()
                       && resource.data.leaderUid == request.auth.uid)
                   || isCoordinator() || isDean();
 
@@ -1277,7 +1293,7 @@ service cloud.firestore {
         // not merely a hidden button -- refuses them. They comment in the
         // room like everyone else, and they hold the two acts below.
         function isPanelistHere() {
-          return signedIn() && request.auth.uid in parent().panelUids;
+          return activeUser() && request.auth.uid in parent().panelUids;
         }
         // Presence, never a sentinel: `.get(k, <sentinel>) == <sentinel>`
         // silently changes meaning the day a legitimate value equals the
@@ -1372,7 +1388,7 @@ service cloud.firestore {
         // an evaluations subcollection holds at most one document per
         // panelist -- unlike the `list` over `defenses` above, which is
         // why that one snapshots leaderUid rather than reading the thesis.
-        allow get, list: if (signedIn()
+        allow get, list: if (activeUser()
                              && ((request.auth.uid == evaluatorUid
                                   && isPanelistHere())
                                  || parent().adviserUid == request.auth.uid))

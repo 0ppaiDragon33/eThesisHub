@@ -4747,6 +4747,38 @@ test("active CONTROL: an ACTIVE coordinator still administers accounts", async (
   await assertSucceeds(updateDoc(doc(coord, "users/target-on"), { active: false }));
 });
 
+// The read-residual, closed. Folding isActive() into the named helpers left
+// the arms that scope by a field on the document itself (leaderUid ==
+// request.auth.uid and friends) still open, so a deactivated leader could
+// LIST their own theses while every get and every write was refused.
+// activeUser() closes that asymmetry. The self-read control below is the
+// line that must NOT move.
+test("active: a deactivated leader may NOT list their own theses", async () => {
+  await seedDeactivated("lead-off3", "student", "leadoff3@isufst.edu.ph");
+  await seedThesis("t-off3", "lead-off3", "draft");
+  const leaderOff = asUser("lead-off3", "leadoff3@isufst.edu.ph");
+  await assertFails(
+    getDocs(query(collection(leaderOff, "theses"),
+      where("leaderUid", "==", "lead-off3")))
+  );
+});
+
+test("active CONTROL: an ACTIVE leader still lists their own theses", async () => {
+  await seedUser("lead-on", "student", "leadon@isufst.edu.ph");
+  await seedThesis("t-on", "lead-on", "draft");
+  const leaderOn = asUser("lead-on", "leadon@isufst.edu.ph");
+  await assertSucceeds(
+    getDocs(query(collection(leaderOn, "theses"),
+      where("leaderUid", "==", "lead-on")))
+  );
+});
+
+test("active: a deactivated account may NOT read the archive", async () => {
+  await seedDeactivated("arch-off", "student", "archoff@isufst.edu.ph");
+  const off = asUser("arch-off", "archoff@isufst.edu.ph");
+  await assertFails(getDocs(collection(off, "archive")));
+});
+
 test.after(async () => {
   await env.cleanup();
 });
