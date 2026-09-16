@@ -281,10 +281,18 @@ final facultyNeedsYouProvider =
           title: d.type.label,
           detail: 'The defence concluded — release your consolidation to '
               'the group.',
-          route: '/defence/${d.id}',
+          // ConsolidatedDefenceScreen, where the adviser releases. NOT
+          // '/defence/${d.id}': that route is M1b's TitleDefenceScreen,
+          // keyed by a THESIS id, so a defence id sent there reads a
+          // `theses/` document that does not exist — and because
+          // `thesisData()` reads `.data` off a null `get()`, the rules
+          // raise an evaluation error, which surfaces as permission-denied
+          // rather than as "not found".
+          route: '/defence/room/${d.id}/consolidated',
           chipLabel: 'Consolidate',
           tone: NeedsYouTone.act,
-          deep: isDeepForRole(UserRole.faculty, '/defence/${d.id}'),
+          deep: isDeepForRole(
+              UserRole.faculty, '/defence/room/${d.id}/consolidated'),
         ));
       }
 
@@ -299,10 +307,12 @@ final facultyNeedsYouProvider =
           detail: d.status == DefenceStatus.inProgress
               ? 'This defence is in progress now.'
               : 'Scheduled for today at ${d.venue}.',
-          route: '/defence/${d.id}',
+          // The live room, by defence id — same reasoning as Consolidate
+          // above.
+          route: '/defence/room/${d.id}',
           chipLabel: 'Join',
           tone: NeedsYouTone.act,
-          deep: isDeepForRole(UserRole.faculty, '/defence/${d.id}'),
+          deep: isDeepForRole(UserRole.faculty, '/defence/room/${d.id}'),
         ));
       }
     }

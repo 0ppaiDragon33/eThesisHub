@@ -259,6 +259,10 @@ void main() {
 
       final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
       expect(items.any((i) => i.type.name == 'defenceComment'), isTrue);
+      // The room route is built from this; without it the reader is sent
+      // to the defences list instead of the defence they were told about.
+      expect(items.firstWhere((i) => i.type.name == 'defenceComment').defenceId,
+          'd1');
     });
 
     test('a schedule change writes a notification keyed by the new value', () async {
@@ -282,8 +286,14 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
-      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('student1')
+          .first;
       expect(items.any((i) => i.type.name == 'defenceScheduled'), isTrue);
+      expect(
+          items.firstWhere((i) => i.type.name == 'defenceScheduled').defenceId,
+          'd1');
     });
 
     test('a comment added mid-session (after the defence was already known) still notifies live', () async {
@@ -354,6 +364,9 @@ void main() {
 
       final items = await container.read(notificationRepositoryProvider).watchItems('faculty1').first;
       expect(items.any((i) => i.type.name == 'evaluationAwaits'), isTrue);
+      expect(
+          items.firstWhere((i) => i.type.name == 'evaluationAwaits').defenceId,
+          'd1');
     });
 
     test('a completed defence this panelist already scored writes nothing', () async {

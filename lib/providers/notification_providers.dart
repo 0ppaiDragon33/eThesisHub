@@ -251,6 +251,7 @@ final defenceDetectorProvider = Provider<void>((ref) {
             id: notificationId(NotificationType.defenceScheduled, key),
             type: NotificationType.defenceScheduled,
             thesisId: defence.thesisId,
+            defenceId: defence.id,
             message: 'Your defence is scheduled for ${defence.venue} on '
                 '${defence.scheduledAt!.day}/${defence.scheduledAt!.month}/${defence.scheduledAt!.year}.',
             read: false,
@@ -279,6 +280,7 @@ final defenceDetectorProvider = Provider<void>((ref) {
                   id: notificationId(NotificationType.defenceComment, c.id),
                   type: NotificationType.defenceComment,
                   thesisId: defence.thesisId,
+                  defenceId: defence.id,
                   message: '${c.authorName} commented on your defence.',
                   read: false,
                   createdAt: c.createdAt ?? DateTime.now(),
@@ -322,6 +324,7 @@ final evaluationAwaitsDetectorProvider = Provider<void>((ref) {
           id: notificationId(NotificationType.evaluationAwaits, defence.id),
           type: NotificationType.evaluationAwaits,
           thesisId: defence.thesisId,
+          defenceId: defence.id,
           message: 'A defence has completed and is waiting on your Form 5c.',
           read: false,
           createdAt: defence.createdAt ?? DateTime.now(),

@@ -55,11 +55,22 @@ class AppNotification {
     required this.message,
     required this.read,
     required this.createdAt,
+    this.defenceId,
   });
 
   final String id;
   final NotificationType type;
   final String thesisId;
+
+  /// The defence this item is about, for the three defence-driven types.
+  ///
+  /// Null for every other type, and also for items written before this
+  /// field existed — a defence notification is addressed to
+  /// `/defence/room/{defenceId}`, and `/defence/{thesisId}` is a DIFFERENT
+  /// screen (M1b's title defence), so a thesis id is not a usable
+  /// substitute. Readers fall back to the defences list rather than
+  /// guessing.
+  final String? defenceId;
 
   /// A pure, already-rendered sentence — generated once by the detector
   /// that wrote this item, from fields the writer already has standing
@@ -80,6 +91,7 @@ class AppNotification {
         message: message,
         read: read ?? this.read,
         createdAt: createdAt,
+        defenceId: defenceId,
       );
 
   factory AppNotification.fromMap(String id, Map<String, dynamic> map) {
@@ -90,6 +102,7 @@ class AppNotification {
       message: map['message'] as String? ?? '',
       read: map['read'] as bool? ?? false,
       createdAt: map['createdAt'] as DateTime? ?? DateTime.fromMillisecondsSinceEpoch(0),
+      defenceId: map['defenceId'] as String?,
     );
   }
 
@@ -99,5 +112,8 @@ class AppNotification {
         'message': message,
         'read': read,
         'createdAt': createdAt,
+        // Omitted rather than written as null, so a document carries the
+        // key only when it means something.
+        if (defenceId != null) 'defenceId': defenceId,
       };
 }
