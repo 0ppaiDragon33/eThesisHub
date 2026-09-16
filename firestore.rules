@@ -49,12 +49,32 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
+    // One read, two checks.
+    //
+    // These used to call myRole() (a get) and then isActive() (an exists
+    // plus a second get) — three document accesses' worth of expression tree
+    // for what is one document. That matters because rules evaluate EVERY
+    // arm of a match against a 1000-expression budget, not just until one
+    // passes: the theses block has nine get()-backed update arms, and once
+    // isActive() was folded into every named helper the budget ran out
+    // before the later arms were reached. A legitimate write whose
+    // authorising arm sat late was then refused with an evaluation-budget
+    // error rather than by any rule — a deny nothing in the file asked for.
+    //
+    // The exists() guard is not needed here the way it is in verified():
+    // reading `.role` already requires the document, so a caller with no
+    // profile has failed before `active` is ever consulted.
+    function activeRole(role) {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return signedIn() && u.role == role && u.get('active', true) != false;
+    }
+
     function isCoordinator() {
-      return signedIn() && myRole() == 'coordinator' && isActive();
+      return activeRole('coordinator');
     }
 
     function isDean() {
-      return signedIn() && myRole() == 'dean' && isActive();
+      return activeRole('dean');
     }
 
     function invitedRoleFor(email) {
@@ -318,6 +338,61 @@ service cloud.firestore {
       // branch also serves) but when supplied it is pinned to `request.time`
       // exactly like the coordinator/dean timestamps below, so a leader can
       // never backdate the letter their own submission produces.
+      // ---------------------------------------------------------------
+      // WARNING TO WHOEVER ADDS THE NEXT ARM HERE.
+      //
+      // This block is close to the rules engine's 1000-expression budget.
+      // Rules evaluate arms in ORDER and do not stop at a budget overrun --
+      // they simply stop evaluating, and every arm past that point counts as
+      // false. A new arm appended to the bottom can therefore be dead on
+      // arrival: not denied by any rule, just never reached. That is not
+      // hypothetical -- the reopen arm below was written last, sat last, and
+      // was refused with an evaluation-budget error until it was moved here.
+      //
+      // So: put cheap arms first, and after adding one, check the emulator
+      // output for "maximum of 1000 expressions" rather than trusting a
+      // green suite. A deny test passes just as happily when the cause is
+      // budget exhaustion as when it is the rule you wrote.
+      //
+      // The budget is per-request across all arms, so the way to buy room is
+      // to make the helpers cheaper (see activeRole) or to merge arms, not
+      // to reorder alone.
+      // ---------------------------------------------------------------
+
+      // Reopen a stalled nomination for re-nomination.
+      //
+      // A declined Conforme stalls a thesis permanently: the nominee can
+      // never accept, `respondToNomination` counts them outstanding forever,
+      // and the leader is frozen out of their own thesis the moment it leaves
+      // 'draft'. Before this arm the only recovery was the Firebase Console.
+      // Returning the thesis to 'draft' hands it back to the group, who then
+      // fix the roster and resubmit (`submitNominations` prunes whoever is no
+      // longer on it, without which the replaced decliner's document would
+      // stall the thesis again immediately).
+      //
+      // Rules cannot verify the thesis is ACTUALLY stalled -- that needs a
+      // query over the nominations subcollection, and rules have no queries.
+      // So this authorises the transition, not the diagnosis: a coordinator
+      // may return any pending-Conforme thesis to draft. That is a legitimate
+      // administrative act in its own right, it is reversible (the group
+      // simply resubmits), and it is the same authority the coordinator
+      // already holds over the next step of this same flow.
+      //
+      // Only the status moves, and the transition is pinned in both
+      // directions so this can never rewind a thesis the coordinator has
+      // already recommended or the dean has already approved.
+      //
+      // FIRST among the update arms deliberately. Rules evaluate arms in
+      // order against a 1000-expression budget, and every arm below does
+      // `get()`-backed work; placed last, this one was never reached at all
+      // and a legitimate reopen was denied with an evaluation-budget error
+      // rather than a rule saying no. Cheap arms belong before expensive
+      // ones for exactly that reason.
+      allow update: if isCoordinator()
+                    && onlyChanged(['status'])
+                    && resource.data.status == 'nominationPendingConforme'
+                    && request.resource.data.status == 'draft';
+
       allow update: if isThesisLeader(thesisId)
                     && resource.data.status == 'draft'
                     && onlyChanged(['memberNames', 'workingTitle', 'college',

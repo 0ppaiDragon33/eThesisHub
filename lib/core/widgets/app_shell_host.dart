@@ -94,6 +94,7 @@ const _staticTitles = {
   '/nominations': 'Nomination inbox',
   '/invites': 'Invites',
   '/users': 'Users',
+  '/stalled': 'Stalled nominations',
   '/notifications': 'Notifications',
 };
 

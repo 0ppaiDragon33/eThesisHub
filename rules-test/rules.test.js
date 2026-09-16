@@ -4778,6 +4778,73 @@ test("active: a deactivated account may NOT read the archive", async () => {
   const off = asUser("arch-off", "archoff@isufst.edu.ph");
   await assertFails(getDocs(collection(off, "archive")));
 });
+// Stalled-thesis recovery. A declined Conforme is terminal without this:
+// the nominee cannot un-decline, and the leader is frozen out the moment
+// the thesis leaves 'draft'. A coordinator returns it to draft so the group
+// can re-nominate. The arm authorises the transition, not the diagnosis --
+// rules have no queries, so "is it actually stalled" is unknowable here.
+//
+// These use `asDefenceUser` (memoised) with uids of their own rather than
+// `asUser` with coord-x/fac-a. Both of those have already issued requests
+// earlier in this file, and re-deriving a Firestore instance for such a uid
+// throws a HARNESS error -- which an assertFails swallows as a pass. The
+// allow case below is what caught it: the denies all "passed" while proving
+// nothing. See the note above `asDefenceUser`.
+
+test("reopen: a coordinator MAY return a pending-Conforme thesis to draft",
+  async () => {
+    await seedUser("coord-rx2", "coordinator", "coordrx2@isufst.edu.ph");
+    await seedThesis("reopen-ok", LEADER, "nominationPendingConforme");
+    const coord = asDefenceUser("coord-rx2", "coordrx2@isufst.edu.ph");
+    // Sanity: if this fails, isCoordinator() is the problem, not the arm.
+    await assertSucceeds(getDocs(collection(coord, "users")));
+    await assertSucceeds(
+      updateDoc(doc(coord, "theses/reopen-ok"), { status: "draft" })
+    );
+  });
+
+test("reopen: the leader may NOT reopen their own thesis", async () => {
+  // The whole reason recovery needs a coordinator: the leader is frozen
+  // out of the thesis at exactly this status.
+  await seedThesis("reopen-leader", LEADER, "nominationPendingConforme");
+  await assertFails(
+    updateDoc(doc(leader, "theses/reopen-leader"), { status: "draft" })
+  );
+});
+
+test("reopen: an ordinary faculty member may NOT reopen", async () => {
+  await seedUser("fac-rx", "faculty", "facrx@isufst.edu.ph");
+  await seedThesis("reopen-fac", LEADER, "nominationPendingConforme");
+  const fac = asDefenceUser("fac-rx", "facrx@isufst.edu.ph");
+  await assertFails(
+    updateDoc(doc(fac, "theses/reopen-fac"), { status: "draft" })
+  );
+});
+
+test("reopen: a coordinator may NOT rewind an already-recommended thesis",
+  async () => {
+    // The prior-status pin. Without it this arm would be a way to rewind a
+    // thesis the dean is already considering.
+    await seedThesis("reopen-late", LEADER, "nominationPendingDean");
+    await seedUser("coord-rx", "coordinator", "coordrx@isufst.edu.ph");
+    const coord = asDefenceUser("coord-rx", "coordrx@isufst.edu.ph");
+    await assertFails(
+      updateDoc(doc(coord, "theses/reopen-late"), { status: "draft" })
+    );
+  });
+
+test("reopen: a coordinator may NOT smuggle another field through it",
+  async () => {
+    await seedThesis("reopen-smuggle", LEADER, "nominationPendingConforme");
+    await seedUser("coord-rx", "coordinator", "coordrx@isufst.edu.ph");
+    const coord = asDefenceUser("coord-rx", "coordrx@isufst.edu.ph");
+    await assertFails(
+      updateDoc(doc(coord, "theses/reopen-smuggle"), {
+        status: "draft",
+        adviserUid: "coord-rx",
+      })
+    );
+  });
 
 test.after(async () => {
   await env.cleanup();

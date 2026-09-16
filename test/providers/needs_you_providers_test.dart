@@ -293,6 +293,7 @@ void main() {
         thesesByStatusProvider(ThesisStatus.titleApproved)
             .overrideWith((ref) => never<List<Thesis>>()),
         allDefencesProvider.overrideWith((ref) => never<List<Defence>>()),
+        stalledThesesProvider.overrideWith((ref) => never<List<Thesis>>()),
       ]);
       addTearDown(container.dispose);
 
@@ -599,6 +600,11 @@ void main() {
         thesesByStatusProvider(ThesisStatus.titleApproved)
             .overrideWith((ref) => Stream.value([readyCandidate])),
         allDefencesProvider.overrideWith((ref) => Stream.value(const [])),
+        // Reuses the same thesis rather than a fixture of its own: this test
+        // is about every row's deep flag matching its route, and a stalled
+        // row is the one pointing at '/stalled'.
+        stalledThesesProvider
+            .overrideWith((ref) => Stream.value([readyCandidate])),
         documentRepositoryProvider.overrideWithValue(_FakeDocumentRepository({
           't-ready': const [
             ThesisChapter(
@@ -626,9 +632,13 @@ void main() {
       await settle();
 
       final items = container.read(coordinatorNeedsYouProvider).requireValue;
-      expect(items.length, 3,
+      expect(items.length, 4,
           reason: 'fixture did not emit the expected recommendation + '
-              'title-defence + schedule rows: $items');
+              'title-defence + schedule + stalled rows: $items');
+      // The stalled row is the reason this count moved from 3 to 4; assert
+      // it is actually present rather than letting any fourth row satisfy
+      // the count.
+      expect(items.where((i) => i.route == '/stalled'), hasLength(1));
       for (final item in items) {
         expect(item.deep, isDeepForRole(UserRole.coordinator, item.route),
             reason: 'NeedsYouItem.deep=${item.deep} disagrees with the '

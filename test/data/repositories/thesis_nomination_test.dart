@@ -5,6 +5,8 @@ import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 
+import '../../support/fake_firestore_settle.dart';
+
 FacultyDirectoryEntry entry(String uid, String name, String role) =>
     FacultyDirectoryEntry(uid: uid, fullName: name, role: role);
 
@@ -162,5 +164,117 @@ void main() {
     expect(coordinator.exOfficio, isTrue);
     expect(coordinator.conformeStatus, ConformeStatus.exOfficio);
     expect(coordinator.needsConforme, isFalse);
+  });
+
+  // ---- Stalled-thesis recovery -----------------------------------------
+  //
+  // A declined Conforme used to be terminal: the nominee cannot un-decline,
+  // respondToNomination counts them outstanding forever, and the rules
+  // freeze the leader out the moment the thesis leaves 'draft'. Recovery was
+  // the Firebase Console.
+
+  test('reopening a stalled thesis returns it to draft', () async {
+    await submit();
+    await repo.respondToNomination(
+      thesisId: thesisId,
+      nomineeUid: 'p1',
+      accept: false,
+      declineReason: 'On sabbatical.',
+    );
+
+    await repo.reopenForRenomination(
+      thesisId: thesisId,
+      coordinatorUid: 'c1',
+    );
+
+    await settleFakeTransaction();
+
+    final thesis = await repo.watchThesis(thesisId).first;
+    expect(thesis!.status, ThesisStatus.draft);
+  });
+
+  test('reopening refuses a thesis that is not awaiting Conforme', () async {
+    // Still 'draft' -- never submitted. The same guard is what stops a
+    // reopen rewinding an already-recommended or already-approved thesis.
+    expect(
+      () => repo.reopenForRenomination(
+        thesisId: thesisId,
+        coordinatorUid: 'c1',
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('resubmitting prunes a nominee dropped from the roster', () async {
+    await submit();
+    await repo.reopenForRenomination(
+      thesisId: thesisId,
+      coordinatorUid: 'c1',
+    );
+
+    // p1 replaced by p4.
+    await repo.submitNominations(
+      thesisId: thesisId,
+      adviser: entry('a1', 'Dr. Armada', 'faculty'),
+      panelists: [
+        entry('p4', 'Dr. Nuevo', 'faculty'),
+        entry('p2', 'Prof. Padojinog', 'faculty'),
+        entry('p3', 'Dr. Braganza', 'faculty'),
+      ],
+      exOfficio: [
+        entry('c1', 'Dr. Bito-onon', 'coordinator'),
+        entry('d1', 'Dr. Siason', 'dean'),
+      ],
+    );
+
+    final noms = await repo.watchNominations(thesisId).first;
+    expect(noms.where((n) => n.nomineeUid == 'p1'), isEmpty);
+    expect(noms.where((n) => n.nomineeUid == 'p4'), hasLength(1));
+  });
+
+  // The regression that matters: the whole rescue path, end to end. Without
+  // the prune this fails at the last line -- p1's `declined` document
+  // survives their replacement and counts as outstanding forever, so the
+  // thesis stalls again on the very action meant to free it.
+  test('decline, reopen, re-nominate and accept advances the thesis',
+      () async {
+    await submit();
+    await repo.respondToNomination(
+      thesisId: thesisId,
+      nomineeUid: 'p1',
+      accept: false,
+      declineReason: 'On sabbatical.',
+    );
+    await repo.reopenForRenomination(
+      thesisId: thesisId,
+      coordinatorUid: 'c1',
+    );
+
+    await repo.submitNominations(
+      thesisId: thesisId,
+      adviser: entry('a1', 'Dr. Armada', 'faculty'),
+      panelists: [
+        entry('p4', 'Dr. Nuevo', 'faculty'),
+        entry('p2', 'Prof. Padojinog', 'faculty'),
+        entry('p3', 'Dr. Braganza', 'faculty'),
+      ],
+      exOfficio: [
+        entry('c1', 'Dr. Bito-onon', 'coordinator'),
+        entry('d1', 'Dr. Siason', 'dean'),
+      ],
+    );
+
+    for (final uid in ['a1', 'p2', 'p3', 'p4']) {
+      await repo.respondToNomination(
+        thesisId: thesisId,
+        nomineeUid: uid,
+        accept: true,
+      );
+    }
+
+    await settleFakeTransaction();
+
+    final thesis = await repo.watchThesis(thesisId).first;
+    expect(thesis!.status, ThesisStatus.nominationPendingCoordinator);
   });
 }

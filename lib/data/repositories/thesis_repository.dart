@@ -206,6 +206,26 @@ class ThesisRepository {
       batch.set(noms.doc(entry.key), entry.value);
     }
 
+    // Prune nominations that are no longer on the roster.
+    //
+    // Submission used to only ever WRITE, which was harmless while a thesis
+    // could be submitted exactly once: nothing stale could exist. Reopening
+    // a stalled thesis (`reopenForRenomination`) makes a second submission
+    // real, and without this the rescue path defeats itself -- the nominee
+    // who declined keeps their `declined` document even after being replaced,
+    // `respondToNomination` counts it outstanding forever, and the thesis
+    // stalls again on the very action meant to free it.
+    //
+    // Read before the batch rather than inside it: a batch is not a
+    // transaction and cannot read. The window is safe because a leader may
+    // only submit while the thesis is still 'draft', and nothing else writes
+    // nominations in that state.
+    for (final existing in (await noms.get()).docs) {
+      if (!writes.containsKey(existing.id)) {
+        batch.delete(noms.doc(existing.id));
+      }
+    }
+
     batch.update(_theses.doc(thesisId), {
       'status': ThesisStatus.nominationPendingConforme.value,
       'nominationsSubmittedAt': FieldValue.serverTimestamp(),
@@ -341,6 +361,46 @@ class ThesisRepository {
           'status': ThesisStatus.nominationPendingCoordinator.value,
         });
       }
+    });
+  }
+
+  /// Returns a stalled thesis to `draft` so the group can re-nominate.
+  ///
+  /// A declined Conforme is terminal without this. The nominee cannot
+  /// un-decline, [respondToNomination] counts them outstanding forever, and
+  /// `firestore.rules` freezes the leader out of their own thesis the moment
+  /// it leaves `draft` — so the group cannot replace them either. Recovery
+  /// was the Firebase Console.
+  ///
+  /// Guarded on the thesis's *current persisted* status, read inside the
+  /// transaction, exactly as [recommend] and [approve] guard themselves. A
+  /// reopen that arrives after the thesis has moved on — a duplicate tap, a
+  /// stale client — is refused rather than silently rewinding a thesis the
+  /// coordinator has already recommended or the dean has already approved.
+  ///
+  /// The declined nomination documents are deliberately left in place: a
+  /// coordinator cannot delete them (the rules grant that only to the
+  /// leader), and the leader's own resubmission prunes whatever is no longer
+  /// on the roster — see [submitNominations].
+  Future<void> reopenForRenomination({
+    required String thesisId,
+    required String coordinatorUid,
+  }) async {
+    await _db.runTransaction((tx) async {
+      final ref = _theses.doc(thesisId);
+      final snap = await tx.get(ref);
+      if (!snap.exists) {
+        throw StateError('Thesis $thesisId does not exist.');
+      }
+
+      final status = _toThesis(snap.id, snap.data()!).status;
+      if (status != ThesisStatus.nominationPendingConforme) {
+        throw StateError(
+            'Cannot reopen this thesis: it is not awaiting Conforme '
+            '(current status: ${status.value}).');
+      }
+
+      tx.update(ref, {'status': ThesisStatus.draft.value});
     });
   }
 
