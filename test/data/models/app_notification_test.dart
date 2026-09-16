@@ -67,4 +67,62 @@ void main() {
       expect(read.createdAt, n.createdAt);
     });
   });
+
+  group('defenceId', () {
+    test('round-trips when present', () {
+      final n = AppNotification(
+        id: 'x',
+        type: NotificationType.defenceComment,
+        thesisId: 't1',
+        defenceId: 'd1',
+        message: 'm',
+        read: false,
+        createdAt: DateTime(2026, 5, 1),
+      );
+
+      expect(AppNotification.fromMap(n.id, n.toMap()).defenceId, 'd1');
+    });
+
+    test('is null, not empty, for an item that never carried one', () {
+      // Items already in real feeds predate the field. They must read back
+      // as null so the screen can fall back deliberately rather than build
+      // '/defence/room/' with an empty id.
+      final back = AppNotification.fromMap('legacy', {
+        'type': 'defenceComment',
+        'thesisId': 't1',
+        'message': 'm',
+        'read': false,
+        'createdAt': DateTime(2026, 5, 1),
+      });
+
+      expect(back.defenceId, isNull);
+    });
+
+    test('is omitted from the written map when null', () {
+      final n = AppNotification(
+        id: 'x',
+        type: NotificationType.archivePublished,
+        thesisId: 't1',
+        message: 'm',
+        read: false,
+        createdAt: DateTime(2026, 5, 1),
+      );
+
+      expect(n.toMap().containsKey('defenceId'), isFalse);
+    });
+
+    test('survives copyWith(read: true)', () {
+      final n = AppNotification(
+        id: 'x',
+        type: NotificationType.evaluationAwaits,
+        thesisId: 't1',
+        defenceId: 'd9',
+        message: 'm',
+        read: false,
+        createdAt: DateTime(2026, 5, 1),
+      );
+
+      expect(n.copyWith(read: true).defenceId, 'd9');
+    });
+  });
 }

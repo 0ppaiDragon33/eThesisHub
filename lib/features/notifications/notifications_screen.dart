@@ -26,11 +26,24 @@ import 'package:ethesishub/providers/notification_providers.dart';
       return (route: '/thesis', mode: null);
     case NotificationType.chapterFeedback:
       return (route: '/thesis/chapters', mode: FacultyMode.adviser);
+    // A defence is addressed by its OWN id, through '/defence/room/...'.
+    // '/defence/{thesisId}' is M1b's title defence screen — a different
+    // screen about a different thing — so an item with no `defenceId`
+    // (written before that field existed) goes to the defences list, where
+    // the reader can find it, rather than somewhere misleading.
     case NotificationType.defenceComment:
     case NotificationType.defenceScheduled:
-      return (route: '/defence/${n.thesisId}', mode: null);
+      final id = n.defenceId;
+      return (
+        route: id == null ? '/defences' : '/defence/room/$id',
+        mode: null,
+      );
     case NotificationType.evaluationAwaits:
-      return (route: '/defence/${n.thesisId}', mode: FacultyMode.panelist);
+      final id = n.defenceId;
+      return (
+        route: id == null ? '/defences' : '/defence/room/$id/evaluate',
+        mode: FacultyMode.panelist,
+      );
     case NotificationType.archivePublished:
       return (route: '/archive/${n.thesisId}', mode: null);
   }
