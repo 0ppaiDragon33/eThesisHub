@@ -27,6 +27,10 @@ void main() {
     expect((light.decoration as BoxDecoration).color, AppTokens.seal);
 
     await pump(tester, const BrandEmblem(), brightness: Brightness.dark);
+    // MaterialApp lerps between themes through AnimatedTheme, and a discrete
+    // field like brightness flips only past the halfway point — so the frame
+    // straight after the second pump still reports the light theme.
+    await tester.pumpAndSettle();
     final dark = tester.widget<Container>(find.byType(Container));
     expect((dark.decoration as BoxDecoration).color, AppTokens.sealDark);
   });
