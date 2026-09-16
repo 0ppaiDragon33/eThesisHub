@@ -28,9 +28,20 @@ final defenceRepositoryProvider = Provider<DefenceRepository>(
 /// overview that wants "every defence" -- a coordinator's or dean's
 /// "Defences this week" tile, or [coordinatorNeedsYouProvider]'s own
 /// "no defence scheduled" check -- reads it from here instead.
-final allDefencesProvider = StreamProvider<List<Defence>>(
-  (ref) => ref.watch(defenceRepositoryProvider).watchAll(),
-);
+final allDefencesProvider = StreamProvider<List<Defence>>((ref) {
+  // Rebuilt on a change of user, exactly like defenceProvider and
+  // defenceCommentsProvider below. `watchAll` is a `list` on `defenses`,
+  // allowed only for a coordinator or dean, so on a COLD sign-in the
+  // listener can attach a beat before the auth token reaches the Firestore
+  // SDK -- the first query goes out unauthenticated and is refused, and a
+  // plain StreamProvider keeps that AsyncError until a new listener opens.
+  // Watching signedInUidProvider re-subscribes the moment auth resolves, so
+  // the coordinator/dean overview stops showing "Could not load" until a
+  // manual page refresh. (A token refresh keeps the same uid, so this does
+  // not churn the listener -- see the provider's own test.)
+  ref.watch(signedInUidProvider);
+  return ref.watch(defenceRepositoryProvider).watchAll();
+});
 
 final defenceProvider =
     StreamProvider.family<Defence?, String>((ref, defenceId) {
