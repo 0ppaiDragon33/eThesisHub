@@ -26,6 +26,7 @@ Future<ProviderContainer> containerFor(
   UserRole role, {
   required String uid,
   bool isEmailVerified = true,
+  bool active = true,
 }) async {
   final db = FakeFirebaseFirestore();
   await UserRepository(db).createStudentProfile(
@@ -35,6 +36,9 @@ Future<ProviderContainer> containerFor(
   );
   if (role != UserRole.student) {
     await db.collection('users').doc(uid).update({'role': role.value});
+  }
+  if (!active) {
+    await db.collection('users').doc(uid).update({'active': false});
   }
 
   SharedPreferences.setMockInitialValues({});
@@ -281,6 +285,66 @@ void main() {
 
     expect(find.text('Sign in'), findsWidgets);
     expect(find.byKey(const Key('overviewScreen')), findsNothing);
+  });
+
+  // --- deactivated accounts ---
+
+  testWidgets('a deactivated account is held on the deactivated screen, not '
+      'its overview', (tester) async {
+    final container =
+        await containerFor(UserRole.faculty, uid: 'off1', active: false);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('deactivatedScreen')), findsOneWidget);
+    expect(find.byKey(const Key('overviewScreen')), findsNothing);
+    expect(find.byKey(const Key('facultyOverview')), findsNothing);
+  });
+
+  testWidgets('a deactivated account cannot reach a protected route by URL',
+      (tester) async {
+    final container =
+        await containerFor(UserRole.coordinator, uid: 'off2', active: false);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    container.read(goRouterProvider).go('/coordinator');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('deactivatedScreen')), findsOneWidget);
+    expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
+  });
+
+  testWidgets('an active account is unaffected -- still lands on its overview',
+      (tester) async {
+    final container =
+        await containerFor(UserRole.faculty, uid: 'on1', active: true);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('deactivatedScreen')), findsNothing);
+    expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
   });
 
   // --- BLOCKING 4: guard coverage for the two primary auth redirects ---
