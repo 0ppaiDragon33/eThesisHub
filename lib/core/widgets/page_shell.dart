@@ -54,10 +54,11 @@ class PageShell extends StatelessWidget {
             kicker!.toUpperCase(),
             style: text.labelSmall?.copyWith(
               letterSpacing: 0.8,
+              fontWeight: FontWeight.w700,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppTokens.sm),
         ],
         if (title != null) ...[
           Text(title!, style: text.headlineSmall),
