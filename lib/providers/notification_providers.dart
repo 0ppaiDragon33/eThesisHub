@@ -214,6 +214,29 @@ final chapterFeedbackDetectorProvider = Provider<void>((ref) {
   });
 });
 
+/// The scheduling line, worded for the reader's own relationship to the
+/// defence — because a detector runs on each recipient's own client, so it
+/// already knows whether `uid` is the student group leader, the adviser, or
+/// a panelist. "Your defence" is right for the group but reads as if a
+/// faculty member were a student, which is the whole point of not sending
+/// every party the same student-voiced sentence.
+String _scheduledMessage(Defence defence, String uid) {
+  final at = defence.scheduledAt!;
+  final when = '${defence.venue} on ${at.day}/${at.month}/${at.year}';
+  if (defence.leaderUid == uid) {
+    return 'Your defence is scheduled for $when.';
+  }
+  if (defence.adviserUid == uid) {
+    return 'A defence you advise is scheduled for $when.';
+  }
+  if (defence.panelUids.contains(uid)) {
+    return 'A defence you are on the panel for is scheduled for $when.';
+  }
+  // Not a party by any snapshot — unreachable via myDefencesProvider, but a
+  // neutral sentence beats an assumption if the data ever disagrees.
+  return 'A defence is scheduled for $when.';
+}
+
 /// New comments and schedule changes on every defence the reader is party
 /// to.
 ///
@@ -252,14 +275,22 @@ final defenceDetectorProvider = Provider<void>((ref) {
             type: NotificationType.defenceScheduled,
             thesisId: defence.thesisId,
             defenceId: defence.id,
-            message: 'Your defence is scheduled for ${defence.venue} on '
-                '${defence.scheduledAt!.day}/${defence.scheduledAt!.month}/${defence.scheduledAt!.year}.',
+            message: _scheduledMessage(defence, uid),
             read: false,
             createdAt: defence.scheduledAt!,
           ),
         );
       }
 
+      // A defence comment reaches the student group leader alone. The
+      // adviser's consolidation and every panel remark are the group's to
+      // act on; the faculty parties authored or heard them live in the
+      // defence room and must not get a bell for a comment on their own
+      // defence. `myDefencesProvider` returns a faculty member every defence
+      // they advise or sit on, so without this guard the whole panel was
+      // pinged. Gated here, before the subscription is even opened, so a
+      // non-leader reader never registers a comment listener at all.
+      //
       // A standing subscription, not a one-shot read: opened once per
       // defence id and kept alive for the life of that defence so a new
       // comment arriving mid-session notifies without waiting for
@@ -267,7 +298,8 @@ final defenceDetectorProvider = Provider<void>((ref) {
       // by `registeredCommentDefenceIds` so a re-emission of the outer
       // source does not stack up duplicate `_detect` listeners for a
       // defence already covered.
-      if (registeredCommentDefenceIds.add(defence.id)) {
+      if (defence.leaderUid == uid &&
+          registeredCommentDefenceIds.add(defence.id)) {
         _detect<List<DefenceComment>>(
           ref,
           defenceCommentsProvider(defence.id),

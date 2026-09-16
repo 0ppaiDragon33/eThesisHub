@@ -11,6 +11,7 @@ import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
+import 'package:ethesishub/features/auth/deactivated_screen.dart';
 import 'package:ethesishub/features/auth/no_profile_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
@@ -131,7 +132,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 return location == '/no-profile' ? null : '/no-profile';
               }
 
+              // A coordinator has switched off this account
+              // (`users/{uid}.active == false`). It is signed in and has a
+              // profile, but every screen is closed to it -- it is held on
+              // the deactivated screen with only sign-out. This is a UX
+              // guard; the authoritative boundary is firestore.rules, the
+              // same as for the role guards further down. Placed before the
+              // role home resolves so no deactivated account is ever routed
+              // into the app.
+              if (!profile.active) {
+                return location == '/deactivated' ? null : '/deactivated';
+              }
+
               final home = homeRouteFor(profile.role);
+              // A reactivated account (active flipped back on) must not stay
+              // parked on the deactivated dead end -- only reached here when
+              // profile.active is true.
+              if (location == '/deactivated') return home;
               if (onAuthScreen || location == '/verify-email') return home;
 
               // A profile that has come back (a retry that succeeded, or a
@@ -366,6 +383,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/verify-email',
         builder: (_, _) => const VerifyEmailScreen(),
+      ),
+      // Outside the shell, with the other signed-out-facing screens: a
+      // deactivated account is offered sign-out and nothing else.
+      GoRoute(
+        path: '/deactivated',
+        builder: (_, _) => const DeactivatedScreen(),
       ),
       // Everything below sits inside ONE shell. That is the whole point of
       // this milestone: navigation used to exist on exactly four screens

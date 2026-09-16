@@ -88,6 +88,46 @@ void main() {
       final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
       expect(items.any((i) => i.type.name == 'nominationRecommended'), isTrue);
     });
+
+    test('the recommendation and approval reach ONLY the group leader, not a '
+        'faculty member with access to the thesis', () async {
+      // The coordinator's recommendation and the dean's approval are the
+      // student's news. A panelist (or adviser, coordinator, dean) who can
+      // read the thesis is not the leader, so `myThesisProvider` yields them
+      // nothing and neither notification is ever written to their feed.
+      final container = await containerFor('faculty1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
+      await firestore.collection('theses').doc('t1').set({
+        'leaderUid': 'student1',
+        'memberNames': ['Santos, J.'],
+        'workingTitle': 'A Study',
+        'college': 'CICT',
+        'program': 'BSIT',
+        'semester': '1',
+        'academicYear': '2026-2027',
+        'status': 'nominationApproved',
+        'panelistUids': ['faculty1'],
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+        'coordinatorRecommendedAt': Timestamp.fromDate(DateTime(2026, 2, 1)),
+        'coordinatorRecommendedBy': 'coord1',
+        'deanApprovedAt': Timestamp.fromDate(DateTime(2026, 2, 10)),
+        'deanApprovedBy': 'dean1',
+      });
+
+      container.read(nominationLifecycleDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('faculty1')
+          .first;
+      expect(items.where((i) => i.type.name == 'nominationRecommended'), isEmpty);
+      expect(items.where((i) => i.type.name == 'nominationApproved'), isEmpty);
+    });
   });
 
   group('chapterFeedbackDetectorProvider', () {
@@ -337,6 +377,83 @@ void main() {
 
       items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
       expect(items.any((i) => i.type.name == 'defenceComment'), isTrue);
+    });
+
+    test('the scheduled message is worded for a panelist, not as a student',
+        () async {
+      // A panelist and the student group both get defenceScheduled, but the
+      // sentence must not tell a faculty member "Your defence".
+      final container = await containerFor('faculty1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 7',
+        'panelUids': ['faculty1'],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'scheduled',
+        'createdBy': 'coord1',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 9)),
+      });
+
+      container.read(defenceDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('faculty1')
+          .first;
+      final scheduled =
+          items.firstWhere((i) => i.type.name == 'defenceScheduled');
+      expect(scheduled.message, contains('on the panel for'));
+      expect(scheduled.message, isNot(contains('Your defence')));
+    });
+
+    test('a comment does NOT notify a faculty panelist -- only the group '
+        'leader', () async {
+      // A defence comment (the adviser's consolidation, a panelist's remark)
+      // is the student group's to act on. Faculty parties heard it live in
+      // the defence room and must not get a bell for their own defence.
+      // 'faculty1' sits on the panel but is not the leaderUid, so the comment
+      // must land in the leader's feed and nowhere else.
+      final container = await containerFor('faculty1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 1',
+        'panelUids': ['faculty1'],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'scheduled',
+        'createdBy': 'coord1',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
+      });
+      await firestore.collection('defenses').doc('d1').collection('comments').doc('c1').set({
+        'authorUid': 'adviser1',
+        'authorName': 'Dr. Cruz',
+        'authorPosition': 'adviser',
+        'body': 'Please prepare the slides.',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
+      });
+
+      container.read(defenceDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('faculty1')
+          .first;
+      expect(items.where((i) => i.type.name == 'defenceComment'), isEmpty);
     });
   });
 
