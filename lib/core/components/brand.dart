@@ -6,9 +6,8 @@ import 'package:ethesishub/core/widgets/page_shell.dart' show Gap;
 /// The app's mark: a mortarboard inside a rounded square.
 ///
 /// Drawn in code rather than shipped as an image (D81) so it stays sharp at
-/// every size it appears — 56px on the entry brand pane, 40px on the card,
-/// 26px in the app bar — and so it can take the dark-mode seal without a
-/// second asset.
+/// every size it appears — 56px on the entry brand pane, 28px in the phone
+/// brand band — and so it can take the dark-mode seal without a second asset.
 ///
 /// Seal blue, not the purple of the reference image: every primary button,
 /// link and active destination in this app keys off `seal`, and a mark in a

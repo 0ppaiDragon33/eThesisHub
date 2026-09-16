@@ -68,32 +68,65 @@ void main() {
     expect(scaffold.resizeToAvoidBottomInset, anyOf(isNull, isTrue));
   });
 
-  testWidgets('survives a keyboard-sized bottom inset', (tester) async {
-    tester.view.physicalSize = const Size(400, 700);
+  // D82's breakpoint, from both sides. An off-by-one here — `>` where `>=`
+  // was meant — would swap the layout on a whole class of tablet widths and
+  // no other test in this file would notice.
+  testWidgets('switches layout exactly at the breakpoint', (tester) async {
+    await pumpAt(tester, const Size(AuthScaffold.wideBreakpoint - 1, 900));
+    expect(find.text(AuthScaffold.brandSentence), findsNothing);
+
+    await pumpAt(tester, const Size(AuthScaffold.wideBreakpoint, 900));
+    expect(find.text(AuthScaffold.brandSentence), findsOneWidget);
+  });
+
+  // D83, and the question this whole design was challenged on: with the
+  // keyboard up, can you still see the field you are typing in?
+  //
+  // Nothing here simulates a keyboard beyond shrinking the viewport, because
+  // nothing in AuthScaffold detects one. The chain being pinned is entirely
+  // the framework's: Scaffold shrinks the viewport to the space above the
+  // inset, the focused EditableText calls Scrollable.ensureVisible on itself,
+  // and the band scrolls away because it is a CHILD of the scroll view rather
+  // than a sibling pinned above it. Break any link — pin the band outside the
+  // scrollable, or set resizeToAvoidBottomInset: false — and this fails.
+  testWidgets('a focused field stays visible above a keyboard-sized inset',
+      (tester) async {
+    const inset = 300.0;
+    const height = 700.0;
+
+    tester.view.physicalSize = const Size(400, height);
     tester.view.devicePixelRatio = 1.0;
-    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    tester.view.viewInsets = const FakeViewPadding(bottom: inset);
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const MaterialApp(
+    final last = FocusNode();
+    addTearDown(last.dispose);
+
+    await tester.pumpWidget(MaterialApp(
       home: AuthScaffold(
         title: 'Create account',
         children: [
-          _FieldStub(), _FieldStub(), _FieldStub(),
-          _FieldStub(), _FieldStub(),
+          const TextField(),
+          const TextField(),
+          const TextField(),
+          const TextField(),
+          // Register's last field starts well below the fold on a phone, which
+          // is the case that actually hurts. The spacer forces it there rather
+          // than hoping five fields happen to overflow.
+          const SizedBox(height: 900),
+          TextField(focusNode: last),
         ],
       ),
     ));
 
-    // Five fields, a shrunken viewport and no overflow: the layout gives way
-    // by scrolling rather than by painting outside itself.
+    last.requestFocus();
+    await tester.pumpAndSettle();
+
+    final field = tester.getRect(find.byType(TextField).last);
+    expect(field.bottom, lessThanOrEqualTo(height - inset),
+        reason: 'the focused field is under the keyboard');
+    expect(field.top, greaterThanOrEqualTo(0.0),
+        reason: 'the focused field scrolled off the top');
     expect(tester.takeException(), isNull);
   });
-}
-
-/// A field-sized block, so the inset test exercises real height rather than
-/// a one-line Text.
-class _FieldStub extends StatelessWidget {
-  const _FieldStub({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox(height: 72);
 }
