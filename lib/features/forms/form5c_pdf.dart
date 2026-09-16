@@ -201,7 +201,7 @@ List<pw.Widget> _page({Form5cData? data}) {
 /// sheet, as a PDF. `compress: false` keeps the content streams
 /// text-greppable; see `form1_pdf.dart` for why that matters.
 Future<Uint8List> buildForm5cPdf(Form5cData data) async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
 
   doc.addPage(
     // MultiPage, not Page: eleven criteria with prompts and comments will
@@ -223,7 +223,7 @@ Future<Uint8List> buildForm5cPdf(Form5cData data) async {
 /// blank score boxes is obviously unfilled on its face, and marking it
 /// would only clutter a form meant to be printed and written on.
 Future<Uint8List> buildForm5cBlank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
 
   doc.addPage(
     pw.MultiPage(

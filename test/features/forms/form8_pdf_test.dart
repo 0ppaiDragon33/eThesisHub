@@ -30,6 +30,9 @@ ArchiveEntry entry({
 }
 
 void main() {
+  // The forms embed Source Serif 4 via rootBundle, which needs the binding.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('carries the chrome and the form title', () async {
     final text = extractPdfText(
       await buildForm8Pdf(Form8Data.assemble(entry: entry())),
@@ -146,6 +149,28 @@ void main() {
       expect(text, isNot(contains('TEMPLATE')));
       expect(text, isNot(contains('not an issued certification')));
     });
+  });
+
+  // The bug the embedded font exists to fix. The `pdf` package's built-in
+  // Helvetica covers Latin-1 and silently dropped everything past it: an em
+  // dash, a curly quote, or a name carrying ễ simply did not appear, with no
+  // error and nothing in the bytes to notice afterwards. On a certificate
+  // the university issues, a student's name quietly going missing is the
+  // worst shape this bug could take, so it is pinned here.
+  test('renders characters beyond Latin-1 rather than dropping them', () async {
+    final text = extractPdfText(
+      await buildForm8Pdf(
+        Form8Data(
+          studentNames: const ['Nguyễn, A.'],
+          title: 'Coastal Fisheries — a “curly” study',
+          issuedOn: DateTime(2026, 9, 30),
+        ),
+      ),
+    );
+
+    expect(text, contains('Nguyễn'));
+    expect(text, contains('—'));
+    expect(text, contains('“curly”'));
   });
 
   test('a filled certificate carries no template marking either', () async {

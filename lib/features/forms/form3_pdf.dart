@@ -160,7 +160,7 @@ pw.Widget _page({Form3Data? data}) {
 /// Pre-Oral Defense — as a PDF. `compress: false` keeps the content
 /// streams text-greppable; see `form1_pdf.dart` for why that matters.
 Future<Uint8List> buildForm3Pdf(Form3Data data) async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,
@@ -176,7 +176,7 @@ Future<Uint8List> buildForm3Pdf(Form3Data data) async {
 /// completed by hand, the way this letter is actually used before a
 /// defence exists in the app at all.
 Future<Uint8List> buildForm3Blank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,

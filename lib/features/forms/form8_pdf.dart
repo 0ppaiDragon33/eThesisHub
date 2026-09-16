@@ -114,7 +114,7 @@ pw.Widget _page({Form8Data? data}) {
 /// PDF. `compress: false` keeps the content streams text-greppable; see
 /// `form1_pdf.dart` for why that matters.
 Future<Uint8List> buildForm8Pdf(Form8Data data) async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
 
   doc.addPage(
     pw.Page(
@@ -132,7 +132,7 @@ Future<Uint8List> buildForm8Pdf(Form8Data data) async {
 /// underscores. Nothing else differs — it is meant to be printed and
 /// completed by hand, so it carries no marking to write around.
 Future<Uint8List> buildForm8Blank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
 
   doc.addPage(
     pw.Page(
