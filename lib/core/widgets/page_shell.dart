@@ -16,11 +16,18 @@ class PageShell extends StatelessWidget {
   const PageShell({
     super.key,
     required this.children,
+    this.kicker,
     this.title,
     this.subtitle,
     this.scrollable = true,
     this.maxWidth = AppTokens.measure,
   });
+
+  /// A short overline above the title naming the context you are reading in —
+  /// the role whose queue this is, or the record this page belongs to. The app
+  /// bar says where you are in the app; the title says what the page asks of
+  /// you; the kicker says on whose behalf.
+  final String? kicker;
 
   /// Optional page heading, set above the content. Distinct from the app bar
   /// title: the app bar names where you are in the app, this names what the
@@ -42,6 +49,16 @@ class PageShell extends StatelessWidget {
     final column = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (kicker != null) ...[
+          Text(
+            kicker!.toUpperCase(),
+            style: text.labelSmall?.copyWith(
+              letterSpacing: 0.8,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 2),
+        ],
         if (title != null) ...[
           Text(title!, style: text.headlineSmall),
           if (subtitle != null) ...[
