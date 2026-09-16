@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
 import 'package:ethesishub/core/widgets/password_strength_meter.dart';
 import 'package:ethesishub/features/auth/registration_controller.dart';
@@ -56,89 +59,104 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Renders nothing while the domain restriction is enforced.
-                const InstitutionalDomainNotice(),
-                TextField(
-                  key: const Key('fullName'),
-                  controller: _fullName,
-                  decoration: const InputDecoration(labelText: 'Full name'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('email'),
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Institutional email',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('program'),
-                  controller: _program,
-                  decoration: const InputDecoration(
-                    labelText: 'Program (optional)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('password'),
-                  controller: _password,
-                  obscureText: true,
-                  // Rebuilds the meter as they type. The meter is guidance
-                  // only — nothing here blocks a submission.
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    helperText: 'At least 8 characters. A phrase of a few '
-                        'words works well.',
-                  ),
-                ),
-                PasswordStrengthMeter(_password.text),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('confirmPassword'),
-                  controller: _confirmPassword,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: 'Confirm password'),
-                ),
-                const SizedBox(height: 20),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                FilledButton(
-                  key: const Key('submit'),
-                  onPressed: _busy ? null : _submit,
-                  child: Text(_busy ? 'Creating…' : 'Create account'),
-                ),
-                TextButton(
-                  key: const Key('goToLogin'),
-                  onPressed: () => context.go('/login'),
-                  child: const Text('Already have an account? Sign in'),
-                ),
-              ],
+    return AuthScaffold(
+      title: 'Create account',
+      subtitle: 'Students register directly. Your role is assigned by the '
+          'college.',
+      children: [
+        // Renders nothing while the domain restriction is enforced.
+        const InstitutionalDomainNotice(),
+        FormRow(
+          label: 'Full name',
+          child: TextField(
+            key: const Key('fullName'),
+            controller: _fullName,
+            decoration: const InputDecoration(
+              border: UnderlineInputBorder(),
+              isDense: true,
             ),
           ),
         ),
-      ),
+        FormRow(
+          label: 'Institutional email',
+          child: TextField(
+            key: const Key('email'),
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              border: UnderlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+        FormRow(
+          label: 'Program (optional)',
+          child: TextField(
+            key: const Key('program'),
+            controller: _program,
+            decoration: const InputDecoration(
+              border: UnderlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+        FormRow(
+          label: 'Password',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                key: const Key('password'),
+                controller: _password,
+                obscureText: true,
+                // Rebuilds the meter as they type. The meter is guidance
+                // only — nothing here blocks a submission.
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  border: UnderlineInputBorder(),
+                  isDense: true,
+                  helperText: 'At least 8 characters. A phrase of a few '
+                      'words works well.',
+                ),
+              ),
+              PasswordStrengthMeter(_password.text),
+            ],
+          ),
+        ),
+        FormRow(
+          label: 'Confirm password',
+          child: TextField(
+            key: const Key('confirmPassword'),
+            controller: _confirmPassword,
+            obscureText: true,
+            decoration: const InputDecoration(
+              border: UnderlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppTokens.md),
+            child: Text(
+              _error!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
+        FilledButton(
+          key: const Key('submit'),
+          onPressed: _busy ? null : _submit,
+          child: Text(_busy ? 'Creating…' : 'Create account'),
+        ),
+        TextButton(
+          key: const Key('goToLogin'),
+          onPressed: () => context.go('/login'),
+          child: const Text('Already have an account? Sign in'),
+        ),
+      ],
     );
   }
 }

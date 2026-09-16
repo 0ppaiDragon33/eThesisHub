@@ -198,6 +198,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Strong'), findsOneWidget);
   });
+
+  testWidgets('five fields survive a keyboard-sized inset', (tester) async {
+    // Register is the screen most likely to break the shared scaffold: five
+    // fields, a phone width and a keyboard up. It must scroll, not overflow.
+    tester.view.physicalSize = const Size(400, 700);
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+        wrap(const RegisterScreen(), db: FakeFirebaseFirestore()));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// Fake UserRepository that throws when createStudentProfile is called.
