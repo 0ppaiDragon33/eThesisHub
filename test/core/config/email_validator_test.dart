@@ -61,4 +61,57 @@ void main() {
       isNull,
     );
   });
+
+  // Domain-adjacent spoofs. The check is exact equality after lowercasing,
+  // so these already fail -- but self-registration restricted to the
+  // institutional domain is a claim the manuscript makes, and a claim with
+  // no test behind it is a claim that quietly breaks the day someone
+  // "improves" this into an endsWith or a contains.
+  group('domain-adjacent spoofs are rejected when enforcement is on', () {
+    // endsWith('isufst.edu.ph') would accept this.
+    test('a domain that merely ENDS with the institutional one', () {
+      expect(
+        EmailValidator.validateForRegistration(
+          'attacker@notisufst.edu.ph',
+          enforceDomain: true,
+        ),
+        isNotNull,
+      );
+    });
+
+    // startsWith / contains would accept this one.
+    test('the institutional domain as a PREFIX of an attacker domain', () {
+      expect(
+        EmailValidator.validateForRegistration(
+          'attacker@isufst.edu.ph.attacker.com',
+          enforceDomain: true,
+        ),
+        isNotNull,
+      );
+    });
+
+    // contains() would accept this: the real domain buried mid-string.
+    test('the institutional domain embedded in the middle', () {
+      expect(
+        EmailValidator.validateForRegistration(
+          'attacker@mail.isufst.edu.ph.evil.net',
+          enforceDomain: true,
+        ),
+        isNotNull,
+      );
+    });
+
+    // A subdomain is NOT the institution's domain. Strict by design: if
+    // ISUFST ever issues mail.isufst.edu.ph addresses this test is the
+    // place that says so out loud rather than a silent behaviour change.
+    test('a subdomain of the institutional domain', () {
+      expect(
+        EmailValidator.validateForRegistration(
+          'someone@mail.isufst.edu.ph',
+          enforceDomain: true,
+        ),
+        isNotNull,
+      );
+    });
+  });
 }
