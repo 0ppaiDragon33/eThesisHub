@@ -33,6 +33,7 @@ import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/features/forms/forms_screen.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
+import 'package:ethesishub/features/nomination/stalled_theses_screen.dart';
 import 'package:ethesishub/features/notifications/notifications_screen.dart';
 import 'package:ethesishub/features/repository/archive_entry_screen.dart';
 import 'package:ethesishub/features/repository/archive_queue_screen.dart';
@@ -263,7 +264,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // deny `list` on `users` and on `facultyInvites` to every
               // other role, so a wrong-role visitor who reached either
               // screen would find nothing readable and nothing writable.
-              if ((location == '/users' || location == '/invites') &&
+              if ((location == '/users' || location == '/invites' || location == '/stalled') &&
                   profile.role != UserRole.coordinator) {
                 return home;
               }
@@ -619,6 +620,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // on the Users entry. Registered as its own route, not a query
       // parameter on '/invites', so both tabs stay independently
       // bookmarkable.
+      GoRoute(
+        path: '/stalled',
+        builder: (_, _) => const StalledThesesScreen(),
+      ),
       GoRoute(
         path: '/users',
         builder: (_, _) => const UsersScreen(),

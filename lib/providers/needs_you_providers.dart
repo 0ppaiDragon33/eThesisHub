@@ -546,6 +546,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   AsyncValue<List<Thesis>>? titleDefences;
   AsyncValue<List<Thesis>>? readyCandidates;
   AsyncValue<List<Defence>>? defences;
+  AsyncValue<List<Thesis>>? stalled;
 
   // thesisId -> its chapters, kept live by a subscription opened/closed as
   // the ready-candidate list itself changes (see the fan-in note above).
@@ -557,7 +558,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
     // not merely for a non-null AsyncValue, which `fireImmediately` supplies
     // on frame one. See [_gate].
     final gate =
-        _gate([recommendations, titleDefences, readyCandidates, defences]);
+        _gate([recommendations, titleDefences, readyCandidates, defences, stalled]);
     if (gate == null) return;
     if (gate.hasError) {
       controller.addError(gate.error!, gate.stackTrace);
@@ -614,6 +615,20 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
             tone: NeedsYouTone.act,
             deep: isDeepForRole(UserRole.coordinator, '/defence/schedule'),
           ),
+      // A declined Conforme wedges a thesis permanently, and only a
+      // coordinator can free it. It is `returned` rather than `act` because
+      // nothing here is progress -- the group has been sent backwards and
+      // needs their thesis handed back.
+      for (final t in stalled!.requireValue)
+        NeedsYouItem(
+          title: t.workingTitle,
+          detail: 'A nominee declined, so this thesis cannot advance -- '
+              'reopen it for re-nomination.',
+          route: '/stalled',
+          chipLabel: 'Reopen',
+          tone: NeedsYouTone.returned,
+          deep: isDeepForRole(UserRole.coordinator, '/stalled'),
+        ),
     ];
 
     controller.add(items);
@@ -647,6 +662,18 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
     thesesByStatusProvider(ThesisStatus.nominationPendingCoordinator),
     (previous, next) {
       recommendations = next;
+      emit();
+    },
+    fireImmediately: true,
+  );
+
+  // Not thesesByStatusProvider(nominationPendingConforme): most theses at
+  // that status are healthy and merely waiting on answers. Only the ones a
+  // decline has wedged belong in a queue of work.
+  ref.listen<AsyncValue<List<Thesis>>>(
+    stalledThesesProvider,
+    (previous, next) {
+      stalled = next;
       emit();
     },
     fireImmediately: true,
