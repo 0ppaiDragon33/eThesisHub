@@ -4665,6 +4665,88 @@ test("notifications: an anonymous reader is denied both directions", async () =>
   );
 });
 
+// ---------------------------------------------------------------------------
+// Account deactivation (users.active), enforced at the rules layer.
+//
+// active:false revokes every write and every position/role-based read, while
+// the account may STILL read its own users doc — otherwise the client cannot
+// discover it is deactivated to show the DeactivatedScreen. In firestore.rules
+// this is isActive(), folded into every named authorization helper; the
+// self-read arm (users get) uses bare signedIn() and is deliberately left
+// ungated. These tests pin both the deny side and that one survival.
+// ---------------------------------------------------------------------------
+
+async function seedDeactivated(uid, role, email) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users", uid), {
+      fullName: "U", email, role, college: null, program: null,
+      specialization: null, active: false,
+      createdAt: serverTimestamp(), createdBy: null,
+    });
+  });
+}
+
+// isCoordinator() seam — the case that matters most: a deactivated
+// coordinator must not be able to administer accounts, least of all
+// reactivate themselves.
+test("active: a deactivated coordinator may NOT administer another account", async () => {
+  await seedDeactivated("coord-off", "coordinator", "coordoff@isufst.edu.ph");
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "users/target-off"),
+      studentProfile("targetoff@isufst.edu.ph")));
+  const coord = asUser("coord-off", "coordoff@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "users/target-off"), { active: true }));
+});
+
+// isDean() seam — privileged read revoked too.
+test("active: a deactivated dean may NOT list accounts", async () => {
+  await seedDeactivated("dean-off", "dean", "deanoff@isufst.edu.ph");
+  const dean = asUser("dean-off", "deanoff@isufst.edu.ph");
+  await assertFails(getDocs(collection(dean, "users")));
+});
+
+// mayCreateNomination() — the signedIn()-based leader write the naive
+// "verified() only" plan would have missed.
+// Mirrors the known-passing C2 "a faculty leader MAY nominate a DIFFERENT
+// faculty member" (fac-b nominee) so the ONLY thing that can deny the write
+// is the leader's active:false — isolating the mayCreateNomination() seam.
+test("active: a deactivated leader may NOT create a nomination", async () => {
+  await seedDeactivated("flead-off", "faculty", "fleadoff@isufst.edu.ph");
+  await seedThesis("t-off", "flead-off", "draft");
+  const leaderOff = asUser("flead-off", "fleadoff@isufst.edu.ph");
+  await assertFails(
+    setDoc(doc(leaderOff, "theses/t-off/nominations/fac-b"), nominationDoc("fac-b"))
+  );
+});
+
+// isThesisLeader() seam — another signedIn()-based leader write.
+test("active: a deactivated leader may NOT edit their own thesis", async () => {
+  await seedDeactivated("lead-off2", "student", "leadoff2@isufst.edu.ph");
+  await seedThesis("t-off2", "lead-off2", "draft");
+  const leaderOff = asUser("lead-off2", "leadoff2@isufst.edu.ph");
+  await assertFails(
+    updateDoc(doc(leaderOff, "theses/t-off2"), { workingTitle: "Changed" })
+  );
+});
+
+// The one survival: discovering you are deactivated.
+test("active CONTROL: a deactivated account may STILL read its own users doc", async () => {
+  await seedDeactivated("self-off", "faculty", "selfoff@isufst.edu.ph");
+  const selfOff = asUser("self-off", "selfoff@isufst.edu.ph");
+  await assertSucceeds(getDoc(doc(selfOff, "users/self-off")));
+});
+
+// Regression guard: enforcement must not over-block a genuinely active
+// privileged account (the paired allow for the first deny above).
+test("active CONTROL: an ACTIVE coordinator still administers accounts", async () => {
+  await seedUser("coord-on", "coordinator", "coordon@isufst.edu.ph");
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "users/target-on"),
+      studentProfile("targeton@isufst.edu.ph")));
+  const coord = asUser("coord-on", "coordon@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(coord, "users/target-on"), { active: false }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });
