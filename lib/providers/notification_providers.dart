@@ -214,6 +214,29 @@ final chapterFeedbackDetectorProvider = Provider<void>((ref) {
   });
 });
 
+/// The scheduling line, worded for the reader's own relationship to the
+/// defence — because a detector runs on each recipient's own client, so it
+/// already knows whether `uid` is the student group leader, the adviser, or
+/// a panelist. "Your defence" is right for the group but reads as if a
+/// faculty member were a student, which is the whole point of not sending
+/// every party the same student-voiced sentence.
+String _scheduledMessage(Defence defence, String uid) {
+  final at = defence.scheduledAt!;
+  final when = '${defence.venue} on ${at.day}/${at.month}/${at.year}';
+  if (defence.leaderUid == uid) {
+    return 'Your defence is scheduled for $when.';
+  }
+  if (defence.adviserUid == uid) {
+    return 'A defence you advise is scheduled for $when.';
+  }
+  if (defence.panelUids.contains(uid)) {
+    return 'A defence you are on the panel for is scheduled for $when.';
+  }
+  // Not a party by any snapshot — unreachable via myDefencesProvider, but a
+  // neutral sentence beats an assumption if the data ever disagrees.
+  return 'A defence is scheduled for $when.';
+}
+
 /// New comments and schedule changes on every defence the reader is party
 /// to.
 ///
@@ -252,8 +275,7 @@ final defenceDetectorProvider = Provider<void>((ref) {
             type: NotificationType.defenceScheduled,
             thesisId: defence.thesisId,
             defenceId: defence.id,
-            message: 'Your defence is scheduled for ${defence.venue} on '
-                '${defence.scheduledAt!.day}/${defence.scheduledAt!.month}/${defence.scheduledAt!.year}.',
+            message: _scheduledMessage(defence, uid),
             read: false,
             createdAt: defence.scheduledAt!,
           ),

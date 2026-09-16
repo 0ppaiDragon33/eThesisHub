@@ -379,6 +379,41 @@ void main() {
       expect(items.any((i) => i.type.name == 'defenceComment'), isTrue);
     });
 
+    test('the scheduled message is worded for a panelist, not as a student',
+        () async {
+      // A panelist and the student group both get defenceScheduled, but the
+      // sentence must not tell a faculty member "Your defence".
+      final container = await containerFor('faculty1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'final',
+        'venue': 'Room 7',
+        'panelUids': ['faculty1'],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'scheduled',
+        'createdBy': 'coord1',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 9)),
+      });
+
+      container.read(defenceDetectorProvider);
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('faculty1')
+          .first;
+      final scheduled =
+          items.firstWhere((i) => i.type.name == 'defenceScheduled');
+      expect(scheduled.message, contains('on the panel for'));
+      expect(scheduled.message, isNot(contains('Your defence')));
+    });
+
     test('a comment does NOT notify a faculty panelist -- only the group '
         'leader', () async {
       // A defence comment (the adviser's consolidation, a panelist's remark)
