@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -141,17 +142,19 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   Widget build(BuildContext context) {
     return AuthScaffold(
       title: 'Verify your email',
-      subtitle: 'We sent a link to your institutional address.',
+      // No subtitle: the paragraph below already says it, and says what to do
+      // next as well. Two paraphrases of one sentence is the duplication this
+      // direction removes.
       children: [
         const Text(
           'We sent a verification link to your institutional email. '
           'Open it, then return here and continue.',
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppTokens.lg),
         if (_message != null)
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: AppTokens.md),
             child: Text(
               _message!,
               textAlign: TextAlign.center,

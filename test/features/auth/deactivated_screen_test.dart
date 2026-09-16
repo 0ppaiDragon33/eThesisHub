@@ -24,7 +24,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Account deactivated'), findsWidgets);
+      // Exactly one: the restyle moved this string into AuthScaffold's title
+      // and dropped the in-body heading that used to repeat it. findsWidgets
+      // would not notice if the duplicate came back.
+      expect(find.text('Account deactivated'), findsOneWidget);
       expect(find.byType(SignOutButton), findsOneWidget);
       expect(tester.takeException(), isNull);
     }

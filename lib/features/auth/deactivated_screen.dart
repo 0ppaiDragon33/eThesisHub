@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 
 /// Shown to a signed-in, verified account whose `users/{uid}.active` is
@@ -24,18 +25,21 @@ class DeactivatedScreen extends StatelessWidget {
     return AuthScaffold(
       key: const Key('deactivatedScreen'),
       title: 'Account deactivated',
-      subtitle: 'This account has been deactivated by the college.',
+      // No subtitle: the paragraph below says the same thing more completely,
+      // and naming the coordinator is the part that tells the reader what to
+      // do next. A subtitle paraphrasing the paragraph under it is the
+      // duplication this direction removes.
       children: [
         Icon(Icons.no_accounts_outlined,
             size: 48, color: theme.colorScheme.error),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppTokens.md),
         const Text(
           'Your account has been deactivated by the College Research '
           'Coordinator, so it can no longer be used to sign in. If you '
           'think this is a mistake, contact the coordinator to have it '
           'restored.',
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppTokens.lg),
         const SignOutButton(),
       ],
     );
