@@ -14,7 +14,7 @@ const _bodyStyle = pw.TextStyle(fontSize: 11);
 /// approved-title-to-new-title-with-reasons letter. See `form4a_pdf.dart`
 /// for the fuller reasoning — it applies here unchanged.
 Future<Uint8List> buildForm4bBlank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,

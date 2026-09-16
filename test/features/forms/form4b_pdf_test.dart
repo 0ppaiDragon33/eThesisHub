@@ -4,6 +4,9 @@ import 'package:ethesishub/features/forms/form4b_pdf.dart';
 import 'pdf_text.dart';
 
 void main() {
+  // The forms embed Source Serif 4 via rootBundle, which needs the binding.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('carries the chrome and the form title', () async {
     final text = extractPdfText(await buildForm4bBlank());
 

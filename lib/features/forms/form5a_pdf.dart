@@ -122,7 +122,7 @@ pw.Widget _page({Form5aData? data}) {
 
 /// Generates Form 5a — Request for Final Oral Defense — as a PDF.
 Future<Uint8List> buildForm5aPdf(Form5aData data) async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,
@@ -136,7 +136,7 @@ Future<Uint8List> buildForm5aPdf(Form5aData data) async {
 /// A blank Form 5a: the same chrome and letter body as [buildForm5aPdf],
 /// with every variable clause a ruled line.
 Future<Uint8List> buildForm5aBlank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,

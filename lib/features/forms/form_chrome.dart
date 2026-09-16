@@ -1,5 +1,38 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
+/// The embedded serif theme every generated form renders with.
+///
+/// The `pdf` package's built-in Helvetica covers Latin-1 and silently drops
+/// everything past it — an em dash, a curly quote, or a name carrying a
+/// character like ễ simply did not appear on the page, with no error and
+/// nothing in the bytes to notice afterwards. On a document a group submits
+/// to the university, a name quietly going missing is the worst shape a bug
+/// can take. Source Serif 4 is embedded instead, which also matches the
+/// serif face of the layout approved with the owner.
+///
+/// Embedding changes how text is written: an embedded TrueType font shows
+/// glyph ids under Identity-H rather than characters, which is why
+/// `test/features/forms/pdf_text.dart` decodes through the font's
+/// `/ToUnicode` CMap.
+///
+/// Parsed once per process. The files are ~260KB each and every form would
+/// otherwise re-parse them on every download.
+Future<pw.ThemeData> formTheme() async {
+  final cached = _theme;
+  if (cached != null) return cached;
+
+  final regular = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/SourceSerif4-Regular.ttf'),
+  );
+  final bold = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/SourceSerif4-Bold.ttf'),
+  );
+  return _theme = pw.ThemeData.withFont(base: regular, bold: bold);
+}
+
+pw.ThemeData? _theme;
 
 /// The house blue, shared by every form's rule and institution line.
 const formAccent = PdfColor.fromInt(0xFF0B5FA5);

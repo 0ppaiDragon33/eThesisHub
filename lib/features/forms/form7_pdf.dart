@@ -159,7 +159,7 @@ pw.Widget _page({Form7Data? data}) {
 /// Generates Form 7 — Certificate of Review — as a PDF. `compress: false`
 /// keeps the content streams text-greppable.
 Future<Uint8List> buildForm7Pdf(Form7Data data) async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -173,7 +173,7 @@ Future<Uint8List> buildForm7Pdf(Form7Data data) async {
 /// A blank Form 7: the same chrome, certification sentence and review
 /// table as [buildForm7Pdf], with the presenter and title lines ruled.
 Future<Uint8List> buildForm7Blank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,

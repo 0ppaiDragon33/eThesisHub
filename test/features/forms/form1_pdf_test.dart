@@ -10,6 +10,9 @@ import 'package:ethesishub/features/forms/form_chrome.dart' show panelSentence;
 import 'pdf_text.dart';
 
 void main() {
+  // The forms embed Source Serif 4 via rootBundle, which needs the binding.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   Thesis buildThesis({
     String? coordinatorRecommendedBy,
     String? deanApprovedBy,

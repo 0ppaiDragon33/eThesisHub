@@ -66,7 +66,7 @@ pw.TextSpan buildPanelParagraphSpan(Form1Data data) {
 /// which is how the tests prove fields actually made it onto the page rather
 /// than merely proving the PDF machinery ran.
 Future<Uint8List> buildForm1Pdf(Form1Data data) async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   final t = data.thesis;
 
   doc.addPage(

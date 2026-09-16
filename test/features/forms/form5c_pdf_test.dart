@@ -74,6 +74,9 @@ Form5cData assemble({
 }
 
 void main() {
+  // The forms embed Source Serif 4 via rootBundle, which needs the binding.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('carries the chrome and the form title', () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
 

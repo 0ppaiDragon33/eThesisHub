@@ -18,7 +18,7 @@ const _bodyStyle = pw.TextStyle(fontSize: 11);
 /// same blank every time, printed and completed by hand — exactly how
 /// this letter is used today.
 Future<Uint8List> buildForm4aBlank() async {
-  final doc = pw.Document(compress: false);
+  final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,
