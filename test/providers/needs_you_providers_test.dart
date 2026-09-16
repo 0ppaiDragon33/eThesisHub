@@ -425,6 +425,75 @@ void main() {
       }
     });
 
+    test(
+        'facultyNeedsYouProvider: a defence row addresses the defence room by '
+        'defence id, never /defence/:thesisId', () async {
+      // `/defence/:thesisId` is M1b's TitleDefenceScreen, keyed by a THESIS
+      // id; the defence room is `/defence/room/:defenceId`. Putting `d.id`
+      // into the former made the screen read `theses/{defenceId}`, a
+      // document that does not exist -- and because `thesisData()` reads
+      // `.data` off a null `get()`, the rules raise an evaluation error,
+      // which surfaces as `permission-denied` rather than "not found". An
+      // adviser clicking Consolidate landed on "Could not load this thesis".
+      final defenceDue = Defence(
+        id: 'd-consolidate',
+        thesisId: 't-consolidate',
+        type: DefenceType.preOral,
+        venue: 'Room 101',
+        panelUids: const [],
+        adviserUid: 'f1',
+        leaderUid: 'leader1',
+        status: DefenceStatus.completed,
+        createdBy: 'c1',
+      );
+      final defenceInProgress = Defence(
+        id: 'd-join',
+        thesisId: 't-join',
+        type: DefenceType.final_,
+        venue: 'Room 102',
+        panelUids: const [],
+        adviserUid: 'f1',
+        leaderUid: 'leader2',
+        status: DefenceStatus.inProgress,
+        createdBy: 'c1',
+      );
+
+      final container = ProviderContainer(overrides: [
+        signedInUidProvider.overrideWithValue('f1'),
+        myPendingNominationsProvider.overrideWith(
+            (ref) => Stream.value(const <({String thesisId, Nomination nomination})>[])),
+        myAdviseesProvider.overrideWith((ref) => Stream.value(const [])),
+        myDefencesProvider.overrideWith(
+            (ref) => Stream.value([defenceDue, defenceInProgress])),
+        documentRepositoryProvider
+            .overrideWithValue(_FakeDocumentRepository(const {})),
+      ]);
+      addTearDown(container.dispose);
+
+      container.listen(facultyNeedsYouProvider, (_, _) {}, fireImmediately: true);
+      await settle();
+
+      final items = container.read(facultyNeedsYouProvider).requireValue;
+      expect(items.length, 2,
+          reason: 'fixture did not emit the Consolidate + Join rows: $items');
+
+      final consolidate =
+          items.firstWhere((i) => i.chipLabel == 'Consolidate');
+      final join = items.firstWhere((i) => i.chipLabel == 'Join');
+
+      // The adviser releases consolidation on ConsolidatedDefenceScreen.
+      expect(consolidate.route, '/defence/room/d-consolidate/consolidated');
+      // Joining a defence happening now lands in the live room.
+      expect(join.route, '/defence/room/d-join');
+
+      // No row may ever address a defence through the thesis-keyed route --
+      // a thesis id and a defence id are not interchangeable.
+      for (final item in items) {
+        expect(item.route, isNot('/defence/${'d-consolidate'}'));
+        expect(item.route, isNot('/defence/${'d-join'}'));
+      }
+    });
+
     test('deanNeedsYouProvider: every row\'s deep flag matches its route',
         () async {
       final approvalThesis = Thesis(
