@@ -8,7 +8,21 @@ service cloud.firestore {
     }
 
     function verified() {
-      return signedIn() && request.auth.token.email_verified == true;
+      return signedIn() && request.auth.token.email_verified == true && isActive();
+    }
+
+    // Account deactivation (users.active), enforced server-side. A missing
+    // users doc or a missing `active` field reads as active, so registration
+    // and email-verification (when the doc may not exist yet) are unaffected
+    // and only an explicit active:false revokes access. Folded into every
+    // named authorization helper. The users self-read arm (users get) and
+    // the registration create arm use bare signedIn()/auth and are
+    // deliberately left ungated, so a deactivated account can still read its
+    // own doc to discover it is deactivated. Only ever evaluated after a
+    // signedIn() short-circuit, so request.auth is non-null here.
+    function isActive() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return !exists(path) || get(path).data.get('active', true) != false;
     }
 
     function myEmail() {
@@ -20,11 +34,11 @@ service cloud.firestore {
     }
 
     function isCoordinator() {
-      return signedIn() && myRole() == 'coordinator';
+      return signedIn() && myRole() == 'coordinator' && isActive();
     }
 
     function isDean() {
-      return signedIn() && myRole() == 'dean';
+      return signedIn() && myRole() == 'dean' && isActive();
     }
 
     function invitedRoleFor(email) {
@@ -70,6 +84,7 @@ service cloud.firestore {
 
       // Profile edits by the owner, but never the role.
       allow update: if signedIn()
+                    && isActive()
                     && request.auth.uid == uid
                     && onlyChanged(['fullName', 'college', 'program', 'specialization']);
 
@@ -160,6 +175,7 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow create: if signedIn()
+                    && isActive()
                     && request.resource.data.actorUid == request.auth.uid
                     && request.resource.data.keys().hasOnly(
                          ['actorUid', 'action', 'targetType', 'targetId',
@@ -174,7 +190,7 @@ service cloud.firestore {
     }
 
     function isThesisLeader(thesisId) {
-      return signedIn() && thesisData(thesisId).leaderUid == request.auth.uid;
+      return signedIn() && isActive() && thesisData(thesisId).leaderUid == request.auth.uid;
     }
 
     function roleOf(uid) {
@@ -206,7 +222,7 @@ service cloud.firestore {
       // `let` so the leader/adviser/panel checks share a single read.
       function mayReadThesis() {
         let t = thesisData(thesisId);
-        return signedIn() && (
+        return signedIn() && isActive() && (
           t.leaderUid == request.auth.uid ||
           t.adviserUid == request.auth.uid ||
           request.auth.uid in t.panelistUids ||
@@ -606,6 +622,7 @@ service cloud.firestore {
           let role = roleOf(nomineeUid);
           let d = request.resource.data;
           return signedIn()
+                 && isActive()
                  && t.leaderUid == request.auth.uid
                  // Critical 3 — see the `delete` rule below.
                  && t.status == 'draft'
@@ -744,7 +761,7 @@ service cloud.firestore {
       // limit.
       function isOnPanel() {
         let t = thesisData(thesisId);
-        return signedIn() && (
+        return signedIn() && isActive() && (
           t.adviserUid == request.auth.uid ||
           request.auth.uid in t.panelistUids ||
           (hasNomination(thesisId, request.auth.uid) &&
@@ -849,7 +866,7 @@ service cloud.firestore {
       }
 
       function isAdviser(thesisId) {
-        return signedIn() && thesisData(thesisId).adviserUid == request.auth.uid;
+        return signedIn() && isActive() && thesisData(thesisId).adviserUid == request.auth.uid;
       }
 
       function chapterIds() {
@@ -1064,7 +1081,7 @@ service cloud.firestore {
 
       function onThisDefence() {
         let d = defence();
-        return signedIn() && (
+        return signedIn() && isActive() && (
           d.adviserUid == request.auth.uid ||
           request.auth.uid in d.panelUids ||
           d.leaderUid == request.auth.uid
@@ -1212,7 +1229,7 @@ service cloud.firestore {
         }
         function mayComment() {
           let d = parent();
-          return signedIn() && (
+          return signedIn() && isActive() && (
             d.adviserUid == request.auth.uid ||
             request.auth.uid in d.panelUids
           );
@@ -1489,6 +1506,7 @@ service cloud.firestore {
       function mayWriteOwnDirectoryEntry() {
         let role = myRole();
         return signedIn()
+               && isActive()
                && request.auth.uid == uid
                && role != 'student'
                && request.resource.data.keys().hasOnly(
