@@ -199,18 +199,38 @@ void main() {
     expect(find.text('Strong'), findsOneWidget);
   });
 
-  testWidgets('five fields survive a keyboard-sized inset', (tester) async {
+  testWidgets('the last field stays visible with the keyboard up',
+      (tester) async {
     // Register is the screen most likely to break the shared scaffold: five
-    // fields, a phone width and a keyboard up. It must scroll, not overflow.
-    tester.view.physicalSize = const Size(400, 700);
+    // fields, a phone width and a keyboard up. The field that hurts is the
+    // last one — it is furthest down the card and the first to go under the
+    // keyboard if AuthScaffold stops giving way by scrolling.
+    //
+    // Tapping the field is what makes this test mean anything. A pump alone
+    // never runs the focus path, so it would pass against a scaffold with
+    // resizeToAvoidBottomInset: false — which is exactly the regression it
+    // is here to catch.
+    const inset = 300.0;
+    const height = 700.0;
+
+    tester.view.physicalSize = const Size(400, height);
     tester.view.devicePixelRatio = 1.0;
-    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    tester.view.viewInsets = const FakeViewPadding(bottom: inset);
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
         wrap(const RegisterScreen(), db: FakeFirebaseFirestore()));
     await tester.pumpAndSettle();
 
+    // showKeyboard, not tap: the field starts below the fold, so a tap never
+    // reaches it — the hit test fails before any focus happens. This drives
+    // the same focus path a real tap would once the field is on screen.
+    await tester.showKeyboard(find.byKey(const Key('confirmPassword')));
+    await tester.pumpAndSettle();
+
+    final field = tester.getRect(find.byKey(const Key('confirmPassword')));
+    expect(field.bottom, lessThanOrEqualTo(height - inset),
+        reason: 'the focused field is under the keyboard');
     expect(tester.takeException(), isNull);
   });
 }
