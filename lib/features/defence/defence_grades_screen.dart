@@ -88,8 +88,14 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     }
   }
 
-  Future<void> _recordVerdict(String defenceId, String adviserUid) async {
-    final verdict = _verdictSelection;
+  /// Takes the verdict rather than reading [_verdictSelection], so the
+  /// value that reaches Firestore is the one the gate approved. A Pass the
+  /// passing-mark gate forbids arrives here as null and is refused.
+  Future<void> _recordVerdict(
+    String defenceId,
+    String adviserUid,
+    PassFail? verdict,
+  ) async {
     if (_recording || verdict == null) return;
     setState(() {
       _recording = true;
@@ -283,6 +289,14 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
     final evaluations = evalsAsync.valueOrNull ?? const <Evaluation>[];
 
+    // One source of truth for the mean. The number the panel deliberates
+    // over and the number that gates the verdict must never drift apart, so
+    // the display and the Pass/Fail gate both read this one value. Null only
+    // when nothing was submitted, in which case there is nothing to gate on.
+    final mean = evaluations.isEmpty
+        ? null
+        : evaluations.fold<int>(0, (a, b) => a + b.total) / evaluations.length;
+
     final children = <Widget>[
       if (evaluations.isEmpty)
         const EmptyState(
@@ -458,8 +472,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         Text(
           // One decimal place, not .round(): 83.5 and 84.4 both rendered
           // as "84", on the one number the panel deliberates over.
-          (evaluations.fold<int>(0, (a, b) => a + b.total) / evaluations.length)
-              .toStringAsFixed(1),
+          mean!.toStringAsFixed(1),
           key: const Key('panelMean'),
           style: Theme.of(context).textTheme.titleLarge,
         ),
@@ -488,7 +501,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
             ),
       ],
       const Gap.lg(),
-      ..._verdictBlock(context, defence, uid, isAdviser),
+      ..._verdictBlock(context, defence, uid, isAdviser, mean),
     ];
 
     return children;
@@ -499,6 +512,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     Defence defence,
     String? uid,
     bool isAdviser,
+    double? mean,
   ) {
     if (defence.hasVerdict) {
       return [
@@ -538,25 +552,50 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       ];
     }
 
+    // A mean below the passing mark admits only Fail (D77). A null mean
+    // means nothing was submitted, so there is nothing to gate on -- the
+    // release gate upstream already prevents a verdict in that state.
+    final passLocked = mean != null && !meanClearsPassingMark(mean);
+    // Never hand the record button a selection the gate forbids, even if
+    // the selection drifted to Pass before the grades resolved.
+    final selection = passLocked && _verdictSelection == PassFail.pass
+        ? null
+        : _verdictSelection;
+
     return [
       Text(
-        'Record the panel\'s deliberated decision under §8b. This is a '
-        'transcription of what the panel decided, not a computed grade.',
+        'Record the panel\'s deliberated decision under §8b. A panel mean '
+        'below $passingMark admits only Fail.',
         key: const Key('verdictCaption'),
         style: Theme.of(context).textTheme.bodySmall,
       ),
+      if (passLocked) ...[
+        const Gap.sm(),
+        Text(
+          // The precise mean, not the one-decimal figure shown above: 74.96
+          // displays as "75.0", and without the exact number here a locked
+          // Pass reads as a broken button rather than a rule.
+          'Panel mean ${mean.toStringAsFixed(2)} is below the passing mark '
+          'of $passingMark, so only Fail may be recorded.',
+          key: const Key('verdictLocked'),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
       const Gap.sm(),
       SegmentedButton<PassFail>(
-        segments: const [
-          ButtonSegment(value: PassFail.pass, label: Text('Pass')),
-          ButtonSegment(value: PassFail.fail, label: Text('Fail')),
+        segments: [
+          ButtonSegment(
+            value: PassFail.pass,
+            label: const Text('Pass'),
+            enabled: !passLocked,
+          ),
+          const ButtonSegment(value: PassFail.fail, label: Text('Fail')),
         ],
-        selected: {?_verdictSelection},
+        selected: {?selection},
         emptySelectionAllowed: true,
         onSelectionChanged: _recording
             ? null
-            : (selection) =>
-                  setState(() => _verdictSelection = selection.firstOrNull),
+            : (sel) => setState(() => _verdictSelection = sel.firstOrNull),
       ),
       const Gap.sm(),
       if (_recordError != null)
@@ -570,8 +609,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         ),
       FilledButton(
         key: const Key('recordVerdict'),
-        onPressed: !_recording && _verdictSelection != null
-            ? () => _recordVerdict(widget.defenceId, uid!)
+        onPressed: !_recording && selection != null
+            ? () => _recordVerdict(widget.defenceId, uid!, selection)
             : null,
         child: Text(_recording ? 'Recording…' : 'Record verdict'),
       ),

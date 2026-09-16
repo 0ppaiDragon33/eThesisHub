@@ -137,6 +137,34 @@ So there are two distinct things, and the screens must not blur them:
 each panelist's **own rating** under §8a, and the panel's **verdict**
 under §8b.
 
+**Amended after the fact — D77 supersedes D41's threshold clause.**
+D41 rejected two ways of deriving the verdict: a majority of the
+Pass/Fail ratings, *and* a threshold on the mean grade. The first still
+stands. The second does not: the institution has since confirmed **75
+as a hard passing mark**, not a guideline, so a Pass on a mean below it
+is not a decision the panel is free to make.
+
+**D77 — A panel mean below 75 admits only Fail.** `passingMark` in
+`evaluation.dart` is the single definition; the grades screen disables
+the Pass segment when the mean falls short, clears any Pass already
+selected, and hands the record button only a verdict the gate approved.
+Exactly 75 passes.
+
+This narrows D41 rather than reversing it. The panel still deliberates
+and still decides; what changed is that the system no longer offers an
+outcome the numbers cannot carry. §8b's *"should there be problems on
+the result of the final grades"* keeps its force everywhere above the
+mark — which is where deliberation actually happens.
+
+**This is a workflow guard, not a security boundary.** `firestore.rules`
+cannot aggregate a subcollection, so it cannot compute a mean and cannot
+enforce this. A direct write to `panelVerdict` could still record a Pass
+below the mark. Do not describe it as enforced.
+
+The screen's caption changed with it: it used to read "a transcription
+of what the panel decided, not a computed grade", which stopped being
+true the moment the system constrained the outcome.
+
 **D42 — The adviser records the verdict.** They already consolidate
 for this defence, so the act sits with the person who already holds
 the closing duties. `verdictRecordedBy` stores their uid, because a
