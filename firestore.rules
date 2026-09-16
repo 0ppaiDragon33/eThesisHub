@@ -318,6 +318,40 @@ service cloud.firestore {
       // branch also serves) but when supplied it is pinned to `request.time`
       // exactly like the coordinator/dean timestamps below, so a leader can
       // never backdate the letter their own submission produces.
+      // Reopen a stalled nomination for re-nomination.
+      //
+      // A declined Conforme stalls a thesis permanently: the nominee can
+      // never accept, `respondToNomination` counts them outstanding forever,
+      // and the leader is frozen out of their own thesis the moment it leaves
+      // 'draft'. Before this arm the only recovery was the Firebase Console.
+      // Returning the thesis to 'draft' hands it back to the group, who then
+      // fix the roster and resubmit (`submitNominations` prunes whoever is no
+      // longer on it, without which the replaced decliner's document would
+      // stall the thesis again immediately).
+      //
+      // Rules cannot verify the thesis is ACTUALLY stalled -- that needs a
+      // query over the nominations subcollection, and rules have no queries.
+      // So this authorises the transition, not the diagnosis: a coordinator
+      // may return any pending-Conforme thesis to draft. That is a legitimate
+      // administrative act in its own right, it is reversible (the group
+      // simply resubmits), and it is the same authority the coordinator
+      // already holds over the next step of this same flow.
+      //
+      // Only the status moves, and the transition is pinned in both
+      // directions so this can never rewind a thesis the coordinator has
+      // already recommended or the dean has already approved.
+      //
+      // FIRST among the update arms deliberately. Rules evaluate arms in
+      // order against a 1000-expression budget, and every arm below does
+      // `get()`-backed work; placed last, this one was never reached at all
+      // and a legitimate reopen was denied with an evaluation-budget error
+      // rather than a rule saying no. Cheap arms belong before expensive
+      // ones for exactly that reason.
+      allow update: if isCoordinator()
+                    && onlyChanged(['status'])
+                    && resource.data.status == 'nominationPendingConforme'
+                    && request.resource.data.status == 'draft';
+
       allow update: if isThesisLeader(thesisId)
                     && resource.data.status == 'draft'
                     && onlyChanged(['memberNames', 'workingTitle', 'college',
