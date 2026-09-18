@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -76,8 +77,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('cannot invite yourself'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('cannot invite yourself'));
 
     final all = await db.collection('facultyInvites').get();
     expect(all.docs, isEmpty,
@@ -111,7 +112,7 @@ void main() {
         find.byKey(const Key('inviteEmail')), 'siason@isufst.edu.ph');
     await tester.tap(find.byKey(const Key('inviteRole')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('dean').last);
+    await tester.tap(find.text('Dean').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sendInvite')));
     await tester.pumpAndSettle();

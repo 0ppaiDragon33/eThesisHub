@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
@@ -144,7 +145,7 @@ void main() {
 
     expect(find.textContaining('Dr. Bito-onon'), findsOneWidget);
     expect(find.textContaining('Dr. Siason'), findsOneWidget);
-    expect(find.textContaining('added automatically'), findsOneWidget);
+    expect(find.textContaining('Added automatically'), findsOneWidget);
 
     // 4 plain faculty + the coordinator + the dean = 6 selectable nominees.
     // Coordinators and the dean are never chosen for their automatic
@@ -297,8 +298,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('three panel members'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('three panel members'));
   });
 
   testWidgets(
@@ -412,8 +413,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('no longer in the faculty directory'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('no longer in the faculty directory'));
 
     final noms = await db.collection('theses/t1/nominations').get();
     expect(noms.docs, isEmpty,
@@ -684,11 +685,11 @@ void main() {
     });
     await tester.pumpAndSettle();
 
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('Dr. Bito-onon'),
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('Dr. Bito-onon'),
         reason: 'the office holder in the adviser slot is exactly the '
             'nominee the rules check, so they must be named');
-    expect(error.data, contains('adviser'));
+    expect(error.message, contains('adviser'));
   });
 
   testWidgets(
@@ -740,17 +741,17 @@ void main() {
     // naming all of them, in plain language, is what the screen can
     // honestly say without guessing at a single culprit it cannot know.
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, isNot(contains('permission-denied')),
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, isNot(contains('permission-denied')),
         reason: 'the raw Firestore code must not leak into the sentence '
             'meant for a student');
     for (final name in ['Dr. Armada', 'Dr. Diamante', 'Dr. Padojinog',
         'Dr. Braganza']) {
-      expect(error.data, contains(name));
+      expect(error.message, contains(name));
     }
-    expect(error.data, contains('adviser'));
-    expect(error.data, contains('panelist'));
-    expect(error.data, contains('this semester'));
+    expect(error.message, contains('adviser'));
+    expect(error.message, contains('panelist'));
+    expect(error.message, contains('this semester'));
 
     // And the Firestore code must still be visible underneath — it helps
     // whoever debugs this next, same as `ErrorState`.

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -152,8 +153,8 @@ void main() {
     // ran. The distinct error message, found by its Key, can only appear
     // if the empty-title branch in _submit actually fired.
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final errorText = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(errorText.data, contains('is required'));
+    final errorText = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(errorText.message, contains('is required'));
   });
 
   testWidgets('creates a draft thesis owned by the signed-in leader',
