@@ -16,17 +16,18 @@ void main() {
       await pump(tester, const SectionRule('Waiting on you',
           trailing: Text('3')));
 
-      // The primitive owns the overline treatment, so callers pass natural
-      // case and twelve screens do not each have to remember to shout.
-      expect(find.text('WAITING ON YOU'), findsOneWidget);
-      expect(find.text('Waiting on you'), findsNothing);
+      // The primitive owns the section-heading treatment (a colour bar and
+      // titleSmall, no longer an all-caps overline), so callers pass natural
+      // case and every screen renders its headings the same way. The label
+      // is shown as given, not re-cased.
+      expect(find.text('Waiting on you'), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
     });
 
     testWidgets('renders without a trailing slot', (tester) async {
       await pump(tester, const SectionRule('Decided'));
 
-      expect(find.text('DECIDED'), findsOneWidget);
+      expect(find.text('Decided'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -73,14 +74,14 @@ void main() {
         child: TextField(key: Key('email')),
       ));
 
-      expect(find.text('INSTITUTIONAL EMAIL'), findsOneWidget);
+      expect(find.text('Institutional email'), findsOneWidget);
       expect(find.byKey(const Key('email')), findsOneWidget);
     });
 
-    testWidgets('the overline sits above the field, not inside it', (tester) async {
-      // The overline sits ABOVE the input rather than floating inside it —
+    testWidgets('the label sits above the field, not inside it', (tester) async {
+      // The label sits ABOVE the input rather than floating inside it —
       // that is the whole point of the treatment, and a labelText would
-      // silently reintroduce the old look.
+      // silently reintroduce the old floating-label look.
       await pump(tester, const FormRow(
         label: 'Password',
         child: TextField(key: Key('pw')),
@@ -88,8 +89,8 @@ void main() {
 
       // Asserting the caller's own TextField has no labelText would prove
       // nothing — the test constructed it that way. What has to be true of
-      // FormRow is that the overline it draws sits ABOVE the field.
-      final label = tester.getTopLeft(find.text('PASSWORD'));
+      // FormRow is that the label it draws sits ABOVE the field.
+      final label = tester.getTopLeft(find.text('Password'));
       final field = tester.getTopLeft(find.byKey(const Key('pw')));
       expect(label.dy, lessThan(field.dy));
     });

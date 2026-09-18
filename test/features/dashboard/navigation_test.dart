@@ -75,18 +75,31 @@ Future<void> pumpApp(WidgetTester tester, ProviderContainer c) async {
   await tester.pumpAndSettle();
 }
 
-/// The labels the sidebar is offering, read off the rail itself rather than
-/// off the page, so a heading that happens to use the same word cannot
-/// stand in for a destination that is not there.
-List<String?> railLabels(WidgetTester tester) => tester
-    .widget<NavigationRail>(find.byType(NavigationRail))
-    .destinations
-    .map((d) => (d.label as Text).data)
+/// The nav items the sidebar is offering — the `InkWell`s keyed
+/// `nav-<route>`, not the page — so a heading that happens to use the same
+/// word cannot stand in for a destination that is not there. (The shell no
+/// longer uses `NavigationRail`; the sidebar is a keyed ink column.)
+Finder _navItems() => find.byWidgetPredicate((w) =>
+    w is InkWell &&
+    w.key is ValueKey<String> &&
+    (w.key as ValueKey<String>).value.startsWith('nav-'));
+
+/// The labels the sidebar is offering, read off each nav item's own text.
+/// At the widths these tests use the sidebar is expanded, so every item
+/// carries its label as visible text.
+List<String?> railLabels(WidgetTester tester) => _navItems()
+    .evaluate()
+    .map((e) => (find
+            .descendant(of: find.byWidget(e.widget), matching: find.byType(Text))
+            .evaluate()
+            .first
+            .widget as Text)
+        .data)
     .toList();
 
 Future<void> tapDestination(WidgetTester tester, String label) async {
   await tester.tap(find.descendant(
-      of: find.byType(NavigationRail), matching: find.text(label)));
+      of: find.byKey(const Key('shellSidebar')), matching: find.text(label)));
   await tester.pumpAndSettle();
 }
 
@@ -143,12 +156,14 @@ void main() {
 
       await tapDestination(tester, 'Chapters');
 
-      // The real chapter list, not a placeholder -- and still exactly one
-      // app bar, the shell's. A screen that kept its own Scaffold would
-      // stack a second one with a back button that goes nowhere, which is
-      // the failure the `embedded` flag used to work around.
+      // The real chapter list, not a placeholder -- and no second chrome.
+      // The shell's own top bar is a custom bar, not an `AppBar`, so a
+      // screen that wrongly kept its own Scaffold+AppBar (the failure the
+      // `embedded` flag used to work around) would show up as an AppBar
+      // where there should be none.
       expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
-      expect(find.byType(AppBar), findsOneWidget);
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     });
   });
 
@@ -483,7 +498,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('chapterDetailScreen')), findsOneWidget);
-      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
       expect(find.byKey(const Key('shellBack')), findsOneWidget);
 
       // And back rises to the destination that owns this location rather
