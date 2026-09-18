@@ -32,9 +32,10 @@ stored in Firestore, readable by everyone on the thesis — can fetch the file
 directly, and the edge function is decorative.
 
 Set the `thesis-documents` bucket to **Private** in the Supabase dashboard
-(Storage → the bucket → Configuration → Public = off). The uploads still work
-(they use the service path through the client), and reads go through the
-function.
+(Storage → the bucket → Configuration → Public = off), then apply the storage
+policies in `supabase/policies.sql`: a private bucket blocks *everything* by
+default, including uploads, so the app needs an explicit anon INSERT policy to
+upload. Reads stay closed to anon and go through the function.
 
 > The previous Supabase project (`wevvsskextznmstjfmfo`) was deleted — its
 > hostname no longer resolves — so a new project must be provisioned anyway.
@@ -48,14 +49,22 @@ function.
      validates `pdf`/`doc`/`docx`/`ppt`/`pptx` and a size cap; a bucket-level
      list is defence in depth).
 
-2. Point the app at the project. In `lib/core/config/app_config.dart`:
+2. Apply the storage policies:
+   - SQL Editor → paste `supabase/policies.sql` → Run.
+   - This grants anon **upload** (confined to the `theses/` prefix) and grants
+     no anon read/update/delete. Without it, uploads fail with 403 on the
+     private bucket; the error the app shows is `storage-forbidden`.
+
+3. Point the app at the project. In `lib/core/config/app_config.dart`:
    - `supabaseUrl` → your project URL
    - `supabaseAnonKey` → your project's **publishable** (anon) key
    These are client-side public values by design; they are not secrets.
 
-3. Deploy the function and its secrets (see below).
+4. Deploy the function and its secrets (see below). Until this is done,
+   uploads work but **opening** a document fails — the app calls the
+   `document-url` function to get a signed URL, and it is not there yet.
 
-4. In the app, opening any document now round-trips through the function. A
+5. In the app, opening any document now round-trips through the function. A
    reader who is not on the thesis gets a "you do not have access" message
    instead of a file.
 
