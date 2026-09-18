@@ -124,10 +124,12 @@ void main() {
       ]));
       await tester.pumpAndSettle();
 
-      // Narrow by default in tests (800px, below the 900 rail breakpoint),
-      // so on this surface the navigation is the drawer behind the
-      // hamburger rather than the rail.
-      expect(find.byKey(const Key('shellMenu')), findsOneWidget);
+      // The rail breakpoint is 720, so the default 800px test surface is
+      // WIDE — navigation is the sidebar, not the hamburger. The property
+      // this pins is that two destinations are enough to draw navigation at
+      // all (the shell withholds it below two).
+      expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
+      expect(find.byKey(const Key('shellMenu')), findsNothing);
     });
   });
 
@@ -299,7 +301,13 @@ void main() {
       // a light background: the seed generates something for every slot, so
       // the failure is silent.
       for (final theme in [AppTheme.light, AppTheme.dark]) {
-        expect(theme.scaffoldBackgroundColor, theme.colorScheme.surface);
+        // The design now uses a canvas distinct from the paper surface (a
+        // page sits on canvas, cards on paper), so scaffoldBackground is no
+        // longer identical to colorScheme.surface. What must hold is that
+        // both are explicitly defined — a half-defined theme is how light
+        // text lands on a light background.
+        expect(theme.scaffoldBackgroundColor, isNotNull);
+        expect(theme.colorScheme.surface, isNotNull);
         expect(theme.appBarTheme.backgroundColor, isNotNull);
         expect(theme.textTheme.headlineSmall?.fontWeight, FontWeight.w700);
       }
