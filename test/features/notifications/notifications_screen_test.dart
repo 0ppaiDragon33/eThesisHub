@@ -96,18 +96,24 @@ void main() {
 
     await pump(tester, firestore: firestore, uid: 'u1');
 
-    final tiles = find.byType(ListTile);
-    expect(tiles, findsNWidgets(2));
-    expect(
-      tester.widget<ListTile>(tiles.at(0)).title,
-      isA<Text>().having((t) => t.data, 'text', 'Newer, unread'),
-    );
+    // Rows are keyed InkWells now (notification-<id>), not ListTiles.
+    Finder rows() => find.byWidgetPredicate((w) =>
+        w is InkWell &&
+        w.key is ValueKey<String> &&
+        (w.key as ValueKey<String>).value.startsWith('notification-'));
+    expect(rows(), findsNWidgets(2));
+
+    // Newest first: the unread June item sits above the read January one.
+    expect(find.text('Newer, unread'), findsOneWidget);
+    expect(find.text('Older, already read'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Newer, unread')).dy,
+        lessThan(tester.getTopLeft(find.text('Older, already read')).dy));
   });
 
   testWidgets('an empty feed shows an empty state, not a blank screen', (tester) async {
     final firestore = await firestoreWith([], 'u1');
     await pump(tester, firestore: firestore, uid: 'u1');
-    expect(find.text('Nothing yet'), findsOneWidget);
+    expect(find.text('No notifications yet'), findsOneWidget);
   });
 
   testWidgets('tapping an item marks it read', (tester) async {

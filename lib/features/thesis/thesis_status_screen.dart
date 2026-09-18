@@ -426,6 +426,21 @@ class _PeoplePanel extends StatelessWidget {
         NominationPosition.dean => 'Dean',
       };
 
+  /// The nominee's position, with the decline reason appended when they
+  /// declined and gave one — so the leader reads it in the row, not only in
+  /// the badge's tooltip.
+  static String _nomineeSubtitle(Nomination n) {
+    final base =
+        n.exOfficio ? '${positionLabel(n.position)}, ex officio' : positionLabel(n.position);
+    final reason = n.declineReason;
+    if (n.conformeStatus == ConformeStatus.declined &&
+        reason != null &&
+        reason.isNotEmpty) {
+      return '$base · Reason: $reason';
+    }
+    return base;
+  }
+
   @override
   Widget build(BuildContext context) {
     final sorted = [...nominations]
@@ -447,9 +462,11 @@ class _PeoplePanel extends StatelessWidget {
                         for (final n in sorted)
                           PersonLine(
                             name: n.nomineeName,
-                            role: n.exOfficio
-                                ? '${positionLabel(n.position)}, ex officio'
-                                : positionLabel(n.position),
+                            // A decline is surfaced here WITH its reason (see
+                            // the class doc): the reason rides the subtitle so
+                            // the leader can read why without hunting for a
+                            // tooltip. The badge still carries "Declined".
+                            role: _nomineeSubtitle(n),
                             trailing: _ConformeBadge(n: n),
                           ),
                       ],
