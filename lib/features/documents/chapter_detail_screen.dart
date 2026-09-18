@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
@@ -119,7 +123,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
             : 'Could not upload this version.');
       }
     } catch (e) {
-      // The file is already in a public bucket but the record that would
+      // The file is already in the bucket but the record that would
       // reference it was never written. Remove the orphan, best-effort:
       // a failed cleanup must never replace the real failure.
       if (stored != null) {
@@ -255,23 +259,28 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   /// whichever state it is in.
   Widget _framed(List<Widget> children) => KeyedSubtree(
         key: const Key('chapterDetailScreen'),
-        child: PageShell(children: children),
+        child: PageShell(
+          maxWidth: AppTokens.measureWide,
+          title: widget.chapter.label,
+          children: children,
+        ),
       );
 
   Widget _uploadControl({required bool disabled, String? disabledReason}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FilledButton(
+        FilledButton.icon(
           key: const Key('uploadVersion'),
           onPressed: disabled || _busy ? null : _upload,
-          child: _busy
+          icon: _busy
               ? const SizedBox(
                   height: 16,
                   width: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Upload new version'),
+              : const Icon(Icons.upload_rounded, size: 18),
+          label: Text(_busy ? 'Uploading…' : 'Upload new version'),
         ),
         if (disabled && disabledReason != null)
           Padding(
@@ -309,12 +318,6 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Gap.lg(),
-        const Divider(),
-        const Gap.sm(),
-        Text('Adviser review',
-            style: Theme.of(context).textTheme.titleMedium),
-        const Gap.sm(),
         TextField(
           key: const Key('feedbackBody'),
           controller: _feedbackController,
@@ -349,37 +352,38 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                   ?.copyWith(color: Theme.of(context).colorScheme.error),
             ),
           ),
+        const Gap.lg(),
+        Text('Decision on version $currentVersion',
+            style: Theme.of(context).textTheme.labelMedium),
         const Gap.sm(),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                key: const Key('markRevise'),
-                onPressed: _statusBusy
-                    ? null
-                    : () => _setStatus(
-                          thesisId: thesisId,
-                          chapter: chapter,
-                          status: ChapterStatus.revise,
-                        ),
-                child: const Text('Send back for revision'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                key: const Key('markApproved'),
-                onPressed: _statusBusy
-                    ? null
-                    : () => _setStatus(
-                          thesisId: thesisId,
-                          chapter: chapter,
-                          status: ChapterStatus.approved,
-                        ),
-                child: const Text('Approve this chapter'),
-              ),
-            ),
-          ],
+        FilledButton.icon(
+          key: const Key('markApproved'),
+          style: FilledButton.styleFrom(
+            backgroundColor: Tone.endorsed.color(context),
+          ),
+          onPressed: _statusBusy
+              ? null
+              : () => _setStatus(
+                    thesisId: thesisId,
+                    chapter: chapter,
+                    status: ChapterStatus.approved,
+                  ),
+          icon: const Icon(Icons.task_alt_rounded, size: 18),
+          label: const Text('Approve this chapter'),
+        ),
+        const Gap.sm(),
+        OutlinedButton.icon(
+          key: const Key('markRevise'),
+          onPressed: _statusBusy
+              ? null
+              : () => _setStatus(
+                    thesisId: thesisId,
+                    chapter: chapter,
+                    status: ChapterStatus.revise,
+                  ),
+          icon: Icon(Icons.undo_rounded,
+              size: 18, color: Tone.returned.color(context)),
+          label: const Text('Send back for revision'),
         ),
         if (_statusError != null)
           Padding(
@@ -505,99 +509,194 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
 
     final versions = versionsAsync.valueOrNull ?? const <ChapterVersion>[];
     final feedback = feedbackAsync.valueOrNull ?? const <ChapterFeedback>[];
-    final brightness = Theme.of(context).brightness;
     final status = thisChapter.status;
+    final text = Theme.of(context).textTheme;
+    final pal = Palette.of(context);
+    final latest = thisChapter.currentVersion;
+
+    final versionsPanel = Panel(
+      title: 'Versions',
+      subtitle: 'Every upload is kept',
+      icon: Icons.history_rounded,
+      flush: true,
+      child: versions.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(AppTokens.lg - 4),
+              child: Text('No versions yet.', style: text.bodySmall),
+            )
+          : Column(
+              children: [
+                for (final v in versions)
+                  Container(
+                    key: Key('versionRow-${v.version}'),
+                    padding: const EdgeInsets.fromLTRB(AppTokens.lg - 4,
+                        AppTokens.sm + 2, AppTokens.sm, AppTokens.sm + 2),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: pal.rule)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: v.version == latest
+                                ? pal.seal
+                                : pal.seal.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'v${v.version}',
+                            style: text.labelMedium?.copyWith(
+                              color: v.version == latest
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : pal.seal,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppTokens.md - 4),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                v.version == latest
+                                    ? 'Version ${v.version}, current'
+                                    : 'Version ${v.version}',
+                                style: text.labelLarge,
+                              ),
+                              Text('Uploaded ${_formatDate(v.uploadedAt)}',
+                                  style: text.bodySmall),
+                            ],
+                          ),
+                        ),
+                        TextButton.icon(
+                          // The stored `fileUrl` is an identifier, not a
+                          // link: the bucket is private. Opening asks the
+                          // `document-url` function to authorize this reader
+                          // and sign a short-lived URL from `storagePath`.
+                          onPressed: () => openStoredDocument(
+                            context,
+                            ref,
+                            v.storagePath,
+                            label: 'version ${v.version}',
+                          ),
+                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                          label: const Text('Open'),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+
+    final feedbackPanel = Panel(
+      title: 'Feedback',
+      subtitle: 'From your adviser, newest last',
+      icon: Icons.rate_review_outlined,
+      flush: true,
+      child: feedback.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(AppTokens.lg - 4),
+              child: Text('No feedback yet. Your adviser has not left a '
+                  'remark.', style: text.bodySmall),
+            )
+          : Column(
+              children: [
+                for (final f in feedback)
+                  Container(
+                    key: Key('feedbackRow-${f.id}'),
+                    padding: const EdgeInsets.all(AppTokens.md),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: pal.rule)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        InitialsAvatar(f.reviewerName, size: 32),
+                        const SizedBox(width: AppTokens.sm + 2),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: AppTokens.sm,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text('${f.reviewerName}, ${f.reviewerRole}',
+                                      style: text.labelMedium),
+                                  Text('on version ${f.version}',
+                                      style: text.bodySmall),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(f.body, style: text.bodyMedium),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
 
     return KeyedSubtree(
       key: const Key('chapterDetailScreen'),
       child: PageShell(
+        maxWidth: AppTokens.measureWide,
+        kicker: thesis?.workingTitle,
         title: widget.chapter.label,
         subtitle: ChapterStatusWords.detailFor(status),
+        actions: [
+          ToneBadge(
+            label: ChapterStatusWords.labelFor(status),
+            tone: ChapterStatusWords.toneFor(status),
+            icon: ChapterStatusWords.iconFor(status),
+          ),
+        ],
         children: [
-          Row(
-            children: [
-              Text(
-                ChapterStatusWords.labelFor(status),
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: ChapterStatusWords.colorFor(status, brightness)),
-              ),
+          SplitColumns(
+            primary: [feedbackPanel, versionsPanel],
+            secondary: [
+              // Leader-only: only the leader can write a version.
+              if (isLeader)
+                Panel(
+                  title: 'Upload',
+                  icon: Icons.upload_file_outlined,
+                  emphasis: status == ChapterStatus.revise,
+                  child: _uploadControl(
+                    disabled: status == ChapterStatus.approved,
+                    disabledReason: 'This chapter is approved. Ask your '
+                        'adviser to reopen it before uploading again.',
+                  ),
+                ),
+              // Adviser-only: the rules deny anyone else's review writes.
+              if (isAdviser)
+                Panel(
+                  title: 'Your review',
+                  icon: Icons.rate_review_outlined,
+                  emphasis: status == ChapterStatus.submitted,
+                  child: _reviewSection(
+                    thesisId: widget.thesisId,
+                    chapter: widget.chapter,
+                    currentVersion: thisChapter.currentVersion,
+                    reviewerUid: me.uid,
+                    reviewerName: me.fullName,
+                  ),
+                ),
+              if (!isLeader && !isAdviser)
+                Panel(
+                  child: Text(
+                    'Only the group leader uploads and only the adviser '
+                    'reviews. You are viewing this chapter read-only.',
+                    style: text.bodySmall,
+                  ),
+                ),
             ],
           ),
-          const Gap.lg(),
-          Text('Versions', style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          if (versions.isEmpty)
-            const EmptyState(
-              icon: Icons.description_outlined,
-              title: 'No versions yet',
-              message: 'Upload the first version below.',
-            )
-          else
-            for (final v in versions)
-              Card(
-                key: Key('versionRow-${v.version}'),
-                child: ListTile(
-                  title: Text('Version ${v.version}'),
-                  subtitle: Text('Uploaded ${_formatDate(v.uploadedAt)}'),
-                  trailing: TextButton(
-                    onPressed: () => launchUrl(Uri.parse(v.fileUrl)),
-                    child: const Text('Open'),
-                  ),
-                ),
-              ),
-          const Gap.lg(),
-          Text('Feedback', style: Theme.of(context).textTheme.titleMedium),
-          const Gap.sm(),
-          if (feedback.isEmpty)
-            const EmptyState(
-              icon: Icons.chat_bubble_outline,
-              title: 'No feedback yet',
-              message: 'Your adviser has not left a remark yet.',
-            )
-          else
-            for (final f in feedback)
-              Card(
-                key: Key('feedbackRow-${f.id}'),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${f.reviewerName} — ${f.reviewerRole} · '
-                        'Version ${f.version}',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(f.body),
-                    ],
-                  ),
-                ),
-              ),
-          const Gap.lg(),
-          // Leader-only, for the same reason `isAdviser` gates the review
-          // section below: the rules deny anyone else's write on `versions`
-          // regardless, but a control that is visible and always fails is
-          // worse than no control at all.
-          if (isLeader)
-            _uploadControl(
-              disabled: status == ChapterStatus.approved,
-              disabledReason: 'This chapter is approved. Ask your adviser '
-                  'to reopen it before uploading again.',
-            ),
-          // Adviser-only. The rules deny a non-adviser's write on `status`
-          // and `feedback` regardless, but a control that is visible and
-          // always fails is worse than no control at all -- a student would
-          // tap it, watch it silently do nothing (or surface a raw
-          // permission error), and have no way to tell the two apart.
-          if (isAdviser)
-            _reviewSection(
-              thesisId: widget.thesisId,
-              chapter: widget.chapter,
-              currentVersion: thisChapter.currentVersion,
-              reviewerUid: me.uid,
-              reviewerName: me.fullName,
-            ),
         ],
       ),
     );

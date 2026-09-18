@@ -55,6 +55,10 @@ class _FakeStorage implements StorageService {
 
   @override
   Future<void> delete(String path) async => deleted.add(path);
+
+  @override
+  Future<String> signedUrl(String path) async =>
+      'https://example.test/signed/$path';
 }
 
 PickedDocument doc() => PickedDocument(

@@ -153,7 +153,11 @@ void main() {
       (tester) async {
     useTallSurface(tester);
     final db = await seed();
-    await db.collection('archive').doc('t1').update({'manuscriptUrl': ''});
+    // Both cleared: the screen now gates the Open button on the storage
+    // PATH (what it signs and opens), not the stored URL, so "no manuscript
+    // on file" means no path.
+    await db.collection('archive').doc('t1').update(
+        {'manuscriptUrl': '', 'manuscriptPath': ''});
     await tester.pumpWidget(await app(db, 's1', role: 'student'));
     await tester.pumpAndSettle();
 

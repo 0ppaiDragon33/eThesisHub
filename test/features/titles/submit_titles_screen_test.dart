@@ -30,6 +30,10 @@ class _FakeStorage implements StorageService {
 
   @override
   Future<void> delete(String path) async {}
+
+  @override
+  Future<String> signedUrl(String path) async =>
+      'https://example.test/signed/$path';
 }
 
 PickedDocument _validDoc([String name = 'doc.pdf']) => PickedDocument(
@@ -348,4 +352,8 @@ class _UnreachableStorage implements StorageService {
 
   @override
   Future<void> delete(String path) async {}
+
+  @override
+  Future<String> signedUrl(String path) async =>
+      'https://example.test/signed/$path';
 }

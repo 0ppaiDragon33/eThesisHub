@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 /// [withPreviousRound] seeds a SUPERSEDED candidate from the round before,
 /// which is the only way the screen's round filter can be tested at all.
@@ -32,22 +34,45 @@ Future<FakeFirebaseFirestore> seeded({
   });
   if (withPreviousRound) {
     await db.collection('theses/t1/candidateTitles').doc('old1').set({
-      'titleText': 'Candidate old1', 'justificationPath': 'p',
+      'titleText': 'Candidate old1',
+      'justificationPath': 'theses/t1/old1/uuid.pdf',
       'justificationUrl': 'https://example.test/old1.pdf', 'round': 1,
     });
   }
   for (final id in ['ct1', 'ct2', 'ct3']) {
     await db.collection('theses/t1/candidateTitles').doc(id).set({
-      'titleText': 'Candidate $id', 'justificationPath': 'p',
+      'titleText': 'Candidate $id',
+      'justificationPath': 'theses/t1/$id/uuid.pdf',
       'justificationUrl': 'https://example.test/$id.pdf', 'round': round,
     });
   }
   return db;
 }
 
+/// The bucket is private, so the screen opens a document by asking the
+/// storage service for a signed URL from its PATH. This stands in for the
+/// `document-url` round trip: a URL derived from the path, so a test can
+/// assert which document was opened without a live Supabase.
+class _FakeStorage implements StorageService {
+  @override
+  Future<String> signedUrl(String path) async => 'https://signed.test/$path';
+
+  @override
+  Future<StoredFile> upload({
+    required List<int> bytes,
+    required String path,
+    required String contentType,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> delete(String path) async => throw UnimplementedError();
+}
+
 Widget wrap(FakeFirebaseFirestore db, {UrlOpener? openUrl}) => ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
+        storageServiceProvider.overrideWithValue(_FakeStorage()),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
           signedIn: true,
           mockUser: MockUser(
@@ -119,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(opened.map((u) => u.toString()),
-        ['https://example.test/ct2.pdf'],
+        ['https://signed.test/theses/t1/ct2/uuid.pdf'],
         reason: 'the link must open THAT candidate, not the first one');
   });
 
@@ -136,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(opened.map((u) => u.toString()),
-        ['https://example.test/presentation.pptx']);
+        ['https://signed.test/theses/t1/presentation/uuid.pptx']);
   });
 
   testWidgets('a document that will not open says so rather than failing '

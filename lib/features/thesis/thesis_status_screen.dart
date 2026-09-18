@@ -3,17 +3,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/motion.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/progress_rail.dart';
 import 'package:ethesishub/features/documents/manuscript_upload.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
@@ -97,187 +106,624 @@ class ThesisStatusScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final thesisAsync = ref.watch(myThesisProvider);
 
-    // No Scaffold and no AppBar: the app shell owns both for every
-    // signed-in route now.
     return KeyedSubtree(
       key: const Key('thesisStatusScreen'),
       child: thesisAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) =>
-            const Center(child: Text('Could not load your thesis.')),
+        loading: () => const PageShell(
+          maxWidth: AppTokens.measureWide,
+          children: [LoadingState.page(label: 'Loading your thesis…')],
+        ),
+        error: (e, _) => PageShell(children: [
+          ErrorState(
+            error: e,
+            message: 'Could not load your thesis.',
+            onRetry: () => ref.invalidate(myThesisProvider),
+          ),
+        ]),
         data: (thesis) {
           if (thesis == null) {
-            // The only in-app door to '/thesis/create' used to be a button
-            // on the student dashboard, which this milestone deletes. Left
-            // as the bare sentence it was, a leader with no group could
-            // reach the create screen only by typing its URL — the exact
-            // "the link exists nowhere but the route does" failure the
-            // router's own exemptions were written to close. So the door
-            // moves here, onto the destination that replaced that
-            // dashboard tab.
-            return PageShell(children: [
-              EmptyState(
-                icon: Icons.groups_outlined,
-                title: 'No thesis group yet',
-                message: 'Create your group to name your working title and '
-                    'list your members. You will nominate an adviser and '
-                    'panel next.',
-                action: FilledButton(
-                  key: const Key('goToCreateThesis'),
-                  onPressed: () => context.go('/thesis/create'),
-                  child: const Text('Create thesis group'),
+            // The in-app door to '/thesis/create' lives here, on the
+            // destination a student without a group reaches first.
+            return PageShell(
+              title: 'My thesis',
+              subtitle: 'Your group\'s workspace appears here once it '
+                  'exists.',
+              children: [
+                EmptyState(
+                  icon: Icons.groups_outlined,
+                  title: 'No thesis group yet',
+                  message: 'Create your group to name your working title and '
+                      'list your members. You will nominate an adviser and '
+                      'panel next.',
+                  action: FilledButton(
+                    key: const Key('goToCreateThesis'),
+                    onPressed: () => context.go('/thesis/create'),
+                    child: const Text('Create thesis group'),
+                  ),
                 ),
-              ),
-            ]);
+              ],
+            );
           }
           return StreamBuilder<List<Nomination>>(
             stream: ref
                 .read(thesisRepositoryProvider)
                 .watchNominations(thesis.id),
-            builder: (context, snap) {
-              final nominations = snap.data ?? const <Nomination>[];
-              final anyDeclined = nominations
-                  .any((n) => n.conformeStatus == ConformeStatus.declined);
-              final stalledByDecline =
-                  thesis.status == ThesisStatus.nominationPendingConforme &&
-                      anyDeclined;
-
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Text(thesis.workingTitle,
-                      key: const Key('workingTitle'),
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 4),
-                  Text(label(thesis.status), key: const Key('statusLabel')),
-                  const SizedBox(height: 16),
-                  if (nominations.isNotEmpty)
-                    Text('Panel',
-                        style: Theme.of(context).textTheme.titleMedium),
-                  for (final n in nominations)
-                    ListTile(
-                      dense: true,
-                      title: Text(n.nomineeName),
-                      subtitle: Text(n.exOfficio
-                          ? '${n.position.value} · ex officio'
-                          : n.position.value),
-                      trailing: Text(
-                        key: Key('conforme-${n.nomineeUid}'),
-                        switch (n.conformeStatus) {
-                          ConformeStatus.accepted => 'Accepted',
-                          ConformeStatus.declined =>
-                            'Declined — ${n.declineReason ?? ''}',
-                          ConformeStatus.exOfficio => 'Ex officio',
-                          ConformeStatus.pending => 'Pending',
-                        },
-                      ),
-                    ),
-                  if (stalledByDecline)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        'One or more nominees declined, and this thesis '
-                        'cannot be re-nominated from here. Please contact '
-                        'your Research Coordinator so they can reopen this '
-                        'thesis for re-nomination.',
-                        key: const Key('reNominationGap'),
-                        style:
-                            TextStyle(color: Theme.of(context).colorScheme.error),
-                      ),
-                    ),
-                  // The student cannot fix what they cannot read, so the
-                  // remark comes before the resubmit action below.
-                  if (thesis.status == ThesisStatus.titleRejected &&
-                      (thesis.titleRejectionRemark ?? '').isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: ErrorState(
-                        message: 'This set was rejected: '
-                            '${thesis.titleRejectionRemark}',
-                      ),
-                    ),
-                  // The single decision this whole milestone exists to
-                  // record was invisible to the group it was made about:
-                  // `approvedTitleId` was written and rendered nowhere, so an
-                  // approved thesis showed a generic chip and the comment
-                  // blocks for every candidate, with no mark on the winner.
-                  if (thesis.status == ThesisStatus.titleApproved &&
-                      thesis.approvedTitleId != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: _ApprovedTitle(
-                        thesisId: thesis.id,
-                        approvedTitleId: thesis.approvedTitleId!,
-                      ),
-                    ),
-                  if (thesis.titleDecidedAt != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 20),
-                      child: _ConsolidatedComments(
-                        thesisId: thesis.id,
-                        round: thesis.titleRound,
-                      ),
-                    ),
-                  const SizedBox(height: 20),
-                  if (thesis.status == ThesisStatus.draft)
-                    FilledButton.icon(
-                      key: const Key('nominateAction'),
-                      icon: const Icon(Icons.how_to_reg),
-                      label: const Text('Nominate adviser and panel'),
-                      onPressed: () =>
-                          context.go('/thesis/nominate?id=${thesis.id}'),
-                    ),
-                  if (thesis.status == ThesisStatus.nominationApproved)
-                    FilledButton.icon(
-                      key: const Key('downloadForm1'),
-                      icon: const Icon(Icons.download),
-                      label: const Text('Download Form 1'),
-                      onPressed: () => _download(ref, thesis, nominations),
-                    ),
-                  if (thesis.status == ThesisStatus.nominationApproved ||
-                      thesis.status == ThesisStatus.titleRejected)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: FilledButton.icon(
-                        key: const Key('goToSubmitTitles'),
-                        icon: const Icon(Icons.edit_document),
-                        label: Text(thesis.status == ThesisStatus.titleRejected
-                            ? 'Resubmit candidate titles'
-                            : 'Submit candidate titles'),
-                        onPressed: () =>
-                            context.go('/thesis/titles?id=${thesis.id}'),
-                      ),
-                    ),
-                  // The Dean's approval is the event that unlocks chapter
-                  // uploads (ChaptersScreen itself refuses any status other
-                  // than titleApproved), so this is the one status that
-                  // gets an entry point into them from here.
-                  if (thesis.status == ThesisStatus.titleApproved)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: FilledButton.icon(
-                        key: const Key('goToChapters'),
-                        icon: const Icon(Icons.menu_book_outlined),
-                        label: const Text('Go to chapters'),
-                        onPressed: () =>
-                            context.go('/thesis/chapters?id=${thesis.id}'),
-                      ),
-                    ),
-                  // Nothing in M2-M4 ever advances the thesis past
-                  // titleApproved -- the final defence's own panel verdict
-                  // is the only signal that the group is done, so
-                  // ManuscriptUpload decides its own visibility off
-                  // myDefencesProvider rather than off thesis.status. It
-                  // renders nothing (a zero-size SizedBox, no stray gap)
-                  // until that verdict is a pass, so it is safe to place
-                  // unconditionally here rather than gating it on
-                  // titleApproved a second time.
-                  ManuscriptUpload(thesis: thesis),
-                ],
-              );
-            },
+            builder: (context, snap) => FadeIn(child: _Workspace(
+              thesis: thesis,
+              nominations: snap.data ?? const <Nomination>[],
+              nominationsLoading: !snap.hasData && !snap.hasError,
+              nominationsError: snap.error,
+              onDownloadForm1: () =>
+                  _download(ref, thesis, snap.data ?? const []),
+            )),
           );
         },
+      ),
+    );
+  }
+}
+
+/// The thesis workspace: identity and journey across the top, the next
+/// action and the decisions made so far in the main column, and the
+/// people, the record and the documents beside them.
+class _Workspace extends ConsumerWidget {
+  const _Workspace({
+    required this.thesis,
+    required this.nominations,
+    required this.nominationsLoading,
+    required this.nominationsError,
+    required this.onDownloadForm1,
+  });
+
+  final Thesis thesis;
+  final List<Nomination> nominations;
+  final bool nominationsLoading;
+  final Object? nominationsError;
+  final Future<void> Function() onDownloadForm1;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    final defences = ref.watch(myDefencesProvider).valueOrNull ?? const [];
+    final chapters =
+        ref.watch(chaptersProvider(thesis.id)).valueOrNull ?? const [];
+
+    return PageShell(
+      maxWidth: AppTokens.measureWide,
+      children: [
+        // Identity.
+        Wrap(
+          spacing: AppTokens.sm,
+          runSpacing: AppTokens.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ToneBadge(
+              label: ThesisStatusScreen.label(thesis.status),
+              tone: StatusChip.toneFor(thesis.status),
+              icon: StatusChip.iconFor(thesis.status),
+              textKey: const Key('statusLabel'),
+            ),
+            Text(
+              [thesis.college, thesis.program]
+                  .where((s) => s.isNotEmpty)
+                  .join(', '),
+              style: text.bodySmall,
+            ),
+          ],
+        ),
+        const Gap.sm(),
+        Text(
+          thesis.workingTitle,
+          key: const Key('workingTitle'),
+          style: Breakpoint.of(context) == Breakpoint.compact
+              ? text.headlineSmall
+              : text.headlineMedium,
+        ),
+        const Gap.sm(),
+        Text(
+          thesis.memberNames.isEmpty
+              ? 'No members listed'
+              : thesis.memberNames.join(', '),
+          style: text.bodyMedium?.copyWith(color: p.muted),
+        ),
+        const Gap.lg(),
+        Panel(
+          title: 'Where your thesis is',
+          icon: Icons.route_outlined,
+          child: ProgressRail(
+            status: thesis.status,
+            defences: defences,
+            chapters: chapters,
+          ),
+        ),
+        const Gap.lg(),
+        SplitColumns(
+          primary: [
+            _NextAction(thesis: thesis, nominations: nominations,
+                onDownloadForm1: onDownloadForm1),
+            if (thesis.status == ThesisStatus.titleApproved &&
+                thesis.approvedTitleId != null)
+              _ApprovedTitle(
+                thesisId: thesis.id,
+                approvedTitleId: thesis.approvedTitleId!,
+              ),
+            if (thesis.titleDecidedAt != null)
+              Panel(
+                title: 'Panel comments',
+                subtitle: 'Round ${thesis.titleRound}, grouped by candidate and '
+                    'panel member',
+                icon: Icons.forum_outlined,
+                child: _ConsolidatedComments(
+                  thesisId: thesis.id,
+                  round: thesis.titleRound,
+                  approvedTitleId: thesis.approvedTitleId,
+                ),
+              ),
+            // Decides its own visibility from the final defence verdict;
+            // renders nothing until that verdict is a pass.
+            ManuscriptUpload(thesis: thesis),
+            _History(thesis: thesis),
+          ],
+          secondary: [
+            _PeoplePanel(
+              nominations: nominations,
+              loading: nominationsLoading,
+              error: nominationsError,
+            ),
+            _DocumentsPanel(thesis: thesis, onDownloadForm1: onDownloadForm1),
+            Panel(
+              title: 'Record',
+              icon: Icons.info_outline_rounded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FactLine(label: 'College', value: thesis.college),
+                  FactLine(label: 'Program', value: thesis.program),
+                  FactLine(
+                    label: 'Term',
+                    value: [thesis.semester, thesis.academicYear]
+                        .where((s) => s.isNotEmpty)
+                        .join(', '),
+                  ),
+                  FactLine(
+                      label: 'Group created',
+                      value: Dates.day(thesis.createdAt)),
+                  if (thesis.titleRound > 0)
+                    FactLine(
+                        label: 'Title round',
+                        value: '${thesis.titleRound}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// What the group does next, with the buttons that do it.
+class _NextAction extends StatelessWidget {
+  const _NextAction({
+    required this.thesis,
+    required this.nominations,
+    required this.onDownloadForm1,
+  });
+
+  final Thesis thesis;
+  final List<Nomination> nominations;
+  final Future<void> Function() onDownloadForm1;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    final anyDeclined =
+        nominations.any((n) => n.conformeStatus == ConformeStatus.declined);
+    final stalledByDecline =
+        thesis.status == ThesisStatus.nominationPendingConforme && anyDeclined;
+
+    final actions = <Widget>[
+      if (thesis.status == ThesisStatus.draft)
+        FilledButton.icon(
+          key: const Key('nominateAction'),
+          icon: const Icon(Icons.how_to_reg, size: 18),
+          label: const Text('Nominate adviser and panel'),
+          onPressed: () => context.go('/thesis/nominate?id=${thesis.id}'),
+        ),
+      if (thesis.status == ThesisStatus.nominationApproved ||
+          thesis.status == ThesisStatus.titleRejected)
+        FilledButton.icon(
+          key: const Key('goToSubmitTitles'),
+          icon: const Icon(Icons.edit_document, size: 18),
+          label: Text(thesis.status == ThesisStatus.titleRejected
+              ? 'Resubmit candidate titles'
+              : 'Submit candidate titles'),
+          onPressed: () => context.go('/thesis/titles?id=${thesis.id}'),
+        ),
+      if (thesis.status == ThesisStatus.nominationApproved)
+        OutlinedButton.icon(
+          key: const Key('downloadForm1'),
+          icon: const Icon(Icons.download, size: 18),
+          label: const Text('Download Form 1'),
+          onPressed: onDownloadForm1,
+        ),
+      // The Dean's title approval unlocks chapter uploads.
+      if (thesis.status == ThesisStatus.titleApproved)
+        FilledButton.icon(
+          key: const Key('goToChapters'),
+          icon: const Icon(Icons.menu_book_outlined, size: 18),
+          label: const Text('Go to chapters'),
+          onPressed: () => context.go('/thesis/chapters?id=${thesis.id}'),
+        ),
+    ];
+
+    return Panel(
+      title: 'Next',
+      icon: Icons.flag_outlined,
+      emphasis: actions.isNotEmpty || stalledByDecline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(StatusChip.detailFor(thesis.status), style: text.bodyLarge),
+          if (stalledByDecline) ...[
+            const Gap.md(),
+            // No re-nominate button: the rules only let the Coordinator
+            // reopen a thesis (see the class note on ThesisStatusScreen).
+            ErrorState(
+              key: const Key('reNominationGap'),
+              message: 'One or more nominees declined, and this thesis '
+                  'cannot be re-nominated from here. Please contact your '
+                  'Research Coordinator so they can reopen this thesis for '
+                  're-nomination.',
+            ),
+          ],
+          // The student cannot fix what they cannot read, so the remark
+          // comes before the resubmit action.
+          if (thesis.status == ThesisStatus.titleRejected &&
+              (thesis.titleRejectionRemark ?? '').isNotEmpty) ...[
+            const Gap.md(),
+            ErrorState(
+              message: 'This set was rejected: '
+                  '${thesis.titleRejectionRemark}',
+            ),
+          ],
+          if (actions.isNotEmpty) ...[
+            const Gap.md(),
+            Wrap(
+              spacing: AppTokens.sm,
+              runSpacing: AppTokens.sm,
+              children: actions,
+            ),
+          ] else if (!stalledByDecline) ...[
+            const Gap.sm(),
+            Text('Nothing for your group to do right now.',
+                style: text.bodySmall?.copyWith(color: p.muted)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Every nominee and where their acceptance stands.
+class _PeoplePanel extends StatelessWidget {
+  const _PeoplePanel({
+    required this.nominations,
+    required this.loading,
+    required this.error,
+  });
+
+  final List<Nomination> nominations;
+  final bool loading;
+  final Object? error;
+
+  static String positionLabel(NominationPosition p) => switch (p) {
+        NominationPosition.adviser => 'Adviser',
+        NominationPosition.panelist => 'Panel member',
+        NominationPosition.coordinator => 'Research Coordinator',
+        NominationPosition.dean => 'Dean',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final sorted = [...nominations]
+      ..sort((a, b) => a.position.index.compareTo(b.position.index));
+    return Panel(
+      title: 'Adviser and panel',
+      icon: Icons.groups_outlined,
+      child: loading
+          ? const LoadingState()
+          : error != null
+              ? ErrorState(error: error, message: 'Could not load nominees.')
+              : sorted.isEmpty
+                  ? Text(
+                      'No one nominated yet.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    )
+                  : Column(
+                      children: [
+                        for (final n in sorted)
+                          PersonLine(
+                            name: n.nomineeName,
+                            role: n.exOfficio
+                                ? '${positionLabel(n.position)}, ex officio'
+                                : positionLabel(n.position),
+                            trailing: _ConformeBadge(n: n),
+                          ),
+                      ],
+                    ),
+    );
+  }
+}
+
+class _ConformeBadge extends StatelessWidget {
+  const _ConformeBadge({required this.n});
+
+  final Nomination n;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, tone) = switch (n.conformeStatus) {
+      ConformeStatus.accepted => ('Accepted', Tone.endorsed),
+      ConformeStatus.declined => ('Declined', Tone.returned),
+      ConformeStatus.exOfficio => ('Ex officio', Tone.neutral),
+      ConformeStatus.pending => ('Pending', Tone.awaiting),
+    };
+    final badge = ToneBadge(
+      key: Key('conforme-${n.nomineeUid}'),
+      label: label,
+      tone: tone,
+      dense: true,
+    );
+    final reason = n.declineReason;
+    if (n.conformeStatus != ConformeStatus.declined ||
+        reason == null ||
+        reason.isEmpty) {
+      return badge;
+    }
+    return Tooltip(message: 'Reason: $reason', child: badge);
+  }
+}
+
+class _DocumentsPanel extends ConsumerWidget {
+  const _DocumentsPanel({required this.thesis, required this.onDownloadForm1});
+
+  final Thesis thesis;
+  final Future<void> Function() onDownloadForm1;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final approvedOnward = thesis.deanApprovedAt != null ||
+        thesis.status == ThesisStatus.nominationApproved;
+    final rows = <Widget>[
+      if (approvedOnward)
+        _DocRow(
+          icon: Icons.picture_as_pdf_outlined,
+          title: 'Form 1',
+          detail: 'Nomination of adviser and panel',
+          action: 'Download',
+          onTap: onDownloadForm1,
+        ),
+      if ((thesis.presentationPath ?? '').isNotEmpty)
+        _DocRow(
+          icon: Icons.slideshow_outlined,
+          title: 'Title defence presentation',
+          detail: 'Submitted with your candidate titles',
+          action: 'Open',
+          onTap: () => openStoredDocument(context, ref, thesis.presentationPath!,
+              label: 'the title defence presentation'),
+        ),
+      if (thesis.hasManuscript)
+        _DocRow(
+          icon: Icons.menu_book_outlined,
+          title: 'Final manuscript',
+          detail: thesis.manuscriptUploadedAt == null
+              ? 'Submitted'
+              : 'Submitted ${Dates.day(thesis.manuscriptUploadedAt!)}',
+          action: 'Open',
+          onTap: () => openStoredDocument(context, ref, thesis.manuscriptPath!,
+              label: 'the final manuscript'),
+        ),
+    ];
+    return Panel(
+      title: 'Documents',
+      icon: Icons.folder_open_outlined,
+      flush: rows.isNotEmpty,
+      trailing: TextButton(
+        onPressed: () => context.go('/forms'),
+        child: const Text('All forms'),
+      ),
+      child: rows.isEmpty
+          ? Text(
+              'Your forms and files appear here as each stage is completed.',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          : Column(children: rows),
+    );
+  }
+}
+
+class _DocRow extends StatelessWidget {
+  const _DocRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.action,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final String action;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+          AppTokens.lg - 4, AppTokens.sm + 2, AppTokens.sm, AppTokens.sm + 2),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: p.rule)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: p.seal),
+          const SizedBox(width: AppTokens.md - 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: text.labelLarge),
+                Text(detail, style: text.bodySmall),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await onTap();
+              } catch (_) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Could not open $title.')),
+                );
+              }
+            },
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The decisions recorded on this thesis, oldest first, from the dates the
+/// repository writes as each office acts.
+class _History extends StatelessWidget {
+  const _History({required this.thesis});
+
+  final Thesis thesis;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = thesis;
+    final events = <({DateTime at, String what, Tone tone, IconData icon})>[
+      (
+        at: t.createdAt,
+        what: 'Thesis group created',
+        tone: Tone.neutral,
+        icon: Icons.groups_outlined,
+      ),
+      if (t.nominationsSubmittedAt != null)
+        (
+          at: t.nominationsSubmittedAt!,
+          what: 'Adviser and panel nominated',
+          tone: Tone.awaiting,
+          icon: Icons.how_to_reg_outlined,
+        ),
+      if (t.coordinatorRecommendedAt != null)
+        (
+          at: t.coordinatorRecommendedAt!,
+          what: 'Recommended by the Research Coordinator',
+          tone: Tone.endorsed,
+          icon: Icons.inventory_2_outlined,
+        ),
+      if (t.deanApprovedAt != null)
+        (
+          at: t.deanApprovedAt!,
+          what: 'Nomination approved by the Dean',
+          tone: Tone.endorsed,
+          icon: Icons.verified_outlined,
+        ),
+      if (t.titlesSubmittedAt != null)
+        (
+          at: t.titlesSubmittedAt!,
+          what: t.titleRound > 1
+              ? 'Candidate titles resubmitted (round ${t.titleRound})'
+              : 'Candidate titles submitted',
+          tone: Tone.awaiting,
+          icon: Icons.edit_document,
+        ),
+      if (t.titleDecidedAt != null)
+        (
+          at: t.titleDecidedAt!,
+          what: t.status == ThesisStatus.titleRejected
+              ? 'Candidate titles returned'
+              : 'Title approved',
+          tone: t.status == ThesisStatus.titleRejected
+              ? Tone.returned
+              : Tone.endorsed,
+          icon: t.status == ThesisStatus.titleRejected
+              ? Icons.undo_rounded
+              : Icons.task_alt_rounded,
+        ),
+      if (t.manuscriptUploadedAt != null)
+        (
+          at: t.manuscriptUploadedAt!,
+          what: 'Final manuscript submitted',
+          tone: Tone.act,
+          icon: Icons.upload_file_outlined,
+        ),
+    ]..sort((a, b) => a.at.compareTo(b.at));
+
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+
+    return Panel(
+      title: 'History',
+      subtitle: 'Decisions recorded on this thesis',
+      icon: Icons.history_rounded,
+      child: Column(
+        key: const Key('thesisHistory'),
+        children: [
+          for (var i = 0; i < events.length; i++)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Column(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: events[i].tone
+                              .color(context)
+                              .withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(events[i].icon,
+                            size: 16, color: events[i].tone.color(context)),
+                      ),
+                      if (i < events.length - 1)
+                        Expanded(child: Container(width: 1.5, color: p.rule)),
+                    ],
+                  ),
+                  const SizedBox(width: AppTokens.md - 4),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                          top: 5,
+                          bottom: i < events.length - 1 ? AppTokens.md : 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(events[i].what, style: text.labelLarge),
+                          Text(Dates.dayTime(events[i].at),
+                              style: text.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -310,30 +756,31 @@ class _ApprovedTitle extends ConsumerWidget {
         .map((c) => c.titleText)
         .firstOrNull;
 
-    return Container(
+    final c = Tone.endorsed.color(context);
+    return Panel(
       key: const Key('approvedTitle'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.verified_outlined, size: 20),
-              const SizedBox(width: 8),
-              Text('Approved title',
-                  style: Theme.of(context).textTheme.titleSmall),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            approved ?? 'The approved title could not be found.',
-            key: const Key('approvedTitleText'),
-            style: Theme.of(context).textTheme.titleMedium,
+          Icon(Icons.verified_outlined, color: c),
+          const SizedBox(width: AppTokens.md - 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Approved title',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(color: c)),
+                const SizedBox(height: AppTokens.xs),
+                Text(
+                  approved ?? 'The approved title could not be found.',
+                  key: const Key('approvedTitleText'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -347,10 +794,15 @@ class _ApprovedTitle extends ConsumerWidget {
 /// (`candidateTitlesProvider`, `titleCommentsProvider`), watched only once a
 /// decision exists — most statuses never render this at all.
 class _ConsolidatedComments extends ConsumerWidget {
-  const _ConsolidatedComments({required this.thesisId, required this.round});
+  const _ConsolidatedComments({
+    required this.thesisId,
+    required this.round,
+    this.approvedTitleId,
+  });
 
   final String thesisId;
   final int round;
+  final String? approvedTitleId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -379,43 +831,268 @@ class _ConsolidatedComments extends ConsumerWidget {
       round: round,
     );
 
+    // The approved title first, then candidates with remarks, then the
+    // ones nobody commented on. Numbering keeps the submitted order.
+    final numbered = [
+      for (var i = 0; i < consolidated.length; i++)
+        (number: i + 1, item: consolidated[i]),
+    ];
+    int rank(ConsolidatedCandidate c) {
+      if (c.candidate.id == approvedTitleId) return 0;
+      return c.blocks.isEmpty ? 2 : 1;
+    }
+    numbered.sort((a, b) {
+      final r = rank(a.item).compareTo(rank(b.item));
+      return r != 0 ? r : a.number.compareTo(b.number);
+    });
+
+    final withRemarks = numbered.where((n) => n.item.blocks.isNotEmpty);
+    final silent = numbered.where((n) => n.item.blocks.isEmpty).toList();
+
+    if (numbered.isEmpty) {
+      return Text('No candidate titles for this round.',
+          style: Theme.of(context).textTheme.bodySmall);
+    }
+
     return Column(
       key: const Key('consolidatedComments'),
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Panel comments',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        for (final candidate in consolidated)
+        for (final n in withRemarks) ...[
+          _CandidateRemarks(
+            number: n.number,
+            candidate: n.item,
+            approved: n.item.candidate.id == approvedTitleId,
+          ),
+          const Gap.md(),
+        ],
+        if (silent.isNotEmpty)
+          _SilentCandidates(
+            entries: silent,
+            approvedTitleId: approvedTitleId,
+          ),
+      ],
+    );
+  }
+}
+
+/// One candidate and every remark on it, grouped by commenter.
+class _CandidateRemarks extends StatelessWidget {
+  const _CandidateRemarks({
+    required this.number,
+    required this.candidate,
+    required this.approved,
+  });
+
+  final int number;
+  final ConsolidatedCandidate candidate;
+  final bool approved;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    final accent = approved ? Tone.endorsed.color(context) : p.seal;
+    final remarkCount =
+        candidate.blocks.fold<int>(0, (a, b) => a + b.bodies.length);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: p.canvas,
+        borderRadius: BorderRadius.circular(AppTokens.radius),
+        border: Border.all(
+          color: approved ? accent.withValues(alpha: 0.5) : p.rule,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Candidate header.
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(
+                AppTokens.md, AppTokens.md, AppTokens.md, AppTokens.sm + 2),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(candidate.candidate.titleText,
-                    style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 4),
-                for (final block in candidate.blocks)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(block.header,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold)),
-                        for (final body in block.bodies)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16, top: 2),
-                            child: Text(body),
-                          ),
-                      ],
-                    ),
+                Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Text('$number',
+                      style: text.labelLarge?.copyWith(color: accent)),
+                ),
+                const SizedBox(width: AppTokens.md - 4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(candidate.candidate.titleText,
+                          style: text.titleMedium),
+                      const SizedBox(height: AppTokens.xs),
+                      Wrap(
+                        spacing: AppTokens.sm,
+                        runSpacing: AppTokens.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (approved)
+                            const ToneBadge(
+                              label: 'Approved title',
+                              tone: Tone.endorsed,
+                              icon: Icons.verified_outlined,
+                              dense: true,
+                            ),
+                          Text(
+                            remarkCount == 1
+                                ? '1 remark'
+                                : '$remarkCount remarks',
+                            style: text.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
+          Divider(height: 1, color: p.rule),
+          // One block per commenter.
+          for (var i = 0; i < candidate.blocks.length; i++)
+            Container(
+              padding: const EdgeInsets.all(AppTokens.md),
+              decoration: BoxDecoration(
+                color: p.paper,
+                border: i == candidate.blocks.length - 1
+                    ? null
+                    : Border(bottom: BorderSide(color: p.rule)),
+              ),
+              child: _CommenterBlock(block: candidate.blocks[i]),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommenterBlock extends StatelessWidget {
+  const _CommenterBlock({required this.block});
+
+  final CommentBlock block;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    final sameWord = block.authorName.trim().toLowerCase() ==
+        block.authorRole.trim().toLowerCase();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InitialsAvatar(block.authorName, size: 34),
+        const SizedBox(width: AppTokens.md - 4),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AppTokens.sm,
+                runSpacing: AppTokens.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(block.authorName, style: text.labelLarge),
+                  // "Dean, Dean" says nothing twice; show the role only
+                  // when it adds something.
+                  if (!sameWord && block.authorRole.isNotEmpty)
+                    ToneBadge(
+                      label: block.authorRole,
+                      tone: Tone.neutral,
+                      icon: Icons.badge_outlined,
+                      dense: true,
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppTokens.sm),
+              for (final body in block.bodies)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: AppTokens.xs + 2),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.md - 4, vertical: AppTokens.sm),
+                  decoration: BoxDecoration(
+                    color: p.canvas,
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(10),
+                      bottomLeft: Radius.circular(10),
+                      bottomRight: Radius.circular(10),
+                      topLeft: Radius.circular(3),
+                    ),
+                    border: Border.all(color: p.rule),
+                  ),
+                  child: SelectableText(body, style: text.bodyMedium),
+                ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Candidates nobody commented on, listed compactly at the end.
+class _SilentCandidates extends StatelessWidget {
+  const _SilentCandidates({
+    required this.entries,
+    required this.approvedTitleId,
+  });
+
+  final List<({int number, ConsolidatedCandidate item})> entries;
+  final String? approvedTitleId;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppTokens.md),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppTokens.radius),
+        border: Border.all(color: p.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('No remarks', style: text.labelMedium),
+          const SizedBox(height: AppTokens.sm),
+          for (final e in entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppTokens.xs + 2),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 30,
+                    child: Text('${e.number}.',
+                        style: text.labelMedium?.copyWith(color: p.muted)),
+                  ),
+                  Expanded(
+                    child: Text(e.item.candidate.titleText,
+                        style: text.bodyMedium?.copyWith(color: p.muted)),
+                  ),
+                  if (e.item.candidate.id == approvedTitleId)
+                    const ToneBadge(
+                      label: 'Approved',
+                      tone: Tone.endorsed,
+                      dense: true,
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
