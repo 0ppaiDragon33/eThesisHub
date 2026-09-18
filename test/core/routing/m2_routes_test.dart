@@ -82,8 +82,9 @@ void main() {
     // `widget.chapter.label` in the AppBar on every branch, loading, error
     // and not-started alike -- so this is a stable signal that the detail
     // route, not the chapters list, is what actually rendered.
-    expect(find.widgetWithText(AppBar, 'Chapter III — Methodology'),
-        findsOneWidget);
+    expect(
+        tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
+        'Chapter III — Methodology');
   });
 
   testWidgets(

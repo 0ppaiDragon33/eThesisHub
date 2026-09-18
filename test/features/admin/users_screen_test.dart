@@ -128,7 +128,7 @@ void main() {
 
     expect(find.byKey(const Key('roleText-u1')), findsOneWidget);
     final roleText = tester.widget<Text>(find.byKey(const Key('roleText-u1')));
-    expect(roleText.data, 'faculty');
+    expect(roleText.data, 'Faculty');
 
     // The only two DropdownButtons on the whole screen are the role and
     // active FILTERS -- never one per row.
@@ -206,7 +206,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('roleFilter')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('dean').last);
+    await tester.tap(find.text('Dean').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Alma Faculty'), findsNothing);
@@ -417,11 +417,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.widget<Text>(find.byKey(const Key('positions-adv'))).data,
-        '2 advising · 3 panel');
+        '2 advising, 3 on panels');
     // Advises nothing, but sits on three panels -- exactly the D30 case
     // the column exists to put in front of the coordinator.
     expect(tester.widget<Text>(find.byKey(const Key('positions-pan'))).data,
-        '0 advising · 3 panel');
+        '0 advising, 3 on panels');
     // Genuinely holds nothing.
     expect(find.byKey(const Key('positions-idle')), findsNothing);
   });
