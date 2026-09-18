@@ -18,22 +18,28 @@ void main() {
     ));
   }
 
-  testWidgets('wide: brand pane beside the card', (tester) async {
+  testWidgets('wide: route panel beside the card', (tester) async {
     await pumpAt(tester, const Size(1200, 900));
 
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.text('form body'), findsOneWidget);
-    // The sentence only appears where the pane has room for it.
-    expect(find.text(AuthScaffold.brandSentence), findsOneWidget);
+    // The wide layout adds the route panel — the five desks a thesis passes
+    // through, under its own sentence — beside the form. The narrow band's
+    // sentence (`brandSentence`) is a different line and is not shown here.
+    expect(find.text('Researchers'), findsOneWidget);
+    expect(find.text('Every thesis, from nomination to the archive.'), findsOneWidget);
+    expect(find.text(AuthScaffold.brandSentence), findsNothing);
   });
 
-  testWidgets('narrow: band above the card, no sentence', (tester) async {
+  testWidgets('narrow: band above the card, no route panel', (tester) async {
     await pumpAt(tester, const Size(400, 900));
 
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.text('form body'), findsOneWidget);
-    // A phone band is a band, not a billboard: the emblem and wordmark only.
-    expect(find.text(AuthScaffold.brandSentence), findsNothing);
+    // The narrow band carries the wordmark and the product sentence, but not
+    // the wide route panel — a phone has no room for the five desks.
+    expect(find.text(AuthScaffold.brandSentence), findsOneWidget);
+    expect(find.text('Researchers'), findsNothing);
   });
 
   testWidgets('the emblem appears at both widths', (tester) async {
@@ -72,11 +78,13 @@ void main() {
   // was meant — would swap the layout on a whole class of tablet widths and
   // no other test in this file would notice.
   testWidgets('switches layout exactly at the breakpoint', (tester) async {
+    // The route panel (wide-only) is the discriminator: the brand sentence
+    // shows at both widths now, so it can no longer tell the layouts apart.
     await pumpAt(tester, const Size(AuthScaffold.wideBreakpoint - 1, 900));
-    expect(find.text(AuthScaffold.brandSentence), findsNothing);
+    expect(find.text('Researchers'), findsNothing);
 
     await pumpAt(tester, const Size(AuthScaffold.wideBreakpoint, 900));
-    expect(find.text(AuthScaffold.brandSentence), findsOneWidget);
+    expect(find.text('Researchers'), findsOneWidget);
   });
 
   // D83, and the question this whole design was challenged on: with the

@@ -127,7 +127,7 @@ void main() {
 
     c.read(goRouterProvider).go('/nominations');
     await tester.pumpAndSettle();
-    expect(find.text('Nomination inbox'), findsOneWidget);
+    expect(find.byKey(const Key('nominationInboxScreen')), findsOneWidget);
   });
 
   testWidgets(

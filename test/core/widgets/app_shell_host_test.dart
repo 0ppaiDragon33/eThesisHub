@@ -89,7 +89,7 @@ void main() {
       expect(find.byKey(const Key('accountFooterName')), findsOneWidget);
       expect(find.text('Dr. Jane Dela Cruz'), findsOneWidget);
       expect(find.byKey(const Key('accountFooterRole')), findsOneWidget);
-      expect(find.text('College Research Coordinator'), findsOneWidget);
+      expect(find.text('Research Coordinator'), findsOneWidget);
       expect(find.byKey(const Key('signOut')), findsOneWidget);
     });
 

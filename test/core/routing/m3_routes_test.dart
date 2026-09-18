@@ -138,7 +138,7 @@ void main() {
     // key as its loaded state (see `_framed` in defence_room_screen.dart),
     // so the real assertion is the shell's single AppBar plus the
     // not-found copy, not the key's absence.
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     expect(find.text('Defence not found'), findsOneWidget);
   });
 

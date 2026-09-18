@@ -98,7 +98,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chapterDetailScreen')), findsNothing);
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     expect(find.text('No such chapter'), findsOneWidget);
   });
 
@@ -120,7 +120,7 @@ void main() {
     expect(find.byKey(const Key('chaptersScreen')), findsNothing);
     // Exactly one app bar -- the shell's, which also carries the sidebar
     // and so the way out.
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     expect(find.text('No thesis given'), findsOneWidget);
   });
 

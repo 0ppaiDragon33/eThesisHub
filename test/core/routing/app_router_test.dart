@@ -217,6 +217,7 @@ void main() {
     expect(find.text('Sign in'), findsWidgets);
 
     // Tap the "goToRegister" button to navigate to registration
+    await tester.ensureVisible(find.byKey(const Key('goToRegister')));
     await tester.tap(find.byKey(const Key('goToRegister')));
     await tester.pumpAndSettle();
 

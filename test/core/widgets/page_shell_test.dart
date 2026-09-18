@@ -54,7 +54,7 @@ void main() {
       ),
     ));
 
-    expect(find.text('DEAN'), findsOneWidget);
+    expect(find.text('Dean'), findsOneWidget);
     expect(find.text('Approvals'), findsOneWidget);
   });
 
