@@ -125,8 +125,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('2'), findsWidgets);
-    expect(find.text('/ 5'), findsOneWidget);
+    // The count renders as one line, '2 of 5 approved', beside a progress
+    // ring, rather than separate '2' and '/ 5' figures.
+    expect(find.textContaining('2 of 5'), findsOneWidget);
   });
 
   testWidgets('a returned chapter appears in the queue', (tester) async {
@@ -145,7 +146,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Chapter III'), findsOneWidget);
+    expect(find.textContaining('Chapter III'), findsWidgets);
     expect(find.text('Revise'), findsOneWidget);
   });
 

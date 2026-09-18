@@ -133,7 +133,10 @@ void main() {
         await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));
     await tester.pumpAndSettle();
 
-    expect(find.text('A Working Title'), findsOneWidget);
+    // The awaiting thesis surfaces on the overview (the needs-you queue and
+    // the title-defences-to-close list can both name it), with an Approve
+    // action — that action is the signal this test is really about.
+    expect(find.text('A Working Title'), findsWidgets);
     expect(find.text('Approve'), findsOneWidget);
   });
 
@@ -144,7 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Theses by stage'), findsOneWidget);
-    expect(find.textContaining('Past 7 months'), findsOneWidget);
+    expect(find.textContaining('past 7 months'), findsOneWidget);
   });
 
   testWidgets('the four tiles render', (tester) async {
@@ -154,7 +157,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Awaiting your approval'), findsOneWidget);
-    expect(find.text('Title defences'), findsOneWidget);
+    expect(find.text('At title defence'), findsOneWidget);
     expect(find.text('Defences this week'), findsOneWidget);
     expect(find.text('Active theses'), findsOneWidget);
   });

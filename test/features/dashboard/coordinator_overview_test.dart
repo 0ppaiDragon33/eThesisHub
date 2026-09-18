@@ -144,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Theses by stage'), findsOneWidget);
-    expect(find.textContaining('Past 7 months'), findsOneWidget);
+    expect(find.textContaining('past 7 months'), findsOneWidget);
   });
 
   testWidgets('the four tiles render', (tester) async {

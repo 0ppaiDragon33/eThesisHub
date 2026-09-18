@@ -119,21 +119,25 @@ void main() {
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
+    // The score renders as a Text.rich, '<score>/<weight>'; the score is the
+    // first span.
+    String scoreOf(String key) {
+      final span =
+          tester.widget<Text>(find.byKey(Key('score_$key'))).textSpan!
+              as TextSpan;
+      return (span.children!.first as TextSpan).text!;
+    }
+
     // recommendation is worth 2 -- three taps must not reach 3.
     for (var i = 0; i < 3; i++) {
       await tester.tap(find.byKey(const Key('plus_recommendation')));
       await tester.pump();
     }
-    expect(
-        tester
-            .widget<Text>(find.byKey(const Key('score_recommendation')))
-            .data,
-        '2');
+    expect(scoreOf('recommendation'), '2');
 
     await tester.tap(find.byKey(const Key('minus_title')));
     await tester.pump();
-    expect(
-        tester.widget<Text>(find.byKey(const Key('score_title'))).data, '0');
+    expect(scoreOf('title'), '0');
   });
 
   testWidgets('submit is disabled until every criterion is scored',

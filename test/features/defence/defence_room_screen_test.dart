@@ -260,6 +260,7 @@ void main() {
 
     await tester.enterText(
         find.byKey(const Key('commentBody')), 'Great defence overall.');
+    await tester.ensureVisible(find.byKey(const Key('postComment')));
     await tester.tap(find.byKey(const Key('postComment')));
     await tester.pumpAndSettle();
 
