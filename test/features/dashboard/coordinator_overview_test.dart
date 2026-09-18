@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ethesishub/app.dart';
+import '../../support/no_animations.dart';
+import 'package:ethesishub/core/design/metrics.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/features/dashboard/coordinator_overview.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -62,7 +64,10 @@ Future<Widget> wrap(
       )),
       ...overrides,
     ],
-    child: MaterialApp(home: dashboard),
+    // Scaffold, because the overview now draws a search field and filter
+    // chips that need a Material ancestor. In the app the shell's Scaffold
+    // supplies it; the harness must too.
+    child: MaterialApp(home: Scaffold(body: dashboard)),
   );
 }
 
@@ -110,7 +115,7 @@ void main() {
     expect(find.byKey(const Key('coordinatorOverview')), findsOneWidget);
     expect(find.text('Nomination recommendations'), findsNothing);
 
-    final rail = find.byType(NavigationRail);
+    final rail = find.byKey(const Key('shellSidebar'));
     expect(find.descendant(of: rail, matching: find.text('Overview')),
         findsOneWidget);
   });
@@ -156,6 +161,7 @@ void main() {
 
   testWidgets('a loading queue is distinguishable from an empty one',
       (tester) async {
+    disableAnimationsForTest(tester);
     final db = FakeFirebaseFirestore();
 
     await tester.pumpWidget(await wrap(
@@ -281,7 +287,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Users')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('Users')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('usersScreen')), findsOneWidget);
@@ -321,7 +327,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final tile = find.ancestor(
-        of: find.text('Defences this week'), matching: find.byKey(const Key('statTilePadding')));
+        of: find.text('Defences this week'), matching: find.byWidgetPredicate((w) => w is Metric));
     expect(find.descendant(of: tile, matching: find.text('1')),
         findsOneWidget);
     expect(find.descendant(of: tile, matching: find.text('0')),

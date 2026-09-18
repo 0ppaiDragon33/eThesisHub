@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
-import 'package:ethesishub/core/widgets/stat_tile.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -164,8 +163,8 @@ void main() {
       ));
       await tester.pump();
 
-      // Title is current, Draft and Nomination are behind it, Chapters ahead.
-      final here = tester.widget<Container>(
+      // Title is current; Draft and Nomination are behind it.
+      final here = tester.widget<AnimatedContainer>(
         find.byKey(const Key('railCurrent-title')),
       );
       expect(
@@ -179,7 +178,7 @@ void main() {
             of: find.byType(ProgressRail),
             matching: find.byType(Container),
           ))
-          .map((c) => (c.decoration as BoxDecoration?)?.color)
+          .map((c) => (c.decoration as BoxDecoration?)?.color ?? c.color)
           .whereType<Color>()
           .toSet();
       expect(colours, contains(AppTokens.endorsedDark));
@@ -188,53 +187,11 @@ void main() {
       expect(colours, isNot(contains(AppTokens.endorsed)));
       expect(colours, isNot(contains(AppTokens.rule)));
 
-      final label = tester.widget<Text>(find.text('Title'));
-      expect(label.style!.color, AppTokens.sealDark);
-    });
-
-    testWidgets('a stat tile uses the dark rule and dark accent',
-        (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        theme: AppTheme.dark,
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => StatTile(
-              label: 'Active theses',
-              value: '12',
-              icon: Icons.school_outlined,
-              // What every overview now passes: the POSITION is a
-              // compile-time constant, brightness only picks the variant.
-              accent: AppTokens.accentFor(0, Theme.of(context).brightness),
-              progress: 0.4,
-            ),
-          ),
-        ),
-      ));
-      await tester.pump();
-
-      final decorations = tester
-          .widgetList<Container>(find.descendant(
-            of: find.byType(StatTile),
-            matching: find.byType(Container),
-          ))
-          .map((c) => c.decoration)
-          .whereType<BoxDecoration>()
-          .toList();
-
-      final card = decorations.firstWhere((d) => d.border != null);
-      expect(
-        (card.border! as Border).top.color,
-        AppTokens.ruleDark,
-        reason: 'the card hairline must not be the light near-white rule',
-      );
-
-      final badge = decorations.firstWhere((d) => d.border == null);
-      expect(badge.color, AppTokens.accentPlumDark);
-
-      final bar = tester.widget<LinearProgressIndicator>(
-        find.byType(LinearProgressIndicator),
-      );
-      expect(bar.backgroundColor, AppTokens.ruleDark);
+      // Every state is said in words as well as colour.
+      final current = tester.widget<Text>(find.text('Current stage'));
+      expect(current.style!.color, AppTokens.sealDark);
+      final done = tester.widget<Text>(find.text('Done').first);
+      expect(done.style!.color, AppTokens.endorsedDark);
     });
   });
 

@@ -54,7 +54,9 @@ Future<Widget> wrap(
             uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
       )),
     ],
-    child: MaterialApp(home: dashboard),
+    // Scaffold: the overview draws Material widgets (search/filter, tiles)
+    // that in the app sit under the shell's Scaffold.
+    child: MaterialApp(home: Scaffold(body: dashboard)),
   );
 }
 

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ethesishub/app.dart';
+import '../../support/no_animations.dart';
 
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
@@ -108,7 +109,9 @@ Future<Widget> wrap(
       )),
       ...overrides,
     ],
-    child: MaterialApp(home: dashboard),
+    // Scaffold: the overview draws Material widgets (search/filter, tiles)
+    // that in the app sit under the shell's Scaffold.
+    child: MaterialApp(home: Scaffold(body: dashboard)),
   );
 }
 
@@ -195,13 +198,24 @@ void main() {
     await pumpRouted(tester, c);
 
     expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
-    final rail = find.byType(NavigationRail);
+    final rail = find.byKey(const Key('shellSidebar'));
     expect(find.descendant(of: rail, matching: find.text('Overview')),
         findsOneWidget);
-    final destinations = tester
-        .widget<NavigationRail>(rail)
-        .destinations
-        .map((d) => (d.label as Text).data)
+    // The sidebar is a keyed ink column now; its first destination is the
+    // first `nav-<route>` item in tree order.
+    final destinations = find
+        .byWidgetPredicate((w) =>
+            w is InkWell &&
+            w.key is ValueKey<String> &&
+            (w.key as ValueKey<String>).value.startsWith('nav-'))
+        .evaluate()
+        .map((e) => (find
+                .descendant(
+                    of: find.byWidget(e.widget), matching: find.byType(Text))
+                .evaluate()
+                .first
+                .widget as Text)
+            .data)
         .toList();
     expect(destinations.first, 'Overview');
   });
@@ -243,6 +257,7 @@ void main() {
 
   testWidgets('a loading queue is distinguishable from an empty one',
       (tester) async {
+    disableAnimationsForTest(tester);
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(adviserUid: 'a1'));
 

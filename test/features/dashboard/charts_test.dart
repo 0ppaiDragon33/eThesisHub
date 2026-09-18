@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -118,6 +119,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('No theses yet'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LoadingState), findsOneWidget);
   });
 }
