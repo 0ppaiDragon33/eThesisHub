@@ -307,7 +307,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('accountFooterName')), findsOneWidget);
-      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
     });
   });
 

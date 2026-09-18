@@ -103,7 +103,7 @@ void main() {
       await tester.pumpWidget(await shell(const []));
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byKey(const Key('shellSidebar')), findsNothing);
       expect(find.byType(NavigationDrawer), findsNothing);
       expect(find.byKey(const Key('shellMenu')), findsNothing);
       expect(find.text('body'), findsOneWidget);

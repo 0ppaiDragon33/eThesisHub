@@ -62,8 +62,14 @@ class AppShell extends ConsumerWidget {
   /// Below this width the sidebar gives way to bottom navigation.
   static const double railBreakpoint = 720;
 
-  /// At and above this width the sidebar may show labels.
-  static const double fullSidebarFrom = 1200;
+  /// At and above this width the sidebar may show labels, and the reader may
+  /// collapse it. Below it the rail is icons-only and the collapse control is
+  /// withheld, because there is nothing to collapse to.
+  ///
+  /// 900, not 1200: a ~1000 px window is an ordinary laptop or split-screen
+  /// size, and pinning the threshold above it left those readers with an
+  /// icon rail they could not expand at all.
+  static const double fullSidebarFrom = 900;
 
   static const int minDestinations = 2;
 
