@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -145,7 +147,12 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   Widget _framed(List<Widget> children, {String? title, String? subtitle}) =>
       KeyedSubtree(
         key: const Key('grades'),
-        child: PageShell(title: title, subtitle: subtitle, children: children),
+        child: PageShell(
+          maxWidth: 1000,
+          kicker: subtitle == null ? null : 'Research Form 5c, $subtitle',
+          title: title,
+          children: children,
+        ),
       );
 
   /// The pre-release block. Everything here is decided from `defence`
@@ -336,12 +343,9 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         // a form -- which is what a panel comparing three columns needs.
         Container(
           decoration: BoxDecoration(
-            border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.6),
-            ),
-            borderRadius: BorderRadius.circular(AppTokens.radius),
+            color: Palette.of(context).paper,
+            border: Border.all(color: Palette.of(context).rule),
+            borderRadius: BorderRadius.circular(AppTokens.radius + 2),
           ),
           clipBehavior: Clip.antiAlias,
           child: DataTable(
@@ -396,7 +400,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
                       SizedBox(
                         width: _labelWidth,
                         child: Text(
-                          '${section.label} — ${EvaluationSection.sectionTotal}',
+                          '${section.label}, out of ${EvaluationSection.sectionTotal}',
                           style: Theme.of(context).textTheme.labelMedium,
                         ),
                       ),
@@ -468,40 +472,81 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           ),
         ),
         const Gap.lg(),
-        Text('Panel mean', style: Theme.of(context).textTheme.labelMedium),
-        Text(
-          // One decimal place, not .round(): 83.5 and 84.4 both rendered
-          // as "84", on the one number the panel deliberates over.
-          mean!.toStringAsFixed(1),
-          key: const Key('panelMean'),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const Gap.lg(),
-        Text(
-          'Remarks by criterion',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-        const Gap.sm(),
-        for (final key in contentKeys)
-          if (evaluations.any((e) => e.comments[key] != null))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    criterionFor(key)?.label ?? key,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  for (final e in evaluations)
-                    if (e.comments[key] != null)
-                      Text('${_evaluatorLabel(e)}: ${e.comments[key]}'),
-                ],
+        Panel(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Panel mean',
+                        style: Theme.of(context).textTheme.labelMedium),
+                    Text(
+                      // One decimal place: 83.5 and 84.4 must not both
+                      // read as 84.
+                      mean!.toStringAsFixed(1),
+                      key: const Key('panelMean'),
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                  ],
+                ),
               ),
+              ToneBadge(
+                label: meanClearsPassingMark(mean)
+                    ? 'At or above $passingMark'
+                    : 'Below $passingMark',
+                tone: meanClearsPassingMark(mean)
+                    ? Tone.endorsed
+                    : Tone.returned,
+              ),
+            ],
+          ),
+        ),
+        if (contentKeys
+            .any((k) => evaluations.any((e) => e.comments[k] != null))) ...[
+          const Gap.md(),
+          Panel(
+            title: 'Remarks by criterion',
+            icon: Icons.notes_rounded,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final key in contentKeys)
+                  if (evaluations.any((e) => e.comments[key] != null))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppTokens.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            criterionFor(key)?.label ?? key,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          for (final e in evaluations)
+                            if (e.comments[key] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                    '${_evaluatorLabel(e)}: ${e.comments[key]}'),
+                              ),
+                        ],
+                      ),
+                    ),
+              ],
             ),
+          ),
+        ],
       ],
-      const Gap.lg(),
-      ..._verdictBlock(context, defence, uid, isAdviser, mean),
+      const Gap.md(),
+      Panel(
+        title: 'Panel verdict',
+        icon: Icons.gavel_outlined,
+        emphasis: isAdviser && !defence.hasVerdict,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _verdictBlock(context, defence, uid, isAdviser, mean),
+        ),
+      ),
     ];
 
     return children;
@@ -519,7 +564,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         Text(
           'Panel verdict: ${defence.panelVerdict?.label ?? '—'}',
           key: const Key('verdict'),
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         const Gap.sm(),
         Text(
@@ -581,7 +626,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ],
-      const Gap.sm(),
+      const Gap.md(),
       SegmentedButton<PassFail>(
         segments: [
           ButtonSegment(
