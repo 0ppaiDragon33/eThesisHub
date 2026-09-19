@@ -57,6 +57,8 @@ rules-test/node_modules/
 .env.*
 !.env.example
 service-account*.json
+*firebase-adminsdk*.json
+*-service-account*.json
 
 # Supabase CLI link state (holds the project ref and access token cache)
 supabase/.temp/
