@@ -454,4 +454,75 @@ void main() {
       expect(tester.takeException(), isNull);
     }
   });
+
+  // The bug this pins: a user verifies their email, the app lets them in
+  // because `reload()` flips the local `emailVerified` flag — but the ID
+  // token Firestore reads still carries `email_verified: false` until it is
+  // force-refreshed. `firestore.rules` gates every write on
+  // `request.auth.token.email_verified`, so the very first write (creating a
+  // thesis, applying the invite) is refused with permission-denied, and the
+  // screen tells a genuinely-verified user their email is not verified.
+  //
+  // `reload()` does not refresh the token; only `getIdToken(true)` does.
+  group('forces a token refresh so the rules see the verified token', () {
+    testWidgets('on the verified path', (tester) async {
+      final db = FakeFirebaseFirestore();
+      final auth = _TokenTrackingAuthService(MockFirebaseAuth(
+        signedIn: true,
+        mockUser: MockUser(
+          uid: 'u', email: 'u@isufst.edu.ph', isEmailVerified: true),
+      ));
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          firestoreProvider.overrideWithValue(db),
+          authServiceProvider.overrideWithValue(auth),
+        ],
+        child: const MaterialApp(home: VerifyEmailScreen()),
+      ));
+
+      await tester.tap(find.byKey(const Key('reload')));
+      await tester.pumpAndSettle();
+
+      expect(auth.forcedRefreshes, 1,
+          reason: 'the token must be refreshed before the rules are hit');
+    });
+
+    testWidgets('but not while still unverified', (tester) async {
+      final db = FakeFirebaseFirestore();
+      final auth = _TokenTrackingAuthService(MockFirebaseAuth(
+        signedIn: true,
+        mockUser: MockUser(
+          uid: 'u', email: 'u@isufst.edu.ph', isEmailVerified: false),
+      ));
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          firestoreProvider.overrideWithValue(db),
+          authServiceProvider.overrideWithValue(auth),
+        ],
+        child: const MaterialApp(home: VerifyEmailScreen()),
+      ));
+
+      await tester.tap(find.byKey(const Key('reload')));
+      await tester.pumpAndSettle();
+
+      // Nothing to refresh to: refreshing a still-unverified token would just
+      // re-fetch the same false value and mask the "check your inbox" path.
+      expect(auth.forcedRefreshes, 0);
+    });
+  });
+}
+
+/// Records forced token refreshes while delegating everything else to a real
+/// [AuthService] over [MockFirebaseAuth].
+class _TokenTrackingAuthService extends AuthService {
+  _TokenTrackingAuthService(super.auth);
+
+  int forcedRefreshes = 0;
+
+  @override
+  Future<void> refreshIdToken() async {
+    forcedRefreshes++;
+  }
 }
