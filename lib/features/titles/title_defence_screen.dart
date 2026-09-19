@@ -108,28 +108,44 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     });
   }
 
+  /// Fires a presence write and swallows its refusal.
+  ///
+  /// The "is writing" marker is decoration, and `firestore.rules` refuses it
+  /// outright to anyone not on the panel: `titleComposing` allows create
+  /// only for `isOnPanel()`, while get/list also allows the Coordinator and
+  /// the Dean. So a Coordinator or Dean reading this screen is shown a
+  /// comment box, focuses it, and the write is denied — once on focus and
+  /// then again on every heartbeat.
+  ///
+  /// Nothing awaits these writes, so each refusal escaped to the browser as
+  /// "Uncaught (in promise) [cloud_firestore/permission-denied]". Losing a
+  /// marker costs a reader nothing; it must not be reported as a failure.
+  void _presence(Future<void> write) {
+    write.catchError((Object _) {});
+  }
+
   void _startComposing(String candidateId, AppUser me, Thesis thesis) {
     _composingCandidateId = candidateId;
     final role = _roleOnThisThesis(thesis, me);
     final repo = ref.read(titleDefenceRepositoryProvider);
-    repo.markComposing(
+    _presence(repo.markComposing(
       thesisId: widget.thesisId,
       uid: me.uid,
       name: me.fullName,
       role: role,
       candidateTitleId: candidateId,
-    );
+    ));
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(const Duration(seconds: 5), (_) {
       final id = _composingCandidateId;
       if (id == null) return;
-      repo.markComposing(
+      _presence(repo.markComposing(
         thesisId: widget.thesisId,
         uid: me.uid,
         name: me.fullName,
         role: role,
         candidateTitleId: id,
-      );
+      ));
     });
   }
 
@@ -137,9 +153,9 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     _heartbeat?.cancel();
     _heartbeat = null;
     _composingCandidateId = null;
-    ref
+    _presence(ref
         .read(titleDefenceRepositoryProvider)
-        .clearComposing(thesisId: widget.thesisId, uid: me.uid);
+        .clearComposing(thesisId: widget.thesisId, uid: me.uid));
   }
 
   /// The uploaded documents were written on submission and rendered

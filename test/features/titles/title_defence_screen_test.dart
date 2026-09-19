@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'package:ethesishub/data/repositories/title_defence_repository.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+import 'package:ethesishub/providers/title_providers.dart';
 
 /// [withPreviousRound] seeds a SUPERSEDED candidate from the round before,
 /// which is the only way the screen's round filter can be tested at all.
@@ -69,9 +73,16 @@ class _FakeStorage implements StorageService {
   Future<void> delete(String path) async => throw UnimplementedError();
 }
 
-Widget wrap(FakeFirebaseFirestore db, {UrlOpener? openUrl}) => ProviderScope(
+Widget wrap(
+  FakeFirebaseFirestore db, {
+  UrlOpener? openUrl,
+  TitleDefenceRepository? repository,
+}) =>
+    ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
+        if (repository != null)
+          titleDefenceRepositoryProvider.overrideWithValue(repository),
         storageServiceProvider.overrideWithValue(_FakeStorage()),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
           signedIn: true,
@@ -298,4 +309,60 @@ void main() {
         reason: 'nothing should have been recorded');
     expect(find.byKey(const Key('error')), findsOneWidget);
   });
+
+  // The "is writing" marker is decoration, and the rules refuse it outright
+  // to anyone who is not on the panel: `titleComposing` allows create only
+  // for isOnPanel(), while get/list also allows the Coordinator and the
+  // Dean. So a Dean or Coordinator reading this screen is shown a comment
+  // box, focuses it, and the marker write is denied — once on focus and then
+  // again every five seconds by the heartbeat.
+  //
+  // Nothing awaits those writes, so each refusal escaped as an uncaught
+  // rejection: "Uncaught (in promise) [cloud_firestore/permission-denied]".
+  // Presence failing costs a reader nothing and must stay silent.
+  testWidgets('a refused composing marker does not surface as an error',
+      (tester) async {
+    final db = await seeded(viewerRole: 'dean');
+
+    await tester.pumpWidget(
+      wrap(db, repository: _RefusingComposingRepository(db)),
+    );
+    await tester.pumpAndSettle();
+
+    // Focus rather than tap: the box sits below the fold, so a tap never
+    // reaches it and the focus listener would never run.
+    await tester.showKeyboard(find.byKey(const Key('commentBox-ct1')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// Stands in for a panel-only `titleComposing` rule refusing a reader who may
+/// watch the screen but not write to it.
+class _RefusingComposingRepository extends TitleDefenceRepository {
+  _RefusingComposingRepository(super.db);
+
+  static final _denied = FirebaseException(
+    plugin: 'cloud_firestore',
+    code: 'permission-denied',
+    message: 'Missing or insufficient permissions.',
+  );
+
+  @override
+  Future<void> markComposing({
+    required String thesisId,
+    required String uid,
+    required String name,
+    required String role,
+    required String candidateTitleId,
+  }) =>
+      Future.error(_denied);
+
+  @override
+  Future<void> clearComposing({
+    required String thesisId,
+    required String uid,
+  }) =>
+      Future.error(_denied);
 }
