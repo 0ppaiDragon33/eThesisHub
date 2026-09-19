@@ -205,31 +205,45 @@ void main() {
     );
   });
 
-  test('resubmitting prunes a nominee dropped from the roster', () async {
+  // This used to assert the opposite — that resubmitting silently pruned ANY
+  // nominee dropped from the roster, including one still waiting to answer.
+  // That passed only because `fake_cloud_firestore` does not evaluate rules.
+  // Firestore does: the leader's delete arm is pinned to
+  // `resource.data.conformeStatus == 'declined'`, so removing a pending or
+  // accepted seat is refused, and the whole batch fails with a bare
+  // permission-denied that the nominate screen then blamed on the nominees'
+  // availability. Reopening is for replacing a REFUSAL, not for reshuffling
+  // a panel that is still answering.
+  test('resubmitting will not drop a nominee who has not declined', () async {
     await submit();
     await repo.reopenForRenomination(
       thesisId: thesisId,
       coordinatorUid: 'c1',
     );
 
-    // p1 replaced by p4.
-    await repo.submitNominations(
-      thesisId: thesisId,
-      adviser: entry('a1', 'Dr. Armada', 'faculty'),
-      panelists: [
-        entry('p4', 'Dr. Nuevo', 'faculty'),
-        entry('p2', 'Prof. Padojinog', 'faculty'),
-        entry('p3', 'Dr. Braganza', 'faculty'),
-      ],
-      exOfficio: [
-        entry('c1', 'Dr. Bito-onon', 'coordinator'),
-        entry('d1', 'Dr. Siason', 'dean'),
-      ],
+    // p1 is still pending — nobody declined here — and is dropped for p4.
+    await expectLater(
+      repo.submitNominations(
+        thesisId: thesisId,
+        adviser: entry('a1', 'Dr. Armada', 'faculty'),
+        panelists: [
+          entry('p4', 'Dr. Nuevo', 'faculty'),
+          entry('p2', 'Prof. Padojinog', 'faculty'),
+          entry('p3', 'Dr. Braganza', 'faculty'),
+        ],
+        exOfficio: [
+          entry('c1', 'Dr. Bito-onon', 'coordinator'),
+          entry('d1', 'Dr. Siason', 'dean'),
+        ],
+      ),
+      throwsA(isA<ArgumentError>().having((e) => e.message.toString(),
+          'message', contains('has not answered yet'))),
     );
 
+    // And nothing was half-written: the roster is exactly as it was.
     final noms = await repo.watchNominations(thesisId).first;
-    expect(noms.where((n) => n.nomineeUid == 'p1'), isEmpty);
-    expect(noms.where((n) => n.nomineeUid == 'p4'), hasLength(1));
+    expect(noms.where((n) => n.nomineeUid == 'p1'), hasLength(1));
+    expect(noms.where((n) => n.nomineeUid == 'p4'), isEmpty);
   });
 
   // The regression that matters: the whole rescue path, end to end. Without

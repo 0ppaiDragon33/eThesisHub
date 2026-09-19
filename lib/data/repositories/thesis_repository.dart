@@ -202,28 +202,96 @@ class ThesisRepository {
       conformeStatus: ConformeStatus.pending,
     );
 
+    // What is already on record. Read before the batch rather than inside
+    // it: a batch is not a transaction and cannot read. The window is safe
+    // because a leader may only submit while the thesis is still 'draft',
+    // and nothing else writes nominations in that state.
+    final prior = {
+      for (final d in (await noms.get()).docs) d.id: d.data(),
+    };
+
+    // A FIRST submission finds nothing here and simply writes the roster.
+    //
+    // A SECOND one — after `reopenForRenomination` hands a stalled thesis
+    // back to the group — is deliberately much narrower, because rewriting
+    // the roster wholesale is wrong twice over. It would reset everyone who
+    // had already answered back to `pending`, asking people to accept a
+    // second time; and `firestore.rules` refuses it anyway, since the
+    // nomination update arm is pinned to `request.auth.uid == nomineeUid`
+    // — answering is the nominee's alone, never the leader's. The leader may
+    // only DELETE, only while `draft`, and only a seat whose
+    // `conformeStatus` is `declined`.
+    //
+    // So a re-submission touches exactly the refused seat: whoever accepted
+    // stays accepted and is left alone, and the replacement is a fresh
+    // create. Everything else here is about refusing, with a reason, the
+    // cases the rules would reject as a bare permission-denied.
     for (final entry in writes.entries) {
-      batch.set(noms.doc(entry.key), entry.value);
+      final before = prior[entry.key];
+      if (before == null) {
+        batch.set(noms.doc(entry.key), entry.value);
+        continue;
+      }
+
+      final status = before['conformeStatus'] as String?;
+      final sameSeat = before['position'] == entry.value['position'] &&
+          before['exOfficio'] == entry.value['exOfficio'];
+
+      if (status == 'declined') {
+        // Re-asking the same person who refused would mean deleting and
+        // re-creating the same document. In a batch both operations are
+        // judged against the state BEFORE the batch, so the create is seen
+        // as an update and refused. Naming that is better than emitting a
+        // permission-denied the screen would blame on availability.
+        throw ArgumentError(
+          '${entry.value['nomineeName']} declined this nomination, so they '
+          'cannot be nominated again on this round. Choose someone else for '
+          'that seat.',
+        );
+      }
+
+      if (!sameSeat) {
+        throw ArgumentError(
+          '${entry.value['nomineeName']} has already been asked to serve as '
+          '${before['position']} on this thesis, and a seat that has been '
+          'asked cannot be changed. Only a nominee who declined can be '
+          'replaced.',
+        );
+      }
+
+      // Same person, same seat, already asked: leave their answer alone.
+      // This is the case that makes a reopen usable — an accepted nominee
+      // is not asked to accept again.
     }
 
-    // Prune nominations that are no longer on the roster.
-    //
-    // Submission used to only ever WRITE, which was harmless while a thesis
-    // could be submitted exactly once: nothing stale could exist. Reopening
-    // a stalled thesis (`reopenForRenomination`) makes a second submission
-    // real, and without this the rescue path defeats itself -- the nominee
-    // who declined keeps their `declined` document even after being replaced,
-    // `respondToNomination` counts it outstanding forever, and the thesis
-    // stalls again on the very action meant to free it.
-    //
-    // Read before the batch rather than inside it: a batch is not a
-    // transaction and cannot read. The window is safe because a leader may
-    // only submit while the thesis is still 'draft', and nothing else writes
-    // nominations in that state.
-    for (final existing in (await noms.get()).docs) {
-      if (!writes.containsKey(existing.id)) {
-        batch.delete(noms.doc(existing.id));
+    // Clear out the refused seat so it stops counting as outstanding. Before
+    // this existed the rescue path defeated itself: the nominee who declined
+    // kept their document even after being replaced, `respondToNomination`
+    // counted it forever, and the thesis stalled again on the very action
+    // meant to free it.
+    for (final entry in prior.entries) {
+      if (writes.containsKey(entry.key)) continue;
+
+      final status = entry.value['conformeStatus'] as String?;
+      if (status == 'declined') {
+        batch.delete(noms.doc(entry.key));
+        continue;
       }
+
+      // Anything else dropped from the roster would have to be deleted, and
+      // the rules permit deleting only a declined seat. Leaving it in place
+      // silently would be worse than refusing: it would count as outstanding
+      // forever and stall the thesis exactly as the decline did.
+      final who = entry.value['nomineeName'] ?? entry.key;
+      final why = switch (status) {
+        'accepted' => 'has already accepted',
+        'exOfficio' => 'sits on this panel by office',
+        _ => 'has been asked and has not answered yet',
+      };
+      throw ArgumentError(
+        '$who $why, so their seat cannot be removed. Only a nominee who '
+        'declined can be replaced.',
+      );
     }
 
     batch.update(_theses.doc(thesisId), {
