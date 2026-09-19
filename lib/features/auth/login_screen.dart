@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/components/brand.dart';
 import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/password_field.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -149,14 +152,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       subtitle: 'Use your ISUFST account.',
       children: [
         if (signedInUser != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppTokens.lg),
+          Container(
+            margin: const EdgeInsets.only(bottom: AppTokens.lg),
+            padding: const EdgeInsets.fromLTRB(
+                AppTokens.md, AppTokens.sm, AppTokens.xs, AppTokens.sm),
+            decoration: BoxDecoration(
+              color: Tone.awaiting.color(context).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+            ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Flexible(
+                Expanded(
                   child: Text(
-                    'Signed in as ${signedInUser.email} — sign out?',
+                    'Signed in as ${signedInUser.email}. Sign out to use '
+                    'another account.',
                   ),
                 ),
                 const SignOutButton(),
@@ -169,48 +178,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             key: const Key('email'),
             controller: _email,
             keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.next,
             decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
-              isDense: true,
+              hintText: 'you@isufst.edu.ph',
+              prefixIcon: Icon(Icons.alternate_email_rounded),
             ),
           ),
         ),
         FormRow(
           label: 'Password',
-          child: TextField(
-            key: const Key('password'),
+          child: PasswordField(
+            fieldKey: const Key('password'),
             controller: _password,
-            obscureText: true,
-            decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
-              isDense: true,
-            ),
+            autofillHints: const [AutofillHints.password],
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_busy) _submit();
+            },
           ),
         ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppTokens.md),
-            child: Text(
-              _error!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            key: const Key('reset'),
+            onPressed: _busy ? null : _resetPassword,
+            child: const Text('Forgot password?'),
           ),
+        ),
+        const SizedBox(height: AppTokens.sm),
+        if (_error != null) ...[
+          ErrorState(message: _error!),
+          const SizedBox(height: AppTokens.md),
+        ],
         FilledButton(
           key: const Key('submit'),
+          style: FilledButton.styleFrom(minimumSize: const Size(64, 50)),
           onPressed: _busy ? null : _submit,
           child: Text(_busy ? 'Signing in…' : 'Sign in'),
         ),
-        TextButton(
-          key: const Key('reset'),
-          onPressed: _busy ? null : _resetPassword,
-          child: const Text('Forgot password?'),
-        ),
-        TextButton(
-          key: const Key('goToRegister'),
-          onPressed: () => context.go('/register'),
-          child: const Text('New here? Create account'),
+        const SizedBox(height: AppTokens.lg),
+        const Divider(),
+        const SizedBox(height: AppTokens.md),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('New to eThesisHub?',
+                style: Theme.of(context).textTheme.bodyMedium),
+            TextButton(
+              key: const Key('goToRegister'),
+              onPressed: () => context.go('/register'),
+              child: const Text('Create an account'),
+            ),
+          ],
         ),
       ],
     );

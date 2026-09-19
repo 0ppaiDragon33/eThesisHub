@@ -6,7 +6,9 @@ import 'package:ethesishub/core/components/brand.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/institutional_domain_notice.dart';
+import 'package:ethesishub/core/widgets/password_field.dart';
 import 'package:ethesishub/core/widgets/password_strength_meter.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/features/auth/registration_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -72,8 +74,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             key: const Key('fullName'),
             controller: _fullName,
             decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
-              isDense: true,
+              prefixIcon: Icon(Icons.badge_outlined),
             ),
           ),
         ),
@@ -84,8 +85,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             controller: _email,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
-              isDense: true,
+              prefixIcon: Icon(Icons.alternate_email_rounded),
             ),
           ),
         ),
@@ -95,8 +95,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             key: const Key('program'),
             controller: _program,
             decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
-              isDense: true,
+              prefixIcon: Icon(Icons.school_outlined),
             ),
           ),
         ),
@@ -106,19 +105,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                key: const Key('password'),
+              PasswordField(
+                fieldKey: const Key('password'),
                 controller: _password,
-                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
                 // Rebuilds the meter as they type. The meter is guidance
                 // only — nothing here blocks a submission.
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  border: UnderlineInputBorder(),
-                  isDense: true,
-                  helperText: 'At least 8 characters. A phrase of a few '
-                      'words works well.',
-                ),
+                helperText: 'At least 8 characters. A phrase of a few '
+                    'words works well.',
               ),
               PasswordStrengthMeter(_password.text),
             ],
@@ -126,35 +121,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
         FormRow(
           label: 'Confirm password',
-          child: TextField(
-            key: const Key('confirmPassword'),
+          child: PasswordField(
+            fieldKey: const Key('confirmPassword'),
             controller: _confirmPassword,
-            obscureText: true,
-            decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
-              isDense: true,
-            ),
+            autofillHints: const [AutofillHints.newPassword],
           ),
         ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppTokens.md),
-            child: Text(
-              _error!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ),
+        if (_error != null) ...[
+          ErrorState(message: _error!),
+          const SizedBox(height: AppTokens.md),
+        ],
         FilledButton(
           key: const Key('submit'),
           onPressed: _busy ? null : _submit,
           child: Text(_busy ? 'Creating…' : 'Create account'),
         ),
-        TextButton(
-          key: const Key('goToLogin'),
-          onPressed: () => context.go('/login'),
-          child: const Text('Already have an account? Sign in'),
+        const SizedBox(height: AppTokens.md),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Already registered?',
+                style: Theme.of(context).textTheme.bodyMedium),
+            TextButton(
+              key: const Key('goToLogin'),
+              onPressed: () => context.go('/login'),
+              child: const Text('Sign in'),
+            ),
+          ],
         ),
       ],
     );
