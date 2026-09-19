@@ -4904,6 +4904,61 @@ test("notifications: an anonymous reader is denied both directions", async () =>
   );
 });
 
+test("notifications: a create may not carry an unlisted key", async () => {
+  const owner = asUser("notif-keys", "notifkeys@isufst.edu.ph");
+  await assertFails(setDoc(doc(owner, "notifications/notif-keys/items/x"),
+    notifDoc({ planted: true })));
+});
+
+test("notifications: a fresh notification must be unread", async () => {
+  // Planting a pre-read notice would let it slip past the badge unseen.
+  const owner = asUser("notif-read", "notifread@isufst.edu.ph");
+  await assertFails(setDoc(doc(owner, "notifications/notif-read/items/x"),
+    notifDoc({ read: true })));
+});
+
+test("notifications: the message is bounded", async () => {
+  const owner = asUser("notif-size", "notifsize@isufst.edu.ph");
+  await assertFails(setDoc(doc(owner, "notifications/notif-size/items/x"),
+    notifDoc({ message: "z".repeat(2001) })));
+});
+
+test("notifications: an update may only flip read to true", async () => {
+  const owner = asUser("notif-upd", "notifupd@isufst.edu.ph");
+  await setDoc(doc(owner, "notifications/notif-upd/items/a"), notifDoc());
+
+  // Some other field.
+  await assertFails(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
+    { message: "rewritten" }));
+  // read back to false is not a thing.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "notifications/notif-upd/items/a"),
+      { read: true });
+  });
+  await assertFails(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
+    { read: false }));
+  // The control — marking read is allowed.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "notifications/notif-upd/items/a"),
+      { read: false });
+  });
+  await assertSucceeds(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
+    { read: true }));
+});
+
+test("notifications: a deactivated account may not write to its own feed",
+  async () => {
+    // verified() folds in isActive(), so switching off the account stops the
+    // self-authored writes too.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/notif-off"),
+        { role: "student", active: false });
+    });
+    const off = asUser("notif-off", "notifoff@isufst.edu.ph");
+    await assertFails(setDoc(doc(off, "notifications/notif-off/items/x"),
+      notifDoc()));
+  });
+
 // ---------------------------------------------------------------------------
 // Account deactivation (users.active), enforced at the rules layer.
 //

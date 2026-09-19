@@ -1705,7 +1705,36 @@ service cloud.firestore {
     // get() lookup into any other collection is needed -- there is no
     // cross-user fact for a rule to verify.
     match /notifications/{uid}/items/{itemId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      // A reader's own feed (D70): every write is the owner's client
+      // reporting to itself, never one user notifying another. This was the
+      // one unbounded write left — `write: if own` accepted any shape, from
+      // any signed-in account, verified or not.
+      //
+      // Read stays open to the signed-in owner even before verification (a
+      // notice is harmless to read). Writing requires an active, verified
+      // account — verified() covers both — and create is bounded: the keys
+      // the client writes, a fresh notification is unread, and the message
+      // is a bounded string. Marking read is the only update, and only ever
+      // to true.
+      allow read: if signedIn() && request.auth.uid == uid;
+
+      allow create: if verified()
+                    && request.auth.uid == uid
+                    && request.resource.data.keys().hasOnly(
+                         ['type', 'thesisId', 'message', 'read', 'createdAt',
+                          'defenceId'])
+                    && request.resource.data.read == false
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() < 2000
+                    && request.resource.data.createdAt is timestamp;
+
+      allow update: if verified()
+                    && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['read'])
+                    && request.resource.data.read == true;
+
+      allow delete: if verified() && request.auth.uid == uid;
     }
 
     // Deny-by-default for everything not matched above.
