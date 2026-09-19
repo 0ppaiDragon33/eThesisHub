@@ -2353,6 +2353,24 @@ test("M1b attack: a comment may NOT be edited or deleted", async () => {
   }));
 });
 
+test("M1b: a comment body over the size cap is refused", async () => {
+  // Defence in depth: an authorized author could otherwise write a megabyte
+  // into a college-readable record. On Spark that is a quota problem too.
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertFails(setDoc(doc(panel, "theses/td1/titleComments/huge"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "x".repeat(4001),
+    createdAt: serverTimestamp(),
+  }));
+  // Control: just under the cap is fine.
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/okbody"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "x".repeat(3999),
+    createdAt: serverTimestamp(),
+  }));
+});
+
 test("M1b attack: a panel member may NOT author a comment as someone else", async () => {
   await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
   const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");

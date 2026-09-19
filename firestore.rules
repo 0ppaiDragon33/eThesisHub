@@ -828,7 +828,11 @@ service cloud.firestore {
                          ['accepted', 'declined']
                       && (request.resource.data.respondedAt == request.time
                           || request.resource.data.respondedAt ==
-                             resource.data.respondedAt);
+                             resource.data.respondedAt)
+                      // Null on accept, a reason on decline — bound it either
+                      // way so a decline cannot carry a megabyte.
+                      && (request.resource.data.declineReason == null
+                          || request.resource.data.declineReason.size() < 2000);
 
         // Critical 3 — decline laundering. The leader correctly could not
         // UPDATE a declined nomination, but could delete it and re-create
@@ -911,6 +915,7 @@ service cloud.firestore {
                       && request.resource.data.position >= 0
                       && request.resource.data.titleText is string
                       && request.resource.data.titleText.size() > 0
+                      && request.resource.data.titleText.size() < 500
                       && request.resource.data.submittedAt == request.time;
 
         // Immutable once submitted: the panel must never be reading a title
@@ -938,6 +943,7 @@ service cloud.firestore {
                             'authorRole', 'body', 'createdAt'])
                       && request.resource.data.body is string
                       && request.resource.data.body.size() > 0
+                      && request.resource.data.body.size() < 4000
                       && request.resource.data.createdAt == request.time;
 
         // Append-only, per parent design §6.4. A remark that could be edited
@@ -1080,6 +1086,7 @@ service cloud.firestore {
                            == request.auth.uid
                         && request.resource.data.body is string
                         && request.resource.data.body.size() > 0
+                        && request.resource.data.body.size() < 4000
                         && request.resource.data.createdAt == request.time
                         && request.resource.data.version is int
                         && request.resource.data.version >= 1
@@ -1292,7 +1299,8 @@ service cloud.firestore {
                     && incoming().diff(defence()).affectedKeys()
                        .hasOnly(['scheduledAt', 'venue'])
                     && incoming().venue is string
-                    && incoming().venue.size() > 0;
+                    && incoming().venue.size() > 0
+                    && incoming().venue.size() < 200;
 
       // Adviser arm: the release, once, and only after it is closed.
       // Guidelines §4d makes consolidation the adviser's act.
@@ -1378,6 +1386,7 @@ service cloud.firestore {
                       && request.resource.data.authorUid == request.auth.uid
                       && request.resource.data.body is string
                       && request.resource.data.body.size() > 0
+                      && request.resource.data.body.size() < 4000
                       && request.resource.data.createdAt == request.time;
 
         // Append-only, per D10: the defence record is evidence, and
