@@ -34,6 +34,7 @@ import {
   ThesisFacts,
   thesisIdForPath,
 } from "./authorize.ts";
+import { json, preflightResponse } from "./cors.ts";
 
 const DOCUMENTS_BUCKET = "thesis-documents";
 
@@ -225,13 +226,13 @@ async function getDoc(
 // Handler
 // ---------------------------------------------------------------------------
 
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-
 Deno.serve(async (req) => {
+  // Before anything else: the browser will not send the real request until
+  // this preflight is answered, so an authorization check here would never
+  // run. See cors.ts.
+  const preflight = preflightResponse(req);
+  if (preflight) return preflight;
+
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   const auth = req.headers.get("authorization") ?? "";
