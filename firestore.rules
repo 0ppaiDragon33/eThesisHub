@@ -216,7 +216,21 @@ service cloud.firestore {
                     && request.resource.data.keys().hasOnly(
                          ['actorUid', 'action', 'targetType', 'targetId',
                           'metadata', 'timestamp'])
-                    && request.resource.data.timestamp == request.time;
+                    && request.resource.data.timestamp == request.time
+                    // `action` was any string, which made the log
+                    // unqueryable and left an entry able to say anything. A
+                    // namespaced pattern (`domain.event`) keeps it
+                    // structured and queryable and caps its size, without
+                    // hardcoding the exact set: an exact enum would refuse
+                    // every action added later — the same permission-denied
+                    // trap this file has been bitten by — so any new action
+                    // just has to follow the `lowercase.lowercase` shape.
+                    && request.resource.data.action is string
+                    && request.resource.data.action.size() <= 64
+                    && request.resource.data.action.matches('[a-z]+([.][a-z]+)+')
+                    // metadata was an unbounded map; bound its breadth so an
+                    // entry cannot carry an arbitrarily large payload.
+                    && request.resource.data.metadata.size() <= 12;
       allow get, list: if isCoordinator() || isDean();
       allow update, delete: if false;
     }
@@ -1111,8 +1125,25 @@ service cloud.firestore {
       // profile inside isCoordinator(). Well inside the budget.
       allow create: if verified()
                     && isCoordinator()
+                    // The one create in this file that used to accept any
+                    // keys. This record is readable by every active user
+                    // (allow get, list above), so an unpinned create let a
+                    // coordinator plant arbitrary fields into a
+                    // college-wide-readable document. Every other create
+                    // pins its keys; this now matches.
+                    && incoming().keys().hasOnly(
+                         ['title', 'memberNames', 'abstract', 'college',
+                          'program', 'academicYear', 'adviserName',
+                          'panelNames', 'manuscriptUrl', 'manuscriptPath',
+                          'finalDefenceId', 'uploadedBy', 'uploadedAt',
+                          'archivedBy', 'archivedAt'])
                     && incoming().archivedBy == request.auth.uid
                     && incoming().archivedAt == request.time
+                    // The thesis must be at the status publishing advances
+                    // FROM. The batch's other write pins this too, but rules
+                    // evaluate each write in a batch independently, so that
+                    // write cannot guarantee it for this one.
+                    && thesis().status == 'titleApproved'
                     // The published file must be the one the STUDENT
                     // uploaded -- a coordinator cannot publish a
                     // substitute.

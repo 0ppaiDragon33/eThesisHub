@@ -159,7 +159,7 @@ test("audit logs may be created but never deleted", async () => {
   await assertSucceeds(
     setDoc(doc(student, "auditLogs/log-1"), {
       actorUid: "student-uid",
-      action: "login",
+      action: "session.login",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -167,6 +167,42 @@ test("audit logs may be created but never deleted", async () => {
     })
   );
   await assertFails(deleteDoc(doc(student, "auditLogs/log-1")));
+});
+
+test("an audit action must be a namespaced, bounded string", async () => {
+  // Unstructured `action` made the log unqueryable and let an entry say
+  // anything. A `domain.event` shape keeps it structured without hardcoding
+  // the set, so a new action just follows the convention.
+  const base = {
+    actorUid: "student-uid", targetType: "session",
+    targetId: "student-uid", metadata: {}, timestamp: serverTimestamp(),
+  };
+
+  // Not namespaced.
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-1"), { ...base, action: "login" }));
+  // Not a lowercase.lowercase shape.
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-2"), { ...base, action: "Role.Promoted" }));
+  // Over the length cap.
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-3"),
+      { ...base, action: "x." + "a".repeat(70) }));
+  // A real, namespaced action is accepted.
+  await assertSucceeds(
+    setDoc(doc(student, "auditLogs/ok-1"),
+      { ...base, action: "role.promoted" }));
+});
+
+test("audit metadata may not be an unbounded map", async () => {
+  const wide = {};
+  for (let i = 0; i < 20; i++) wide["k" + i] = "v";
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-meta"), {
+      actorUid: "student-uid", action: "role.promoted",
+      targetType: "user", targetId: "student-uid",
+      metadata: wide, timestamp: serverTimestamp(),
+    }));
 });
 
 test("unauthenticated access is denied", async () => {
@@ -297,7 +333,7 @@ test("an audit log may NOT be created with a foreign actorUid", async () => {
   await assertFails(
     setDoc(doc(student, "auditLogs/log-forged"), {
       actorUid: "someone-else-uid",
-      action: "login",
+      action: "session.login",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -310,7 +346,7 @@ test("an audit log may NOT be overwritten via setDoc on an existing id", async (
   await assertSucceeds(
     setDoc(doc(student, "auditLogs/log-overwrite"), {
       actorUid: "student-uid",
-      action: "login",
+      action: "session.login",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -321,7 +357,7 @@ test("an audit log may NOT be overwritten via setDoc on an existing id", async (
   await assertFails(
     setDoc(doc(student, "auditLogs/log-overwrite"), {
       actorUid: "student-uid",
-      action: "logout",
+      action: "session.logout",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -2110,6 +2146,69 @@ test("M1b allow: a panel member MAY read comments during the defence", async () 
   const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
   await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComments")));
 });
+
+// An ex-officio dean sits on the panel by office. Whether they may post a
+// title-defence comment was never covered, and it is exactly the question a
+// crash raised: `isOnPanel()` accepts an `exOfficio` conformeStatus, so a
+// dean who holds that nomination seat MAY comment and mark composing. The
+// earlier permission-denied was a dean who had NO such seat — an account
+// with no facultyDirectory entry is never returned by fetchExOfficio and so
+// is never written an ex-officio nomination — not a rule that refuses deans.
+test("M1b allow: an ex-officio dean on the seat MAY post a title comment",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedDefence(db);
+      await setDoc(doc(db, "users/dean-uid"), {
+        fullName: "Dr. Dean", email: "dean@isufst.edu.ph", role: "dean",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+      });
+      // The ex-officio seat submitNominations writes for an office holder.
+      await setDoc(doc(db, "theses/td1/nominations/dean-uid"), {
+        nomineeUid: "dean-uid", nomineeName: "Dr. Dean", position: "dean",
+        exOfficio: true, conformeStatus: "exOfficio",
+      });
+    });
+
+    const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+    await assertSucceeds(
+      setDoc(doc(dean, "theses/td1/titleComments/dean-remark"), {
+        candidateTitleId: "ct1", authorUid: "dean-uid",
+        authorName: "Dr. Dean", authorRole: "Dean",
+        body: "Sharpen the scope.", createdAt: serverTimestamp(),
+      })
+    );
+  });
+
+test("M1b: a dean with NO ex-officio seat may NOT post a title comment",
+  async () => {
+    // The other half — this is the case the screen mishandles, showing a
+    // comment box to a dean the rules will refuse. The read arm lets any
+    // dean SEE the thread; the create arm requires the seat.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedDefence(db);
+      await setDoc(doc(db, "users/dean2-uid"), {
+        fullName: "Dr. Other", email: "dean2@isufst.edu.ph", role: "dean",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+      });
+      // No nomination doc for this dean on this thesis.
+    });
+
+    const dean = asDefenceUser("dean2-uid", "dean2@isufst.edu.ph");
+    // They can read the thread...
+    await assertSucceeds(getDocs(collection(dean, "theses/td1/titleComments")));
+    // ...but not post to it.
+    await assertFails(
+      setDoc(doc(dean, "theses/td1/titleComments/dean2-remark"), {
+        candidateTitleId: "ct1", authorUid: "dean2-uid",
+        authorName: "Dr. Other", authorRole: "Dean",
+        body: "Not my seat.", createdAt: serverTimestamp(),
+      })
+    );
+  });
 
 test("M1b attack: the leader may NOT read comments before the decision", async () => {
   await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
@@ -4576,6 +4675,33 @@ async function seedArchivable({ verdict = "pass", type = "final",
 test("M5a: the coordinator publishes a passed thesis", async () => {
   await seedArchivable();
   await assertSucceeds(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc()));
+});
+
+test("M5a: an archive entry may NOT carry an unlisted key", async () => {
+  // This record is readable by the whole college; an unpinned create let a
+  // coordinator plant arbitrary fields into it.
+  await seedArchivable();
+  await assertFails(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc({ isDean: true })));
+});
+
+test("M5a: a thesis not at titleApproved may NOT be published", async () => {
+  // The batch's sibling write pins this, but rules judge each write in a
+  // batch independently, so the archive create must check it itself.
+  await seedArchivable();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/mt1"),
+      m5Thesis({
+        manuscriptPath: "theses/mt1/manuscript/abc.pdf",
+        manuscriptUrl: "https://example.test/abc.pdf",
+        manuscriptAbstract: "Fish were counted.",
+        status: "chapters",
+      }));
+  });
+  await assertFails(setDoc(
     doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
     archiveDoc()));
 });

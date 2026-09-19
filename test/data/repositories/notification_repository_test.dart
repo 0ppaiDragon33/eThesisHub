@@ -69,6 +69,23 @@ void main() {
       final other = await repo.watchItems('u2').first;
       expect(other, isEmpty);
     });
+
+    test('streams at most the feed limit, newest first', () async {
+      // The feed used to re-stream every notification ever received. Seed
+      // past the cap and confirm the oldest fall away rather than being read
+      // on every listen.
+      for (var i = 0; i < kNotificationFeedLimit + 10; i++) {
+        await repo.upsertIfAbsent(
+          'u1',
+          item(id: 'n$i', createdAt: DateTime(2026, 1, 1).add(Duration(days: i))),
+        );
+      }
+
+      final items = await repo.watchItems('u1').first;
+      expect(items, hasLength(kNotificationFeedLimit));
+      // Newest kept: the last-seeded id is the most recent.
+      expect(items.first.id, 'n${kNotificationFeedLimit + 9}');
+    });
   });
 
   group('markAllRead', () {
