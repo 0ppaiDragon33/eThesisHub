@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +29,23 @@ Future<void> main() async {
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
+
+  // Crash reporting, so a failure during the defence demo leaves a record
+  // instead of a blank stare. Crashlytics is Android/iOS only — it has no
+  // web plugin — so on Web the same two hooks fall back to presenting the
+  // error, which is all the framework can do there.
+  if (!kIsWeb) {
+    FlutterError.onError =
+        FirebaseCrashlytics.instance.recordFlutterFatalError;
+    // Errors outside the Flutter callchain (async gaps, platform channels)
+    // that the framework does not route through FlutterError.
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } else {
+    FlutterError.onError = FlutterError.presentError;
+  }
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
