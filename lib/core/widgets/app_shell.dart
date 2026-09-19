@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -142,6 +144,43 @@ class AppShell extends ConsumerWidget {
           showMenu: narrowMenu,
         );
 
+        // The top bar above the page, in the one shape all three layouts
+        // use.
+        //
+        // The bar is a hard 60px and a Column hands its non-flex children an
+        // unbounded main axis, so the bar asks for 60 however little there
+        // is — and any viewport shorter than that overflows and stripes the
+        // screen. Flutter web hands the app a near-zero canvas for a frame
+        // or two before the browser settles its size, and a desktop window
+        // can be dragged shorter at any time.
+        //
+        // The bar keeps its natural height inside an OverflowBox, so it
+        // never lays out against an impossible constraint and pushes the
+        // overflow inside itself; the SizedBox caps what the Column is asked
+        // for, and the ClipRect throws away what does not fit. Nothing
+        // readable fits in a viewport this small — the point is only that
+        // the shell yields quietly instead of raising.
+        Widget barAndBody() {
+          final barHeight = math.min(_TopBar.height, constraints.maxHeight);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRect(
+                child: SizedBox(
+                  height: barHeight,
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minHeight: 0,
+                    maxHeight: _TopBar.height,
+                    child: topBar,
+                  ),
+                ),
+              ),
+              Expanded(child: child),
+            ],
+          );
+        }
+
         Widget narrowScaffold(Widget drawerContent) {
           return Scaffold(
             drawer: Drawer(
@@ -149,13 +188,7 @@ class AppShell extends ConsumerWidget {
               backgroundColor: Palette.of(context).sidebar,
               child: drawerContent,
             ),
-            body: SafeArea(
-              bottom: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [topBar, Expanded(child: child)],
-              ),
-            ),
+            body: SafeArea(bottom: false, child: barAndBody()),
           );
         }
 
@@ -175,12 +208,7 @@ class AppShell extends ConsumerWidget {
                   onSelect: (d) => _navigate(context, d.route),
                   footer: accountFooter,
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [topBar, Expanded(child: child)],
-                  ),
-                ),
+                Expanded(child: barAndBody()),
               ],
             ),
           );
@@ -197,13 +225,7 @@ class AppShell extends ConsumerWidget {
 
         if (!showNav) {
           return Scaffold(
-            body: SafeArea(
-              bottom: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [topBar, Expanded(child: child)],
-              ),
-            ),
+            body: SafeArea(bottom: false, child: barAndBody()),
           );
         }
 
@@ -233,6 +255,10 @@ class AppShell extends ConsumerWidget {
 }
 
 class _TopBar extends StatelessWidget {
+  /// The bar's fixed height. Named because the shell has to cap the bar
+  /// against it when the viewport is shorter than the bar itself.
+  static const double height = 60;
+
   const _TopBar({
     required this.title,
     required this.parent,
@@ -263,7 +289,7 @@ class _TopBar extends StatelessWidget {
     return Material(
       color: p.paper,
       child: Container(
-        height: 60,
+        height: height,
         padding: const EdgeInsets.symmetric(horizontal: AppTokens.sm + 4),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: p.rule)),

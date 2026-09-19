@@ -728,4 +728,23 @@ void main() {
       });
     }
   });
+
+  // Flutter web hands the app a near-zero canvas for a frame or two before
+  // the browser settles its size, and a desktop window can be dragged
+  // shorter than the top bar at any time. The shell stacks a fixed-height
+  // top bar above an Expanded body, so any viewport shorter than that bar
+  // is an overflow — it paints outside itself and stripes the screen.
+  //
+  // Nothing readable fits in a viewport this small; the requirement is only
+  // that the shell yields quietly instead of raising.
+  testWidgets('does not overflow a viewport shorter than the top bar',
+      (tester) async {
+    await setViewSize(tester, 1.6, 1.6);
+
+    await tester.pumpWidget(
+      await wrap(destinations: const AsyncValue.data(_destinations)),
+    );
+
+    expect(tester.takeException(), isNull);
+  });
 }
