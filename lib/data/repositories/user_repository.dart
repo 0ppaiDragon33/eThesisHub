@@ -98,7 +98,20 @@ class UserRepository {
     //
     // Asking first, rather than widening the catch, is what keeps a genuine
     // refusal loud: a coordinator who has lost the role still hears about it.
-    if (await _directory.fetch(uid) == null) return;
+    if (await _directory.fetch(uid) == null) {
+      // No entry to mirror into, so create one from `users` rather than
+      // leaving the designation inert until this person's first sign-in.
+      // The rules pin `fullName` and `role` to that document, so this cannot
+      // be a blank row or an invented role.
+      final profile = await fetchUser(uid);
+      if (profile == null) return;
+      await _directory.createForDesignation(
+        user: profile,
+        adviser: adviser,
+        panelist: panelist,
+      );
+      return;
+    }
 
     try {
       await _directory.setDesignation(

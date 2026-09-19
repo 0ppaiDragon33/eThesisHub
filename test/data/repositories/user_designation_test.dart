@@ -15,16 +15,30 @@ import 'package:ethesishub/data/repositories/user_repository.dart';
 /// present, and proves nothing.
 ///
 /// Firestore does not behave that way. `mayCoordinatorSetDesignation` in
-/// `firestore.rules` requires `resource != null`, deliberately: a
-/// coordinator-created entry would carry no name and show as a blank row in
-/// the nomination picker. When the entry is missing that arm cannot pass, and
-/// a refused rule is reported as **permission-denied**, never as not-found.
-/// That is the case this fake reproduces.
+/// `firestore.rules` requires `resource != null` — it is update-only — so
+/// when the entry is missing that arm cannot pass, and a refused rule is
+/// reported as **permission-denied**, never as not-found. That is the case
+/// this fake reproduces: `setDesignation` refuses unless the uid is known.
+///
+/// Creating the entry is a separate arm
+/// (`mayCoordinatorCreateDirectoryEntry`), which is why the fake accepts
+/// `createForDesignation` for a uid it would refuse to update.
 class _RulesLikeDirectory implements FacultyDirectoryRepository {
   _RulesLikeDirectory({required this.existingUids});
 
   final Set<String> existingUids;
   final List<String> designationWrites = [];
+  final List<String> created = [];
+
+  @override
+  Future<void> createForDesignation({
+    required AppUser user,
+    required bool adviser,
+    required bool panelist,
+  }) async {
+    created.add(user.uid);
+    existingUids.add(user.uid);
+  }
 
   @override
   Future<void> setDesignation({
@@ -89,7 +103,7 @@ void main() {
   // the student-facing picker can read.
   test('designating an account that has never signed in still succeeds',
       () async {
-    final directory = _RulesLikeDirectory(existingUids: const {});
+    final directory = _RulesLikeDirectory(existingUids: <String>{});
     final repo = UserRepository(db, directory);
 
     await repo.setDesignation(uid: 'f1', adviser: true, panelist: true);
@@ -99,21 +113,23 @@ void main() {
     expect(saved['nominableAsPanelist'], isTrue);
   });
 
-  test('the mirror is not attempted when there is no entry to mirror into',
-      () async {
-    final directory = _RulesLikeDirectory(existingUids: const {});
+  test('the entry is created rather than updated when none exists', () async {
+    final directory = _RulesLikeDirectory(existingUids: <String>{});
     final repo = UserRepository(db, directory);
 
     await repo.setDesignation(uid: 'f1', adviser: true, panelist: false);
 
-    // Swallowing the refusal would also work, but it would swallow a REAL
-    // authorization failure with it. Skipping the call is what keeps a
-    // genuine permission-denied loud.
+    // An update here would be refused — `mayCoordinatorSetDesignation` is
+    // update-only. Creating instead is what stops the designation sitting
+    // inert on `users` until this person's first sign-in. Swallowing the
+    // refusal would also have silenced the error, but it would have
+    // swallowed a genuine authorization failure with it.
     expect(directory.designationWrites, isEmpty);
+    expect(directory.created, ['f1']);
   });
 
   test('an existing entry is still mirrored', () async {
-    final directory = _RulesLikeDirectory(existingUids: const {'f1'});
+    final directory = _RulesLikeDirectory(existingUids: <String>{'f1'});
     final repo = UserRepository(db, directory);
 
     await repo.setDesignation(uid: 'f1', adviser: true, panelist: false);

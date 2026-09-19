@@ -1617,9 +1617,43 @@ service cloud.firestore {
                && onlyChanged(['nominableAsAdviser', 'nominableAsPanelist']);
       }
 
+      // A designation set before the subject has ever signed in.
+      //
+      // The entry is written by its own subject at sign-in, so an invited
+      // account that has never logged in has none — and the arm above is
+      // update-only. A coordinator designating such an account therefore
+      // wrote the authoritative flags to `users` and had nowhere to mirror
+      // them, and since the student-facing picker reads only this
+      // collection, the designation stayed inert until that person happened
+      // to sign in. The Users screen said so on the row, which made it
+      // visible but no less broken.
+      //
+      // The objection to a coordinator-created entry was that it would carry
+      // no name and show as a blank row in the picker. That is answered by
+      // pinning rather than by refusing: `fullName` and `role` must equal
+      // what `users/{uid}` already says, which the coordinator can read.
+      // Nothing becomes self-declarable — the caller is not the subject, and
+      // the role is taken from `users`, never from the request. A student is
+      // excluded here exactly as `mayWriteOwnDirectoryEntry` excludes one.
+      //
+      // Ordered last among the three arms: it is the only one that costs a
+      // `get()` on `users`, and it is the rarest case.
+      function mayCoordinatorCreateDirectoryEntry() {
+        let u = get(/databases/$(database)/documents/users/$(uid)).data;
+        return isCoordinator()
+               && resource == null
+               && u.role != 'student'
+               && request.resource.data.keys().hasOnly(
+                    ['fullName', 'role', 'college', 'specialization',
+                     'nominableAsAdviser', 'nominableAsPanelist'])
+               && request.resource.data.fullName == u.fullName
+               && request.resource.data.role == u.role;
+      }
+
       allow read: if verified();
       allow create, update: if mayWriteOwnDirectoryEntry()
-                             || mayCoordinatorSetDesignation();
+                             || mayCoordinatorSetDesignation()
+                             || mayCoordinatorCreateDirectoryEntry();
       // Nobody removes a directory entry: a deleted entry would silently
       // drop an office holder out of the ex-officio picker. Deactivation
       // lives on `users.active` instead.

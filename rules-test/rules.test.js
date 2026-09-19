@@ -1781,6 +1781,101 @@ test("(g) a directory entry may NOT be deleted", async () => {
   );
 });
 
+// --- a coordinator designating an account that never signed in ------------
+//
+// The entry is written by its own subject at sign-in, so an invited account
+// that has never logged in has none, and the designation arm is update-only.
+// The coordinator's designation therefore reached `users` and stopped there,
+// while the student-facing picker reads only `facultyDirectory` — so the
+// designation did nothing until that person happened to sign in.
+
+test("a coordinator MAY create a directory entry for a designated account",
+  async () => {
+    const coordinator = await asCoordinator("coord-dir1", "coorddir1@isufst.edu.ph");
+    await seedUser("never-signed-in", "faculty", "nsi@isufst.edu.ph");
+
+    await assertSucceeds(
+      setDoc(doc(coordinator, "facultyDirectory/never-signed-in"), {
+        fullName: "U", role: "faculty",
+        nominableAsAdviser: true, nominableAsPanelist: true,
+      })
+    );
+  });
+
+test("a coordinator-created entry may NOT carry a name other than the real one",
+  async () => {
+    // The old objection to this arm was a blank row in the picker. The answer
+    // is to pin the name to `users/{uid}`, so it can be neither blank nor
+    // invented.
+    const coordinator = await asCoordinator("coord-dir2", "coorddir2@isufst.edu.ph");
+    await seedUser("nsi-2", "faculty", "nsi2@isufst.edu.ph");
+
+    await assertFails(
+      setDoc(doc(coordinator, "facultyDirectory/nsi-2"), {
+        fullName: "Someone Else", role: "faculty",
+        nominableAsAdviser: true, nominableAsPanelist: false,
+      })
+    );
+  });
+
+test("a coordinator-created entry may NOT invent a role", async () => {
+  // The whole point of finding (g): the role must come from `users`, never
+  // from the request. Creating on someone else's behalf must not reopen it.
+  const coordinator = await asCoordinator("coord-dir3", "coorddir3@isufst.edu.ph");
+  await seedUser("nsi-3", "faculty", "nsi3@isufst.edu.ph");
+
+  await assertFails(
+    setDoc(doc(coordinator, "facultyDirectory/nsi-3"), {
+      fullName: "U", role: "dean",
+      nominableAsAdviser: true, nominableAsPanelist: true,
+    })
+  );
+});
+
+test("a coordinator may NOT create a directory entry for a student", async () => {
+  const coordinator = await asCoordinator("coord-dir4", "coorddir4@isufst.edu.ph");
+  await seedUser("stu-dir", "student", "studir@isufst.edu.ph");
+
+  await assertFails(
+    setDoc(doc(coordinator, "facultyDirectory/stu-dir"), {
+      fullName: "U", role: "student",
+      nominableAsAdviser: true, nominableAsPanelist: true,
+    })
+  );
+});
+
+test("a NON-coordinator may NOT create an entry for somebody else", async () => {
+  await seedUser("nsi-5", "faculty", "nsi5@isufst.edu.ph");
+
+  await assertFails(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/nsi-5"), {
+      fullName: "U", role: "faculty",
+      nominableAsAdviser: true, nominableAsPanelist: true,
+    })
+  );
+});
+
+test("the create arm may NOT be used to overwrite an existing entry",
+  async () => {
+    // `resource == null` confines the new arm to creation. Without that pin
+    // a coordinator could rewrite a subject's own name and college through
+    // it, which the designation arm (onlyChanged) deliberately prevents.
+    const coordinator = await asCoordinator("coord-dir6", "coorddir6@isufst.edu.ph");
+    await seedUser("nsi-6", "faculty", "nsi6@isufst.edu.ph");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "facultyDirectory/nsi-6"), {
+        fullName: "U", role: "faculty", college: "CICT",
+      });
+    });
+
+    await assertFails(
+      setDoc(doc(coordinator, "facultyDirectory/nsi-6"), {
+        fullName: "U", role: "faculty", college: "CAS",
+        nominableAsAdviser: true, nominableAsPanelist: true,
+      })
+    );
+  });
+
 // --- MINOR (h): a pending nominee could not read the parent thesis ------
 
 test("(h) allow: a pending nominee MAY read the thesis they were nominated to", async () => {
