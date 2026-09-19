@@ -37,9 +37,16 @@ policies in `supabase/policies.sql`: a private bucket blocks *everything* by
 default, including uploads, so the app needs an explicit anon INSERT policy to
 upload. Reads stay closed to anon and go through the function.
 
-> The previous Supabase project (`wevvsskextznmstjfmfo`) was deleted — its
-> hostname no longer resolves — so a new project must be provisioned anyway.
-> Create the bucket **private** from the start; there is no data to migrate.
+> The project in use is **`wevvsskextznmstjfmfo`**, the one
+> `lib/core/config/app_config.dart` points at. An earlier note here said it
+> had been deleted and that a new project was needed; that was wrong, and it
+> cost an afternoon. If `supabase link` offers you a different ref, it is not
+> this app's project — pass `--project-ref wevvsskextznmstjfmfo` explicitly.
+>
+> Note that a wrong ref is not obvious from the outside: every `*.supabase.co`
+> hostname resolves to the same Cloudflare gateway, and that gateway answers
+> 404 for a missing function and 404 for a project that does not exist. You
+> cannot tell the two apart with curl. `supabase projects list` can.
 
 ## Setup
 
@@ -71,8 +78,21 @@ upload. Reads stay closed to anon and go through the function.
 ## Deploying `document-url`
 
 ```sh
-supabase functions deploy document-url --project-ref <your-ref>
+supabase functions deploy document-url \
+  --project-ref wevvsskextznmstjfmfo --no-verify-jwt
 ```
+
+`--no-verify-jwt` is required, not a convenience. Supabase validates the
+`Authorization` header as a *Supabase* JWT by default, and this function is
+called with a **Firebase** ID token in that header — `SupabaseStorageService`
+overrides it deliberately, and `index.ts` verifies it itself against Google's
+signing keys. Deployed with the default, every call is rejected 401 by the
+gateway before the function runs, which looks like a broken function rather
+than a deploy flag.
+
+The function is still not open to anonymous callers: it answers 401 to a
+request with no bearer token, 401 to one it cannot verify against
+`FIREBASE_PROJECT_ID`, and 403 to a verified caller who is not on the thesis.
 
 Secrets — set once, never committed:
 
