@@ -39,7 +39,8 @@ class _FakeStorage implements StorageService {
 
 PickedDocument _validDoc([String name = 'doc.pdf']) => PickedDocument(
       name: name,
-      bytes: Uint8List(10),
+      // Leads with the %PDF signature so it passes the content check.
+      bytes: Uint8List.fromList([0x25, 0x50, 0x44, 0x46, ...List.filled(6, 0)]),
       extension: 'pdf',
       contentType: 'application/octet-stream',
     );

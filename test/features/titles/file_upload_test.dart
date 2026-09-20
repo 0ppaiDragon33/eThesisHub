@@ -25,12 +25,31 @@ class _FakeStorage implements StorageService {
       'https://example.test/signed/$path';
 }
 
-PickedDocument doc(String name, int bytes, String ext) => PickedDocument(
-      name: name,
-      bytes: Uint8List(bytes),
-      extension: ext,
-      contentType: 'application/octet-stream',
-    );
+/// The file signature a real file of [ext] would begin with. `doc` embeds it
+/// so a document that is genuinely the type its extension claims passes the
+/// content check; [overrideBytes] writes something else, to stand in for a
+/// renamed or damaged file.
+List<int> _sigFor(String ext) => switch (ext.toLowerCase()) {
+      'pdf' => const [0x25, 0x50, 0x44, 0x46],
+      'docx' || 'pptx' => const [0x50, 0x4B, 0x03, 0x04],
+      'doc' || 'ppt' => const [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1],
+      _ => const [],
+    };
+
+PickedDocument doc(String name, int bytes, String ext,
+    {List<int>? overrideBytes}) {
+  final buf = Uint8List(bytes);
+  final sig = overrideBytes ?? _sigFor(ext);
+  for (var i = 0; i < sig.length && i < buf.length; i++) {
+    buf[i] = sig[i];
+  }
+  return PickedDocument(
+    name: name,
+    bytes: buf,
+    extension: ext,
+    contentType: 'application/octet-stream',
+  );
+}
 
 void main() {
   test('accepts an allowed type inside the size limit', () {
@@ -63,6 +82,35 @@ void main() {
           allowed: kJustificationTypes, maxBytes: kJustificationMaxBytes),
       isNull,
     );
+  });
+
+  test('refuses a file whose content does not match its extension', () {
+    // A renamed file: .pdf on the outside, not a PDF inside.
+    final error = validateDocument(
+        doc('renamed.pdf', 1000, 'pdf', overrideBytes: const [0, 0, 0, 0]),
+        allowed: kJustificationTypes, maxBytes: kJustificationMaxBytes);
+    expect(error, isNotNull);
+    expect(error, contains('PDF'));
+    expect(error, contains('renamed'));
+  });
+
+  test('accepts a real docx by its zip signature', () {
+    expect(
+      validateDocument(doc('paper.docx', 1000, 'docx'),
+          allowed: const {'pdf', 'doc', 'docx'},
+          maxBytes: kJustificationMaxBytes),
+      isNull,
+    );
+  });
+
+  test('a docx carrying PDF bytes is refused', () {
+    final error = validateDocument(
+        doc('fake.docx', 1000, 'docx',
+            overrideBytes: const [0x25, 0x50, 0x44, 0x46]),
+        allowed: const {'pdf', 'doc', 'docx'},
+        maxBytes: kJustificationMaxBytes);
+    expect(error, isNotNull);
+    expect(error, contains('DOCX'));
   });
 
   test('uploading puts the file at an unguessable path under the thesis',
