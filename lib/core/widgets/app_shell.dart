@@ -438,24 +438,7 @@ class _Sidebar extends StatelessWidget {
                             horizontal:
                                 collapsed ? AppTokens.sm + 4 : AppTokens.md - 4,
                           ),
-                          children: [
-                            // Keyed by route, so when the faculty mode
-                            // swaps Advisees for Panels the slot fades
-                            // between them instead of snapping.
-                            for (final d in destinations)
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 250),
-                                transitionBuilder: (child, a) =>
-                                    FadeTransition(opacity: a, child: child),
-                                child: _NavItem(
-                                  key: ValueKey(d.route),
-                                  destination: d,
-                                  selected: d == selected,
-                                  collapsed: collapsed,
-                                  onTap: () => onSelect(d),
-                                ),
-                              ),
-                          ],
+                          children: _sectioned(context),
                         ),
                   ),
                 ),
@@ -471,6 +454,82 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// The destinations grouped under their section headings, in
+  /// [ShellSection.order]. A section with nothing for this role is skipped,
+  /// so no empty heading ever shows. Collapsed to icons there is no room for
+  /// a heading, so groups are parted by a hairline instead.
+  List<Widget> _sectioned(BuildContext context) {
+    final children = <Widget>[];
+    var isFirstGroup = true;
+
+    for (final section in ShellSection.order) {
+      final items =
+          destinations.where((d) => d.section == section).toList();
+      if (items.isEmpty) continue;
+
+      if (collapsed) {
+        if (!isFirstGroup) {
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppTokens.sm),
+            child: Divider(height: 1, color: Palette.of(context).sidebarRule),
+          ));
+        }
+      } else {
+        children.add(_SectionLabel(section, isFirst: isFirstGroup));
+      }
+      isFirstGroup = false;
+
+      for (final d in items) {
+        children.add(
+          // Keyed by route, so when the faculty mode swaps Advisees for
+          // Panels the slot fades between them instead of snapping.
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, a) =>
+                FadeTransition(opacity: a, child: child),
+            child: _NavItem(
+              key: ValueKey(d.route),
+              destination: d,
+              selected: d == selected,
+              collapsed: collapsed,
+              onTap: () => onSelect(d),
+            ),
+          ),
+        );
+      }
+    }
+    return children;
+  }
+}
+
+/// A sidebar section heading: a small uppercase overline over its group.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label, {required this.isFirst});
+
+  final String label;
+  final bool isFirst;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppTokens.sm,
+        isFirst ? AppTokens.xs : AppTokens.md,
+        AppTokens.sm,
+        AppTokens.xs,
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: p.sidebarMuted,
+              letterSpacing: 0.8,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }

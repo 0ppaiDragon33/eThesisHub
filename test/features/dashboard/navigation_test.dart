@@ -139,8 +139,28 @@ void main() {
 
       expect(
         railLabels(tester),
-        ['Overview', 'My thesis', 'Archive', 'Forms'],
+        ['Dashboard', 'My thesis', 'Archive', 'Forms'],
       );
+    });
+
+    testWidgets('the sidebar groups destinations under section headings',
+        (tester) async {
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set(thesis());
+
+      final c = await containerFor(db, uid: 'l1', role: 'student');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      final rail = find.byKey(const Key('shellSidebar'));
+      // Dashboard sits under OVERVIEW; Archive and Forms under RESOURCES.
+      // The role has no Management destination, so that heading never shows.
+      expect(find.descendant(of: rail, matching: find.text('OVERVIEW')),
+          findsOneWidget);
+      expect(find.descendant(of: rail, matching: find.text('RESOURCES')),
+          findsOneWidget);
+      expect(find.descendant(of: rail, matching: find.text('MANAGEMENT')),
+          findsNothing);
     });
 
     testWidgets('gets a Chapters destination once the title is approved',

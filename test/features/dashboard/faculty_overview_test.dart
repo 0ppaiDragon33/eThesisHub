@@ -199,7 +199,7 @@ void main() {
 
     expect(find.byKey(const Key('facultyOverview')), findsOneWidget);
     final rail = find.byKey(const Key('shellSidebar'));
-    expect(find.descendant(of: rail, matching: find.text('Overview')),
+    expect(find.descendant(of: rail, matching: find.text('Dashboard')),
         findsOneWidget);
     // The sidebar is a keyed ink column now; its first destination is the
     // first `nav-<route>` item in tree order.
@@ -217,7 +217,7 @@ void main() {
                 .widget as Text)
             .data)
         .toList();
-    expect(destinations.first, 'Overview');
+    expect(destinations.first, 'Dashboard');
   });
 
   testWidgets('the tiles change with the mode switch', (tester) async {

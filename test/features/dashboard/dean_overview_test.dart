@@ -116,7 +116,7 @@ void main() {
     expect(find.text('Nomination approvals'), findsNothing);
 
     final rail = find.byKey(const Key('shellSidebar'));
-    expect(find.descendant(of: rail, matching: find.text('Overview')),
+    expect(find.descendant(of: rail, matching: find.text('Dashboard')),
         findsOneWidget);
   });
 

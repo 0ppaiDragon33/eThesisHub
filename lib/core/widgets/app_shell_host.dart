@@ -78,10 +78,10 @@ String shellTitleFor(
 /// '/overview' names itself, not the app: spec §5.4 says the bar names the
 /// screen you are on, and 'eThesisHub' on the one destination every role
 /// lands on first said the opposite -- the sidebar's own label for it is
-/// 'Overview' (see `shell_destination.dart`), so the two disagreed about
+/// 'Dashboard' (see `shell_destination.dart`), so the two must agree about
 /// what to call the same screen.
 const _staticTitles = {
-  '/overview': 'Overview',
+  '/overview': 'Dashboard',
   '/defences': 'Defences',
   '/advisees': 'Advisees',
   '/panels': 'Panels',

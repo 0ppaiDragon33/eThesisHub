@@ -312,10 +312,10 @@ void main() {
   });
 
   group('shellTitleFor', () {
-    test('/overview reads "Overview", matching the sidebar\'s own label -- '
+    test('/overview reads "Dashboard", matching the sidebar\'s own label -- '
         'not the app name (spec §5.4)', () {
       expect(shellTitleFor('/overview', const {}, UserRole.student),
-          'Overview');
+          'Dashboard');
     });
   });
 

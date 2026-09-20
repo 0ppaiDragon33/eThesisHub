@@ -271,7 +271,7 @@ void main() {
     expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
     expect(
         find.descendant(
-            of: find.byKey(const Key('shellSidebar')), matching: find.text('Overview')),
+            of: find.byKey(const Key('shellSidebar')), matching: find.text('Dashboard')),
         findsOneWidget);
     // No back control here on purpose: for a student whose title is
     // approved, Chapters IS a destination, and the shell offers back only
