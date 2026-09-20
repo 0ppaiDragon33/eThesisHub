@@ -54,9 +54,13 @@ class Panel extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (title != null)
+                        // Wraps rather than truncating: at a large text
+                        // scale a one-line panel title lost its tail to an
+                        // ellipsis, and a heading you cannot read is worse
+                        // than one that takes a second line.
                         Text(title!,
                             style: text.titleSmall,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis),
                       if (subtitle != null) ...[
                         const SizedBox(height: 2),
