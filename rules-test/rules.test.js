@@ -205,6 +205,31 @@ test("audit metadata may not be an unbounded map", async () => {
     }));
 });
 
+test("only a coordinator or dean may read the audit log", async () => {
+  // asDefenceUser (memoised) for both readers: creating two fresh contexts
+  // in one test the other way throws "Firestore has already been started".
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "auditLogs/e1"), {
+      actorUid: "coord-x", action: "account.deactivated",
+      targetType: "user", targetId: "u1", metadata: {},
+      timestamp: serverTimestamp(),
+    });
+    await setDoc(doc(db, "users/coord-audit"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-audit"),
+      { role: "dean", active: true });
+  });
+
+  const coordinator = asDefenceUser("coord-audit", "coordaudit@isufst.edu.ph");
+  const dean = asDefenceUser("dean-audit", "deanaudit@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(coordinator, "auditLogs")));
+  await assertSucceeds(getDocs(collection(dean, "auditLogs")));
+
+  // A student (the default `student` context) may not.
+  await assertFails(getDocs(collection(student, "auditLogs")));
+});
+
 test("unauthenticated access is denied", async () => {
   const anon = env.unauthenticatedContext().firestore();
   await assertFails(getDoc(doc(anon, "users/student-uid")));

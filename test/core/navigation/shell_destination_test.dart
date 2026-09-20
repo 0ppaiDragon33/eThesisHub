@@ -195,7 +195,7 @@ void main() {
         '/overview', '/thesis', '/thesis/chapters', '/defences',
         '/advisees', '/panels', '/nominations', '/approvals',
         '/recommendations', '/title-defences', '/readiness', '/users',
-        '/archive', '/forms',
+        '/audit', '/archive', '/forms',
       };
       for (final role in UserRole.values) {
         for (final d in destinationsFor(

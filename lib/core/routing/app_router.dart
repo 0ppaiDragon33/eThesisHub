@@ -9,6 +9,7 @@ import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
+import 'package:ethesishub/features/admin/audit_log_screen.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/deactivated_screen.dart';
@@ -266,6 +267,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // screen would find nothing readable and nothing writable.
               if ((location == '/users' || location == '/invites' || location == '/stalled') &&
                   profile.role != UserRole.coordinator) {
+                return home;
+              }
+              // '/audit' is the activity log — coordinator and dean, the two
+              // roles the rules let `list` auditLogs. UX guard, not the
+              // boundary: the rules deny the read to everyone else.
+              if (location == '/audit' &&
+                  profile.role != UserRole.coordinator &&
+                  profile.role != UserRole.dean) {
                 return home;
               }
               // '/archive/queue' is the coordinator's publish control, not
@@ -627,6 +636,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/users',
         builder: (_, _) => const UsersScreen(),
+      ),
+      GoRoute(
+        path: '/audit',
+        builder: (_, _) => const AuditLogScreen(),
       ),
       // '/thesis/chapters' (the list) is registered before
       // '/thesis/chapters/:chapterId' (one chapter's detail) only because

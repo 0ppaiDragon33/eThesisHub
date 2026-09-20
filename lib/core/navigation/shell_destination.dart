@@ -110,6 +110,14 @@ List<ShellDestination> destinationsFor({
     route: '/forms',
     section: ShellSection.resources,
   );
+  // The activity log — coordinator and dean only, the two roles the rules
+  // let read auditLogs.
+  const audit = ShellDestination(
+    label: 'Activity log',
+    icon: Icons.history_rounded,
+    route: '/audit',
+    section: ShellSection.management,
+  );
 
   return switch (role) {
     UserRole.student => [
@@ -177,6 +185,7 @@ List<ShellDestination> destinationsFor({
           icon: Icons.checklist_outlined,
           route: '/readiness',
         ),
+        audit,
         archive,
         forms,
       ],
@@ -205,6 +214,7 @@ List<ShellDestination> destinationsFor({
           section: ShellSection.management,
           alsoOwns: ['/invites'],
         ),
+        audit,
         archive,
         forms,
       ],

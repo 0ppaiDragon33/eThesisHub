@@ -99,6 +99,7 @@ const _staticTitles = {
   '/nominations': 'Nomination inbox',
   '/invites': 'Invites',
   '/users': 'Users',
+  '/audit': 'Activity log',
   '/stalled': 'Stalled nominations',
   '/notifications': 'Notifications',
   '/archive': 'Archive',
