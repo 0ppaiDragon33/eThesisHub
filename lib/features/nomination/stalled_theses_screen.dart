@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -36,6 +37,16 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
 
   Future<void> _reopen(String coordinatorUid, String thesisId) async {
     if (_busy.contains(thesisId)) return; // guards against a double tap
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Reopen this thesis for re-nomination?',
+      message: 'It goes back to the group as a draft. Nominees who already '
+          'accepted keep their seat; the group replaces whoever declined.',
+      confirmLabel: 'Reopen',
+      confirmKey: Key('confirmReopen-$thesisId'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy.add(thesisId);
