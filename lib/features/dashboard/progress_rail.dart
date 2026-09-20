@@ -110,6 +110,11 @@ class ProgressRail extends StatelessWidget {
         RailStage.finalDefence => 'Final defence, then the archive',
       };
 
+  /// A comfortable width for one stage — wide enough that its label sits on a
+  /// single line. Six of these is the rail's natural width; below it, the row
+  /// scrolls sideways rather than squeezing the labels into stacks.
+  static const double _stepWidth = 96;
+
   @override
   Widget build(BuildContext context) {
     final archived = status == ThesisStatus.archived;
@@ -117,40 +122,44 @@ class ProgressRail extends StatelessWidget {
         ? RailStage.values.length
         : RailStage.values.indexOf(current);
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final vertical = constraints.maxWidth < 560;
-      final steps = [
-        for (var i = 0; i < RailStage.values.length; i++)
-          _JourneyStep(
-            key: Key('railStep-${RailStage.values[i].id}'),
-            stage: RailStage.values[i],
-            number: i + 1,
-            state: i < currentIndex
-                ? _StepState.done
-                : i == currentIndex
-                    ? _StepState.current
-                    : _StepState.ahead,
-            first: i == 0,
-            last: i == RailStage.values.length - 1,
-            vertical: vertical,
-          ),
-      ];
-      return Semantics(
-        label: archived
-            ? 'Thesis journey: every stage complete'
-            : 'Thesis journey: stage ${currentIndex + 1} of '
-                '${RailStage.values.length}, ${current.label}',
-        child: vertical
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: steps,
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [for (final s in steps) Expanded(child: s)],
-              ),
-      );
-    });
+    final steps = [
+      for (var i = 0; i < RailStage.values.length; i++)
+        _JourneyStep(
+          key: Key('railStep-${RailStage.values[i].id}'),
+          stage: RailStage.values[i],
+          number: i + 1,
+          state: i < currentIndex
+              ? _StepState.done
+              : i == currentIndex
+                  ? _StepState.current
+                  : _StepState.ahead,
+          first: i == 0,
+          last: i == RailStage.values.length - 1,
+        ),
+    ];
+
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [for (final s in steps) Expanded(child: s)],
+    );
+
+    return Semantics(
+      label: archived
+          ? 'Thesis journey: every stage complete'
+          : 'Thesis journey: stage ${currentIndex + 1} of '
+              '${RailStage.values.length}, ${current.label}',
+      // Always a left-to-right stepper. When the six stages fit, they share
+      // the width evenly; when they do not (a phone), the rail scrolls
+      // sideways at their natural width so no label ever wraps or clips.
+      child: LayoutBuilder(builder: (context, constraints) {
+        final natural = RailStage.values.length * _stepWidth;
+        if (constraints.maxWidth >= natural) return row;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(width: natural, child: row),
+        );
+      }),
+    );
   }
 }
 
@@ -164,7 +173,6 @@ class _JourneyStep extends StatelessWidget {
     required this.state,
     required this.first,
     required this.last,
-    required this.vertical,
   });
 
   final RailStage stage;
@@ -172,7 +180,6 @@ class _JourneyStep extends StatelessWidget {
   final _StepState state;
   final bool first;
   final bool last;
-  final bool vertical;
 
   @override
   Widget build(BuildContext context) {
@@ -229,13 +236,14 @@ class _JourneyStep extends StatelessWidget {
     };
 
     final words = Column(
-      crossAxisAlignment:
-          vertical ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           stage.label,
-          textAlign: vertical ? TextAlign.start : TextAlign.center,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: text.labelLarge?.copyWith(
             color: state == _StepState.ahead ? muted : null,
             fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
@@ -243,7 +251,9 @@ class _JourneyStep extends StatelessWidget {
         ),
         Text(
           stateWord,
-          textAlign: vertical ? TextAlign.start : TextAlign.center,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: text.labelSmall?.copyWith(
             color: switch (state) {
               _StepState.done => done,
@@ -252,53 +262,12 @@ class _JourneyStep extends StatelessWidget {
             },
           ),
         ),
-        if (isCurrent && vertical) ...[
-          const SizedBox(height: 2),
-          Text(ProgressRail.describe(stage), style: text.bodySmall),
-        ],
       ],
     );
 
     Color lineColor(bool before) {
       if (before) return state == _StepState.ahead ? rule : done;
       return state == _StepState.done ? done : rule;
-    }
-
-    if (vertical) {
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 40,
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 6,
-                    child: first
-                        ? null
-                        : Container(width: 2, color: lineColor(true)),
-                  ),
-                  node,
-                  Expanded(
-                    child: last
-                        ? const SizedBox()
-                        : Container(width: 2, color: lineColor(false)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppTokens.sm + 4),
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(
-                    top: 8, bottom: last ? 0 : AppTokens.md),
-                child: words,
-              ),
-            ),
-          ],
-        ),
-      );
     }
 
     return Column(

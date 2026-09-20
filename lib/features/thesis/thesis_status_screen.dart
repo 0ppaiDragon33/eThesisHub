@@ -231,10 +231,26 @@ class _Workspace extends ConsumerWidget {
         Panel(
           title: 'Where your thesis is',
           icon: Icons.route_outlined,
-          child: ProgressRail(
-            status: thesis.status,
-            defences: defences,
-            chapters: chapters,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ProgressRail(
+                status: thesis.status,
+                defences: defences,
+                chapters: chapters,
+              ),
+              if (thesis.status != ThesisStatus.archived) ...[
+                const Gap.md(),
+                Text(
+                  'Now: ${ProgressRail.describe(ProgressRail.stageFor(
+                    status: thesis.status,
+                    defences: defences,
+                    chapters: chapters,
+                  ))}.',
+                  style: text.bodySmall,
+                ),
+              ],
+            ],
           ),
         ),
         const Gap.lg(),
