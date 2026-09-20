@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/platform/native_platform.dart';
 import 'package:ethesishub/core/design/motion.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
@@ -119,6 +120,17 @@ class AppShell extends ConsumerWidget {
         isDeeperThanDestination(list, location);
     final owner = loading ? null : destinationForLocation(list, location);
 
+    // A native mobile app hides the visible back arrow: the OS back gesture
+    // (Android's edge-swipe or button) does the same job, routed to the same
+    // rise-to-parent by the BackButtonListener below. Web — including mobile
+    // web, which has no in-app system back — and desktop keep the arrow.
+    //
+    // isNativeMobile (dart:io Platform), not defaultTargetPlatform: the latter
+    // reports android under `flutter test`, which would hide the arrow in
+    // every widget test, whereas the former reports the host OS there, so the
+    // tests keep exercising the desktop arrow with no per-test override.
+    final showArrow = !isNativeMobile;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -137,7 +149,7 @@ class AppShell extends ConsumerWidget {
           parent: deep && owner != null && owner.route != location
               ? owner.label
               : null,
-          showBack: deep,
+          showBack: deep && showArrow,
           onBack: () => _back(context),
           trailing: trailing,
           showBrand: !wide && !narrowMenu,
