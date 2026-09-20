@@ -5,6 +5,14 @@ import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 
+/// Thrown when a nominee answers a request whose thesis has been reopened to
+/// `draft` for re-nomination. The request they hold is stale and a fresh one
+/// is on its way, so this is NOT the "already completed" case — the inbox
+/// tells them to wait rather than that they missed their chance.
+class NominationBeingRevised implements Exception {
+  const NominationBeingRevised();
+}
+
 class ThesisRepository {
   ThesisRepository(this._db);
 
@@ -384,12 +392,18 @@ class ThesisRepository {
   }) async {
     final ids = await _nominationIds(thesisId);
 
-    await _db.runTransaction((tx) async {
+    // The guard returns its failure rather than throwing it: an exception
+    // thrown inside `runTransaction` aborts the transaction through a native
+    // `cancel` call that this cloud_firestore version does not implement on
+    // Android, surfacing as a fatal `MissingPluginException` instead of the
+    // StateError. Returning the failure lets the transaction commit its
+    // (empty) write set normally; we throw once we are back outside it.
+    final failure = await _db.runTransaction<Object?>((tx) async {
       // --- reads first, all of them, before any write ---
       final thesisRef = _theses.doc(thesisId);
       final thesisSnap = await tx.get(thesisRef);
       if (!thesisSnap.exists) {
-        throw StateError('Thesis $thesisId does not exist.');
+        return StateError('Thesis $thesisId does not exist.');
       }
       final status = _toThesis(thesisSnap.id, thesisSnap.data()!).status;
 
@@ -401,8 +415,13 @@ class ThesisRepository {
         }
       }
 
+      if (status == ThesisStatus.draft) {
+        // A coordinator reopened this thesis for re-nomination; the request
+        // in this nominee's inbox is stale, not completed.
+        return const NominationBeingRevised();
+      }
       if (status != ThesisStatus.nominationPendingConforme) {
-        throw StateError(
+        return StateError(
             'Cannot respond to a nomination: this thesis is no longer '
             'awaiting Conforme (current status: ${status.value}).');
       }
@@ -415,7 +434,7 @@ class ThesisRepository {
         'declineReason': accept ? null : declineReason,
       });
 
-      if (!accept) return;
+      if (!accept) return null;
 
       // nomineeUid is excluded rather than trusted from the (pre-write)
       // fresh read above, since this write is what makes it accepted.
@@ -429,7 +448,10 @@ class ThesisRepository {
           'status': ThesisStatus.nominationPendingCoordinator.value,
         });
       }
+      return null;
     });
+
+    if (failure != null) throw failure;
   }
 
   /// Returns a stalled thesis to `draft` so the group can re-nominate.
@@ -454,22 +476,28 @@ class ThesisRepository {
     required String thesisId,
     required String coordinatorUid,
   }) async {
-    await _db.runTransaction((tx) async {
+    // Returns its failure rather than throwing inside the transaction — see
+    // `respondToNomination` for why (the Android `MissingPluginException` on
+    // transaction cancel).
+    final failure = await _db.runTransaction<StateError?>((tx) async {
       final ref = _theses.doc(thesisId);
       final snap = await tx.get(ref);
       if (!snap.exists) {
-        throw StateError('Thesis $thesisId does not exist.');
+        return StateError('Thesis $thesisId does not exist.');
       }
 
       final status = _toThesis(snap.id, snap.data()!).status;
       if (status != ThesisStatus.nominationPendingConforme) {
-        throw StateError(
+        return StateError(
             'Cannot reopen this thesis: it is not awaiting Conforme '
             '(current status: ${status.value}).');
       }
 
       tx.update(ref, {'status': ThesisStatus.draft.value});
+      return null;
     });
+
+    if (failure != null) throw failure;
   }
 
   /// A Research Coordinator recommends the thesis to the Dean. Only valid
@@ -513,7 +541,10 @@ class ThesisRepository {
   }) async {
     final ids = await _nominationIds(thesisId);
 
-    await _db.runTransaction((tx) async {
+    // Returns its failure rather than throwing inside the transaction — see
+    // `respondToNomination` for why (the Android `MissingPluginException` on
+    // transaction cancel).
+    final failure = await _db.runTransaction<StateError?>((tx) async {
       // --- reads first, all of them, before any write ---
       final thesisRef = _theses.doc(thesisId);
       final thesisSnap = await tx.get(thesisRef);
@@ -530,7 +561,7 @@ class ThesisRepository {
       }
 
       if (status != ThesisStatus.nominationPendingDean) {
-        throw StateError(
+        return StateError(
             'Cannot approve a thesis that is not pending dean review.');
       }
 
@@ -547,10 +578,10 @@ class ThesisRepository {
           .toList();
 
       if (adviser.isEmpty) {
-        throw StateError('Cannot approve without an accepted adviser.');
+        return StateError('Cannot approve without an accepted adviser.');
       }
       if (panelists.length < 3) {
-        throw StateError('Cannot approve with fewer than three panel members.');
+        return StateError('Cannot approve with fewer than three panel members.');
       }
 
       // --- then the write ---
@@ -561,7 +592,10 @@ class ThesisRepository {
         'deanApprovedAt': FieldValue.serverTimestamp(),
         'deanApprovedBy': deanUid,
       });
+      return null;
     });
+
+    if (failure != null) throw failure;
   }
 
   /// Every nomination addressed to this user that still needs their

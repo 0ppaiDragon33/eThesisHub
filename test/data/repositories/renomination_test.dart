@@ -140,6 +140,21 @@ void main() {
       expect(t['status'], 'nominationPendingConforme');
     });
 
+    // A nominee still holding a pending request in their inbox answers it
+    // while the thesis sits reopened at `draft`. That is not "already
+    // completed" — a fresh request is coming — so it is reported as its own
+    // case, and (the reason this matters on a device) the guard is returned
+    // from the transaction rather than thrown inside it, which on Android
+    // aborts through an unimplemented `cancel` and crashes.
+    test('answering during a reopen reports "being revised", not completed',
+        () async {
+      await expectLater(
+        repo.respondToNomination(
+            thesisId: 't1', nomineeUid: 'p2', accept: true),
+        throwsA(isA<NominationBeingRevised>()),
+      );
+    });
+
     // Dropping a seat that was not refused is not a thing this flow does,
     // and the rules would refuse the delete. Failing loudly here beats
     // leaving an orphan nomination that counts as outstanding forever.

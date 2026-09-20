@@ -693,6 +693,54 @@ void main() {
   });
 
   testWidgets(
+      'after a reopen the surviving roster is pre-selected and the declined '
+      'seat is left empty', (tester) async {
+    // Reported from the running app: a coordinator reopens a stalled thesis,
+    // the leader opens this form, and it is blank — the accepted adviser and
+    // panellists look as though every answer were lost, and dropping one of
+    // them (because the leader cannot see they accepted) is then refused with
+    // a confusing error. The surviving roster must be pre-selected; only the
+    // declined seat is empty, since re-nominating a refusal is refused.
+    useTallSurface(tester);
+    final db = await seeded();
+    Future<void> seedNom(String uid, String position, String status) =>
+        db.collection('theses/t1/nominations').doc(uid).set({
+          'nomineeUid': uid,
+          'nomineeName': 'Dr. $uid',
+          'position': position,
+          'exOfficio': false,
+          'conformeStatus': status,
+          'respondedAt': null,
+          'declineReason': null,
+        });
+    await seedNom('Armada', 'adviser', 'accepted');
+    await seedNom('Diamante', 'panelist', 'accepted');
+    await seedNom('Padojinog', 'panelist', 'accepted');
+    await seedNom('Braganza', 'panelist', 'declined');
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final adviser = tester.widget<DropdownButtonFormField<String>>(
+        find.byKey(const Key('adviser')));
+    expect(adviser.initialValue, 'Armada',
+        reason: 'the accepted adviser is pre-selected, not a blank slot');
+
+    final selected = [
+      for (final slot in ['panel0', 'panel1', 'panel2'])
+        tester
+            .widget<DropdownButtonFormField<String>>(find.byKey(Key(slot)))
+            .initialValue,
+    ];
+    expect(selected, containsAll(<String?>['Diamante', 'Padojinog']),
+        reason: 'the accepted panellists keep their seats');
+    expect(selected, contains(null),
+        reason: 'the declined seat is left empty for a replacement');
+    expect(selected, isNot(contains('Braganza')),
+        reason: 'the nominee who declined is not restored');
+  });
+
+  testWidgets(
       'a permission-denied on submit names the person and the position, '
       'not a bare Firestore code', (tester) async {
     // Reproduces spec §4.2.1's sync window: the picker offers a nominee

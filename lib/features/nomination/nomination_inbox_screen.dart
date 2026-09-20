@@ -9,6 +9,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/nomination.dart';
+import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -78,6 +79,18 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
         setState(() {
           _decliningThesisId = null;
           _reason.clear();
+        });
+      }
+    } on NominationBeingRevised catch (_) {
+      // The coordinator reopened this thesis for re-nomination: the request
+      // here is stale and a fresh one is coming, so this is not the
+      // "already completed" case — telling them that would be a lie.
+      if (mounted) {
+        setState(() {
+          _decliningThesisId = null;
+          _reason.clear();
+          _error = 'The group is revising this nomination. You will get an '
+              'updated request to respond to.';
         });
       }
     } on StateError catch (_) {

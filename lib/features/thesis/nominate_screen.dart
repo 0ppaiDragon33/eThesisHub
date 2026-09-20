@@ -8,6 +8,7 @@ import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -69,7 +70,15 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   @override
   void initState() {
     super.initState();
-    _loadExOfficio();
+    _init();
+  }
+
+  // Ex-officio seats first (they set the panel-slot cap), then the surviving
+  // roster from any earlier round.
+  Future<void> _init() async {
+    await _loadExOfficio();
+    if (!mounted) return;
+    await _loadExistingRoster();
   }
 
   Future<void> _loadExOfficio() async {
@@ -82,6 +91,61 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       if (_panelUids.length > max) {
         _panelUids = _panelUids.sublist(0, max < 0 ? 0 : max);
       }
+    });
+  }
+
+  /// Pre-selects the roster that survived a reopen.
+  ///
+  /// After a coordinator hands a stalled thesis back to `draft`, whoever
+  /// accepted — or is still awaiting an answer — keeps their seat:
+  /// [ThesisRepository.submitNominations] and the rules refuse to remove
+  /// them, and only a declined seat may be refilled. A blank form here read
+  /// as though every answer were lost and let the leader accidentally drop an
+  /// accepted nominee (which submit then refuses with a confusing error).
+  /// Pre-selecting the survivors shows who is still on the panel and leaves
+  /// only the declined seats empty for a fresh pick — re-nominating the
+  /// person who declined is refused, so their seat is deliberately not
+  /// restored. A first nomination finds nothing here and stays blank.
+  Future<void> _loadExistingRoster() async {
+    final List<Nomination> existing;
+    try {
+      existing = await ref
+          .read(thesisRepositoryProvider)
+          .watchNominations(widget.thesisId)
+          .first;
+    } catch (_) {
+      return; // nothing to prefill; the form simply stays blank
+    }
+    if (!mounted || existing.isEmpty) return;
+
+    String? adviser;
+    final panel = <String>[];
+    for (final n in existing) {
+      if (n.exOfficio) continue; // added automatically, never chosen here
+      if (n.conformeStatus == ConformeStatus.declined) continue; // must refill
+      switch (n.position) {
+        case NominationPosition.adviser:
+          adviser = n.nomineeUid;
+        case NominationPosition.panelist:
+          panel.add(n.nomineeUid);
+        case NominationPosition.coordinator:
+        case NominationPosition.dean:
+          break; // office holders sit ex officio, not in a chosen seat
+      }
+    }
+
+    if (adviser == null && panel.isEmpty) return;
+
+    setState(() {
+      _adviserUid = adviser;
+      final slots = <String?>[...panel];
+      // Always leave at least three seats so a refill has somewhere to land,
+      // and never exceed the cap the ex-officio count leaves.
+      while (slots.length < 3) {
+        slots.add(null);
+      }
+      final max = _maxPanelists;
+      _panelUids = max > 0 && slots.length > max ? slots.sublist(0, max) : slots;
     });
   }
 
