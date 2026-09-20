@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -67,6 +68,17 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
   Future<void> _release(String defenceId, String adviserUid) async {
     if (_releasing) return;
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Release evaluations to the group?',
+      message: 'The students will be able to see their scores and comments. '
+          'This cannot be taken back.',
+      confirmLabel: 'Release',
+      confirmKey: const Key('confirmRelease'),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() {
       _releasing = true;
       _releaseError = null;
@@ -99,6 +111,18 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     PassFail? verdict,
   ) async {
     if (_recording || verdict == null) return;
+
+    final pass = verdict == PassFail.pass;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Record a ${pass ? 'Pass' : 'Fail'} verdict?',
+      message: "This is the panel's decision on the defence and goes into the "
+          'permanent record.',
+      confirmLabel: 'Record ${pass ? 'Pass' : 'Fail'}',
+      confirmKey: const Key('confirmVerdict'),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() {
       _recording = true;
       _recordError = null;
