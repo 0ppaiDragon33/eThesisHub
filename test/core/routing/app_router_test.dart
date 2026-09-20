@@ -283,6 +283,10 @@ void main() {
         reason: 'exactly one sign-out, in the shell, not one per screen');
     await tester.tap(find.byKey(const Key('signOut')));
     await tester.pumpAndSettle();
+    // Sign-out now confirms first, so nothing has happened yet.
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirmSignOut')));
+    await tester.pumpAndSettle();
 
     expect(find.text('Sign in'), findsWidgets);
     expect(find.byKey(const Key('overviewScreen')), findsNothing);
