@@ -2,7 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:ethesishub/core/theme/app_theme.dart';
+import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis.dart';
@@ -27,45 +27,17 @@ class SubmissionTrend extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theses = ref.watch(allThesesProvider);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  'Submissions',
-                  style: TextStyle(
-                    fontFamily: AppTheme.serif,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(width: AppTokens.sm),
-                Text(
-                  'Past 7 months',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppTokens.md),
-            theses.when(
-              loading: () => const LoadingState(label: 'Loading submissions…'),
-              error: (error, _) => ErrorState(
-                message: 'Could not load the submission trend.',
-                error: error,
-              ),
-              data: (all) => _Body(theses: all),
-            ),
-          ],
+    return Panel(
+      title: 'Submissions',
+      subtitle: 'New thesis groups, past 7 months',
+      icon: Icons.show_chart_rounded,
+      child: theses.when(
+        loading: () => const LoadingState(label: 'Loading submissions…'),
+        error: (error, _) => ErrorState(
+          message: 'Could not load the submission trend.',
+          error: error,
         ),
+        data: (all) => _Body(theses: all),
       ),
     );
   }

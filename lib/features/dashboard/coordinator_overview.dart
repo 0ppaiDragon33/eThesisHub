@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/metrics.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/needs_you_queue.dart';
-import 'package:ethesishub/core/widgets/page_shell.dart';
-import 'package:ethesishub/core/widgets/stat_tile.dart';
-import 'package:ethesishub/core/widgets/stat_tile_grid.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/agenda.dart';
 import 'package:ethesishub/features/dashboard/all_theses_table.dart';
 import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
@@ -18,91 +21,269 @@ import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// Where the coordinator lands: a greeting, what needs a recommendation or
-/// a decision, the four figures that used to require opening several
-/// separate screens, the full roster with a filter, and the two
-/// college-wide charts.
+/// The research office console.
 ///
-/// [AllThesesTable], [StageDonut] and [SubmissionTrend] all watch
-/// [allThesesProvider] directly, which the security rules permit only for
-/// the coordinator and the dean -- this overview must never be reused for
-/// another role.
-class CoordinatorOverview extends ConsumerWidget {
+/// A command row for the office's recurring jobs, the office's figures,
+/// the work queue beside the pipeline and the week's defences, and the
+/// full college register — which the pipeline bar filters when tapped.
+///
+/// Reads [allThesesProvider], permitted only to the coordinator and dean:
+/// never reuse this for another role.
+class CoordinatorOverview extends ConsumerStatefulWidget {
   const CoordinatorOverview({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // The accent POSITION per tile stays a compile-time constant fixed by
-    // where the tile sits; brightness only selects between that position's
-    // light and dark variant (spec D14, and every other colour consumer in
-    // the app does the same).
-    final brightness = Theme.of(context).brightness;
-    final needsYouAsync = ref.watch(coordinatorNeedsYouProvider);
+  ConsumerState<CoordinatorOverview> createState() =>
+      _CoordinatorOverviewState();
+}
 
+class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
+  final _stageFilter = ValueNotifier<ThesisStage?>(null);
+
+  @override
+  void dispose() {
+    _stageFilter.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final needsYouAsync = ref.watch(coordinatorNeedsYouProvider);
     final allThesesAsync = ref.watch(allThesesProvider);
     final recommendAsync = ref.watch(
         thesesByStatusProvider(ThesisStatus.nominationPendingCoordinator));
-    // allDefencesProvider, not myDefencesProvider: the latter awaits
-    // currentUserProvider.future and branches on role, so a coordinator
-    // without a profile document falls through to the faculty adviser/panel
-    // fan-in instead of the college-wide watchAll() -- silently wrong,
-    // never blocked. See the note on allDefencesProvider itself.
+    final stalledAsync = ref.watch(stalledThesesProvider);
     final defencesAsync = ref.watch(allDefencesProvider);
     final directoryAsync = ref.watch(allDirectoryProvider);
 
-    return PageShell(
+    return KeyedSubtree(
       key: const Key('coordinatorOverview'),
-      maxWidth: AppTokens.measureWide,
-      children: [
-        const OverviewGreeting(),
-        const Gap.sm(),
-        NeedsYouHeadline(items: needsYouAsync, suffix: 'the college'),
-        const Gap.lg(),
-        StatTileGrid(children: [
-          AsyncStatTile<List<Thesis>>(
+      child: DashboardBody(children: [
+        DashboardHeader(
+          office: 'Research office',
+          summary:
+              NeedsYouHeadline(items: needsYouAsync, suffix: 'the college'),
+          actions: [
+            FilledButton.icon(
+              key: const Key('coordOpenReview'),
+              onPressed: () => context.push('/review'),
+              icon: const Icon(Icons.fact_check_outlined, size: 18),
+              label: const Text('Open review queue'),
+            ),
+          ],
+        ),
+        const _CommandRow(),
+        MetricStrip(metrics: [
+          Metric<List<Thesis>>(
             label: 'Active theses',
             value: allThesesAsync,
-            // The same definition the stage donut below uses. See
-            // [activeThesisCount] for which one was chosen and why.
             format: (l) => '${activeThesisCount(l)}',
-            icon: Icons.school_outlined,
-            accent: AppTokens.accentFor(0, brightness),
           ),
-          AsyncStatTile<List<Thesis>>(
+          Metric<List<Thesis>>(
             label: 'Awaiting your recommendation',
             value: recommendAsync,
             format: (l) => '${l.length}',
-            icon: Icons.fact_check_outlined,
-            accent: AppTokens.accentFor(3, brightness),
+            highlight: (l) => l.isNotEmpty,
+            onTap: () => context.go('/recommendations'),
           ),
-          AsyncStatTile<List<Defence>>(
+          Metric<List<Defence>>(
             label: 'Defences this week',
             value: defencesAsync,
             format: (l) => '${defencesThisWeek(l).length}',
-            icon: Icons.event_note_outlined,
-            accent: AppTokens.accentFor(1, brightness),
+            onTap: () => context.go('/defences'),
           ),
-          AsyncStatTile<List<FacultyDirectoryEntry>>(
+          Metric<List<FacultyDirectoryEntry>>(
             label: 'Faculty accounts',
             value: directoryAsync,
             format: (l) => '${l.length}',
-            icon: Icons.badge_outlined,
-            accent: AppTokens.accentFor(2, brightness),
+            onTap: () => context.go('/users'),
           ),
         ]),
-        const Gap.lg(),
-        NeedsYouQueue(
-          items: needsYouAsync,
-          emptyTitle: 'All caught up',
-          emptyMessage: 'Nothing needs your decision right now.',
+        SplitColumns(
+          primary: [
+            NeedsYouQueue(
+              items: needsYouAsync,
+              emptyTitle: 'All caught up',
+              emptyMessage: 'Nothing needs your decision right now.',
+            ),
+            _StalledNotice(stalled: stalledAsync),
+          ],
+          secondary: [
+            StageDonut(
+              onStageSelected: (stage) => _stageFilter.value = stage,
+            ),
+            WeekAgenda(defences: defencesAsync),
+          ],
         ),
-        const Gap.lg(),
-        const AllThesesTable(),
-        const Gap.lg(),
-        const StageDonut(),
-        const Gap.lg(),
+        AllThesesTable(filter: _stageFilter),
         const SubmissionTrend(),
-      ],
+      ]),
+    );
+  }
+}
+
+/// The office's recurring jobs, one tap each. Every target is a route the
+/// coordinator's guards admit.
+class _CommandRow extends StatelessWidget {
+  const _CommandRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final commands = <({IconData icon, String label, String detail, VoidCallback go})>[
+      (
+        icon: Icons.event_available_outlined,
+        label: 'Schedule a defence',
+        detail: 'Choose a ready thesis',
+        go: () => context.go('/readiness'),
+      ),
+      (
+        icon: Icons.person_add_alt_outlined,
+        label: 'Invite faculty',
+        detail: 'Send an account invite',
+        go: () => context.go('/invites'),
+      ),
+      (
+        icon: Icons.calendar_month_outlined,
+        label: 'Defence calendar',
+        detail: 'Every scheduled session',
+        go: () => context.go('/defences'),
+      ),
+      (
+        icon: Icons.local_library_outlined,
+        label: 'Publish to archive',
+        detail: 'Finished manuscripts',
+        go: () => context.push('/archive/queue'),
+      ),
+    ];
+
+    return LayoutBuilder(builder: (context, c) {
+      final across = c.maxWidth >= 900 ? 4 : (c.maxWidth >= 480 ? 2 : 1);
+      final w = (c.maxWidth - (across - 1) * AppTokens.md) / across;
+      return Wrap(
+        spacing: AppTokens.md,
+        runSpacing: AppTokens.md,
+        children: [
+          for (final cmd in commands)
+            SizedBox(
+              width: w,
+              child: _CommandTile(
+                icon: cmd.icon,
+                label: cmd.label,
+                detail: cmd.detail,
+                onTap: cmd.go,
+              ),
+            ),
+        ],
+      );
+    });
+  }
+}
+
+class _CommandTile extends StatelessWidget {
+  const _CommandTile({
+    required this.icon,
+    required this.label,
+    required this.detail,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String detail;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: p.paper,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radius),
+        side: BorderSide(color: p.rule),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppTokens.md),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: p.seal.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 20, color: p.seal),
+              ),
+              const SizedBox(width: AppTokens.md - 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.labelLarge),
+                    Text(detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodySmall),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: p.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Nominations stalled by a declined nominee, which only this office can
+/// reopen. Hidden when there are none.
+class _StalledNotice extends StatelessWidget {
+  const _StalledNotice({required this.stalled});
+
+  final AsyncValue<List<Thesis>> stalled;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = stalled.valueOrNull;
+    if (list == null || list.isEmpty) return const SizedBox.shrink();
+    final text = Theme.of(context).textTheme;
+    final c = Tone.returned.color(context);
+    return Panel(
+      child: Row(
+        children: [
+          Icon(Icons.report_outlined, color: c),
+          const SizedBox(width: AppTokens.md - 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  list.length == 1
+                      ? '1 nomination is stalled'
+                      : '${list.length} nominations are stalled',
+                  style: text.labelLarge?.copyWith(color: c),
+                ),
+                Text('A nominee declined. Reopen the thesis for '
+                    're-nomination.', style: text.bodySmall),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppTokens.sm),
+          TextButton(
+            key: const Key('coordOpenStalled'),
+            onPressed: () => context.push('/stalled'),
+            child: const Text('Resolve'),
+          ),
+        ],
+      ),
     );
   }
 }

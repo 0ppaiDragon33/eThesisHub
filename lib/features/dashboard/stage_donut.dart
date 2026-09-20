@@ -1,8 +1,9 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:ethesishub/core/theme/app_theme.dart';
+import 'package:ethesishub/core/design/metrics.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis.dart';
@@ -10,56 +11,52 @@ import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// How many theses sit at each [ThesisStage], for the dean and coordinator
-/// dashboards only — it watches [allThesesProvider] directly, which the
-/// security rules deny to every other role.
+/// The college pipeline: how many theses sit at each [ThesisStage], as one
+/// proportional bar with every count written out beneath it.
 ///
-/// The donut is decoration. The legend beside it is where the numbers live,
-/// and it is laid out so it keeps its own share of the width via [Expanded]
-/// rather than depending on the donut succeeding first — a chart that fails
-/// to lay out in a cramped space must never take the counts down with it.
+/// Dean and coordinator only — it watches [allThesesProvider], which the
+/// rules deny to every other role. Stages are coloured from the accent
+/// palette by position: they identify, they do not judge.
+///
+/// [onStageSelected] lets a host filter its own table to the stage a reader
+/// taps, using the same `thesisStage()` buckets so the two always agree.
 class StageDonut extends ConsumerWidget {
-  const StageDonut({super.key});
+  const StageDonut({super.key, this.onStageSelected});
+
+  final ValueChanged<ThesisStage>? onStageSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theses = ref.watch(allThesesProvider);
+    final total = theses.valueOrNull == null
+        ? null
+        : activeThesisCount(theses.valueOrNull!);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Theses by stage',
-              style: TextStyle(
-                fontFamily: AppTheme.serif,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: AppTokens.md),
-            theses.when(
-              loading: () => const LoadingState(label: 'Loading theses…'),
-              error: (error, _) => ErrorState(
-                message: 'Could not load the stage breakdown.',
-                error: error,
-              ),
-              data: (all) => _Body(theses: all),
-            ),
-          ],
+    return Panel(
+      title: 'Theses by stage',
+      subtitle: total == null
+          ? 'The college pipeline'
+          : total == 1
+              ? '1 thesis on file'
+              : '$total theses on file',
+      icon: Icons.stacked_bar_chart_rounded,
+      child: theses.when(
+        loading: () => const LoadingState(label: 'Loading theses…'),
+        error: (error, _) => ErrorState(
+          message: 'Could not load the stage breakdown.',
+          error: error,
         ),
+        data: (all) => _Body(theses: all, onStageSelected: onStageSelected),
       ),
     );
   }
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.theses});
+  const _Body({required this.theses, required this.onStageSelected});
 
   final List<Thesis> theses;
+  final ValueChanged<ThesisStage>? onStageSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -69,100 +66,33 @@ class _Body extends StatelessWidget {
       counts[stage] = (counts[stage] ?? 0) + 1;
     }
 
-    // The same definition the "Active theses" tile above uses, so the two
-    // numbers on this screen cannot disagree. See [activeThesisCount].
+    // The same definition the "Active theses" figure uses, so the two
+    // numbers on one screen cannot disagree.
     final total = activeThesisCount(theses);
     if (total == 0) {
-      return const EmptyState(
-        title: 'No theses yet',
-        message: 'Once theses are underway, their stages will appear here.',
-        icon: Icons.donut_large_outlined,
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppTokens.sm),
+        child: Text(
+          'No theses yet. Once groups are underway, their stages appear here.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       );
     }
 
-    final brightness = Theme.of(context).brightness;
-
-    return SizedBox(
-      height: 180,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 2,
-            child: PieChart(
-              PieChartData(
-                sections: [
-                  for (var i = 0; i < ThesisStage.values.length; i++)
-                    if (counts[ThesisStage.values[i]]! > 0)
-                      PieChartSectionData(
-                        value: counts[ThesisStage.values[i]]!.toDouble(),
-                        color: AppTokens.accentFor(i, brightness),
-                        radius: 28,
-                        showTitle: false,
-                      ),
-                ],
-                centerSpaceRadius: 36,
-                sectionsSpace: 2,
-                pieTouchData: PieTouchData(enabled: false),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppTokens.md),
-          Expanded(
-            flex: 3,
-            child: _Legend(counts: counts, brightness: brightness),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  const _Legend({required this.counts, required this.brightness});
-
-  final Map<ThesisStage, int> counts;
-  final Brightness brightness;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
+    final p = Palette.of(context);
+    return SegmentBar(
+      key: const Key('stagePipeline'),
+      segments: [
         for (var i = 0; i < ThesisStage.values.length; i++)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: AppTokens.accentFor(i, brightness),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: AppTokens.sm),
-                Expanded(
-                  child: Text(
-                    ThesisStage.values[i].label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodySmall,
-                  ),
-                ),
-                Text(
-                  '${counts[ThesisStage.values[i]]}',
-                  style: text.bodySmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
+          (
+            label: ThesisStage.values[i].label,
+            count: counts[ThesisStage.values[i]]!,
+            color: p.accent(i),
           ),
       ],
+      onTap: onStageSelected == null
+          ? null
+          : (i) => onStageSelected!(ThesisStage.values[i]),
     );
   }
 }

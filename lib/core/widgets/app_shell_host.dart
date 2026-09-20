@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/app_shell.dart';
@@ -13,7 +15,6 @@ import 'package:ethesishub/features/notifications/notification_bell.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/notification_providers.dart';
 import 'package:ethesishub/providers/shell_providers.dart';
-import 'package:ethesishub/providers/sidebar_provider.dart';
 import 'package:ethesishub/providers/theme_provider.dart';
 
 /// What the app bar calls the page you are on.
@@ -65,6 +66,10 @@ String shellTitleFor(
     return 'Title defence';
   }
 
+  if (location != '/archive/queue' && location.startsWith('/archive/')) {
+    return 'Archive record';
+  }
+
   return _staticTitles[location] ?? 'eThesisHub';
 }
 
@@ -96,6 +101,9 @@ const _staticTitles = {
   '/users': 'Users',
   '/stalled': 'Stalled nominations',
   '/notifications': 'Notifications',
+  '/archive': 'Archive',
+  '/archive/queue': 'Publish to archive',
+  '/forms': 'Forms',
 };
 
 /// Wires [AppShell] to this app's providers and router.
@@ -182,96 +190,79 @@ class AppShellHost extends ConsumerWidget {
   }
 }
 
-/// A role's label for [AccountFooter]. Local to display, not [UserRole]
-/// itself -- D25 governs what the app DOES with an unknown role (nothing
-/// silently defaulted), not what a resolved one is called on screen.
-String _roleLabel(UserRole role) => switch (role) {
-      UserRole.student => 'Student',
-      UserRole.faculty => 'Faculty',
-      UserRole.coordinator => 'College Research Coordinator',
-      UserRole.dean => 'Dean',
-    };
-
-/// Name, role and sign-out at the foot of the sidebar (spec §5.3).
+/// Who is signed in, the theme control, and sign-out.
 ///
-/// Watches [currentUserProvider] itself rather than trusting whatever
-/// already gated the shell into rendering: the one account this footer
-/// MUST still work for is exactly the one whose `users/{uid}` document is
-/// missing or unreadable -- the `/no-profile` case -- because that reader
-/// has no destination to reach and no other account to switch to, so
-/// sign-out is the one control that may never depend on the profile read
-/// that just failed. A missing or errored profile therefore degrades to
-/// sign-out alone, never a blank footer and never a thrown error.
+/// Drawn in three places, told which by [ShellPlacement]: the full ink
+/// sidebar, the collapsed icon sidebar, and the phone's "More" sheet.
+///
+/// Watches [currentUserProvider] itself: the one account this footer must
+/// still serve is the one whose profile is missing, so a missing or failed
+/// profile degrades to the two controls alone — never a blank footer and
+/// never a thrown error.
 class AccountFooter extends ConsumerWidget {
   const AccountFooter({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentUserProvider).valueOrNull;
+    final placement = ShellPlacement.maybeOf(context);
+    final inSidebar = placement?.inSidebar ?? false;
+    final collapsed = placement?.collapsed ?? false;
+    final p = Palette.of(context);
+    final text = Theme.of(context).textTheme;
+
+    final controls = IconTheme.merge(
+      data: IconThemeData(color: inSidebar ? p.sidebarMuted : p.muted),
+      child: Flex(
+        direction: collapsed ? Axis.vertical : Axis.horizontal,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ThemeToggleButton(onDark: inSidebar),
+          _SidebarSignOut(onDark: inSidebar),
+        ],
+      ),
+    );
 
     if (profile == null) {
-      // Degraded state (spec: no code path may depend on `users/{uid}`
-      // existing to render the shell at all) -- sign-out and the theme
-      // toggle both still work here, since neither reads the profile.
-      return const Padding(
-        key: Key('accountFooterSignOutOnly'),
-        padding: EdgeInsets.all(8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SignOutButton(),
-            _ThemeToggleButton(),
-          ],
+      return Padding(
+        key: const Key('accountFooterSignOutOnly'),
+        padding: const EdgeInsets.all(AppTokens.sm),
+        child: Align(
+          alignment: collapsed ? Alignment.center : Alignment.centerLeft,
+          child: controls,
         ),
       );
     }
 
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final textTheme = Theme.of(context).textTheme;
-
-    // Same `Key('accountFooter')` widget renders in two places that behave
-    // very differently: `NavigationDrawer` lays its children out inside a
-    // plain `ListView`, which genuinely bounds their width to the drawer's
-    // own -- an `Expanded` there is safe. `NavigationRail`'s `trailing`
-    // slot does NOT: `NavigationRail` sizes itself from an
-    // `IntrinsicWidth`-style probe of its content with no `maxWidth` cap,
-    // so its trailing child is laid out with a genuinely UNBOUNDED width
-    // constraint. An `Expanded` there throws ("RenderFlex children have
-    // non-zero flex but incoming width constraints are unbounded"), and
-    // before that, a bare `Flexible` inside a min-size `Row` just rendered
-    // the name at its full natural width -- unbounded, so it never
-    // wrapped or ellipsized -- which is the overflow this fixes.
-    //
-    // `wide` mirrors `AppShell.railBreakpoint`: when the shell would be
-    // showing the rail (not the drawer), this footer self-imposes the
-    // rail's own width -- 220 expanded, 72 collapsed -- so `Expanded`
-    // below finally has something finite to divide. A collapsed 72px
-    // rail cannot fit a name, a role, AND two icon buttons, so that case
-    // drops to icons only, the same trade `NavigationRail` itself makes
-    // for destination labels when collapsed.
-    final wide = MediaQuery.sizeOf(context).width >= AppShell.railBreakpoint;
-    final expanded = wide ? ref.watch(sidebarExpandedProvider) : true;
-
-    if (wide && !expanded) {
-      return const Padding(
-        key: Key('accountFooter'),
-        padding: EdgeInsets.all(8),
+    if (collapsed) {
+      return Padding(
+        key: const Key('accountFooter'),
+        padding: const EdgeInsets.symmetric(vertical: AppTokens.sm),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ThemeToggleButton(),
-            SignOutButton(),
+            Tooltip(
+              message: '${profile.fullName} · ${roleLabel(profile.role)}',
+              child: InitialsAvatar(profile.fullName, size: 34),
+            ),
+            const SizedBox(height: AppTokens.xs),
+            controls,
           ],
         ),
       );
     }
 
-    Widget footer = Padding(
+    final nameColor = inSidebar ? p.sidebarText : p.text;
+    final roleColor = inSidebar ? p.sidebarMuted : p.muted;
+
+    return Padding(
       key: const Key('accountFooter'),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.fromLTRB(
+          AppTokens.md, AppTokens.md - 4, AppTokens.xs, AppTokens.md - 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          InitialsAvatar(profile.fullName, size: 36),
+          const SizedBox(width: AppTokens.sm + 2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,51 +273,54 @@ class AccountFooter extends ConsumerWidget {
                   key: const Key('accountFooterName'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: dark ? AppTokens.inkDark : AppTokens.ink,
-                  ),
+                  style: text.labelLarge?.copyWith(color: nameColor),
                 ),
                 Text(
-                  _roleLabel(profile.role),
+                  roleLabel(profile.role),
                   key: const Key('accountFooterRole'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
-                  ),
+                  style: text.bodySmall?.copyWith(color: roleColor),
                 ),
               ],
             ),
           ),
-          // Sign-out and the theme toggle in their own column, separate
-          // from the name/role column above -- two icon-sized controls
-          // side by side would not fit the 220px rail alongside a long
-          // name, but stacked they always do.
-          const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ThemeToggleButton(),
-              SignOutButton(),
-            ],
-          ),
+          controls,
         ],
       ),
     );
+  }
+}
 
-    if (wide) {
-      footer = SizedBox(width: AppShell.expandedRailWidth, child: footer);
-    }
-    return footer;
+/// [SignOutButton], tinted for the dark sidebar when it sits there.
+class _SidebarSignOut extends StatelessWidget {
+  const _SidebarSignOut({required this.onDark});
+
+  final bool onDark;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!onDark) return const SignOutButton();
+    return IconButtonTheme(
+      data: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: Palette.of(context).sidebarMuted,
+          hoverColor: Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: const SignOutButton(),
+    );
   }
 }
 
 /// Cycles [themeModeProvider] system -> light -> dark -> system.
 ///
-/// The icon and tooltip both name the *next* state, not the current one --
-/// this is a control you press to get somewhere, not a status readout.
+/// The icon and tooltip both name the *next* state: this is a control you
+/// press to get somewhere, not a status readout.
 class _ThemeToggleButton extends ConsumerWidget {
-  const _ThemeToggleButton();
+  const _ThemeToggleButton({required this.onDark});
+
+  final bool onDark;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -341,6 +335,8 @@ class _ThemeToggleButton extends ConsumerWidget {
       key: const Key('themeToggle'),
       icon: Icon(icon),
       tooltip: tooltip,
+      color: onDark ? Palette.of(context).sidebarMuted : null,
+      hoverColor: onDark ? Colors.white.withValues(alpha: 0.08) : null,
       onPressed: () => ref.read(themeModeProvider.notifier).cycle(),
     );
   }

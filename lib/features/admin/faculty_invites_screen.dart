@@ -2,6 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_invite.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
@@ -93,7 +100,7 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
           );
       if (!mounted) return;
       setState(() {
-        _notice = 'Invited $email as ${_role.value}. They will hold that role '
+        _notice = 'Invited $email as ${roleLabel(_role)}. They will hold that role '
             'the next time they sign in with a verified address.';
         _email.clear();
         _specialization.clear();
@@ -147,134 +154,170 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
       // AppBar title instead would match the sidebar entry that opens this
       // screen, and so would pass whether or not navigation happened.
       key: const Key('facultyInvitesScreen'),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              // The Invites half of the Users destination's two tabs. Both
-              // tabs carry the same strip: without it this route rendered
-              // with the rail highlighting "Users" and no way back to
-              // Accounts anywhere on the screen (spec §5).
-              const UsersTabs(selected: UsersTab.invites),
-              const SizedBox(height: 16),
-              const Text('Invite a faculty member',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(
-                'They sign up normally with this address. The role is applied '
-                'the first time they sign in with it verified.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('inviteEmail'),
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Institutional email',
-                  hintText: 'surname@isufst.edu.ph',
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<UserRole>(
-                key: const Key('inviteRole'),
-                initialValue: _role,
-                decoration: const InputDecoration(labelText: 'Role'),
-                items: [
-                  for (final r in _invitableRoles)
-                    DropdownMenuItem(value: r, child: Text(r.value)),
-                ],
-                onChanged: (v) => setState(() => _role = v!),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                key: const Key('inviteCollege'),
-                initialValue: _college,
-                decoration: const InputDecoration(labelText: 'College'),
-                items: [
-                  for (final c in _colleges)
-                    DropdownMenuItem(value: c, child: Text(c)),
-                ],
-                onChanged: (v) => setState(() => _college = v!),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('inviteSpecialization'),
-                controller: _specialization,
-                decoration: const InputDecoration(
-                  labelText: 'Specialization (optional)',
-                  helperText:
-                      'Shown beside their name when students pick a panel.',
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!,
-                      key: const Key('error'),
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
-              if (_notice != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_notice!, key: const Key('notice')),
-                ),
-              FilledButton(
-                key: const Key('sendInvite'),
-                onPressed: (_busy || me == null)
-                    ? null
-                    : () => _invite(me.uid, me.email ?? ''),
-                child: Text(_busy ? 'Inviting…' : 'Send invite'),
-              ),
-              const Divider(height: 40),
-              const Text('Invites',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              invitesAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (_, _) => const Text(
-                    'Could not load invites. Only coordinators may view them.'),
-                data: (invites) {
-                  if (invites.isEmpty) {
-                    return const Text('No invites yet.',
-                        key: Key('noInvites'));
-                  }
-                  return Column(
-                    children: [
-                      for (final i in invites)
-                        ListTile(
-                          key: Key('invite_${i.email}'),
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(i.email),
-                          subtitle: Text([
-                            i.role.value,
-                            if (i.college != null) i.college!,
-                            if (i.specialization != null) i.specialization!,
-                          ].join(' · ')),
-                          trailing: i.isConsumed
-                              // Consumed invites are the permanent record of
-                              // a promotion that happened. Retracting one
-                              // would erase evidence, not cancel anything —
-                              // so only open invites offer the action.
-                              ? const Text('Claimed')
-                              : TextButton(
-                                  key: Key('retract_${i.email}'),
-                                  onPressed: () => _retract(i),
-                                  child: const Text('Retract'),
-                                ),
+      child: PageShell(
+        maxWidth: AppTokens.measureWide,
+        kicker: 'Research office',
+        title: 'Users',
+        subtitle: 'Invite faculty by their institutional address. The role '
+            'is applied the first time they sign in with it verified.',
+        children: [
+          // Both Users tabs carry the same strip.
+          const UsersTabs(selected: UsersTab.invites),
+          const Gap.lg(),
+          SplitColumns(
+            primaryFlex: 5,
+            secondaryFlex: 6,
+            primary: [
+              Panel(
+                title: 'Invite a faculty member',
+                icon: Icons.person_add_alt_outlined,
+                emphasis: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FormRow(
+                      label: 'Institutional email',
+                      child: TextField(
+                        key: const Key('inviteEmail'),
+                        controller: _email,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          hintText: 'surname@isufst.edu.ph',
                         ),
+                      ),
+                    ),
+                    FormRow(
+                      label: 'Role',
+                      child: DropdownButtonFormField<UserRole>(
+                        key: const Key('inviteRole'),
+                        initialValue: _role,
+                        items: [
+                          for (final r in _invitableRoles)
+                            DropdownMenuItem(
+                                value: r, child: Text(roleLabel(r))),
+                        ],
+                        onChanged: (v) => setState(() => _role = v!),
+                      ),
+                    ),
+                    FormRow(
+                      label: 'College',
+                      child: DropdownButtonFormField<String>(
+                        key: const Key('inviteCollege'),
+                        initialValue: _college,
+                        isExpanded: true,
+                        items: [
+                          for (final c in _colleges)
+                            DropdownMenuItem(
+                              value: c,
+                              child: Text(c, overflow: TextOverflow.ellipsis),
+                            ),
+                        ],
+                        onChanged: (v) => setState(() => _college = v!),
+                      ),
+                    ),
+                    FormRow(
+                      label: 'Specialization (optional)',
+                      hint: 'Shown beside their name when students pick a '
+                          'panel.',
+                      child: TextField(
+                        key: const Key('inviteSpecialization'),
+                        controller: _specialization,
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      ErrorState(key: const Key('error'), message: _error!),
+                      const Gap.md(),
                     ],
-                  );
-                },
+                    if (_notice != null) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.check_circle_outline,
+                              size: 18, color: Tone.endorsed.color(context)),
+                          const SizedBox(width: AppTokens.sm),
+                          Expanded(
+                              child: Text(_notice!, key: const Key('notice'))),
+                        ],
+                      ),
+                      const Gap.md(),
+                    ],
+                    FilledButton.icon(
+                      key: const Key('sendInvite'),
+                      onPressed: (_busy || me == null)
+                          ? null
+                          : () => _invite(me.uid, me.email ?? ''),
+                      icon: const Icon(Icons.send_outlined, size: 18),
+                      label: Text(_busy ? 'Inviting…' : 'Send invite'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            secondary: [
+              Panel(
+                title: 'Invites',
+                subtitle: 'Open invites can be retracted; claimed ones are '
+                    'the record of a promotion',
+                icon: Icons.mail_outline_rounded,
+                flush: true,
+                child: invitesAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppTokens.md),
+                    child: LoadingState(),
+                  ),
+                  error: (e, _) => Padding(
+                    padding: const EdgeInsets.all(AppTokens.md),
+                    child: ErrorState(
+                      error: e,
+                      message: 'Could not load invites. Only coordinators '
+                          'may view them.',
+                    ),
+                  ),
+                  data: (invites) {
+                    if (invites.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(AppTokens.lg - 4),
+                        child: Text('No invites yet.',
+                            key: const Key('noInvites'),
+                            style: Theme.of(context).textTheme.bodySmall),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final i in invites)
+                          RecordRow(
+                            key: Key('invite_${i.email}'),
+                            leading: InitialsAvatar(i.email, size: 32),
+                            title: i.email,
+                            subtitle: [
+                              roleLabel(i.role),
+                              if (i.college != null) i.college!,
+                              if (i.specialization != null &&
+                                  i.specialization!.isNotEmpty)
+                                i.specialization!,
+                            ].join(', '),
+                            // Consumed invites are the permanent record of
+                            // a promotion; only open ones can be retracted.
+                            trailing: i.isConsumed
+                                ? const ToneBadge(
+                                    label: 'Claimed',
+                                    tone: Tone.endorsed,
+                                    dense: true,
+                                  )
+                                : TextButton(
+                                    key: Key('retract_${i.email}'),
+                                    onPressed: () => _retract(i),
+                                    child: const Text('Retract'),
+                                  ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

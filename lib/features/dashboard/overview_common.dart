@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/motion.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -39,14 +44,121 @@ class OverviewGreeting extends ConsumerWidget {
     return 'Good evening';
   }
 
+  static String textFor(String fullName, DateTime at) {
+    final first = fullName.trim().split(RegExp(r'\s+')).first;
+    final greeting = _band(at);
+    return first.isEmpty ? greeting : '$greeting, $first';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final name = ref.watch(currentUserProvider).valueOrNull?.fullName ?? '';
-    final first = name.trim().split(RegExp(r'\s+')).first;
-    final greeting = _band(now());
+    final compact = Breakpoint.of(context) == Breakpoint.compact;
+    final text = Theme.of(context).textTheme;
     return Text(
-      first.isEmpty ? greeting : '$greeting, $first',
-      style: Theme.of(context).textTheme.headlineSmall,
+      textFor(name, now()),
+      style: compact ? text.headlineSmall : text.headlineMedium,
+    );
+  }
+}
+
+/// The top of every overview: today's date and the reader's office, the
+/// greeting, a one-line state of affairs, and the page's own commands.
+class DashboardHeader extends StatelessWidget {
+  const DashboardHeader({
+    super.key,
+    required this.office,
+    required this.summary,
+    this.actions = const [],
+    this.now = DateTime.now,
+    this.animateKey,
+  });
+
+  /// When this changes, the office line cross-fades (the faculty mode).
+  final Object? animateKey;
+
+  /// Whose desk this is: "Student researcher", "Research office", ….
+  final String office;
+  final Widget summary;
+  final List<Widget> actions;
+  final DateTime Function() now;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = now();
+    final p = Palette.of(context);
+    final text = Theme.of(context).textTheme;
+    return _layout(context, at, p, text);
+  }
+
+  Widget _layout(BuildContext context, DateTime at, Palette p, TextTheme text) {
+    final words = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          transitionBuilder: (child, a) =>
+              FadeTransition(opacity: a, child: child),
+          child: Text(
+            '${Dates.weekday(at)}, ${Dates.day(at)} · $office',
+            key: ValueKey(animateKey ?? office),
+            style: text.labelMedium?.copyWith(color: p.seal),
+          ),
+        ),
+        const SizedBox(height: AppTokens.xs),
+        OverviewGreeting(now: now),
+        const SizedBox(height: AppTokens.xs + 2),
+        summary,
+      ],
+    );
+    if (actions.isEmpty) return words;
+    final compact = Breakpoint.of(context) == Breakpoint.compact;
+    final wrap = Wrap(
+      spacing: AppTokens.sm,
+      runSpacing: AppTokens.sm,
+      children: actions,
+    );
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [words, const SizedBox(height: AppTokens.md), wrap],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: words),
+        const SizedBox(width: AppTokens.lg),
+        Flexible(
+          child: Align(alignment: Alignment.bottomRight, child: wrap),
+        ),
+      ],
+    );
+  }
+}
+
+/// Canonical dashboard body: a wide canvas with a consistent gap between
+/// blocks.
+class DashboardBody extends StatelessWidget {
+  const DashboardBody({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return PageShell(
+      maxWidth: AppTokens.measureWide,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppTokens.lg),
+          // Blocks settle in top to bottom, a beat apart.
+          FadeIn(
+            delay: Duration(milliseconds: 40 * (i < 5 ? i : 5)),
+            child: children[i],
+          ),
+        ],
+      ],
     );
   }
 }

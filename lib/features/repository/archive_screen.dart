@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/motion.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -31,8 +34,11 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
   Widget _framed(List<Widget> children) => KeyedSubtree(
         key: const Key('archive'),
         child: PageShell(
-          title: 'Thesis Archive',
-          subtitle: 'Every approved thesis, across every college.',
+          maxWidth: AppTokens.measureWide,
+          kicker: 'College archive',
+          title: 'Thesis archive',
+          subtitle: 'Every published thesis, across every college. Search '
+              'by title or author, or narrow by college, program and year.',
           children: children,
         ),
       );
@@ -60,8 +66,8 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
     ValueChanged<String?> onSelect,
   ) {
     return Wrap(
-      spacing: AppTokens.sm,
-      runSpacing: AppTokens.sm,
+      spacing: AppTokens.xs + 2,
+      runSpacing: AppTokens.xs + 2,
       children: [
         for (final v in values)
           FilterChip(
@@ -132,34 +138,123 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
         .where((e) => _year == null || e.academicYear == _year)
         .toList();
 
-    return _framed([
-      TextField(
-        key: const Key('archiveSearch'),
-        decoration: const InputDecoration(
-          labelText: 'Search',
-          hintText: 'Search by title or author',
-          prefixIcon: Icon(Icons.search),
-        ),
-        onChanged: (v) => setState(() => _query = v),
+    final activeFilters =
+        [_college, _program, _year].where((v) => v != null).length;
+
+    final search = TextField(
+      key: const Key('archiveSearch'),
+      decoration: const InputDecoration(
+        hintText: 'Search by title or author',
+        prefixIcon: Icon(Icons.search_rounded),
       ),
-      const Gap.md(),
-      _filterRow('college', colleges, _college,
-          (v) => setState(() => _college = v)),
-      const Gap.sm(),
-      _filterRow('program', programs, _program,
-          (v) => setState(() => _program = v)),
-      const Gap.sm(),
-      _filterRow('year', years, _year, (v) => setState(() => _year = v)),
+      onChanged: (v) => setState(() => _query = v),
+    );
+
+    Widget facet(String label, Widget chips) => Padding(
+          padding: const EdgeInsets.only(bottom: AppTokens.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelMedium),
+              const SizedBox(height: AppTokens.sm),
+              chips,
+            ],
+          ),
+        );
+
+    final filters = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        facet('College', _filterRow('college', colleges, _college,
+            (v) => setState(() => _college = v))),
+        facet('Program', _filterRow('program', programs, _program,
+            (v) => setState(() => _program = v))),
+        facet('Academic year', _filterRow('year', years, _year,
+            (v) => setState(() => _year = v))),
+        if (activeFilters > 0)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('clearArchiveFilters'),
+              onPressed: () => setState(() {
+                _college = null;
+                _program = null;
+                _year = null;
+              }),
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+              label: const Text('Clear filters'),
+            ),
+          ),
+      ],
+    );
+
+    final results = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppTokens.sm + 2),
+          child: Text(
+            filtered.length == 1
+                ? '1 thesis'
+                : '${filtered.length} theses',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ),
+        if (filtered.isEmpty)
+          const EmptyState(
+            key: Key('noMatches'),
+            icon: Icons.search_off,
+            title: 'No theses match that search.',
+            message: 'Try a different search term or clear a filter.',
+          )
+        else
+          for (final (i, e) in filtered.indexed)
+            FadeIn(
+              key: ValueKey('fade-${e.thesisId}'),
+              delay: Duration(milliseconds: 30 * (i < 8 ? i : 8)),
+              child: _ArchiveCard(entry: e),
+            ),
+      ],
+    );
+
+    return _framed([
+      search,
       const Gap.lg(),
-      if (filtered.isEmpty)
-        const EmptyState(
-          key: Key('noMatches'),
-          icon: Icons.search_off,
-          title: 'No theses match that search.',
-          message: 'Try a different search term or clear a filter.',
-        )
-      else
-        for (final e in filtered) _ArchiveCard(entry: e),
+      LayoutBuilder(builder: (context, c) {
+        if (c.maxWidth < 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Panel(
+                flush: true,
+                child: ExpansionTile(
+                  tilePadding:
+                      const EdgeInsets.symmetric(horizontal: AppTokens.md),
+                  childrenPadding: const EdgeInsets.fromLTRB(
+                      AppTokens.md, 0, AppTokens.md, AppTokens.sm),
+                  title: Text(activeFilters == 0
+                      ? 'Filters'
+                      : 'Filters ($activeFilters on)'),
+                  children: [filters],
+                ),
+              ),
+              const Gap.md(),
+              results,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 260,
+              child: Panel(title: 'Filters', child: filters),
+            ),
+            const SizedBox(width: AppTokens.lg),
+            Expanded(child: results),
+          ],
+        );
+      }),
     ]);
   }
 }
@@ -179,32 +274,70 @@ class _ArchiveCard extends StatelessWidget {
     final authors =
         entry.authorsLabel.isNotEmpty ? entry.authorsLabel : 'Unknown authors';
 
-    return Card(
-      key: Key('archiveCard-${entry.thesisId}'),
-      margin: const EdgeInsets.only(bottom: AppTokens.sm),
-      child: InkWell(
-        onTap: () => context.push('/archive/${entry.thesisId}'),
-        child: Padding(
-          padding: const EdgeInsets.all(AppTokens.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(entry.title, style: text.titleMedium),
-              const SizedBox(height: AppTokens.xs),
-              Text(authors, style: text.bodyMedium?.copyWith(color: muted)),
-              const SizedBox(height: AppTokens.xs),
-              Text(
-                '${entry.program} · ${entry.academicYear}',
-                style: text.bodySmall?.copyWith(color: muted),
-              ),
-              const SizedBox(height: AppTokens.sm),
-              Text(
-                entry.abstract,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: text.bodyMedium,
-              ),
-            ],
+    final p = Palette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTokens.sm + 4),
+      child: Material(
+        key: Key('archiveCard-${entry.thesisId}'),
+        color: p.paper,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius),
+          side: BorderSide(color: p.rule),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.push('/archive/${entry.thesisId}'),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // The spine: the year the thesis belongs to.
+                Container(
+                  width: 72,
+                  color: p.seal.withValues(alpha: 0.07),
+                  padding: const EdgeInsets.symmetric(vertical: AppTokens.md),
+                  child: Column(
+                    children: [
+                      Icon(Icons.menu_book_outlined, color: p.seal, size: 22),
+                      const SizedBox(height: AppTokens.sm),
+                      Text(
+                        entry.academicYear.replaceAll('-', '–\n'),
+                        textAlign: TextAlign.center,
+                        style: text.labelSmall?.copyWith(color: p.seal),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTokens.md + 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(entry.title, style: text.titleLarge),
+                        const SizedBox(height: AppTokens.xs),
+                        Text(authors,
+                            style: text.bodyMedium?.copyWith(color: muted)),
+                        const SizedBox(height: AppTokens.sm),
+                        Text(
+                          entry.abstract,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodyMedium,
+                        ),
+                        const SizedBox(height: AppTokens.sm),
+                        Text(
+                          [entry.college, entry.program]
+                              .where((x) => x.isNotEmpty)
+                              .join(', '),
+                          style: text.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

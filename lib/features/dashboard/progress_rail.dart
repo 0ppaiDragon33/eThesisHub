@@ -99,76 +99,234 @@ class ProgressRail extends StatelessWidget {
     return RailStage.chapters;
   }
 
+  /// One sentence per stage, for the reader who is standing on it.
+  static String describe(RailStage stage) => switch (stage) {
+        RailStage.draft => 'Group formed, working title named',
+        RailStage.nomination => 'Adviser and panel accept; Coordinator and '
+            'Dean sign off',
+        RailStage.title => 'Candidate titles go before the panel',
+        RailStage.chapters => 'Chapters I–V, reviewed by the adviser',
+        RailStage.preOral => 'Proposal defended before the panel',
+        RailStage.finalDefence => 'Final defence, then the archive',
+      };
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    // Brightness-aware like every other colour consumer in the app; the app
-    // ships `themeMode: ThemeMode.system`.
-    final dark = theme.brightness == Brightness.dark;
-    final done = dark ? AppTokens.endorsedDark : AppTokens.endorsed;
-    final here = dark ? AppTokens.sealDark : AppTokens.seal;
-    final ahead = dark ? AppTokens.ruleDark : AppTokens.rule;
-    // Archived is terminal: every stage is complete. Setting currentIndex
-    // to values.length (past the last stage) makes all stages paint as done.
-    final currentIndex = status == ThesisStatus.archived
+    final archived = status == ThesisStatus.archived;
+    final currentIndex = archived
         ? RailStage.values.length
         : RailStage.values.indexOf(current);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: AppTokens.md,
-          horizontal: AppTokens.sm,
-        ),
-        child: Row(
-          children: [
-            for (final stage in RailStage.values)
-              Expanded(
-                key: Key('railStep-${stage.id}'),
-                child: Column(
-                  children: [
-                    Container(
-                      key: status != ThesisStatus.archived && stage == current
-                          ? Key('railCurrent-${stage.id}')
-                          : null,
-                      width: status != ThesisStatus.archived && stage == current
-                          ? 14
-                          : 11,
-                      height: status != ThesisStatus.archived && stage == current
-                          ? 14
-                          : 11,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: switch (RailStage.values.indexOf(stage)) {
-                          final i when i < currentIndex => done,
-                          final i when i == currentIndex => here,
-                          _ => ahead,
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: AppTokens.xs),
-                    Text(
-                      stage.label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight:
-                            status != ThesisStatus.archived && stage == current
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                        color: status != ThesisStatus.archived &&
-                                stage == current
-                            ? here
-                            : scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+    return LayoutBuilder(builder: (context, constraints) {
+      final vertical = constraints.maxWidth < 560;
+      final steps = [
+        for (var i = 0; i < RailStage.values.length; i++)
+          _JourneyStep(
+            key: Key('railStep-${RailStage.values[i].id}'),
+            stage: RailStage.values[i],
+            number: i + 1,
+            state: i < currentIndex
+                ? _StepState.done
+                : i == currentIndex
+                    ? _StepState.current
+                    : _StepState.ahead,
+            first: i == 0,
+            last: i == RailStage.values.length - 1,
+            vertical: vertical,
+          ),
+      ];
+      return Semantics(
+        label: archived
+            ? 'Thesis journey: every stage complete'
+            : 'Thesis journey: stage ${currentIndex + 1} of '
+                '${RailStage.values.length}, ${current.label}',
+        child: vertical
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: steps,
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [for (final s in steps) Expanded(child: s)],
               ),
+      );
+    });
+  }
+}
+
+enum _StepState { done, current, ahead }
+
+class _JourneyStep extends StatelessWidget {
+  const _JourneyStep({
+    super.key,
+    required this.stage,
+    required this.number,
+    required this.state,
+    required this.first,
+    required this.last,
+    required this.vertical,
+  });
+
+  final RailStage stage;
+  final int number;
+  final _StepState state;
+  final bool first;
+  final bool last;
+  final bool vertical;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final text = theme.textTheme;
+    final dark = theme.brightness == Brightness.dark;
+    final done = dark ? AppTokens.endorsedDark : AppTokens.endorsed;
+    final here = dark ? AppTokens.sealDark : AppTokens.seal;
+    final rule = dark ? AppTokens.ruleDark : AppTokens.rule;
+    final muted = dark ? AppTokens.inkMutedDark : AppTokens.inkMuted;
+    final paper = dark ? AppTokens.surfaceDark : AppTokens.paper;
+    final isCurrent = state == _StepState.current;
+
+    final node = AnimatedContainer(
+      key: isCurrent ? Key('railCurrent-${stage.id}') : null,
+      duration: const Duration(milliseconds: 300),
+      width: isCurrent ? 34 : 28,
+      height: isCurrent ? 34 : 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: switch (state) {
+          _StepState.done => done,
+          _StepState.current => here,
+          _StepState.ahead => paper,
+        },
+        border: state == _StepState.ahead
+            ? Border.all(color: rule, width: 1.5)
+            : null,
+        boxShadow: isCurrent
+            ? [
+                BoxShadow(
+                  color: here.withValues(alpha: 0.25),
+                  blurRadius: 0,
+                  spreadRadius: 5,
+                ),
+              ]
+            : null,
+      ),
+      child: state == _StepState.done
+          ? Icon(Icons.check_rounded, size: 16, color: paper)
+          : Text(
+              '$number',
+              style: text.labelMedium?.copyWith(
+                color: isCurrent ? paper : muted,
+              ),
+            ),
+    );
+
+    final stateWord = switch (state) {
+      _StepState.done => 'Done',
+      _StepState.current => 'Current stage',
+      _StepState.ahead => 'Ahead',
+    };
+
+    final words = Column(
+      crossAxisAlignment:
+          vertical ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          stage.label,
+          textAlign: vertical ? TextAlign.start : TextAlign.center,
+          style: text.labelLarge?.copyWith(
+            color: state == _StepState.ahead ? muted : null,
+            fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+        Text(
+          stateWord,
+          textAlign: vertical ? TextAlign.start : TextAlign.center,
+          style: text.labelSmall?.copyWith(
+            color: switch (state) {
+              _StepState.done => done,
+              _StepState.current => here,
+              _StepState.ahead => muted,
+            },
+          ),
+        ),
+        if (isCurrent && vertical) ...[
+          const SizedBox(height: 2),
+          Text(ProgressRail.describe(stage), style: text.bodySmall),
+        ],
+      ],
+    );
+
+    Color lineColor(bool before) {
+      if (before) return state == _StepState.ahead ? rule : done;
+      return state == _StepState.done ? done : rule;
+    }
+
+    if (vertical) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 40,
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 6,
+                    child: first
+                        ? null
+                        : Container(width: 2, color: lineColor(true)),
+                  ),
+                  node,
+                  Expanded(
+                    child: last
+                        ? const SizedBox()
+                        : Container(width: 2, color: lineColor(false)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppTokens.sm + 4),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                    top: 8, bottom: last ? 0 : AppTokens.md),
+                child: words,
+              ),
+            ),
           ],
         ),
-      ),
+      );
+    }
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 40,
+          child: Row(
+            children: [
+              Expanded(
+                child: first
+                    ? const SizedBox()
+                    : Container(height: 2, color: lineColor(true)),
+              ),
+              node,
+              Expanded(
+                child: last
+                    ? const SizedBox()
+                    : Container(height: 2, color: lineColor(false)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppTokens.sm),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: words,
+        ),
+      ],
     );
   }
 }

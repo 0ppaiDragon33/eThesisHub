@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -24,7 +27,8 @@ class ArchiveQueueScreen extends ConsumerWidget {
   Widget _framed(List<Widget> children) => KeyedSubtree(
         key: const Key('archiveQueue'),
         child: PageShell(
-          title: 'Publish Queue',
+          kicker: 'Research office',
+          title: 'Publish to archive',
           subtitle: 'Theses ready to be added to the college archive.',
           children: children,
         ),
@@ -209,41 +213,68 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
     final uploadedAt = thesis.manuscriptUploadedAt;
     final uploadedLabel = uploadedAt == null
         ? 'Manuscript uploaded'
-        : 'Uploaded ${uploadedAt.year}-${uploadedAt.month.toString().padLeft(2, '0')}-'
-            '${uploadedAt.day.toString().padLeft(2, '0')}';
+        : 'Uploaded ${Dates.day(uploadedAt)}';
 
-    return Card(
+    return Padding(
       key: Key('queueRow-${thesis.id}'),
-      margin: const EdgeInsets.only(bottom: AppTokens.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.md),
+      padding: const EdgeInsets.only(bottom: AppTokens.md),
+      child: Panel(
+        emphasis: true,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Wrap(
+              spacing: AppTokens.sm,
+              runSpacing: AppTokens.xs,
+              children: [
+                ToneBadge(
+                  label: 'Final defence passed',
+                  tone: Tone.endorsed,
+                  dense: true,
+                ),
+                ToneBadge(
+                  label: 'Manuscript on file',
+                  tone: Tone.endorsed,
+                  icon: Icons.picture_as_pdf_outlined,
+                  dense: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTokens.sm + 2),
             Text(title,
                 key: Key('queueTitle-${thesis.id}'),
-                style: text.titleMedium),
+                style: text.titleLarge),
             const SizedBox(height: AppTokens.xs),
             Text(authors, style: text.bodyMedium?.copyWith(color: muted)),
             const SizedBox(height: AppTokens.xs),
             Text(uploadedLabel, style: text.bodySmall?.copyWith(color: muted)),
+            if ((thesis.manuscriptAbstract ?? '').isNotEmpty) ...[
+              const SizedBox(height: AppTokens.sm + 2),
+              Text(
+                thesis.manuscriptAbstract!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: text.bodyMedium,
+              ),
+            ],
             if (_error != null) ...[
-              const SizedBox(height: AppTokens.sm),
+              const SizedBox(height: AppTokens.md),
               ErrorState(message: _error!),
             ],
             const SizedBox(height: AppTokens.md),
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton(
+              child: FilledButton.icon(
                 key: Key('publish-${thesis.id}'),
                 onPressed: _publishing ? null : _publish,
-                child: _publishing
+                icon: _publishing
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Publish to archive'),
+                    : const Icon(Icons.local_library_outlined, size: 18),
+                label: const Text('Publish to archive'),
               ),
             ),
           ],

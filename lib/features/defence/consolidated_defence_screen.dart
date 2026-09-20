@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -130,9 +133,12 @@ class _ConsolidatedDefenceScreenState
     if (isLeader && !defence.isReleased) {
       return _framed(
         [
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text(
+          const EmptyState(
+            icon: Icons.lock_clock_outlined,
+            title: 'Not released yet',
+            message: 'Your adviser releases the panel\'s consolidated '
+                'comments after the defence is closed.',
+            action: Text(
               'The adviser has not released these comments yet.',
               key: Key('notReleasedReason'),
             ),
@@ -205,12 +211,73 @@ class _ConsolidatedDefenceScreenState
       if (seenKeys.add(key)) authorUidsInOrder.add(c.authorUid);
     }
 
+    final text = Theme.of(context).textTheme;
+
     return KeyedSubtree(
       key: const Key('consolidated'),
       child: PageShell(
-        title: defence.type.label,
-        subtitle: 'Consolidated comments',
+        kicker: defence.type.label,
+        title: 'Consolidated comments',
+        subtitle: 'Every remark from the session, grouped by the panel '
+            'member who made it.',
+        actions: [
+          ToneBadge(
+            label: defence.isReleased
+                ? 'Released to the group'
+                : 'Not yet released',
+            tone: defence.isReleased ? Tone.endorsed : Tone.awaiting,
+            icon: defence.isReleased
+                ? Icons.lock_open_rounded
+                : Icons.lock_outline_rounded,
+          ),
+        ],
         children: [
+          if (isAdviser && !defence.isReleased) ...[
+            Panel(
+              emphasis: true,
+              title: 'Release to the group',
+              icon: Icons.send_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_releaseError != null) ...[
+                    ErrorState(
+                        key: const Key('releaseError'),
+                        message: _releaseError!),
+                    const Gap.sm(),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          defence.status != DefenceStatus.completed
+                              ? 'Release once the defence is completed, so '
+                                  'the log is the whole record.'
+                              : 'The group will be able to read everything '
+                                  'below.',
+                          key: defence.status != DefenceStatus.completed
+                              ? const Key('releaseReason')
+                              : null,
+                          style: text.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(width: AppTokens.md),
+                      FilledButton(
+                        key: const Key('releaseComments'),
+                        onPressed: _releasing ||
+                                defence.status != DefenceStatus.completed
+                            ? null
+                            : _release,
+                        child: Text(
+                            _releasing ? 'Releasing…' : 'Release comments'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Gap.md(),
+          ],
           if (canSeeBlocks) ...[
             if (blocks.isEmpty)
               const EmptyState(
@@ -219,65 +286,59 @@ class _ConsolidatedDefenceScreenState
                 message: 'There is nothing to consolidate yet.',
               )
             else
-              for (var i = 0; i < blocks.length; i++)
-                Card(
+              for (var i = 0; i < blocks.length; i++) ...[
+                Panel(
                   key: Key('blockFor-${authorUidsInOrder[i]}'),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          blocks[i].header,
-                          style: Theme.of(context).textTheme.labelLarge,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InitialsAvatar(blocks[i].header, size: 36),
+                      const SizedBox(width: AppTokens.md - 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(blocks[i].header, style: text.labelLarge),
+                            for (final body in blocks[i].bodies)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(top: AppTokens.sm),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          top: 8, right: AppTokens.sm),
+                                      child: Container(
+                                        width: 5,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: Palette.of(context).muted,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(body,
+                                          style: text.bodyMedium),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        for (final body in blocks[i].bodies)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(body),
-                          ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+                const Gap.md(),
+              ],
           ] else
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'The adviser has not released these comments yet.',
-                key: const Key('notReleasedReason'),
-              ),
+            const Text(
+              'The adviser has not released these comments yet.',
+              key: Key('notReleasedReason'),
             ),
-          const Gap.lg(),
-          if (isAdviser && !defence.isReleased) ...[
-            if (_releaseError != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  _releaseError!,
-                  key: const Key('releaseError'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            FilledButton(
-              key: const Key('releaseComments'),
-              onPressed:
-                  _releasing || defence.status != DefenceStatus.completed
-                      ? null
-                      : _release,
-              child: Text(_releasing ? 'Releasing…' : 'Release comments'),
-            ),
-            if (defence.status != DefenceStatus.completed)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Release once the defence is completed, so the log is '
-                  'the whole record.',
-                  key: const Key('releaseReason'),
-                ),
-              ),
-          ],
         ],
       ),
     );

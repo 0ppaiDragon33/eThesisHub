@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/candidate_title.dart';
@@ -339,106 +343,156 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     final locked = released || _submitting;
     final complete = _scores.length == evaluationCriteria.length;
 
-    return KeyedSubtree(
-      key: const Key('evaluation'),
-      child: PageShell(
-        title: defence.type.label,
-        subtitle: 'Research Form 5c',
-        children: [
-          if (released)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                'These evaluations have been released. This sheet is now '
-                'part of the record.',
-                key: const Key('releasedNotice'),
-                style: Theme.of(context).textTheme.bodyMedium,
+    final text = Theme.of(context).textTheme;
+    final pal = Palette.of(context);
+    int subtotal(EvaluationSection section) => _scores.entries
+        .where((e) => criterionFor(e.key)?.section == section)
+        .fold<int>(0, (a, b) => a + b.value);
+    final scored = _scores.length;
+
+    Widget criterionRow(EvaluationCriterion c) {
+      final score = _scores[c.key] ?? 0;
+      return Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.lg - 4, vertical: AppTokens.md - 2),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: pal.rule)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(c.label,
+                          style: text.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                      if (c.prompt.isNotEmpty)
+                        Text(c.prompt, style: text.bodySmall),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppTokens.sm),
+                _stepperButton(
+                  key: Key('minus_${c.key}'),
+                  icon: Icons.remove,
+                  onPressed:
+                      locked ? null : () => _adjust(c.key, -1, c.weight),
+                ),
+                SizedBox(
+                  width: 56,
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: '$score',
+                        style: text.titleMedium,
+                      ),
+                      TextSpan(text: '/${c.weight}', style: text.bodySmall),
+                    ]),
+                    key: Key('score_${c.key}'),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                _stepperButton(
+                  key: Key('plus_${c.key}'),
+                  icon: Icons.add,
+                  onPressed:
+                      locked ? null : () => _adjust(c.key, 1, c.weight),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTokens.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: c.weight == 0 ? 0 : score / c.weight,
+                minHeight: 4,
               ),
             ),
-          for (final section in EvaluationSection.values) ...[
-            Text(section.label, style: Theme.of(context).textTheme.titleMedium),
-            const Gap.sm(),
-            for (final c in evaluationCriteria.where((c) => c.section == section))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text('${c.label} (${c.weight})'),
-                        ),
-                        _stepperButton(
-                          key: Key('minus_${c.key}'),
-                          icon: Icons.remove,
-                          onPressed:
-                              locked ? null : () => _adjust(c.key, -1, c.weight),
-                        ),
-                        SizedBox(
-                          width: 24,
-                          child: Text(
-                            '${_scores[c.key] ?? 0}',
-                            key: Key('score_${c.key}'),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        _stepperButton(
-                          key: Key('plus_${c.key}'),
-                          icon: Icons.add,
-                          onPressed:
-                              locked ? null : () => _adjust(c.key, 1, c.weight),
-                        ),
-                      ],
-                    ),
-                    if (c.prompt.isNotEmpty)
-                      Text(
-                        c.prompt,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    if (c.takesComment) ...[
-                      const Gap.sm(),
-                      TextField(
-                        key: Key('comment_${c.key}'),
-                        controller: _comments[c.key],
-                        enabled: !locked,
-                        decoration: const InputDecoration(labelText: 'Remarks'),
-                        minLines: 1,
-                        maxLines: 3,
-                      ),
-                    ],
-                  ],
-                ),
+            if (c.takesComment) ...[
+              const Gap.sm(),
+              TextField(
+                key: Key('comment_${c.key}'),
+                controller: _comments[c.key],
+                enabled: !locked,
+                decoration: const InputDecoration(hintText: 'Remarks'),
+                minLines: 1,
+                maxLines: 3,
               ),
-            Text(
-              '${section.label} subtotal: '
-              '${_scores.entries.where((e) => criterionFor(e.key)?.section == section).fold<int>(0, (a, b) => a + b.value)} '
-              '/ ${EvaluationSection.sectionTotal}',
-              key: Key(
-                'sectionTotal_${section == EvaluationSection.content ? 'content' : 'presentation'}',
-              ),
-              style: Theme.of(context).textTheme.labelLarge,
+            ],
+          ],
+        ),
+      );
+    }
+
+    final sections = [
+      for (final section in EvaluationSection.values) ...[
+        Panel(
+          title: section.label,
+          icon: section == EvaluationSection.content
+              ? Icons.article_outlined
+              : Icons.record_voice_over_outlined,
+          flush: true,
+          trailing: Text(
+            '${subtotal(section)} / ${EvaluationSection.sectionTotal}',
+            key: Key(
+              'sectionTotal_${section == EvaluationSection.content ? 'content' : 'presentation'}',
+            ),
+            style: text.labelLarge,
+          ),
+          child: Column(
+            children: [
+              for (final c
+                  in evaluationCriteria.where((c) => c.section == section))
+                criterionRow(c),
+            ],
+          ),
+        ),
+      ],
+    ];
+
+    final summary = Panel(
+      title: 'Your evaluation',
+      icon: Icons.fact_check_outlined,
+      emphasis: !released,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (released) ...[
+            ToneBadge(
+              key: const Key('releasedNotice'),
+              label: 'Released, part of the record',
+              tone: Tone.endorsed,
+              icon: Icons.lock_outline_rounded,
             ),
             const Gap.md(),
           ],
-          Text('Final grade', style: Theme.of(context).textTheme.labelMedium),
+          Text('Final grade', style: text.labelMedium),
           Text(
             totalOf(_scores).toString(),
             key: const Key('finalGrade'),
-            style: Theme.of(context).textTheme.titleLarge,
+            style: text.headlineLarge,
+          ),
+          Text(
+            '$scored of ${evaluationCriteria.length} criteria scored',
+            style: text.bodySmall,
           ),
           const Gap.lg(),
-          Text(
-            'Your own rating under §8a. The panel\'s verdict is decided '
-            'separately, after deliberation.',
-            key: const Key('ratingIsYours'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text('Your rating', style: text.labelMedium),
           const Gap.sm(),
           SegmentedButton<PassFail>(
             segments: const [
-              ButtonSegment(value: PassFail.pass, label: Text('Pass')),
-              ButtonSegment(value: PassFail.fail, label: Text('Fail')),
+              ButtonSegment(
+                  value: PassFail.pass,
+                  label: Text('Pass'),
+                  icon: Icon(Icons.check_rounded)),
+              ButtonSegment(
+                  value: PassFail.fail,
+                  label: Text('Fail'),
+                  icon: Icon(Icons.close_rounded)),
             ],
             selected: {?_rating},
             emptySelectionAllowed: true,
@@ -447,54 +501,72 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                 : (selection) =>
                     setState(() => _rating = selection.firstOrNull),
           ),
+          const Gap.sm(),
+          Text(
+            'Your own rating under §8a. The panel\'s verdict is decided '
+            'separately, after deliberation.',
+            key: const Key('ratingIsYours'),
+            style: text.bodySmall,
+          ),
           const Gap.lg(),
-          if (_submitError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _submitError!,
-                key: const Key('submitError'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
+          if (_submitError != null) ...[
+            ErrorState(key: const Key('submitError'), message: _submitError!),
+            const Gap.md(),
+          ],
           if (!released) ...[
-            if (hasSheet)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'You submitted this sheet already. It can be changed '
-                  'until the adviser releases the evaluations.',
-                  key: const Key('editableUntilRelease'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+            if (hasSheet) ...[
+              Text(
+                'You submitted this sheet already. It can be changed until '
+                'the adviser releases the evaluations.',
+                key: const Key('editableUntilRelease'),
+                style: text.bodySmall,
               ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                FilledButton(
-                  key: const Key('submitEvaluation'),
-                  onPressed: !locked && complete && _rating != null
-                      ? () => _submit(uid, myName)
-                      : null,
-                  child: Text(_submitting
-                      ? (hasSheet ? 'Updating…' : 'Submitting…')
-                      : (hasSheet ? 'Update evaluation' : 'Submit evaluation')),
-                ),
-                if (hasSheet)
-                  OutlinedButton(
-                    key: const Key('downloadForm5c'),
-                    onPressed: () => _downloadForm5c(defence, existing, uid),
-                    child: const Text('Download Form 5c'),
-                  ),
-              ],
+              const Gap.sm(),
+            ],
+            FilledButton(
+              key: const Key('submitEvaluation'),
+              onPressed: !locked && complete && _rating != null
+                  ? () => _submit(uid, myName)
+                  : null,
+              child: Text(_submitting
+                  ? (hasSheet ? 'Updating…' : 'Submitting…')
+                  : (hasSheet ? 'Update evaluation' : 'Submit evaluation')),
             ),
-          ] else if (hasSheet)
-            OutlinedButton(
+            if (!complete || _rating == null) ...[
+              const Gap.sm(),
+              Text(
+                !complete
+                    ? 'Score every criterion to submit.'
+                    : 'Choose a rating to submit.',
+                style: text.bodySmall,
+              ),
+            ],
+          ],
+          if (hasSheet) ...[
+            const Gap.sm(),
+            OutlinedButton.icon(
               key: const Key('downloadForm5c'),
               onPressed: () => _downloadForm5c(defence, existing, uid),
-              child: const Text('Download Form 5c'),
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: const Text('Download Form 5c'),
             ),
+          ],
+        ],
+      ),
+    );
+
+    return KeyedSubtree(
+      key: const Key('evaluation'),
+      child: PageShell(
+        maxWidth: AppTokens.measureWide,
+        kicker: 'Research Form 5c',
+        title: defence.type.label,
+        subtitle: 'Score each criterion, then give your own rating.',
+        children: [
+          SplitColumns(
+            primary: sections,
+            secondary: [summary],
+          ),
         ],
       ),
     );

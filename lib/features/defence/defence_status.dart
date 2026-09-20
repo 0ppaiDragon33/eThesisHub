@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/data/models/defence.dart';
 
@@ -34,3 +35,18 @@ Color defenceStatusColor(DefenceStatus status, Brightness brightness) {
       light ? AppTokens.inkMuted : AppTokens.inkMutedDark,
   };
 }
+
+/// The shared [Tone] for a defence status, matching [defenceStatusColor].
+Tone defenceStatusTone(DefenceStatus status) => switch (status) {
+      DefenceStatus.scheduled => Tone.awaiting,
+      DefenceStatus.inProgress => Tone.endorsed,
+      DefenceStatus.completed => Tone.neutral,
+      DefenceStatus.cancelled => Tone.neutral,
+    };
+
+IconData defenceStatusIcon(DefenceStatus status) => switch (status) {
+      DefenceStatus.scheduled => Icons.event_outlined,
+      DefenceStatus.inProgress => Icons.sensors_rounded,
+      DefenceStatus.completed => Icons.check_circle_outline,
+      DefenceStatus.cancelled => Icons.block_rounded,
+    };

@@ -487,9 +487,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             //
             // No Scaffold of its own: the shell above supplies it, and a
             // second one here would stack a second app bar.
-            return const Center(
+            return const PageShell(
               key: Key('nominateBareVisitLoading'),
-              child: CircularProgressIndicator(),
+              children: [LoadingState.page(label: 'Finding your thesis…')],
             );
           }
           return NominateScreen(thesisId: id);
@@ -503,9 +503,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // parameter, and distinguish loading from absent while doing it.
           final id = state.uri.queryParameters['id'];
           if (id == null) {
-            return const Center(
+            return const PageShell(
               key: Key('submitTitlesBareVisitLoading'),
-              child: CircularProgressIndicator(),
+              children: [LoadingState.page(label: 'Finding your thesis…')],
             );
           }
           return SubmitTitlesScreen(thesisId: id);

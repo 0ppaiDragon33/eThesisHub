@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 
-/// The shared presentation primitives for the document direction (D78).
+/// Shared record primitives for the rebuilt interface.
 ///
-/// Content sits on ruled rows under a hard section rule rather than inside
-/// nested bordered panels: the tokens are already a paper-and-ink set, and
-/// the app shell is itself a panel, so panels inside it become boxes within
-/// boxes. Screens compose these instead of hand-rolling a Card with a
-/// ListTile, which is the direct cause of every list in the app looking
-/// slightly different from every other.
+/// Lists are registers of rows with hover and focus states, grouped under a
+/// section heading — not stacks of individual cards.
 
-/// Opens a band: an overline label, an optional trailing count or control,
-/// and the hard rule that separates this band from the one above it.
+/// Opens a section: a sentence-case heading, an optional count or control,
+/// and a short accent under the heading rather than a full-width rule.
 class SectionRule extends StatelessWidget {
   const SectionRule(this.label, {super.key, this.trailing});
 
@@ -21,45 +18,35 @@ class SectionRule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.lg, bottom: AppTokens.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label.toUpperCase(),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        letterSpacing: 0.8,
-                        fontWeight: FontWeight.w700,
-                        color: dark
-                            ? AppTokens.inkMutedDark
-                            : AppTokens.inkMuted,
-                      ),
-                ),
-              ),
-              ?trailing,
-            ],
-          ),
-          const SizedBox(height: AppTokens.sm),
           Container(
-            height: 1.5,
-            color: dark ? AppTokens.inkDark : AppTokens.ink,
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              color: p.seal,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
+          const SizedBox(width: AppTokens.sm + 2),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          ?trailing,
         ],
       ),
     );
   }
 }
 
-/// One record in a list: the ruled row that replaces Card-wrapping-ListTile.
-///
-/// The hairline is on the BOTTOM only, so consecutive rows read as a register
-/// rather than as a stack of separate objects, and the last row sits flush
-/// against whatever follows it.
+/// One record in a register. Hover, press and keyboard focus all show.
 class RecordRow extends StatelessWidget {
   const RecordRow({
     super.key,
@@ -75,31 +62,28 @@ class RecordRow extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
 
-  /// When null the row renders as plain content with no ink response — a row
-  /// that looks interactive but does nothing is worse than one that plainly
-  /// is not.
+  /// When null the row is plain content with no ink response — a row that
+  /// looks interactive but does nothing is worse than one that plainly is
+  /// not.
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
 
     final row = Container(
-      padding: const EdgeInsets.symmetric(vertical: AppTokens.md),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.md, vertical: AppTokens.md - 2),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: dark ? AppTokens.ruleDark : AppTokens.rule,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: p.rule)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (leading != null) ...[
             leading!,
-            const SizedBox(width: AppTokens.sm),
+            const SizedBox(width: AppTokens.md - 4),
           ],
           Expanded(
             child: Column(
@@ -107,18 +91,11 @@ class RecordRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(title,
-                    style: text.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600)),
+                    style: text.bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w600)),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: text.bodySmall?.copyWith(
-                      color: dark
-                          ? AppTokens.inkMutedDark
-                          : AppTokens.inkMuted,
-                    ),
-                  ),
+                  Text(subtitle!, style: text.bodySmall),
                 ],
               ],
             ),
@@ -127,45 +104,53 @@ class RecordRow extends StatelessWidget {
             const SizedBox(width: AppTokens.sm),
             trailing!,
           ],
+          if (onTap != null) ...[
+            const SizedBox(width: AppTokens.xs),
+            Icon(Icons.chevron_right_rounded, color: p.muted, size: 20),
+          ],
         ],
       ),
     );
 
     if (onTap == null) return row;
-    return InkWell(onTap: onTap, child: row);
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(onTap: onTap, child: row),
+    );
   }
 }
 
-/// A labelled field: an overline label above the input, not floating inside
-/// it.
-///
-/// Screens previously passed their own `InputDecoration(labelText: ...)` per
-/// field, which is why no two forms in this app look alike. The label moves
-/// out of the decoration and into the layout, so every form shares one
-/// rhythm and the field itself is free to be a TextField, a dropdown or a
-/// date picker without the label treatment changing.
+/// A labelled field: the label above the input in sentence case, so every
+/// form shares one rhythm whatever the input is.
 class FormRow extends StatelessWidget {
-  const FormRow({super.key, required this.label, required this.child});
+  const FormRow({
+    super.key,
+    required this.label,
+    required this.child,
+    this.hint,
+  });
 
   final String label;
   final Widget child;
 
+  /// A short line under the label saying what belongs in the field.
+  final String? hint;
+
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppTokens.md),
+      padding: const EdgeInsets.only(bottom: AppTokens.md + 2),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  letterSpacing: 0.8,
-                  color: dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
-                ),
-          ),
-          const SizedBox(height: AppTokens.sm),
+          Text(label, style: text.labelLarge?.copyWith(color: p.text)),
+          if (hint != null) ...[
+            const SizedBox(height: 2),
+            Text(hint!, style: text.bodySmall),
+          ],
+          const SizedBox(height: AppTokens.sm - 2),
           child,
         ],
       ),
@@ -173,16 +158,8 @@ class FormRow extends StatelessWidget {
   }
 }
 
-/// Label-and-value pairs for stating facts about a record.
-///
-/// Takes an ordered list rather than a Map: these are read in a deliberate
-/// order (program before academic year), and a Map's iteration order is an
-/// implementation detail to rely on by accident.
-///
-/// Unlike `SectionRule` and `FormRow`, these labels are NOT uppercased. Those
-/// two open something — a band, a field — and their overline is a signpost.
-/// A key fact is read as a sentence beside its value, and shouting half of
-/// every pair makes the pairs harder to scan, not easier.
+/// Label-and-value pairs, read in the order given. Two columns when there
+/// is room; label above value when there is not.
 class KeyFacts extends StatelessWidget {
   const KeyFacts(this.facts, {super.key});
 
@@ -191,33 +168,42 @@ class KeyFacts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final fact in facts)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppTokens.sm),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 130,
-                  child: Text(
-                    fact.label,
-                    style: text.bodySmall?.copyWith(
-                      color:
-                          dark ? AppTokens.inkMutedDark : AppTokens.inkMuted,
-                    ),
-                  ),
-                ),
-                Expanded(child: Text(fact.value, style: text.bodyMedium)),
-              ],
-            ),
-          ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked =
+            constraints.hasBoundedWidth && constraints.maxWidth < 360;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final fact in facts)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppTokens.sm + 2),
+                child: stacked
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(fact.label, style: text.labelSmall),
+                          Text(fact.value, style: text.bodyMedium),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 140,
+                            child: Text(fact.label, style: text.labelSmall),
+                          ),
+                          Expanded(
+                            child: Text(fact.value, style: text.bodyMedium),
+                          ),
+                        ],
+                      ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

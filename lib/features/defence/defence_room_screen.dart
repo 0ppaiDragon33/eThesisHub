@@ -3,10 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/defence/defence_status.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -348,48 +353,56 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     // never see them.
     final isLeader = uid != null && uid == defence.leaderUid;
     if (isLeader) {
-      return _framed(
-        [
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              'The group reads the adviser\'s consolidated comments for '
-              'this defence, not the live log.',
-              key: Key('leaderRefusal'),
-            ),
-          ),
-          FilledButton(
-            key: const Key('goToConsolidated'),
-            onPressed: () => context
-                .go('/defence/room/${widget.defenceId}/consolidated'),
-            child: const Text('View consolidated comments'),
-          ),
-          // D47's group half. Decided from `defence` alone, same as the
-          // isLeader gate above it: the group's route to the numbers is the
-          // paper grading sheet through the subject professor, and no arm
-          // of the rules grants them a read of any evaluation, so nothing
-          // here links to '/grades' -- the screen would load and then deny.
-          if (defence.status == DefenceStatus.completed)
-            if (defence.hasVerdict)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  'Panel verdict: ${defence.panelVerdict!.label}',
-                  key: const Key('leaderVerdict'),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              )
-            else
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  'The panel has not recorded a verdict for this defence '
-                  'yet.',
-                  key: Key('leaderVerdictPending'),
+      final completed = defence.status == DefenceStatus.completed;
+      return _framed([
+        Panel(
+          emphasis: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ToneBadge(
+                label: defenceStatusLabel(defence.status),
+                tone: defenceStatusTone(defence.status),
+                icon: defenceStatusIcon(defence.status),
+              ),
+              const Gap.md(),
+              const Text(
+                'The group reads the adviser\'s consolidated comments for '
+                'this defence, not the live log.',
+                key: Key('leaderRefusal'),
+              ),
+              // D47: the group's route to the numbers is the paper grading
+              // sheet, so nothing here links to '/grades'.
+              if (completed) ...[
+                const Gap.md(),
+                if (defence.hasVerdict)
+                  Text(
+                    'Panel verdict: ${defence.panelVerdict!.label}',
+                    key: const Key('leaderVerdict'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  )
+                else
+                  const Text(
+                    'The panel has not recorded a verdict for this defence '
+                    'yet.',
+                    key: Key('leaderVerdictPending'),
+                  ),
+              ],
+              const Gap.lg(),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  key: const Key('goToConsolidated'),
+                  onPressed: () => context
+                      .go('/defence/room/${widget.defenceId}/consolidated'),
+                  icon: const Icon(Icons.summarize_outlined, size: 18),
+                  label: const Text('View consolidated comments'),
                 ),
               ),
-        ],
-      );
+            ],
+          ),
+        ),
+      ]);
     }
 
     if (commentsAsync.isLoading) {
@@ -448,152 +461,162 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
         : null;
     final isAdviser = uid != null && uid == defence.adviserUid;
 
-    return KeyedSubtree(
-      key: const Key('defenceRoom'),
-      child: PageShell(
-        title: defence.type.label,
-        subtitle: thesisTitle,
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    final at = defence.scheduledAt;
+
+    final log = Panel(
+      title: 'Session log',
+      subtitle: defence.status == DefenceStatus.inProgress
+          ? 'Live. Remarks appear as they are posted'
+          : 'Remarks made during the defence',
+      icon: Icons.forum_outlined,
+      flush: true,
+      trailing: defence.status == DefenceStatus.inProgress
+          ? const ToneBadge(
+              label: 'Live',
+              tone: Tone.endorsed,
+              icon: Icons.sensors_rounded,
+              dense: true,
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The room has no other route to the consolidated view once the
-          // coordinator closes it -- grep for 'consolidated' across lib/
-          // found it nowhere else before this. Visible to everyone who can
-          // already see the room; the leader never reaches this branch at
-          // all (see the isLeader gate above), so this is not their door.
-          //
-          // On the page rather than in the app bar, because the app bar
-          // belongs to the app shell now and it carries the sidebar and
-          // the back control, which every screen needs, rather than one
-          // screen's own link.
+          if (comments.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppTokens.lg - 4),
+              child: Text('No comments yet. Remarks made during the defence '
+                  'will appear here.', style: text.bodySmall),
+            ),
+          for (final c in comments)
+            Container(
+              key: Key('commentRow-${c.id}'),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.lg - 4, vertical: AppTokens.md - 4),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: p.rule)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InitialsAvatar(c.authorName, size: 32),
+                  const SizedBox(width: AppTokens.sm + 2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${c.authorName}, ${c.authorPosition}',
+                            style: text.labelMedium),
+                        const SizedBox(height: 2),
+                        Text(c.body, style: text.bodyMedium),
+                      ],
+                    ),
+                  ),
+                  if (c.createdAt != null)
+                    Text(Dates.time(c.createdAt!), style: text.bodySmall),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(AppTokens.md),
+            child: canComment
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_commentError != null) ...[
+                        ErrorState(
+                          key: const Key('commentError'),
+                          message: _commentError!,
+                        ),
+                        const Gap.sm(),
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const Key('commentBody'),
+                              controller: _bodyController,
+                              decoration: const InputDecoration(
+                                hintText: 'Add a remark to the log',
+                              ),
+                              minLines: 1,
+                              maxLines: 4,
+                            ),
+                          ),
+                          const SizedBox(width: AppTokens.sm),
+                          FilledButton(
+                            key: const Key('postComment'),
+                            style: FilledButton.styleFrom(
+                                minimumSize: const Size(64, 52)),
+                            onPressed: _posting ||
+                                    uid == null ||
+                                    authorPosition == null
+                                ? null
+                                : () => _postComment(
+                                      uid: uid,
+                                      authorName: me?.fullName ?? '',
+                                      authorPosition: authorPosition,
+                                    ),
+                            child: Text(_posting ? 'Posting…' : 'Post'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Icon(Icons.lock_outline_rounded,
+                          size: 18, color: p.muted),
+                      const SizedBox(width: AppTokens.sm),
+                      Expanded(
+                        child: Text(
+                          _commentReasonFor(defence, uid, role),
+                          key: const Key('commentReason'),
+                          style: text.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+
+    final session = Panel(
+      title: 'Session',
+      icon: Icons.event_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              key: const Key('goToConsolidated'),
-              icon: const Icon(Icons.summarize_outlined),
-              label: const Text('Consolidated comments'),
-              onPressed: () => context
-                  .go('/defence/room/${widget.defenceId}/consolidated'),
+            child: ToneBadge(
+              label: defenceStatusLabel(defence.status),
+              tone: defenceStatusTone(defence.status),
+              icon: defenceStatusIcon(defence.status),
             ),
           ),
           const Gap.md(),
-          // Evaluation entry points, only on a closed defence -- Form 5c
-          // exists to score what happened in the room, not one still open.
-          // Above the comment log, since the sheet and the grades are what
-          // brought most panelists and the adviser back to this screen once
-          // the defence is done.
-          if (defence.status == DefenceStatus.completed) ...[
-            if (isPanelist)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton(
-                  key: const Key('goToEvaluate'),
-                  onPressed: () => context
-                      .push('/defence/room/${widget.defenceId}/evaluate'),
-                  child: Text(myEvaluation != null
-                      ? 'Your evaluation — ${myEvaluation.total}/100'
-                      : 'Evaluate'),
-                ),
-              ),
-            // The adviser always, once closed; the panel, the coordinator
-            // and the dean once the adviser has released the grades. The
-            // rules already grant all four the released evaluations and
-            // §6 names all four as viewers of this screen -- without the
-            // last two, two authorised roles could reach the grades only
-            // by typing the URL. Naming this on `evaluationsReleased`,
-            // never `isReleased`: that flag is the comment log's own
-            // release to the group, three lines away in defence.dart and
-            // easy to reach for by mistake.
-            if (isAdviser ||
-                ((isPanelist || isCoordinator || role == UserRole.dean) &&
-                    defence.evaluationsReleased))
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton(
-                    key: const Key('goToGrades'),
-                    onPressed: () => context
-                        .push('/defence/room/${widget.defenceId}/grades'),
-                    child: const Text('Grades'),
-                  ),
-                ),
-              ),
-            const Gap.md(),
+          FactLine(
+            label: 'When',
+            value: at == null
+                ? 'Date to be confirmed'
+                : '${Dates.weekday(at)}, ${Dates.day(at)}, ${Dates.time(at)}',
+          ),
+          FactLine(label: 'Venue', value: defence.venue),
+          FactLine(
+            label: 'Panel',
+            value: defence.panelUids.length == 1
+                ? '1 member'
+                : '${defence.panelUids.length} members',
+          ),
+          if (_statusError != null) ...[
+            ErrorState(key: const Key('statusError'), message: _statusError!),
+            const Gap.sm(),
           ],
-          for (final c in comments)
-            Card(
-              key: Key('commentRow-${c.id}'),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${c.authorName} — ${c.authorPosition}',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(c.body),
-                  ],
-                ),
-              ),
-            ),
-          if (comments.isEmpty)
-            const EmptyState(
-              icon: Icons.forum_outlined,
-              title: 'No comments yet',
-              message: 'Remarks made during the defence will appear here.',
-            ),
-          const Gap.lg(),
-          if (canComment) ...[
-            TextField(
-              key: const Key('commentBody'),
-              controller: _bodyController,
-              decoration: const InputDecoration(labelText: 'Add a comment'),
-              minLines: 2,
-              maxLines: 4,
-            ),
-            const Gap.md(),
-            if (_commentError != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  _commentError!,
-                  key: const Key('commentError'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            FilledButton(
-              key: const Key('postComment'),
-              onPressed: _posting || uid == null || authorPosition == null
-                  ? null
-                  : () => _postComment(
-                        uid: uid,
-                        authorName: me?.fullName ?? '',
-                        authorPosition: authorPosition,
-                      ),
-              child: Text(_posting ? 'Posting…' : 'Post comment'),
-            ),
-          ] else
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                _commentReasonFor(defence, uid, role),
-                key: const Key('commentReason'),
-              ),
-            ),
-          const Gap.lg(),
-          if (_statusError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _statusError!,
-                key: const Key('statusError'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          // Hidden rather than merely disabled for anyone but the
-          // coordinator: the rules deny the write either way, but a button
-          // that always fails is worse than no button at all.
+          // Hidden rather than disabled for anyone but the coordinator.
           if (isCoordinator && defence.status == DefenceStatus.scheduled) ...[
             Builder(builder: (context) {
               final opensAt = defence.scheduledAt?.subtract(defenceOpenGrace);
@@ -602,23 +625,22 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FilledButton(
+                  FilledButton.icon(
                     key: const Key('openDefence'),
                     onPressed: _statusBusy || tooEarly
                         ? null
                         : () => _setStatus(DefenceStatus.inProgress),
-                    child: Text(_statusBusy ? 'Opening…' : 'Open defence'),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                    label: Text(_statusBusy ? 'Opening…' : 'Open defence'),
                   ),
-                  // Say WHEN, not just no. A dead button with no reason
-                  // reads as a broken app; the coordinator needs to know
-                  // whether to wait or to move the schedule.
+                  // Say when, not just no.
                   if (tooEarly) ...[
                     const Gap.sm(),
                     Text(
                       'Opens ${_formatDateTime(opensAt)}, 30 minutes '
                           'before the scheduled time.',
                       key: const Key('openNotYet'),
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: text.bodySmall,
                     ),
                   ],
                 ],
@@ -627,27 +649,92 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             const Gap.sm(),
             OutlinedButton(
               key: const Key('editSchedule'),
-              onPressed:
-                  _statusBusy ? null : () => _editSchedule(defence),
+              onPressed: _statusBusy ? null : () => _editSchedule(defence),
               child: const Text('Edit schedule'),
             ),
-            const Gap.sm(),
-            // Cancelling is for a defence created by mistake -- wrong
-            // thesis, duplicate, abandoned. One that actually happened is
-            // closed instead, so its log stays a record of what was said.
+            // For a defence created by mistake; one that happened is
+            // closed instead so its log stays a record.
             TextButton(
               key: const Key('cancelDefence'),
+              style: TextButton.styleFrom(
+                  foregroundColor: Tone.returned.color(context)),
               onPressed: _statusBusy ? null : _confirmCancel,
               child: const Text('Cancel this defence'),
             ),
           ],
           if (isCoordinator && defence.status == DefenceStatus.inProgress)
-            FilledButton(
+            FilledButton.icon(
               key: const Key('closeDefence'),
               onPressed:
                   _statusBusy ? null : () => _setStatus(DefenceStatus.completed),
-              child: Text(_statusBusy ? 'Closing…' : 'Close defence'),
+              icon: const Icon(Icons.stop_rounded, size: 20),
+              label: Text(_statusBusy ? 'Closing…' : 'Close defence'),
             ),
+        ],
+      ),
+    );
+
+    final completed = defence.status == DefenceStatus.completed;
+    final canSeeGrades = isAdviser ||
+        ((isPanelist || isCoordinator || role == UserRole.dean) &&
+            defence.evaluationsReleased);
+
+    final after = Panel(
+      title: 'Records',
+      icon: Icons.fact_check_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OutlinedButton.icon(
+            key: const Key('goToConsolidated'),
+            icon: const Icon(Icons.summarize_outlined, size: 18),
+            label: const Text('Consolidated comments'),
+            onPressed: () =>
+                context.go('/defence/room/${widget.defenceId}/consolidated'),
+          ),
+          // Form 5c scores what happened, so only on a closed defence.
+          if (completed && isPanelist) ...[
+            const Gap.sm(),
+            FilledButton(
+              key: const Key('goToEvaluate'),
+              onPressed: () =>
+                  context.push('/defence/room/${widget.defenceId}/evaluate'),
+              child: Text(myEvaluation != null
+                  ? 'Your evaluation: ${myEvaluation.total}/100'
+                  : 'Evaluate'),
+            ),
+          ],
+          // Released grades: `evaluationsReleased`, never `isReleased`.
+          if (completed && canSeeGrades) ...[
+            const Gap.sm(),
+            OutlinedButton(
+              key: const Key('goToGrades'),
+              onPressed: () =>
+                  context.push('/defence/room/${widget.defenceId}/grades'),
+              child: const Text('Grades'),
+            ),
+          ],
+          if (!completed) ...[
+            const Gap.sm(),
+            Text('Evaluation opens once the defence is closed.',
+                style: text.bodySmall),
+          ],
+        ],
+      ),
+    );
+
+    return KeyedSubtree(
+      key: const Key('defenceRoom'),
+      child: PageShell(
+        maxWidth: AppTokens.measureWide,
+        kicker: defence.type.label,
+        title: thesisTitle ?? defence.type.label,
+        children: [
+          SplitColumns(
+            secondaryFirstWhenStacked: true,
+            primary: [log],
+            secondary: [session, after],
+          ),
         ],
       ),
     );

@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -108,9 +114,12 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
     return DropdownButtonFormField<String>(
       key: Key(key),
       initialValue: value,
+      isExpanded: true,
       decoration: InputDecoration(labelText: label),
       items: [
-        for (final o in options) DropdownMenuItem(value: o, child: Text(o)),
+        for (final o in options)
+          DropdownMenuItem(
+              value: o, child: Text(o, overflow: TextOverflow.ellipsis)),
       ],
       onChanged: (v) => onChanged(v!),
     );
@@ -124,86 +133,140 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
     // event and see a stale `null`.
     final signedIn = ref.watch(authStateProvider).valueOrNull != null;
 
-    // No Scaffold and no AppBar: the app shell owns both for every
-    // signed-in route now.
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+    final text = Theme.of(context).textTheme;
+
+    Widget pair(Widget a, Widget b) => LayoutBuilder(
+          builder: (context, c) => c.maxWidth < 480
+              ? Column(children: [a, const Gap.md(), b])
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: a),
+                    const SizedBox(width: AppTokens.md),
+                    Expanded(child: b),
+                  ],
+                ),
+        );
+
+    return PageShell(
+      kicker: 'Step 1 of 3',
+      title: 'Create your thesis group',
+      subtitle: 'Next you will nominate an adviser and panel, then submit '
+          'candidate titles once the Dean approves.',
+      children: [
+        Panel(
+          title: 'Working title',
+          icon: Icons.title_rounded,
+          child: FormRow(
+            label: 'Working title',
+            hint: 'Your initial idea. Candidate titles come later.',
+            child: TextField(
+              key: const Key('workingTitle'),
+              controller: _workingTitle,
+              maxLines: 2,
+              minLines: 1,
+            ),
+          ),
+        ),
+        const Gap.md(),
+        Panel(
+          title: 'Members',
+          subtitle: 'You are already listed as the group leader. Add '
+              'everyone else.',
+          icon: Icons.groups_outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                key: const Key('workingTitle'),
-                controller: _workingTitle,
-                decoration: const InputDecoration(
-                  labelText: 'Working title',
-                  helperText:
-                      'Your initial idea. Candidate titles come later.',
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Your groupmates'),
-              // Says plainly that the leader is already counted. Labelled
-              // "Group members", this read as "list the group", and a
-              // leader added themselves again — which printed them twice
-              // on Form 1 and pushed a five-person group onto a second
-              // sheet.
-              Text(
-                'You are already listed as the group leader. Add everyone '
-                'else here.',
-                style: Theme.of(context).textTheme.bodySmall,
+              Row(
+                children: [
+                  Icon(Icons.star_outline_rounded,
+                      size: 20, color: Palette.of(context).seal),
+                  const SizedBox(width: AppTokens.sm),
+                  Text('You, group leader', style: text.labelLarge),
+                ],
               ),
               for (var i = 0; i < _members.length; i++)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextField(
-                    key: Key('member$i'),
-                    controller: _members[i],
-                    decoration: const InputDecoration(
-                        labelText: 'Surname, First name'),
+                  padding: const EdgeInsets.only(top: AppTokens.sm + 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: Key('member$i'),
+                          controller: _members[i],
+                          decoration: InputDecoration(
+                            labelText: 'Member ${i + 1}',
+                            hintText: 'Surname, First name',
+                          ),
+                        ),
+                      ),
+                      if (_members.length > 1)
+                        IconButton(
+                          tooltip: 'Remove member ${i + 1}',
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () {
+                            final removed = _members[i];
+                            setState(() => _members.removeAt(i));
+                            // Disposed after the frame that stops using it.
+                            WidgetsBinding.instance.addPostFrameCallback(
+                                (_) => removed.dispose());
+                          },
+                        ),
+                    ],
                   ),
                 ),
+              const Gap.sm(),
               Align(
                 alignment: Alignment.centerLeft,
-                child: TextButton(
+                child: TextButton.icon(
                   key: const Key('addMember'),
                   onPressed: () => setState(
                       () => _members.add(TextEditingController())),
-                  child: const Text('+ Add member'),
+                  icon: const Icon(Icons.person_add_alt_outlined, size: 18),
+                  label: const Text('Add member'),
                 ),
-              ),
-              const SizedBox(height: 8),
-              _dropdown('college', 'College', _college, kColleges,
-                  (v) => setState(() => _college = v)),
-              const SizedBox(height: 12),
-              _dropdown('program', 'Program', _program, kPrograms,
-                  (v) => setState(() => _program = v)),
-              const SizedBox(height: 12),
-              _dropdown('semester', 'Semester', _semester, kSemesters,
-                  (v) => setState(() => _semester = v)),
-              const SizedBox(height: 12),
-              _dropdown('academicYear', 'Academic year', _academicYear,
-                  kAcademicYears, (v) => setState(() => _academicYear = v)),
-              const SizedBox(height: 20),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!,
-                      key: const Key('error'),
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
-                ),
-              FilledButton(
-                key: const Key('submit'),
-                onPressed: (_busy || !signedIn) ? null : _submit,
-                child: Text(_busy ? 'Creating…' : 'Create group'),
               ),
             ],
           ),
         ),
-      ),
+        const Gap.md(),
+        Panel(
+          title: 'Academic record',
+          icon: Icons.account_balance_outlined,
+          child: Column(
+            children: [
+              pair(
+                _dropdown('college', 'College', _college, kColleges,
+                    (v) => setState(() => _college = v)),
+                _dropdown('program', 'Program', _program, kPrograms,
+                    (v) => setState(() => _program = v)),
+              ),
+              const Gap.md(),
+              pair(
+                _dropdown('semester', 'Semester', _semester, kSemesters,
+                    (v) => setState(() => _semester = v)),
+                _dropdown('academicYear', 'Academic year', _academicYear,
+                    kAcademicYears,
+                    (v) => setState(() => _academicYear = v)),
+              ),
+            ],
+          ),
+        ),
+        const Gap.lg(),
+        if (_error != null) ...[
+          ErrorState(key: const Key('error'), message: _error!),
+          const Gap.md(),
+        ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: const Key('submit'),
+            onPressed: (_busy || !signedIn) ? null : _submit,
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: Text(_busy ? 'Creating…' : 'Create group'),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -2,6 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -80,64 +85,66 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
     final stalled = ref.watch(stalledThesesProvider);
 
     // No Scaffold and no AppBar: the app shell owns both.
+    const title = 'Stalled nominations';
+    const subtitle = 'A nominee declined on each of these, so the thesis '
+        'cannot advance. Reopening returns it to draft so the group can '
+        'nominate again.';
+
     return KeyedSubtree(
       key: const Key('stalledThesesScreen'),
-      child: stalled.when(
-        loading: () => const Center(
-          key: Key('stalledLoading'),
-          child: CircularProgressIndicator(),
-        ),
-        // Distinct from "nothing is stuck". A coordinator who cannot read
-        // this must not be told the queue is clear.
-        error: (e, _) => const Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(
-            child: Text(
-              'Could not load stalled theses.',
-              key: Key('stalledError'),
+      child: PageShell(
+        kicker: 'Research office',
+        title: title,
+        subtitle: subtitle,
+        children: [
+          if (_error != null) ...[
+            ErrorState(key: const Key('error'), message: _error!),
+            const Gap.md(),
+          ],
+          stalled.when(
+            loading: () => const LoadingState(
+              key: Key('stalledLoading'),
+              label: 'Checking nominations…',
             ),
-          ),
-        ),
-        data: (theses) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  _error!,
-                  key: const Key('error'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            if (theses.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: Center(
-                  child: Text('Nothing is stuck.', key: Key('empty')),
-                ),
-              )
-            else
-              for (final t in theses)
-                Card(
-                  child: ListTile(
-                    title: Text(t.workingTitle),
-                    subtitle: const Text(
-                      'A nominee declined, so this thesis cannot advance. '
-                      'Reopening returns it to draft for the group to '
-                      're-nominate.',
-                    ),
-                    trailing: FilledButton(
-                      key: Key('reopen-${t.id}'),
-                      onPressed: (uid == null || _busy.contains(t.id))
-                          ? null
-                          : () => _reopen(uid, t.id),
-                      child: const Text('Reopen'),
+            // Distinct from "nothing is stuck".
+            error: (e, _) => ErrorState(
+              key: const Key('stalledError'),
+              error: e,
+              message: 'Could not load stalled theses.',
+            ),
+            data: (theses) => theses.isEmpty
+                ? const EmptyState(
+                    key: Key('empty'),
+                    icon: Icons.done_all_rounded,
+                    title: 'Nothing is stuck',
+                    message: 'Every nomination in progress is still waiting '
+                        'on answers, not blocked by a decline.',
+                  )
+                : Panel(
+                    flush: true,
+                    child: Column(
+                      children: [
+                        for (final t in theses)
+                          RecordRow(
+                            leading: Icon(Icons.report_outlined,
+                                color: Tone.returned.color(context)),
+                            title: t.workingTitle,
+                            subtitle: [t.program, t.academicYear]
+                                .where((x) => x.isNotEmpty)
+                                .join(', '),
+                            trailing: FilledButton(
+                              key: Key('reopen-${t.id}'),
+                              onPressed: (uid == null || _busy.contains(t.id))
+                                  ? null
+                                  : () => _reopen(uid, t.id),
+                              child: const Text('Reopen'),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

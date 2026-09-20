@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -60,48 +62,45 @@ class StatusChip extends StatelessWidget {
           'college archive.',
       };
 
-  static Color _colorFor(ThesisStatus status, Brightness brightness) {
-    final light = brightness == Brightness.light;
-    return switch (status) {
-      // Draft is the only state that is nobody's responsibility yet, so it
-      // is the only one drawn in plain ink.
-      ThesisStatus.draft =>
-        light ? AppTokens.inkMuted : AppTokens.inkMutedDark,
-      ThesisStatus.nominationPendingConforme ||
-      ThesisStatus.nominationPendingCoordinator ||
-      ThesisStatus.nominationPendingDean ||
-      ThesisStatus.titlePendingDefence =>
-        light ? AppTokens.awaiting : AppTokens.awaitingDark,
-      ThesisStatus.nominationApproved || ThesisStatus.titleApproved ||
-      ThesisStatus.archived =>
-        light ? AppTokens.endorsed : AppTokens.endorsedDark,
-      ThesisStatus.titleRejected =>
-        light ? AppTokens.returned : AppTokens.returnedDark,
-    };
-  }
+  /// The meaning of a status, in the shared [Tone] vocabulary.
+  static Tone toneFor(ThesisStatus status) => switch (status) {
+        // Draft is the only state that is nobody's responsibility yet.
+        ThesisStatus.draft => Tone.neutral,
+        ThesisStatus.nominationPendingConforme ||
+        ThesisStatus.nominationPendingCoordinator ||
+        ThesisStatus.nominationPendingDean ||
+        ThesisStatus.titlePendingDefence =>
+          Tone.awaiting,
+        ThesisStatus.nominationApproved ||
+        ThesisStatus.titleApproved ||
+        ThesisStatus.archived =>
+          Tone.endorsed,
+        ThesisStatus.titleRejected => Tone.returned,
+      };
+
+  /// A glyph per status, so the word is never the only carrier besides
+  /// colour.
+  static IconData iconFor(ThesisStatus status) => switch (status) {
+        ThesisStatus.draft => Icons.edit_note_rounded,
+        ThesisStatus.nominationPendingConforme =>
+          Icons.how_to_reg_outlined,
+        ThesisStatus.nominationPendingCoordinator =>
+          Icons.inventory_2_outlined,
+        ThesisStatus.nominationPendingDean => Icons.gavel_outlined,
+        ThesisStatus.nominationApproved => Icons.verified_outlined,
+        ThesisStatus.titlePendingDefence => Icons.forum_outlined,
+        ThesisStatus.titleApproved => Icons.task_alt_rounded,
+        ThesisStatus.titleRejected => Icons.undo_rounded,
+        ThesisStatus.archived => Icons.local_library_outlined,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final color = _colorFor(status, brightness);
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: dense ? AppTokens.sm : AppTokens.md - AppTokens.xs,
-        vertical: dense ? 2 : AppTokens.xs + 1,
-      ),
-      decoration: BoxDecoration(
-        // A tinted field with a matching hairline, not a solid fill: a
-        // status here is an annotation on a document, and a saturated block
-        // of colour would outweigh the thesis title it sits beside.
-        color: color.withValues(alpha: 0.10),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
-        borderRadius: BorderRadius.circular(AppTokens.radiusSm),
-      ),
-      child: Text(
-        labelFor(status),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
-      ),
+    return ToneBadge(
+      label: labelFor(status),
+      tone: toneFor(status),
+      icon: iconFor(status),
+      dense: dense,
     );
   }
 }
@@ -123,6 +122,18 @@ class ChapterStatusWords {
           'Read the feedback, then upload the next version.',
         ChapterStatus.approved =>
           'Locked. Only your adviser can reopen it.',
+      };
+
+  static Tone toneFor(ChapterStatus status) => switch (status) {
+        ChapterStatus.submitted => Tone.awaiting,
+        ChapterStatus.revise => Tone.returned,
+        ChapterStatus.approved => Tone.endorsed,
+      };
+
+  static IconData iconFor(ChapterStatus status) => switch (status) {
+        ChapterStatus.submitted => Icons.schedule_outlined,
+        ChapterStatus.revise => Icons.undo_rounded,
+        ChapterStatus.approved => Icons.lock_outline_rounded,
       };
 
   /// The same palette [StatusChip] uses, so a chapter waiting on someone

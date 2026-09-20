@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/core/widgets/status_chip.dart';
+import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -132,47 +140,172 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
       child: StreamBuilder(
         stream: _queueStream,
         builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final theses = snap.data!;
-          return ListView(
-            padding: const EdgeInsets.all(16),
+          final theses = snap.data;
+          return PageShell(
+            maxWidth: AppTokens.measureWide,
+            kicker: widget.isDean ? 'Office of the Dean' : 'Research office',
+            title: widget.isDean
+                ? 'Approve nominations'
+                : 'Recommend nominations',
+            subtitle: widget.isDean
+                ? 'The Coordinator has recommended each of these. Check the '
+                    'roster, then approve to issue Form 1.'
+                : 'Every nominee below has accepted. Check the roster, then '
+                    'recommend each to the Dean.',
             children: [
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!,
-                      key: const Key('error'),
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
-                ),
-              if (theses.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 24),
-                  child: Center(
-                    child: Text('Nothing waiting.', key: Key('empty')),
-                  ),
+              if (_error != null) ...[
+                ErrorState(key: const Key('error'), message: _error!),
+                const Gap.md(),
+              ],
+              if (snap.hasError)
+                ErrorState(
+                    error: snap.error,
+                    message: 'Could not load this queue.')
+              else if (theses == null)
+                const LoadingState(label: 'Loading the queue…')
+              else if (theses.isEmpty)
+                const EmptyState(
+                  key: Key('empty'),
+                  icon: Icons.task_alt_rounded,
+                  title: 'Nothing waiting',
+                  message: 'Every nomination in this queue has been decided.',
                 )
               else
-                for (final t in theses)
-                  Card(
-                    child: ListTile(
-                      title: Text(t.workingTitle),
-                      subtitle: Text(
-                          '${t.program} · ${t.semester} · ${t.academicYear}'),
-                      trailing: FilledButton(
-                        key: Key('act-${t.id}'),
-                        onPressed: (uid == null || _busy.contains(t.id))
-                            ? null
-                            : () => _act(uid, t.id),
-                        child: Text(label),
-                      ),
-                    ),
+                for (final t in theses) ...[
+                  _DecisionCard(
+                    thesis: t,
+                    actionKey: Key('act-${t.id}'),
+                    label: label,
+                    busy: _busy.contains(t.id),
+                    onAct: uid == null ? null : () => _act(uid, t.id),
                   ),
+                  const Gap.md(),
+                ],
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// One nomination under review: the group, and the roster being signed
+/// off, beside the decision button.
+class _DecisionCard extends ConsumerStatefulWidget {
+  const _DecisionCard({
+    required this.thesis,
+    required this.actionKey,
+    required this.label,
+    required this.busy,
+    required this.onAct,
+  });
+
+  final Thesis thesis;
+  final Key actionKey;
+  final String label;
+  final bool busy;
+  final VoidCallback? onAct;
+
+  @override
+  ConsumerState<_DecisionCard> createState() => _DecisionCardState();
+}
+
+class _DecisionCardState extends ConsumerState<_DecisionCard> {
+  // One subscription for the card's lifetime (see the queue stream note).
+  late final Stream<List<Nomination>> _nominations = ref
+      .read(thesisRepositoryProvider)
+      .watchNominations(widget.thesis.id);
+
+  static String _position(NominationPosition p) => switch (p) {
+        NominationPosition.adviser => 'Adviser',
+        NominationPosition.panelist => 'Panel member',
+        NominationPosition.coordinator => 'Research Coordinator',
+        NominationPosition.dean => 'Dean',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.thesis;
+    final text = Theme.of(context).textTheme;
+
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        StatusChip(t.status, dense: true),
+        const Gap.sm(),
+        Text(t.workingTitle, style: text.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          [t.program, t.semester, t.academicYear]
+              .where((x) => x.isNotEmpty)
+              .join(', '),
+          style: text.bodySmall,
+        ),
+        if (t.memberNames.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text('Members: ${t.memberNames.join(', ')}', style: text.bodySmall),
+        ],
+        const Gap.md(),
+        FilledButton.icon(
+          key: widget.actionKey,
+          onPressed: widget.busy ? null : widget.onAct,
+          icon: widget.busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.verified_outlined, size: 18),
+          label: Text(widget.label),
+        ),
+      ],
+    );
+
+    final roster = StreamBuilder<List<Nomination>>(
+      stream: _nominations,
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return ErrorState(
+              error: snap.error, message: 'Could not load the roster.');
+        }
+        final list = snap.data;
+        if (list == null) return const LoadingState();
+        final sorted = [...list]
+          ..sort((a, b) => a.position.index.compareTo(b.position.index));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Roster', style: text.labelMedium),
+            for (final n in sorted)
+              PersonLine(
+                name: n.nomineeName,
+                role: n.exOfficio
+                    ? '${_position(n.position)}, ex officio'
+                    : _position(n.position),
+                trailing: switch (n.conformeStatus) {
+                  ConformeStatus.accepted => const ToneBadge(
+                      label: 'Accepted', tone: Tone.endorsed, dense: true),
+                  ConformeStatus.declined => const ToneBadge(
+                      label: 'Declined', tone: Tone.returned, dense: true),
+                  ConformeStatus.pending => const ToneBadge(
+                      label: 'Pending', tone: Tone.awaiting, dense: true),
+                  ConformeStatus.exOfficio => const ToneBadge(
+                      label: 'Ex officio', tone: Tone.neutral, dense: true),
+                },
+              ),
+          ],
+        );
+      },
+    );
+
+    return Panel(
+      emphasis: true,
+      child: SplitColumns(
+        stackBelow: 720,
+        primaryFlex: 5,
+        secondaryFlex: 4,
+        primary: [identity],
+        secondary: [roster],
       ),
     );
   }

@@ -30,8 +30,11 @@ class DeactivatedScreen extends StatelessWidget {
       // do next. A subtitle paraphrasing the paragraph under it is the
       // duplication this direction removes.
       children: [
-        Icon(Icons.no_accounts_outlined,
-            size: 48, color: theme.colorScheme.error),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Icon(Icons.no_accounts_outlined,
+              size: 40, color: theme.colorScheme.error),
+        ),
         const SizedBox(height: AppTokens.md),
         const Text(
           'Your account has been deactivated by the College Research '
@@ -40,7 +43,13 @@ class DeactivatedScreen extends StatelessWidget {
           'restored.',
         ),
         const SizedBox(height: AppTokens.lg),
-        const SignOutButton(),
+        const Row(
+          children: [
+            SignOutButton(),
+            SizedBox(width: AppTokens.xs),
+            Text('Sign out'),
+          ],
+        ),
       ],
     );
   }

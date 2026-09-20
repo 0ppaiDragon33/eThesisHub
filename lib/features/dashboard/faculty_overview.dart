@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/metrics.dart';
+import 'package:ethesishub/core/design/motion.dart';
 import 'package:ethesishub/core/widgets/needs_you_queue.dart';
-import 'package:ethesishub/core/widgets/page_shell.dart';
-import 'package:ethesishub/core/widgets/stat_tile.dart';
-import 'package:ethesishub/core/widgets/stat_tile_grid.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/advisees_screen.dart';
+import 'package:ethesishub/features/dashboard/agenda.dart';
 import 'package:ethesishub/features/dashboard/overview_common.dart';
+import 'package:ethesishub/features/dashboard/panels_screen.dart';
+import 'package:ethesishub/features/notifications/notifications_screen.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
@@ -66,50 +70,25 @@ final _defencesThisWeekProvider = FutureProvider<int>((ref) async {
   return defencesThisWeek(defences).length;
 });
 
-/// Where a faculty member lands: a greeting, what needs them regardless of
-/// mode (spec D17), and the four figures for whichever position -- adviser
-/// or panelist -- the mode switch currently has them looking at (spec D5).
+/// The faculty desk.
 ///
-/// The queue below the tiles and the tiles themselves read from genuinely
-/// different sources on purpose: [facultyNeedsYouProvider] never reads the
-/// mode, the tiles always do.
+/// The inbox is mode-independent (spec D17) and leads the page. The figure
+/// strip and the roster below follow the mode switch in the top bar
+/// (spec D5): an adviser sees their advisees and chapters waiting, a
+/// panelist sees the title sets waiting. The week's defences sit beside
+/// them whichever position brought the member to each.
 class FacultyOverview extends ConsumerWidget {
   const FacultyOverview({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The accent POSITION per tile stays a compile-time constant fixed by
-    // where the tile sits; brightness only selects between that position's
-    // light and dark variant (spec D14, and every other colour consumer in
-    // the app does the same).
-    final brightness = Theme.of(context).brightness;
     final modeAsync = ref.watch(effectiveFacultyModeProvider);
     final needsYouAsync = ref.watch(facultyNeedsYouProvider);
 
-    // This used to call `requireValue`, on the strength of
-    // `FacultyDashboard` resolving the mode before it ever built this
-    // widget. That dashboard is gone — `/overview` renders this directly
-    // now — so the unresolved case is reachable and has to be answered
-    // here.
-    //
-    // It is answered per-SECTION, not per-page: the greeting, the
-    // headline and the queue below are all mode-independent (spec D17)
-    // and have their own loading states already, so only the tile grid
-    // waits. Replacing the whole overview with a spinner or an error is
-    // what spec §9 forbids — a dashboard that replaces itself strands the
-    // reader with no way to reach the screens that do work.
-    //
-    // And the mode is not defaulted while it resolves. That was the
-    // hard-won rule in faculty_dashboard.dart: guessing shows a panelist
-    // the adviser's four tiles and then swaps them out from under them on
-    // every launch.
-    //
-    // `modeAsync.isLoading` (no snapshot yet) is a genuinely different
-    // question from `mode == null` (a resolved answer of "neither
-    // capability"): `effectiveFacultyModeProvider` can now settle on `null`
-    // as real data, and treating that the same as "still resolving" would
-    // spin the tile section's loading state forever for a member on leave
-    // rather than simply omitting it (spec §6).
+    // `isLoading` (no answer yet) and `mode == null` (a resolved answer of
+    // "neither position") are different: the second simply omits the
+    // mode-specific sections rather than spinning forever. The mode is
+    // never guessed while it resolves.
     final stillResolving = modeAsync.isLoading;
     final mode = modeAsync.valueOrNull;
 
@@ -119,99 +98,146 @@ class FacultyOverview extends ConsumerWidget {
     final defencesThisWeekAsync = ref.watch(_defencesThisWeekProvider);
     final panelCountAsync = ref.watch(panelPositionCountProvider);
     final titleSetsAsync = ref.watch(_titleSetsToReviewProvider);
+    final myDefencesAsync = ref.watch(myDefencesProvider);
+    final idsAsync = ref.watch(myThesisIdsProvider);
 
-    return PageShell(
+    final office = switch (mode) {
+      FacultyMode.adviser => 'Faculty, adviser view',
+      FacultyMode.panelist => 'Faculty, panelist view',
+      null => 'Faculty',
+    };
+
+    final conforme = Metric<List<({String thesisId, Nomination nomination})>>(
+      label: 'Conforme requests',
+      value: nominationsAsync,
+      format: (l) => '${l.length}',
+      highlight: (l) => l.isNotEmpty,
+      caption: (l) => l.isEmpty ? 'None to answer' : 'Accept or decline',
+      onTap: () => context.go('/nominations'),
+    );
+    final week = Metric<int>(
+      label: 'Defences this week',
+      value: defencesThisWeekAsync,
+      format: (n) => '$n',
+      onTap: () => context.go('/defences'),
+    );
+
+    final Widget modeSection;
+    if (stillResolving) {
+      modeSection =
+          const LoadingState(label: 'Working out which positions you hold…');
+    } else if (mode == null) {
+      modeSection = const SizedBox.shrink();
+    } else if (mode == FacultyMode.adviser) {
+      modeSection = MetricStrip(metrics: [
+        Metric<int>(
+          label: 'Chapters awaiting your review',
+          value: chaptersAwaitingAsync,
+          format: (n) => '$n',
+          highlight: (n) => n > 0,
+          onTap: () => context.go('/advisees'),
+        ),
+        Metric<List<Thesis>>(
+          label: 'Advisees',
+          value: adviseesAsync,
+          format: (l) => '${l.length}',
+          onTap: () => context.go('/advisees'),
+        ),
+        week,
+        conforme,
+      ]);
+    } else {
+      modeSection = MetricStrip(metrics: [
+        Metric<int>(
+          label: 'Title sets to review',
+          value: titleSetsAsync,
+          format: (n) => '$n',
+          highlight: (n) => n > 0,
+          onTap: () => context.go('/panels'),
+        ),
+        Metric<int>(
+          label: 'Panels',
+          value: panelCountAsync,
+          format: (n) => '$n',
+          onTap: () => context.go('/panels'),
+        ),
+        week,
+        conforme,
+      ]);
+    }
+
+    final Widget roster = switch (mode) {
+      FacultyMode.adviser when !stillResolving =>
+        const AdviseeRegister(limit: 5, title: 'Your advisees'),
+      FacultyMode.panelist when !stillResolving => idsAsync.when(
+          loading: () => const LoadingState(),
+          error: (e, _) =>
+              ErrorState(error: e, message: 'Could not load your panels.'),
+          data: (ids) => PanelRegister(thesisIds: ids, reviewOnly: true),
+        ),
+      _ => const SizedBox.shrink(),
+    };
+
+    return KeyedSubtree(
       key: const Key('facultyOverview'),
-      maxWidth: AppTokens.measureWide,
-      children: [
-        const OverviewGreeting(),
-        const Gap.sm(),
-        NeedsYouHeadline(
-          items: needsYouAsync,
-          suffix: 'your advisees and panels',
-        ),
-        const Gap.lg(),
-        if (stillResolving)
-          const LoadingState(label: 'Working out which positions you hold…')
-        else if (mode == null)
-          // Neither designated nor holding a position for either mode --
-          // resolved, not loading. There is no tile set to show and none is
-          // owed; the greeting, headline and queue above and below already
-          // cover everything mode-independent (spec D17).
-          const SizedBox.shrink()
-        else
-          StatTileGrid(
-            children: mode == FacultyMode.adviser
-                ? [
-                    AsyncStatTile<int>(
-                      label: 'Chapters awaiting your review',
-                      value: chaptersAwaitingAsync,
-                      format: (n) => '$n',
-                      icon: Icons.hourglass_top_outlined,
-                      accent: AppTokens.accentFor(3, brightness),
-                    ),
-                    AsyncStatTile<List<Thesis>>(
-                      label: 'Advisees',
-                      value: adviseesAsync,
-                      format: (l) => '${l.length}',
-                      icon: Icons.school_outlined,
-                      accent: AppTokens.accentFor(0, brightness),
-                    ),
-                    AsyncStatTile<int>(
-                      label: 'Defences this week',
-                      value: defencesThisWeekAsync,
-                      format: (n) => '$n',
-                      icon: Icons.event_note_outlined,
-                      accent: AppTokens.accentFor(1, brightness),
-                    ),
-                    AsyncStatTile<
-                        List<({String thesisId, Nomination nomination})>>(
-                      label: 'Conforme requests',
-                      value: nominationsAsync,
-                      format: (l) => '${l.length}',
-                      icon: Icons.drafts_outlined,
-                      accent: AppTokens.accentFor(2, brightness),
-                    ),
-                  ]
-                : [
-                    AsyncStatTile<int>(
-                      label: 'Panels',
-                      value: panelCountAsync,
-                      format: (n) => '$n',
-                      icon: Icons.forum_outlined,
-                      accent: AppTokens.accentFor(0, brightness),
-                    ),
-                    AsyncStatTile<int>(
-                      label: 'Title sets to review',
-                      value: titleSetsAsync,
-                      format: (n) => '$n',
-                      icon: Icons.fact_check_outlined,
-                      accent: AppTokens.accentFor(3, brightness),
-                    ),
-                    AsyncStatTile<int>(
-                      label: 'Defences this week',
-                      value: defencesThisWeekAsync,
-                      format: (n) => '$n',
-                      icon: Icons.event_note_outlined,
-                      accent: AppTokens.accentFor(1, brightness),
-                    ),
-                    AsyncStatTile<
-                        List<({String thesisId, Nomination nomination})>>(
-                      label: 'Conforme requests',
-                      value: nominationsAsync,
-                      format: (l) => '${l.length}',
-                      icon: Icons.drafts_outlined,
-                      accent: AppTokens.accentFor(2, brightness),
-                    ),
-                  ],
+      child: DashboardBody(children: [
+        DashboardHeader(
+          office: office,
+          animateKey: mode,
+          summary: NeedsYouHeadline(
+            items: needsYouAsync,
+            suffix: 'your advisees and panels',
           ),
-        const Gap.lg(),
-        NeedsYouQueue(
-          items: needsYouAsync,
-          emptyTitle: 'All caught up',
-          emptyMessage: 'Nothing needs your attention right now.',
+          actions: [
+            OutlinedButton.icon(
+              onPressed: () => context.go('/nominations'),
+              icon: const Icon(Icons.drafts_outlined, size: 18),
+              label: const Text('Nomination inbox'),
+            ),
+            if (mode != null)
+              ModeSwap<FacultyMode>(
+                value: mode,
+                forward: mode == FacultyMode.panelist,
+                child: FilledButton.icon(
+                  onPressed: () => context.go(
+                      mode == FacultyMode.adviser ? '/advisees' : '/panels'),
+                  icon: Icon(
+                    mode == FacultyMode.adviser
+                        ? Icons.school_outlined
+                        : Icons.forum_outlined,
+                    size: 18,
+                  ),
+                  label: Text(mode == FacultyMode.adviser
+                      ? 'My advisees'
+                      : 'My panels'),
+                ),
+              ),
+          ],
         ),
-      ],
+        ModeSwap<FacultyMode?>(
+          value: stillResolving ? null : mode,
+          forward: mode != FacultyMode.adviser,
+          child: modeSection,
+        ),
+        SplitColumns(
+          primary: [
+            NeedsYouQueue(
+              items: needsYouAsync,
+              emptyTitle: 'All caught up',
+              emptyMessage: 'Nothing needs your attention right now.',
+            ),
+            ModeSwap<FacultyMode?>(
+              value: stillResolving ? null : mode,
+              forward: mode != FacultyMode.adviser,
+              child: roster,
+            ),
+          ],
+          secondary: [
+            WeekAgenda(defences: myDefencesAsync),
+            const RecentNotificationsPanel(),
+          ],
+        ),
+      ]),
     );
   }
 }
