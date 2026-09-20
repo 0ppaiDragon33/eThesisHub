@@ -171,6 +171,14 @@ void main() {
 
     final doc = await db.collection('users').doc('u1').get();
     expect(doc.data()!['active'], isFalse);
+
+    // The deactivation is recorded, naming who did it and to whom.
+    final logs = await db.collection('auditLogs').get();
+    expect(logs.docs, hasLength(1));
+    final entry = logs.docs.first.data();
+    expect(entry['action'], 'account.deactivated');
+    expect(entry['actorUid'], 'coord-1');
+    expect(entry['targetId'], 'u1');
   });
 
   testWidgets('cancelling the deactivation writes nothing', (tester) async {

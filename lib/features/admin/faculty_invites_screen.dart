@@ -13,6 +13,7 @@ import 'package:ethesishub/data/models/faculty_invite.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 /// Lets a Research Coordinator promote someone to faculty, coordinator or
 /// dean without opening the Firebase Console.
@@ -98,6 +99,17 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
             college: _college,
             specialization: _specialization.text.trim(),
           );
+      // Best-effort, after the invite is written, swallowing its own failure
+      // so the log never blocks issuing an invite.
+      try {
+        await ref.read(auditServiceProvider).log(
+              actorUid: myUid,
+              action: 'invite.issued',
+              targetType: 'invite',
+              targetId: email,
+              metadata: {'role': _role.value},
+            );
+      } catch (_) {/* audit must never block the action */}
       if (!mounted) return;
       setState(() {
         _notice = 'Invited $email as ${roleLabel(_role)}. They will hold that role '

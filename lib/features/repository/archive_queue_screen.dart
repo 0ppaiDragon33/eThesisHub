@@ -16,6 +16,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
@@ -198,6 +199,15 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
             finalDefenceId: finalDefence.id,
             coordinatorUid: coordinatorUid,
           );
+      // Best-effort, after the entry is published, swallowing its own failure.
+      try {
+        await ref.read(auditServiceProvider).log(
+              actorUid: coordinatorUid,
+              action: 'archive.published',
+              targetType: 'thesis',
+              targetId: thesis.id,
+            );
+      } catch (_) {/* audit must never block the action */}
     } catch (e) {
       if (!mounted) return;
       setState(() {

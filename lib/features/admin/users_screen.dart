@@ -13,6 +13,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/admin_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Active-state buckets the coordinator can narrow by. Defaults to
@@ -755,10 +756,27 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
 
     try {
       await ref.read(userRepositoryProvider).setActive(widget.user.uid, value);
+      await _logActiveChange(value);
       if (mounted && _error != null) setState(() => _error = null);
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
+  }
+
+  /// Records who switched an account on or off. Best-effort and after the
+  /// write: it swallows its own failure so the log can never block or undo
+  /// the action — the same treatment the sign-in audit entries already get.
+  Future<void> _logActiveChange(bool active) async {
+    final actor = ref.read(signedInUidProvider);
+    if (actor == null) return;
+    try {
+      await ref.read(auditServiceProvider).log(
+            actorUid: actor,
+            action: active ? 'account.activated' : 'account.deactivated',
+            targetType: 'user',
+            targetId: widget.user.uid,
+          );
+    } catch (_) {/* audit must never block the action */}
   }
 
   @override

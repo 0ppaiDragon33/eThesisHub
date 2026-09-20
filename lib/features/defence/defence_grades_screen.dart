@@ -12,6 +12,7 @@ import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 /// Research Form 5c, the other half: release, deliberation and the
 /// recorded verdict.
@@ -87,6 +88,15 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       await ref
           .read(defenceRepositoryProvider)
           .releaseEvaluations(defenceId: defenceId, adviserUid: adviserUid);
+      // Best-effort, after the release, swallowing its own failure.
+      try {
+        await ref.read(auditServiceProvider).log(
+              actorUid: adviserUid,
+              action: 'evaluations.released',
+              targetType: 'defence',
+              targetId: defenceId,
+            );
+      } catch (_) {/* audit must never block the action */}
     } on StateError catch (e) {
       if (mounted) setState(() => _releaseError = e.message);
     } catch (_) {
