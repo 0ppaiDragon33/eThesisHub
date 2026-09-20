@@ -10,6 +10,7 @@ import 'package:ethesishub/core/design/motion.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/double_back_to_exit.dart';
 import 'package:ethesishub/providers/sidebar_provider.dart';
 
 /// Tells shell content (the account footer, mainly) where it is drawn, so
@@ -115,7 +116,8 @@ class AppShell extends ConsumerWidget {
     final list = destinations.valueOrNull ?? const <ShellDestination>[];
 
     final showNav = !loading && list.length >= minDestinations;
-    final deep = !loading &&
+    final deep =
+        !loading &&
         !suppressBackControl &&
         isDeeperThanDestination(list, location);
     final owner = loading ? null : destinationForLocation(list, location);
@@ -131,139 +133,145 @@ class AppShell extends ConsumerWidget {
     // tests keep exercising the desktop arrow with no per-test override.
     final showArrow = !isNativeMobile;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final wide = width >= railBreakpoint;
-        final canExpand = width >= fullSidebarFrom;
-        final collapsed = !(canExpand && expandedPref);
+    // On a phone, a top-level destination has nothing left to pop, so the OS
+    // back gesture would jump away or drop out of the app on a stray swipe.
+    // There it is guarded behind a confirming second back; a pushed screen
+    // (deep) still pops in one gesture, and web/desktop keep the arrow.
+    final guardExit = isNativeMobile && showNav && !deep;
 
-        // Narrow keeps navigation behind a drawer rather than in a bottom
-        // bar. A bottom bar left an inner screen with no navigation at all,
-        // and this app's longest role (coordinator) overflows five slots, so
-        // the bar could not hold every destination anyway.
-        final narrowMenu = !wide && (loading || showNav);
+    return DoubleBackToExit(
+      enabled: guardExit,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final wide = width >= railBreakpoint;
+          final canExpand = width >= fullSidebarFrom;
+          final collapsed = !(canExpand && expandedPref);
 
-        final topBar = _TopBar(
-          title: title,
-          parent: deep && owner != null && owner.route != location
-              ? owner.label
-              : null,
-          showBack: deep && showArrow,
-          onBack: () => _back(context),
-          trailing: trailing,
-          showBrand: !wide && !narrowMenu,
-          showMenu: narrowMenu,
-        );
+          // Narrow keeps navigation behind a drawer rather than in a bottom
+          // bar. A bottom bar left an inner screen with no navigation at all,
+          // and this app's longest role (coordinator) overflows five slots, so
+          // the bar could not hold every destination anyway.
+          final narrowMenu = !wide && (loading || showNav);
 
-        // The top bar above the page, in the one shape all three layouts
-        // use.
-        //
-        // The bar is a hard 60px and a Column hands its non-flex children an
-        // unbounded main axis, so the bar asks for 60 however little there
-        // is — and any viewport shorter than that overflows and stripes the
-        // screen. Flutter web hands the app a near-zero canvas for a frame
-        // or two before the browser settles its size, and a desktop window
-        // can be dragged shorter at any time.
-        //
-        // The bar keeps its natural height inside an OverflowBox, so it
-        // never lays out against an impossible constraint and pushes the
-        // overflow inside itself; the SizedBox caps what the Column is asked
-        // for, and the ClipRect throws away what does not fit. Nothing
-        // readable fits in a viewport this small — the point is only that
-        // the shell yields quietly instead of raising.
-        Widget barAndBody() {
-          final barHeight = math.min(_TopBar.height, constraints.maxHeight);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ClipRect(
-                child: SizedBox(
-                  height: barHeight,
-                  child: OverflowBox(
-                    alignment: Alignment.topCenter,
-                    minHeight: 0,
-                    maxHeight: _TopBar.height,
-                    child: topBar,
-                  ),
-                ),
-              ),
-              Expanded(child: child),
-            ],
+          final topBar = _TopBar(
+            title: title,
+            parent: deep && owner != null && owner.route != location
+                ? owner.label
+                : null,
+            showBack: deep && showArrow,
+            onBack: () => _back(context),
+            trailing: trailing,
+            showBrand: !wide && !narrowMenu,
+            showMenu: narrowMenu,
           );
-        }
 
-        Widget narrowScaffold(Widget drawerContent) {
-          return Scaffold(
-            drawer: Drawer(
-              width: expandedRailWidth,
-              backgroundColor: Palette.of(context).sidebar,
-              child: drawerContent,
-            ),
-            body: SafeArea(bottom: false, child: barAndBody()),
-          );
-        }
-
-        if (wide && (loading || showNav)) {
-          return Scaffold(
-            body: Row(
+          // The top bar above the page, in the one shape all three layouts
+          // use.
+          //
+          // The bar is a hard 60px and a Column hands its non-flex children an
+          // unbounded main axis, so the bar asks for 60 however little there
+          // is — and any viewport shorter than that overflows and stripes the
+          // screen. Flutter web hands the app a near-zero canvas for a frame
+          // or two before the browser settles its size, and a desktop window
+          // can be dragged shorter at any time.
+          //
+          // The bar keeps its natural height inside an OverflowBox, so it
+          // never lays out against an impossible constraint and pushes the
+          // overflow inside itself; the SizedBox caps what the Column is asked
+          // for, and the ClipRect throws away what does not fit. Nothing
+          // readable fits in a viewport this small — the point is only that
+          // the shell yields quietly instead of raising.
+          Widget barAndBody() {
+            final barHeight = math.min(_TopBar.height, constraints.maxHeight);
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _Sidebar(
-                  loading: loading,
-                  destinations: list,
-                  selected: owner,
-                  collapsed: collapsed,
-                  canExpand: canExpand,
-                  onToggle: () =>
-                      ref.read(sidebarExpandedProvider.notifier).toggle(),
-                  onSelect: (d) => _navigate(context, d.route),
-                  footer: accountFooter,
+                ClipRect(
+                  child: SizedBox(
+                    height: barHeight,
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: 0,
+                      maxHeight: _TopBar.height,
+                      child: topBar,
+                    ),
+                  ),
                 ),
-                Expanded(child: barAndBody()),
+                Expanded(child: child),
               ],
+            );
+          }
+
+          Widget narrowScaffold(Widget drawerContent) {
+            return Scaffold(
+              drawer: Drawer(
+                width: expandedRailWidth,
+                backgroundColor: Palette.of(context).sidebar,
+                child: drawerContent,
+              ),
+              body: SafeArea(bottom: false, child: barAndBody()),
+            );
+          }
+
+          if (wide && (loading || showNav)) {
+            return Scaffold(
+              body: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Sidebar(
+                    loading: loading,
+                    destinations: list,
+                    selected: owner,
+                    collapsed: collapsed,
+                    canExpand: canExpand,
+                    onToggle: () =>
+                        ref.read(sidebarExpandedProvider.notifier).toggle(),
+                    onSelect: (d) => _navigate(context, d.route),
+                    footer: accountFooter,
+                  ),
+                  Expanded(child: barAndBody()),
+                ],
+              ),
+            );
+          }
+
+          // Narrow while the role is still resolving: the drawer holds the
+          // same inert skeleton the sidebar shows, so the reader can see
+          // navigation is coming rather than finding an empty drawer.
+          if (narrowMenu && loading) {
+            return narrowScaffold(
+              const SafeArea(child: _SidebarSkeleton(collapsed: false)),
+            );
+          }
+
+          if (!showNav) {
+            return Scaffold(body: SafeArea(bottom: false, child: barAndBody()));
+          }
+
+          // Narrow with navigation: the same ink sidebar the wide layout
+          // uses, behind the drawer. Selecting closes the drawer before
+          // navigating — one left open over the page you just asked for is
+          // the bug this guards against.
+          return narrowScaffold(
+            _Sidebar(
+              loading: false,
+              destinations: list,
+              selected: owner,
+              collapsed: false,
+              canExpand: false,
+              onToggle: () {},
+              onSelect: (d) {
+                Navigator.of(context).pop();
+                _navigate(context, d.route);
+              },
+              footer: accountFooter,
             ),
           );
-        }
-
-        // Narrow while the role is still resolving: the drawer holds the
-        // same inert skeleton the sidebar shows, so the reader can see
-        // navigation is coming rather than finding an empty drawer.
-        if (narrowMenu && loading) {
-          return narrowScaffold(
-            const SafeArea(child: _SidebarSkeleton(collapsed: false)),
-          );
-        }
-
-        if (!showNav) {
-          return Scaffold(
-            body: SafeArea(bottom: false, child: barAndBody()),
-          );
-        }
-
-        // Narrow with navigation: the same ink sidebar the wide layout
-        // uses, behind the drawer. Selecting closes the drawer before
-        // navigating — one left open over the page you just asked for is
-        // the bug this guards against.
-        return narrowScaffold(
-          _Sidebar(
-            loading: false,
-            destinations: list,
-            selected: owner,
-            collapsed: false,
-            canExpand: false,
-            onToggle: () {},
-            onSelect: (d) {
-              Navigator.of(context).pop();
-              _navigate(context, d.route);
-            },
-            footer: accountFooter,
-          ),
-        );
-      },
+        },
+      ),
     );
   }
-
 }
 
 class _TopBar extends StatelessWidget {
@@ -348,8 +356,11 @@ class _TopBar extends StatelessWidget {
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Icon(Icons.chevron_right_rounded,
-                            size: 18, color: p.muted),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: p.muted,
+                        ),
                       ),
                     ],
                     Flexible(
@@ -398,8 +409,9 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final width =
-        collapsed ? AppShell.collapsedRailWidth : AppShell.expandedRailWidth;
+    final width = collapsed
+        ? AppShell.collapsedRailWidth
+        : AppShell.expandedRailWidth;
 
     return AnimatedContainer(
       // The shell's one navigation surface, at every width: the wide
@@ -444,14 +456,15 @@ class _Sidebar extends StatelessWidget {
                     behavior: HitTestBehavior.translucent,
                     onTap: canExpand ? onToggle : null,
                     child: loading
-                      ? _SidebarSkeleton(collapsed: collapsed)
-                      : ListView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal:
-                                collapsed ? AppTokens.sm + 4 : AppTokens.md - 4,
+                        ? _SidebarSkeleton(collapsed: collapsed)
+                        : ListView(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: collapsed
+                                  ? AppTokens.sm + 4
+                                  : AppTokens.md - 4,
+                            ),
+                            children: _sectioned(context),
                           ),
-                          children: _sectioned(context),
-                        ),
                   ),
                 ),
                 if (footer != null) ...[
@@ -479,16 +492,17 @@ class _Sidebar extends StatelessWidget {
     var isFirstGroup = true;
 
     for (final section in ShellSection.order) {
-      final items =
-          destinations.where((d) => d.section == section).toList();
+      final items = destinations.where((d) => d.section == section).toList();
       if (items.isEmpty) continue;
 
       if (collapsed) {
         if (!isFirstGroup) {
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppTokens.sm),
-            child: Divider(height: 1, color: Palette.of(context).sidebarRule),
-          ));
+          children.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppTokens.sm),
+              child: Divider(height: 1, color: Palette.of(context).sidebarRule),
+            ),
+          );
         }
       } else {
         children.add(_SectionLabel(section, isFirst: isFirstGroup));
@@ -538,10 +552,10 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: p.sidebarMuted,
-              letterSpacing: 0.8,
-              fontWeight: FontWeight.w700,
-            ),
+          color: p.sidebarMuted,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -612,8 +626,9 @@ class _NavItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: text.labelLarge?.copyWith(
                         color: selected ? Colors.white : p.sidebarText,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                   ),
@@ -632,10 +647,7 @@ class _NavItem extends StatelessWidget {
         child: item,
       );
     }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: item,
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 4), child: item);
   }
 }
 
@@ -658,8 +670,9 @@ class _BrandHeader extends StatelessWidget {
     final content = SizedBox(
       height: 72,
       child: Row(
-        mainAxisAlignment:
-            collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisAlignment: collapsed
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.start,
         children: [
           if (!collapsed) const SizedBox(width: AppTokens.lg - 4),
           BrandEmblem(size: 34, background: p.seal),
@@ -729,21 +742,22 @@ class _SidebarSkeleton extends StatelessWidget {
     return Padding(
       key: const Key('shellSkeleton'),
       padding: const EdgeInsets.symmetric(horizontal: AppTokens.md),
-      child: Shimmer(child: Column(
-        children: [
-          for (var i = 0; i < 5; i++)
-            Container(
-              height: 16,
-              width: collapsed ? 28 : double.infinity,
-              margin: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: p.sidebarRule,
-                borderRadius: BorderRadius.circular(4),
+      child: Shimmer(
+        child: Column(
+          children: [
+            for (var i = 0; i < 5; i++)
+              Container(
+                height: 16,
+                width: collapsed ? 28 : double.infinity,
+                margin: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: p.sidebarRule,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
-            ),
-        ],
-      )),
+          ],
+        ),
+      ),
     );
   }
 }
-
