@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -736,6 +737,22 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
   Object? _error;
 
   Future<void> _setActive(bool value) async {
+    // Only deactivation needs a guard: it signs the person out and locks them
+    // out until reactivated, and the control is a switch a stray tap flips.
+    // Reactivating is harmless and stays a single tap.
+    if (!value) {
+      final confirmed = await confirmAction(
+        context,
+        title: 'Deactivate this account?',
+        message: '${widget.user.fullName} will be signed out and cannot sign '
+            'back in until an account is reactivated.',
+        confirmLabel: 'Deactivate',
+        cancelLabel: 'Keep active',
+        confirmKey: Key('confirmDeactivate-${widget.user.uid}'),
+      );
+      if (!confirmed || !mounted) return;
+    }
+
     try {
       await ref.read(userRepositoryProvider).setActive(widget.user.uid, value);
       if (mounted && _error != null) setState(() => _error = null);

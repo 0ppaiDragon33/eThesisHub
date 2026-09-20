@@ -5,6 +5,7 @@ import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/candidate_title.dart';
@@ -144,6 +145,19 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   }
 
   Future<void> _publish() async {
+    // Publishing makes the manuscript readable to the whole college and is
+    // the one write in this screen with a public, lasting effect — worth a
+    // pause even though a coordinator can retract it.
+    final confirmed = await confirmAction(
+      context,
+      title: 'Publish to the archive?',
+      message: 'The manuscript becomes readable to everyone in the college. '
+          'It can be retracted, but only by a coordinator.',
+      confirmLabel: 'Publish',
+      confirmKey: Key('confirmPublish-${widget.thesis.id}'),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() {
       _publishing = true;
       _error = null;

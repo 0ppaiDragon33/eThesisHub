@@ -256,8 +256,25 @@ void main() {
 
     await tester.tap(find.byKey(const Key('publish-t1')));
     await tester.pumpAndSettle();
+    // Publishing confirms first — it makes the manuscript public.
+    await tester.tap(find.byKey(const Key('confirmPublish-t1')));
+    await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('queueRow-t1')), findsNothing);
+  });
+
+  testWidgets('cancelling the publish leaves the row', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(
+        verdict: 'pass', withManuscript: true)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('publish-t1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('queueRow-t1')), findsOneWidget);
   });
 
   testWidgets('an empty queue says so, and is not an error', (tester) async {

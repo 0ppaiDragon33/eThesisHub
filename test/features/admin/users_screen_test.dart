@@ -165,9 +165,30 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
     await tester.tap(find.byKey(const Key('activeSwitch-u1')));
     await tester.pumpAndSettle();
+    // Deactivation confirms first.
+    await tester.tap(find.byKey(const Key('confirmDeactivate-u1')));
+    await tester.pumpAndSettle();
 
     final doc = await db.collection('users').doc('u1').get();
     expect(doc.data()!['active'], isFalse);
+  });
+
+  testWidgets('cancelling the deactivation writes nothing', (tester) async {
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('u1').set(userDoc('Alma Cruz'));
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
+    await tester.tap(find.byKey(const Key('activeSwitch-u1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep active'));
+    await tester.pumpAndSettle();
+
+    final doc = await db.collection('users').doc('u1').get();
+    expect(doc.data()!['active'], isTrue, reason: 'still active — cancelled');
   });
 
   testWidgets('setting a designation calls through to the repository',
@@ -368,6 +389,8 @@ void main() {
 
     await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
     await tester.tap(find.byKey(const Key('activeSwitch-u1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmDeactivate-u1')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('activeWriteError-u1')), findsOneWidget);
