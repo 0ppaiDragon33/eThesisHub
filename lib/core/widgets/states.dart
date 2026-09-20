@@ -152,7 +152,10 @@ class ErrorState extends StatelessWidget {
                 ],
                 if (error is FirebaseException) ...[
                   const SizedBox(height: AppTokens.xs),
-                  Text(
+                  // Selectable: with no server-side logs, this code is what a
+                  // reader reads out or pastes to whoever can help, so it has
+                  // to be copyable rather than just legible.
+                  SelectableText(
                     '[${(error as FirebaseException).code}]',
                     key: const Key('errorCode'),
                     style: text.labelSmall?.copyWith(color: scheme.error),

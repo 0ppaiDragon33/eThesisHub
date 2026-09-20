@@ -756,7 +756,7 @@ void main() {
     // And the Firestore code must still be visible underneath — it helps
     // whoever debugs this next, same as `ErrorState`.
     expect(find.byKey(const Key('errorCode')), findsOneWidget);
-    final code = tester.widget<Text>(find.byKey(const Key('errorCode')));
+    final code = tester.widget<SelectableText>(find.byKey(const Key('errorCode')));
     expect(code.data, '[permission-denied]');
 
     // And the submission must not have gone through.

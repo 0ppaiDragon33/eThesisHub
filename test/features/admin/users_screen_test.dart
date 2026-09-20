@@ -351,7 +351,7 @@ void main() {
     expect(find.textContaining('Alma Cruz'), findsWidgets);
     expect(find.byKey(const Key('errorCode')), findsOneWidget);
     expect(
-        tester.widget<Text>(find.byKey(const Key('errorCode'))).data,
+        tester.widget<SelectableText>(find.byKey(const Key('errorCode'))).data,
         '[permission-denied]');
   });
 
@@ -372,7 +372,7 @@ void main() {
 
     expect(find.byKey(const Key('activeWriteError-u1')), findsOneWidget);
     expect(
-        tester.widget<Text>(find.byKey(const Key('errorCode'))).data,
+        tester.widget<SelectableText>(find.byKey(const Key('errorCode'))).data,
         '[permission-denied]');
   });
 
