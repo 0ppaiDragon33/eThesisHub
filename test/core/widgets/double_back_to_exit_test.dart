@@ -5,9 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/widgets/double_back_to_exit.dart';
 
 void main() {
-  // A real Router, because BackButtonListener registers with the router's
-  // back-button dispatcher — exactly what makes it work inside the app's
-  // ShellRoute where a bare PopScope did not.
+  // A real Router, because the guard listens on the router's back-button
+  // dispatcher and pops deep screens through go_router.
   Widget host({
     required bool enabled,
     required VoidCallback onExit,
@@ -41,6 +40,9 @@ void main() {
     expect(find.text('Swipe again to close the app'), findsOneWidget);
     expect(exits, 0, reason: 'one back only warns');
 
+    // Past the dedupe window, still inside the arm window.
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 150)));
     await tester.binding.handlePopRoute();
     await tester.pump();
     expect(exits, 1, reason: 'the confirming second back leaves the app');
@@ -71,7 +73,7 @@ void main() {
     expect(find.text('Swipe again to close the app'), findsOneWidget);
   });
 
-  testWidgets('when disabled the back is not intercepted and pops normally',
+  testWidgets('a pushed (deep) screen pops in one back, never exiting',
       (tester) async {
     var exits = 0;
     final router = GoRouter(routes: [
@@ -89,7 +91,7 @@ void main() {
       GoRoute(
         path: '/deep',
         builder: (_, _) => DoubleBackToExit(
-          enabled: false,
+          enabled: true,
           onExit: () => exits++,
           child: const Scaffold(body: Center(child: Text('pushed'))),
         ),
@@ -106,7 +108,17 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('pushed'), findsNothing,
-        reason: 'a disabled guard lets the pushed screen pop in one gesture');
+        reason: 'a deep screen is popped through go_router in one gesture');
+    expect(exits, 0, reason: 'popping a deep screen never exits the app');
+  });
+
+  testWidgets('when disabled the guard stays out of the way', (tester) async {
+    var exits = 0;
+    await tester.pumpWidget(host(enabled: false, onExit: () => exits++));
+    await tester.pumpAndSettle();
+
+    // No PopScope/BackButtonListener mounted, so the guard cannot fire.
+    expect(find.byType(BackButtonListener), findsNothing);
     expect(exits, 0);
   });
 }

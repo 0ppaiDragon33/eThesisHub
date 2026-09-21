@@ -1,30 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 /// Guards the app's exit behind a second back within [window].
 ///
 /// On a phone the shell hides its back arrow and leans on the OS back gesture
-/// (Android's edge-swipe). At a top-level destination there is nothing left to
-/// pop, so a stray swipe would either jump to a previously-visited screen or
-/// drop the reader out of the app outright — losing where they were with no
-/// warning. When [enabled], the first back is caught and answered with a
-/// toast; only a second back inside [window] actually leaves.
+/// (Android's edge-swipe). Left alone, a single swipe at a top-level
+/// destination drops the reader out of the app; a swipe on a pushed screen
+/// should still pop it. When [enabled], this catches the back: it pops a
+/// pushed (deep) screen through go_router, and at a top-level destination it
+/// warns with a toast and only leaves on a second back inside [window].
 ///
-/// [enabled] is set to false for a screen pushed on top of a destination, so
-/// the OS back still pops that screen in one gesture as expected, and on web
-/// and desktop, where there is no app to close and a visible back arrow does
-/// the job instead.
+/// It listens on BOTH back-dispatch paths, because which one Android uses
+/// depends on the device and build:
+///   * [PopScope] — the framework's predictive-back / navigator path.
+///   * [BackButtonListener] — the legacy back-button dispatcher path.
+/// A single physical back fires only one of them; a short dedupe collapses
+/// the rare case where both arrive. A bare [PopScope] in the shell builder was
+/// not enough on its own: the shell is a go_router `ShellRoute`, so at a
+/// top-level destination go_router asks the single-page nested navigator to
+/// pop and, finding it cannot, closed the app before that PopScope was
+/// consulted — hence also driving the pop through go_router here.
 ///
-/// Uses [BackButtonListener], not a bare [PopScope]: the app's shell is a
-/// go_router `ShellRoute`, so a `PopScope` placed in the shell builder
-/// registers on the ROOT route, and at a top-level destination go_router asks
-/// the (single-page) nested navigator to pop, finds it cannot, and exits
-/// WITHOUT ever consulting that root PopScope — the app closed on the first
-/// swipe. `BackButtonListener` registers with the router's back-button
-/// dispatcher and is consulted before go_router pops anything, so it actually
-/// catches the gesture. It needs a `Router` ancestor (the app's
-/// `MaterialApp.router` supplies one); mounting it only when [enabled] keeps
-/// it off the disabled paths entirely.
+/// Both listeners need a `Router` ancestor (the app's `MaterialApp.router`
+/// supplies one) and are mounted only when [enabled], so a disabled screen —
+/// a deep screen on web, or desktop — behaves exactly as it did before.
 class DoubleBackToExit extends StatefulWidget {
   const DoubleBackToExit({
     super.key,
@@ -39,8 +39,8 @@ class DoubleBackToExit extends StatefulWidget {
   final Widget child;
 
   /// What a confirmed exit does. Defaults to [SystemNavigator.pop], which asks
-  /// Android to move the task to the background exactly as the Home button
-  /// would. Injectable so a test can observe the exit without killing itself.
+  /// Android to move the task to the background as the Home button would.
+  /// Injectable so a test can observe the exit without killing itself.
   final VoidCallback? onExit;
 
   /// How long the first back stays "armed" for a confirming second one.
@@ -55,10 +55,32 @@ class DoubleBackToExit extends StatefulWidget {
 
 class _DoubleBackToExitState extends State<DoubleBackToExit> {
   DateTime? _armedAt;
+  DateTime? _lastEvent;
 
-  /// Returns true to swallow the back event so go_router never acts on it.
-  Future<bool> _onBack() async {
+  /// Handles one back gesture. Returns true when it fully handled it (a pushed
+  /// screen was popped, or the exit was armed/confirmed) so the legacy
+  /// listener can report the event consumed.
+  bool _handleBack() {
     final now = DateTime.now();
+
+    // One physical back can reach both listeners within a frame; collapse
+    // those. 100ms is far below any human double-tap, so a real second back
+    // is never swallowed.
+    if (_lastEvent != null &&
+        now.difference(_lastEvent!) < const Duration(milliseconds: 100)) {
+      return true;
+    }
+    _lastEvent = now;
+
+    // A pushed screen pops in one gesture — route it through go_router so the
+    // nested navigator actually pops rather than the app exiting.
+    final router = GoRouter.maybeOf(context);
+    if (router != null && router.canPop()) {
+      router.pop();
+      return true;
+    }
+
+    // Top-level destination: warn, then exit on a confirming second back.
     if (_armedAt != null && now.difference(_armedAt!) <= widget.window) {
       (widget.onExit ?? () => SystemNavigator.pop())();
       return true;
@@ -78,12 +100,17 @@ class _DoubleBackToExitState extends State<DoubleBackToExit> {
 
   @override
   Widget build(BuildContext context) {
-    // Disabled (a deep screen, or web/desktop): stay out of the way entirely
-    // so the OS back pops or exits exactly as it did before.
     if (!widget.enabled) return widget.child;
-    return BackButtonListener(
-      onBackButtonPressed: _onBack,
-      child: widget.child,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: BackButtonListener(
+        onBackButtonPressed: () async => _handleBack(),
+        child: widget.child,
+      ),
     );
   }
 }

@@ -133,11 +133,12 @@ class AppShell extends ConsumerWidget {
     // tests keep exercising the desktop arrow with no per-test override.
     final showArrow = !isNativeMobile;
 
-    // On a phone, a top-level destination has nothing left to pop, so the OS
-    // back gesture would jump away or drop out of the app on a stray swipe.
-    // There it is guarded behind a confirming second back; a pushed screen
-    // (deep) still pops in one gesture, and web/desktop keep the arrow.
-    final guardExit = isNativeMobile && showNav && !deep;
+    // On a phone the OS back gesture is the only way back, so it is caught
+    // below: a pushed screen still pops in one gesture (routed through
+    // go_router), and a top-level destination is guarded behind a confirming
+    // second back rather than dropping the reader out of the app on a stray
+    // swipe. Web and desktop keep the visible arrow and are left untouched.
+    final guardExit = isNativeMobile;
 
     return DoubleBackToExit(
       enabled: guardExit,
