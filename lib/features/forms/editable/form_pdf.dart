@@ -32,7 +32,10 @@ Future<Uint8List> buildFormPdf(
 /// empty blank.
 ///
 /// Typed text wraps within [width], the width of the line it replaces, so a
-/// long entry in a row cannot push the row off the page.
+/// long entry in a row cannot push the row off the page. Short text keeps
+/// its own natural width rather than filling [width], so it still hugs
+/// whichever edge its parent aligns it to (a right-aligned date, a name in
+/// an end-aligned column).
 pw.Widget blankOr(
   FormText text,
   String id, {
@@ -41,7 +44,10 @@ pw.Widget blankOr(
   pw.TextStyle? style,
 }) {
   if (text.isBlank(id)) return ruledLine(width: width, height: height);
-  return pw.SizedBox(width: width, child: pw.Text(text.of(id), style: style));
+  return pw.ConstrainedBox(
+    constraints: pw.BoxConstraints(maxWidth: width),
+    child: pw.Text(text.of(id), style: style),
+  );
 }
 
 /// A value the app supplied, printed exactly as the official filled form

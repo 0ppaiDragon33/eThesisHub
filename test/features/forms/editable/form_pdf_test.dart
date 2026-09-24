@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'package:ethesishub/features/forms/editable/form_pdf.dart';
 import 'package:ethesishub/features/forms/editable/form_template.dart';
+import 'package:ethesishub/features/forms/form_chrome.dart';
 
 import '../pdf_text.dart';
 
@@ -36,6 +38,31 @@ void main() {
     final text = extractPdfText(
         await buildFormPdf(tpl, const {'signer': 'MARIA SANTOS'}));
     expect(text, contains('MARIA SANTOS'));
+  });
+
+  test('short typed text keeps its own width instead of filling the blank',
+      () async {
+    final text = FormText(tpl, const {'signer': 'Al'});
+
+    late PdfRect box;
+    final doc = pw.Document(compress: false, theme: await formTheme());
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) {
+          final widget = blankOr(text, 'signer', width: 200);
+          widget.layout(context, const pw.BoxConstraints(maxWidth: 500));
+          box = widget.box!;
+          return widget;
+        },
+      ),
+    );
+    await doc.save();
+
+    expect(box.width, lessThan(200),
+        reason: 'short typed text should hug its own width, not the '
+            '200-wide blank it replaces, so a right- or end-aligned '
+            'parent still hugs the correct edge');
   });
 
   group('dataOr and valueOr', () {
