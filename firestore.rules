@@ -230,6 +230,11 @@ service cloud.firestore {
                                   'sizeBytes', 'folderId', 'createdAt'])
               && d.name is string && d.name.size() >= 1 && d.name.size() <= 200
               && d.storagePath is string
+              // uid/fileId are spliced into the regex below; without this,
+              // an id containing regex metacharacters (e.g. ".*") could
+              // make the pattern match any subpath, not just this record's.
+              && uid.matches('[A-Za-z0-9][A-Za-z0-9_-]*')
+              && fileId.matches('[A-Za-z0-9][A-Za-z0-9_-]*')
               && d.storagePath.matches('personal/' + uid + '/' + fileId
                      + '/[A-Za-z0-9][A-Za-z0-9_-]*[.][A-Za-z0-9]{1,8}')
               && d.contentType in [

@@ -5441,6 +5441,21 @@ test("a file record must point inside the owner's area, at its own id",
     })));
 });
 
+test("a document id with regex metacharacters cannot widen the storagePath match",
+    async () => {
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/.*"),
+    fileRecord(".*", {
+      storagePath: "personal/mf-owner/other-id/3f9a-b2.png",
+    })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/.*"),
+    fileRecord(".*", {
+      storagePath: "personal/mf-owner/.*/3f9a-b2.png",
+    })));
+  await assertSucceeds(setDoc(doc(owner, "users/mf-owner/files/Ab3_x-9"),
+    fileRecord("Ab3_x-9")));
+});
+
 test("a file record must be an allowed type within 25 MB", async () => {
   const owner = asDefenceUser(...MF_OWNER);
   await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-exe"),
