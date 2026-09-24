@@ -183,3 +183,15 @@ abstract class StorageService {
   /// is not authorized for the thesis the path belongs to.
   Future<String> signedUrl(String path);
 }
+
+/// Deletes a file from the signed-in person's own My files.
+///
+/// Separate from [StorageService] on purpose. The bucket grants the
+/// anonymous client no delete, so this goes through the `document-url`
+/// function, which checks that the caller owns the path before it removes
+/// anything. Keeping it out of [StorageService] also leaves that interface's
+/// test fakes untouched.
+abstract class PersonalFileRemover {
+  /// Throws [StorageFailure] when the function refuses or fails.
+  Future<void> deletePersonal(String path);
+}
