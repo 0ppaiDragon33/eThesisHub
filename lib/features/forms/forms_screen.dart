@@ -9,6 +9,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/forms/editable/form_copies_section.dart';
 import 'package:ethesishub/features/forms/form3_pdf.dart';
 import 'package:ethesishub/features/forms/form4a_pdf.dart';
 import 'package:ethesishub/features/forms/form4b_pdf.dart';
@@ -112,12 +113,17 @@ class _FormCard extends StatelessWidget {
     required this.name,
     required this.purpose,
     required this.actions,
+    this.footer,
   });
 
   final Key cardKey;
   final String name;
   final String purpose;
   final List<Widget> actions;
+
+  /// Drawn under the actions: the card's saved copies, where a form can be
+  /// edited in the app.
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -175,6 +181,10 @@ class _FormCard extends StatelessWidget {
                   runSpacing: AppTokens.sm,
                   children: actions,
                 ),
+                if (footer != null) ...[
+                  const SizedBox(height: AppTokens.md - 4),
+                  footer!,
+                ],
               ],
             ),
           ),
@@ -195,13 +205,11 @@ void _reportFailure(BuildContext context, String form, Object error) {
 
 /// Form 1 — Nomination of Thesis Adviser and Panel Members.
 ///
-/// No blank template button here, deliberately. `Form1Data` requires a
-/// whole `Thesis` (and its layout is a table of nominees built from real
-/// nominations, not a fixed rubric with ruled blanks), so there is no
-/// honest way to hand back a blank Form 1 without fabricating a thesis
-/// that does not exist. This card still lists the form and, when the
-/// reader has a thesis of their own, links to the screen that already
-/// generates it filled — Form 1's status page, `/thesis`.
+/// No blank template download, still deliberately: the official Form 1 is
+/// generated from a thesis's own nominations, so this card links to the
+/// thesis page for it. What it adds is the editable copy (spec 2026-09-24):
+/// anyone can start a named copy of a blank Form 1, reword it in the app and
+/// download it, from [FormCopiesSection] below the actions.
 class _Form1Card extends ConsumerWidget {
   const _Form1Card();
 
@@ -217,8 +225,9 @@ class _Form1Card extends ConsumerWidget {
           'its adviser and panel.',
       actions: [
         Text(
-          'Generated from a thesis\'s own nominations, so there is no '
-          'blank template — open your thesis to download it filled in.',
+          'The filled Form 1 is made from a thesis\'s own nominations. '
+          'Open your thesis to download it, or start your own copy to '
+          'edit here.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -232,6 +241,10 @@ class _Form1Card extends ConsumerWidget {
           ),
         ],
       ],
+      footer: const FormCopiesSection(
+        formId: 'form1',
+        defaultName: 'Form 1 copy',
+      ),
     );
   }
 }

@@ -197,4 +197,22 @@ void main() {
     expect(find.byKey(const Key('form8BlankButton')), findsOneWidget);
     expect(find.byKey(const Key('form8Download-t1')), findsOneWidget);
   });
+
+  testWidgets('the Form 1 card offers a copy to edit in the app',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seedUser('s1');
+    await tester.pumpWidget(app(db, 's1'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('form1Card')),
+        matching: find.byKey(const Key('form1NewCopy')),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('form1BlankButton')), findsNothing,
+        reason: 'still no blank download for Form 1');
+  });
 }
