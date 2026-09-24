@@ -77,6 +77,9 @@ final FormTemplate form5cTemplate = FormTemplate(
     ...fieldBlocks('evaluator', 'Evaluator'),
     ...fieldBlocks('rank', 'Academic Rank'),
     ...fieldBlocks('specialization', 'Field of Specialization'),
+    // The "(50%)" in these headings is display text only, editable like any
+    // other block. Scoring reads the fixed criterion weights below, not
+    // this heading text, so editing it does not change how the form scores.
     const FormBlock(
         id: 'sectionA', label: 'Section A heading', defaultText: 'A. CONTENT (50%)'),
     for (final c in _criteriaIn(EvaluationSection.content))
