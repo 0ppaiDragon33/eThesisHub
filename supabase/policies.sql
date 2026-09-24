@@ -15,13 +15,19 @@
 --   * READ  — no anon SELECT policy at all, so anon cannot read a byte. This
 --             is what makes the bucket private: the only way to read is a
 --             signed URL the edge function mints after authorizing the caller.
---   * UPLOAD — anon MAY insert, but only under the `theses/` or `personal/` prefix, so a
---             client cannot scribble elsewhere in the bucket. This is not a
---             full authorization (an anon caller can upload an orphan), but a
---             private bucket makes an orphan unreadable and unreferenced: the
---             function only ever signs paths whose thesis the caller is on,
---             and Firestore rules gate whether a document RECORD may point at
---             an uploaded file. The exposure is storage cost, not data access.
+--   * UPLOAD — anon MAY insert, but only under the `theses/` or `personal/`
+--             prefix, so a client cannot scribble elsewhere in the bucket.
+--             This is not a full authorization (an anon caller can upload an
+--             orphan under either prefix, including under any `personal/{uid}/`
+--             for any uid), but a private bucket makes an orphan unreadable
+--             and unreferenced: the function only ever signs paths whose
+--             thesis the caller is on, or whose `personal/{uid}/` matches the
+--             caller's own uid, and Firestore rules gate whether a document
+--             RECORD may point at an uploaded file — an orphan under someone
+--             else's `personal/{uid}/` can never be recorded for another
+--             person, never signed for anyone but that uid's owner, and never
+--             overwrites anything. The exposure is storage cost, not data
+--             access.
 --   * DELETE/UPDATE — none. Nothing anonymous may remove or overwrite a file.
 --             Chapter versions are immutable by design (firestore.rules denies
 --             version update/delete), so the app never deletes in normal use;
