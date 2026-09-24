@@ -5297,6 +5297,26 @@ test("the owner may save edits but not rewrite createdAt or formId",
   }));
 });
 
+test("the owner may save edits with the app's real transactional shape",
+    async () => {
+  const at = Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"));
+  await seedFormCopy("fc-owner", "c-tx", { createdAt: at, updatedAt: at });
+  const owner = asDefenceUser(...FC_OWNER);
+  const ref = doc(owner, "users/fc-owner/formCopies/c-tx");
+  // The app's saveOverrides() spreads the stored document back into a full
+  // set() (not update()) and stamps updatedAt with serverTimestamp(), so
+  // createdAt must be re-sent as the stored Timestamp, unchanged.
+  await assertSucceeds(setDoc(ref, {
+    formId: "form1", name: "Seeded", overrides: { salutation: "Dear Dean:" },
+    folderId: null, createdAt: at, updatedAt: serverTimestamp(),
+  }));
+  const other = Timestamp.fromDate(new Date("2020-01-01T00:00:00Z"));
+  await assertFails(setDoc(ref, {
+    formId: "form1", name: "Seeded", overrides: { salutation: "Dear Dean:" },
+    folderId: null, createdAt: other, updatedAt: serverTimestamp(),
+  }));
+});
+
 test("nobody else may change or delete a form copy; the owner may delete",
     async () => {
   await seedFormCopy("fc-owner", "c-del");
