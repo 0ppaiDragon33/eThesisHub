@@ -31,6 +31,7 @@ own uploaded files, in folders.
 | E7 | Folders are **one level deep**. | Moving and deleting stay simple. Nested folders can come later if asked for. |
 | E8 | Deleting a folder **moves its contents to the top level**; it never deletes them. | Nothing is lost to one mis-tap. |
 | E9 | A person's personal files are readable **only by that person**, including not by the Dean or Coordinator. | They are personal working files, not thesis records. |
+| E10 | The letterhead lines (Republic of the Philippines, the university name, Research and Development, the address line) stay fixed; everything below them is editable, including the form code and title. | The letterhead is the institution's identity; an edited one would make an unofficial document. |
 
 ## 3. What exists today (what this builds on)
 
@@ -120,6 +121,15 @@ A new entry point renders an edited copy:
 rewrite contain the same text as before. The existing PDF tests, which read
 the text of uncompressed PDFs, must pass unchanged. That is how this rewrite is
 checked.
+
+**Form 1 is the exception.** It has no blank template today, on purpose: its
+filled PDF (`buildForm1Pdf`) is built from live nominations, with a variable
+number of researchers and e-signature status lines. That builder is left
+untouched. The editable copy gets its own blank Form 1 layout
+(`form1_template.dart`) with fixed slots: 5 researchers, the adviser, 3 panel
+members, the Coordinator and the Dean. Blanks inside sentences are underscores
+in the editable text. The "Electronically completed in eThesisHub" notice is
+left off, since it would be false on a hand-edited copy.
 
 ## 5. Form copies
 
