@@ -410,6 +410,10 @@ class _Form8CardState extends State<_Form8Card> {
                 ),
             ],
           ],
+          footer: const FormCopiesSection(
+            formId: 'form8',
+            defaultName: 'Form 8 copy',
+          ),
         );
       },
     );
@@ -651,6 +655,10 @@ class _Form7Card extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form7',
+        defaultName: 'Form 7 copy',
+      ),
     );
   }
 }
