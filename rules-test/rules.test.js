@@ -5331,6 +5331,182 @@ test("nobody else may change or delete a form copy; the owner may delete",
     deleteDoc(doc(owner, "users/fc-owner/formCopies/c-del")));
 });
 
+// --- My files: folders and file records (Phase 2) ---------------------------
+//
+// users/{uid}/folders and users/{uid}/files: one person's own, readable and
+// writable by them alone. asDefenceUser (memoised) for every context.
+
+const MF_OWNER = ["mf-owner", "mfowner@isufst.edu.ph"];
+const MF_OTHER = ["mf-other", "mfother@isufst.edu.ph"];
+const MF_AT = Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"));
+
+function folder(overrides = {}) {
+  return { name: "Group 3", createdAt: serverTimestamp(), ...overrides };
+}
+
+function fileRecord(fileId, overrides = {}) {
+  return {
+    name: "Photo.png",
+    storagePath: `personal/mf-owner/${fileId}/3f9a-b2.png`,
+    contentType: "image/png",
+    sizeBytes: 1234,
+    folderId: null,
+    createdAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+async function seedMf(path, data) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), path), data);
+  });
+}
+
+test("the owner may create, rename and delete a folder", async () => {
+  const owner = asDefenceUser(...MF_OWNER);
+  const ref = doc(owner, "users/mf-owner/folders/fo1");
+  await assertSucceeds(setDoc(ref, folder()));
+  await assertSucceeds(updateDoc(ref, { name: "Group 5" }));
+  await assertSucceeds(deleteDoc(ref));
+});
+
+test("nobody else may read, list or write a folder, not even a coordinator or dean",
+    async () => {
+  await seedMf("users/mf-owner/folders/fo-private",
+    { name: "Private", createdAt: MF_AT });
+  await seedUser("mf-coord", "coordinator", "mfcoord@isufst.edu.ph");
+  await seedUser("mf-dean", "dean", "mfdean@isufst.edu.ph");
+  for (const [uid, email] of [
+    MF_OTHER,
+    ["mf-coord", "mfcoord@isufst.edu.ph"],
+    ["mf-dean", "mfdean@isufst.edu.ph"],
+  ]) {
+    const db = asDefenceUser(uid, email);
+    await assertFails(getDoc(doc(db, "users/mf-owner/folders/fo-private")));
+    await assertFails(getDocs(collection(db, "users/mf-owner/folders")));
+    await assertFails(updateDoc(doc(db, "users/mf-owner/folders/fo-private"),
+      { name: "Taken" }));
+    await assertFails(deleteDoc(doc(db, "users/mf-owner/folders/fo-private")));
+    await assertFails(setDoc(doc(db, "users/mf-owner/folders/fo-planted"),
+      folder()));
+  }
+});
+
+test("a folder is exactly a 1-60 character name and a server time", async () => {
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertFails(setDoc(doc(owner, "users/mf-owner/folders/fo-n0"),
+    folder({ name: "" })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/folders/fo-n61"),
+    folder({ name: "x".repeat(61) })));
+  await assertSucceeds(setDoc(doc(owner, "users/mf-owner/folders/fo-n60"),
+    folder({ name: "x".repeat(60) })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/folders/fo-extra"),
+    folder({ parentId: "fo-n60" })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/folders/fo-t"),
+    folder({ createdAt: MF_AT })));
+});
+
+test("a folder's createdAt never changes", async () => {
+  await seedMf("users/mf-owner/folders/fo-ts",
+    { name: "Dated", createdAt: MF_AT });
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertFails(updateDoc(doc(owner, "users/mf-owner/folders/fo-ts"),
+    { createdAt: serverTimestamp() }));
+});
+
+test("the owner may record an upload in their own area", async () => {
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertSucceeds(setDoc(doc(owner, "users/mf-owner/files/fi1"),
+    fileRecord("fi1")));
+});
+
+test("a file record must point inside the owner's area, at its own id",
+    async () => {
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-a"),
+    fileRecord("fi-a", {
+      storagePath: "personal/mf-other/fi-a/3f9a-b2.png",
+    })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-b"),
+    fileRecord("fi-b", {
+      storagePath: "personal/mf-owner/some-other-id/3f9a-b2.png",
+    })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-c"),
+    fileRecord("fi-c", {
+      storagePath: "theses/t1/chapterI/3f9a-b2.png",
+    })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-d"),
+    fileRecord("fi-d", {
+      storagePath: "personal/mf-owner/fi-d/../x.png",
+    })));
+});
+
+test("a file record must be an allowed type within 25 MB", async () => {
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-exe"),
+    fileRecord("fi-exe", { contentType: "application/x-msdownload" })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-0"),
+    fileRecord("fi-0", { sizeBytes: 0 })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-big"),
+    fileRecord("fi-big", { sizeBytes: 26214401 })));
+  await assertSucceeds(setDoc(doc(owner, "users/mf-owner/files/fi-max"),
+    fileRecord("fi-max", { sizeBytes: 26214400 })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-x"),
+    fileRecord("fi-x", { sharedWith: ["mf-other"] })));
+  await assertFails(setDoc(doc(owner, "users/mf-owner/files/fi-n"),
+    fileRecord("fi-n", { name: "x".repeat(201) })));
+});
+
+test("the owner may rename or move a file but not rewrite what it is",
+    async () => {
+  await seedMf("users/mf-owner/files/fi-upd", {
+    ...fileRecord("fi-upd"), createdAt: MF_AT,
+  });
+  const owner = asDefenceUser(...MF_OWNER);
+  const ref = doc(owner, "users/mf-owner/files/fi-upd");
+  await assertSucceeds(updateDoc(ref, { name: "Renamed.png" }));
+  await assertSucceeds(updateDoc(ref, { folderId: "fo1" }));
+  await assertSucceeds(updateDoc(ref, { folderId: null }));
+  await assertFails(updateDoc(ref, {
+    storagePath: "personal/mf-owner/fi-upd/other.png",
+  }));
+  await assertFails(updateDoc(ref, { sizeBytes: 99 }));
+  await assertFails(updateDoc(ref, { contentType: "application/pdf" }));
+  await assertFails(updateDoc(ref, { createdAt: serverTimestamp() }));
+});
+
+test("nobody else may read or change a file record; the owner may delete it",
+    async () => {
+  await seedMf("users/mf-owner/files/fi-del", {
+    ...fileRecord("fi-del"), createdAt: MF_AT,
+  });
+  await seedUser("mf-coord2", "coordinator", "mfcoord2@isufst.edu.ph");
+  for (const [uid, email] of [
+    MF_OTHER,
+    ["mf-coord2", "mfcoord2@isufst.edu.ph"],
+  ]) {
+    const db = asDefenceUser(uid, email);
+    await assertFails(getDoc(doc(db, "users/mf-owner/files/fi-del")));
+    await assertFails(getDocs(collection(db, "users/mf-owner/files")));
+    await assertFails(updateDoc(doc(db, "users/mf-owner/files/fi-del"),
+      { name: "Taken.png" }));
+    await assertFails(deleteDoc(doc(db, "users/mf-owner/files/fi-del")));
+  }
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertSucceeds(getDocs(collection(owner, "users/mf-owner/files")));
+  await assertSucceeds(deleteDoc(doc(owner, "users/mf-owner/files/fi-del")));
+});
+
+test("the owner may move a form copy into a folder", async () => {
+  await seedMf("users/mf-owner/formCopies/c-mv", {
+    formId: "form1", name: "Copy", overrides: {}, folderId: null,
+    createdAt: MF_AT, updatedAt: MF_AT,
+  });
+  const owner = asDefenceUser(...MF_OWNER);
+  await assertSucceeds(updateDoc(doc(owner, "users/mf-owner/formCopies/c-mv"),
+    { folderId: "fo1", updatedAt: serverTimestamp() }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

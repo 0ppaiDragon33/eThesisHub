@@ -189,6 +189,75 @@ service cloud.firestore {
                       && request.resource.data.formId == resource.data.formId;
         allow delete: if mine();
       }
+
+      // My files: folders (spec 2026-09-24 §6). One level; the owner's alone,
+      // like form copies.
+      match /folders/{folderId} {
+        function mine() {
+          return verified() && request.auth.uid == uid;
+        }
+
+        function validFolder(d) {
+          return d.keys().hasOnly(['name', 'createdAt'])
+              && d.keys().hasAll(['name', 'createdAt'])
+              && d.name is string && d.name.size() >= 1 && d.name.size() <= 60;
+        }
+
+        allow read: if mine();
+        allow create: if mine()
+                      && validFolder(request.resource.data)
+                      && request.resource.data.createdAt == request.time;
+        allow update: if mine()
+                      && validFolder(request.resource.data)
+                      && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if mine();
+      }
+
+      // My files: uploaded-file records. The bytes live in Supabase under
+      // personal/{uid}/{fileId}/...; this record is what makes a file show in
+      // My files, so only the owner may create one, and only for a path in
+      // their own area carrying this record's own id. What the file is
+      // (path, type, size, time) never changes; its name and folder may.
+      match /files/{fileId} {
+        function mine() {
+          return verified() && request.auth.uid == uid;
+        }
+
+        function validFile(d) {
+          return d.keys().hasOnly(['name', 'storagePath', 'contentType',
+                                   'sizeBytes', 'folderId', 'createdAt'])
+              && d.keys().hasAll(['name', 'storagePath', 'contentType',
+                                  'sizeBytes', 'folderId', 'createdAt'])
+              && d.name is string && d.name.size() >= 1 && d.name.size() <= 200
+              && d.storagePath is string
+              && d.storagePath.matches('personal/' + uid + '/' + fileId
+                     + '/[A-Za-z0-9][A-Za-z0-9_-]*[.][A-Za-z0-9]{1,8}')
+              && d.contentType in [
+                   'application/pdf',
+                   'application/msword',
+                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                   'application/vnd.ms-powerpoint',
+                   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                   'image/png',
+                   'image/jpeg']
+              && d.sizeBytes is int && d.sizeBytes >= 1
+              && d.sizeBytes <= 26214400
+              && (d.folderId == null
+                  || (d.folderId is string && d.folderId.size() <= 128));
+        }
+
+        allow read: if mine();
+        allow create: if mine()
+                      && validFile(request.resource.data)
+                      && request.resource.data.createdAt == request.time;
+        allow update: if mine()
+                      && validFile(request.resource.data)
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.storagePath == resource.data.storagePath
+                      && request.resource.data.contentType == resource.data.contentType
+                      && request.resource.data.sizeBytes == resource.data.sizeBytes;
+        allow delete: if mine();
+      }
     }
 
     match /facultyInvites/{email} {
