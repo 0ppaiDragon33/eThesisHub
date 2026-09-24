@@ -71,8 +71,12 @@ String shellTitleFor(
   }
 
   // A saved form copy, '/forms/<formId>/copies/<copyId>'. The copy's own
-  // name is on the page; the bar says what kind of page this is.
-  if (location.startsWith('/forms/')) return 'Edit form';
+  // name is on the page; the bar says what kind of page this is. Matched
+  // specifically so a future '/forms/...' route that is not the editor
+  // does not also pick up this title.
+  if (location.startsWith('/forms/') && location.contains('/copies/')) {
+    return 'Edit form';
+  }
 
   return _staticTitles[location] ?? 'eThesisHub';
 }
@@ -263,7 +267,11 @@ class AccountFooter extends ConsumerWidget {
     return Padding(
       key: const Key('accountFooter'),
       padding: const EdgeInsets.fromLTRB(
-          AppTokens.md, AppTokens.md - 4, AppTokens.xs, AppTokens.md - 4),
+        AppTokens.md,
+        AppTokens.md - 4,
+        AppTokens.xs,
+        AppTokens.md - 4,
+      ),
       child: Row(
         children: [
           InitialsAvatar(profile.fullName, size: 36),
@@ -333,7 +341,10 @@ class _ThemeToggleButton extends ConsumerWidget {
     final (icon, tooltip) = switch (mode) {
       ThemeMode.system => (Icons.light_mode_outlined, 'Switch to light theme'),
       ThemeMode.light => (Icons.dark_mode_outlined, 'Switch to dark theme'),
-      ThemeMode.dark => (Icons.brightness_auto_outlined, 'Switch to system theme'),
+      ThemeMode.dark => (
+        Icons.brightness_auto_outlined,
+        'Switch to system theme',
+      ),
     };
 
     return IconButton(

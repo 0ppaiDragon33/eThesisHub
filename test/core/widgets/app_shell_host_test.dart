@@ -325,6 +325,13 @@ void main() {
       expect(shellTitleFor('/forms', const {}, UserRole.student), 'Forms',
           reason: 'the Forms destination itself keeps its own title');
     });
+
+    test('a /forms/... route that is not the editor does not read "Edit '
+        'form"', () {
+      expect(shellTitleFor('/forms/form1', const {}, UserRole.student),
+          isNot('Edit form'),
+          reason: 'only .../copies/... is the editor');
+    });
   });
 
   group('AppShellHost', () {
