@@ -120,7 +120,13 @@ class MyFilesRepository {
   }) {
     var shown = name.trim();
     if (shown.isEmpty) shown = 'Untitled';
-    if (shown.length > kFileNameMax) shown = shown.substring(0, kFileNameMax);
+    // Clip by runes, not UTF-16 code units: `substring` can split a
+    // surrogate pair (e.g. an emoji) in half and leave a lone surrogate.
+    // Firestore rules' `string.size()` counts characters (code points), so
+    // rune-based clipping still keeps the rules' ≤200 bound.
+    if (shown.runes.length > kFileNameMax) {
+      shown = String.fromCharCodes(shown.runes.take(kFileNameMax));
+    }
     return _files(uid).doc(fileId).set({
       'name': shown,
       'storagePath': storagePath,

@@ -115,6 +115,30 @@ void main() {
     expect((await db.doc('users/u1/files/$blank').get())['name'], 'Untitled');
   });
 
+  test('clipping a long name does not split an emoji into a lone surrogate',
+      () async {
+    // (kFileNameMax - 1) 'x's, then an emoji (a surrogate pair) and more
+    // text: the emoji's high surrogate lands exactly at UTF-16 code unit
+    // `kFileNameMax - 1`, so a plain `substring(0, kFileNameMax)` cuts the
+    // pair in half and leaves a lone surrogate.
+    final id = repo.newFileId('u1');
+    final name = '${'x' * (kFileNameMax - 1)}\u{1F600}more.pdf';
+    await repo.addFile(
+      uid: 'u1', fileId: id, name: name,
+      storagePath: 'personal/u1/$id/x.pdf', contentType: 'application/pdf',
+      sizeBytes: 1,
+    );
+    final stored =
+        (await db.doc('users/u1/files/$id').get())['name'] as String;
+    expect(stored.runes.length, lessThanOrEqualTo(kFileNameMax));
+    // A clip that split the emoji leaves a lone lead surrogate as the last
+    // code unit (0xD800-0xDBFF with no trailing surrogate after it).
+    final lastUnit = stored.codeUnitAt(stored.length - 1);
+    final isLoneLeadSurrogate = (lastUnit & 0xFC00) == 0xD800;
+    expect(isLoneLeadSurrogate, isFalse,
+        reason: 'stored name ends with an unpaired surrogate: $stored');
+  });
+
   test('watchFiles lists newest first', () async {
     await seedFile('old', null, day: 1);
     await seedFile('new', null, day: 3);
