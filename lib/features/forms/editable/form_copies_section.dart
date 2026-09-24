@@ -12,7 +12,7 @@ import 'package:ethesishub/providers/form_copy_providers.dart';
 
 /// A form card's own copies: a New copy button, and the person's saved
 /// copies of this form with Open, Rename and Delete.
-class FormCopiesSection extends ConsumerWidget {
+class FormCopiesSection extends ConsumerStatefulWidget {
   const FormCopiesSection({
     super.key,
     required this.formId,
@@ -24,13 +24,23 @@ class FormCopiesSection extends ConsumerWidget {
   /// What the name prompt suggests for a new copy.
   final String defaultName;
 
+  @override
+  ConsumerState<FormCopiesSection> createState() => _FormCopiesSectionState();
+}
+
+class _FormCopiesSectionState extends ConsumerState<FormCopiesSection> {
+  bool _creating = false;
+
+  String get formId => widget.formId;
+
   void _open(BuildContext context, String copyId) =>
       context.push('/forms/$formId/copies/$copyId');
 
   void _report(BuildContext context, String what, Object error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Could not $what: $error')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Could not $what: $error')));
   }
 
   Future<void> _newCopy(BuildContext context, WidgetRef ref) async {
@@ -39,10 +49,11 @@ class FormCopiesSection extends ConsumerWidget {
     final name = await promptForName(
       context,
       title: 'Name this copy',
-      initial: defaultName,
+      initial: widget.defaultName,
       confirmLabel: 'Create',
     );
     if (name == null) return;
+    setState(() => _creating = true);
     try {
       final id = await ref
           .read(formCopyRepositoryProvider)
@@ -50,11 +61,16 @@ class FormCopiesSection extends ConsumerWidget {
       if (context.mounted) _open(context, id);
     } catch (e) {
       if (context.mounted) _report(context, 'create the copy', e);
+    } finally {
+      if (mounted) setState(() => _creating = false);
     }
   }
 
   Future<void> _rename(
-      BuildContext context, WidgetRef ref, FormCopy copy) async {
+    BuildContext context,
+    WidgetRef ref,
+    FormCopy copy,
+  ) async {
     final uid = ref.read(signedInUidProvider);
     if (uid == null) return;
     final name = await promptForName(
@@ -74,7 +90,10 @@ class FormCopiesSection extends ConsumerWidget {
   }
 
   Future<void> _delete(
-      BuildContext context, WidgetRef ref, FormCopy copy) async {
+    BuildContext context,
+    WidgetRef ref,
+    FormCopy copy,
+  ) async {
     final uid = ref.read(signedInUidProvider);
     if (uid == null) return;
     final confirmed = await confirmAction(
@@ -95,9 +114,9 @@ class FormCopiesSection extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final copies =
-        ref.watch(myFormCopiesProvider(formId)).valueOrNull ?? const [];
+  Widget build(BuildContext context) {
+    final copiesAsync = ref.watch(myFormCopiesProvider(formId));
+    final copies = copiesAsync.valueOrNull ?? const [];
     final text = Theme.of(context).textTheme;
 
     return Column(
@@ -106,10 +125,20 @@ class FormCopiesSection extends ConsumerWidget {
       children: [
         OutlinedButton.icon(
           key: Key('${formId}NewCopy'),
-          onPressed: () => _newCopy(context, ref),
+          onPressed: _creating ? null : () => _newCopy(context, ref),
           icon: const Icon(Icons.edit_note_rounded, size: 18),
           label: const Text('New copy'),
         ),
+        if (copiesAsync.hasError) ...[
+          const SizedBox(height: AppTokens.md - 4),
+          Text(
+            'Could not load your copies.',
+            key: Key('${formId}CopiesError'),
+            style: text.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
         if (copies.isNotEmpty) ...[
           const SizedBox(height: AppTokens.md - 4),
           Text(

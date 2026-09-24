@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -6,8 +8,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/data/models/form_copy.dart';
+import 'package:ethesishub/data/repositories/form_copy_repository.dart';
 import 'package:ethesishub/features/forms/editable/form_copies_section.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/form_copy_providers.dart';
+
+/// A repository whose `create` does not resolve until [gate] completes, so
+/// a test can observe the state while a create is still in flight -- which
+/// [FakeFirebaseFirestore]'s own `set()` resolves too quickly to catch.
+class _SlowCreateRepo extends FormCopyRepository {
+  _SlowCreateRepo(super.db, this.gate);
+
+  final Completer<void> gate;
+
+  @override
+  Future<String> create({
+    required String uid,
+    required String formId,
+    required String name,
+  }) async {
+    await gate.future;
+    return super.create(uid: uid, formId: formId, name: name);
+  }
+}
 
 Future<FakeFirebaseFirestore> seeded() async {
   final db = FakeFirebaseFirestore();
@@ -34,7 +58,8 @@ Future<void> seedCopy(FakeFirebaseFirestore db, String uid, String id,
 }
 
 Future<GoRouter> pumpSection(
-    WidgetTester tester, FakeFirebaseFirestore db) async {
+    WidgetTester tester, FakeFirebaseFirestore db,
+    {List<Override> extraOverrides = const []}) async {
   final router = GoRouter(
     initialLocation: '/forms',
     routes: [
@@ -65,6 +90,7 @@ Future<GoRouter> pumpSection(
         mockUser: MockUser(
             uid: 'u1', email: 't@isufst.edu.ph', isEmailVerified: true),
       )),
+      ...extraOverrides,
     ],
     child: MaterialApp.router(routerConfig: router),
   ));
@@ -182,6 +208,63 @@ void main() {
     expect((await db.doc('users/u1/formCopies/a').get()).data()!['name'],
         'Renamed');
     expect(find.text('Renamed'), findsOneWidget);
+  });
+
+  testWidgets(
+      'New copy is disabled while a create is pending, so it cannot make '
+      'duplicates', (tester) async {
+    final db = await seeded();
+    final gate = Completer<void>();
+    await pumpSection(tester, db, extraOverrides: [
+      formCopyRepositoryProvider
+          .overrideWithValue(_SlowCreateRepo(db, gate)),
+    ]);
+
+    await tester.tap(find.byKey(const Key('form1NewCopy')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('copyNameField')), 'Group 3 – Santos');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('copyNameConfirm')));
+    await tester.pump();
+
+    final button = tester.widget<OutlinedButton>(
+        find.byKey(const Key('form1NewCopy')));
+    expect(button.onPressed, isNull,
+        reason: 'a second tap here must not start a second create');
+
+    gate.complete();
+    await settleReal(tester);
+    expect((await db.collection('users/u1/formCopies').get()).docs,
+        hasLength(1));
+  });
+
+  testWidgets('a stream error under New copy shows a short inline message',
+      (tester) async {
+    final router = GoRouter(
+      initialLocation: '/forms',
+      routes: [
+        GoRoute(
+          path: '/forms',
+          builder: (_, _) => const Scaffold(
+            body: FormCopiesSection(
+                formId: 'form1', defaultName: 'Form 1 copy'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        myFormCopiesProvider('form1').overrideWith(
+            (ref) => Stream<List<FormCopy>>.error('permission-denied')),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('form1CopiesError')), findsOneWidget);
+    expect(find.text('Could not load your copies.'), findsOneWidget);
   });
 
   testWidgets('Delete asks first, then deletes', (tester) async {
