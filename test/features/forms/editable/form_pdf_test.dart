@@ -37,4 +37,47 @@ void main() {
         await buildFormPdf(tpl, const {'signer': 'MARIA SANTOS'}));
     expect(text, contains('MARIA SANTOS'));
   });
+
+  group('dataOr and valueOr', () {
+    final helperTpl = FormTemplate(
+      formId: 'helper',
+      title: 'Helper',
+      blocks: const [
+        FormBlock(id: 'venue', label: 'Venue', kind: BlockKind.blank),
+        FormBlock(id: 'lead', label: 'Lead', defaultText: 'Lead text'),
+      ],
+      layout: (t) => [
+        pw.Text(t.of('lead')),
+        dataOr(null, t, 'venue'),
+      ],
+    );
+
+    test('valueOr prefers app data, then typed text, then nothing', () {
+      expect(valueOr('AVR', FormText(helperTpl), 'venue'), 'AVR');
+      expect(valueOr('', FormText(helperTpl), 'venue'), '',
+          reason: 'an empty value from the app is still the app\'s value');
+      expect(valueOr(null, FormText(helperTpl, {'venue': 'Room 2'}), 'venue'),
+          'Room 2');
+      expect(valueOr(null, FormText(helperTpl), 'venue'), isNull);
+    });
+
+    test('dataOr prints app data over anything typed', () async {
+      final tpl = FormTemplate(
+        formId: 'helper2',
+        title: 'Helper',
+        blocks: helperTpl.blocks,
+        layout: (t) => [dataOr('From the app', t, 'venue')],
+      );
+      final text = extractPdfText(
+          await buildFormPdf(tpl, const {'venue': 'Typed venue'}));
+      expect(text, contains('From the app'));
+      expect(text, isNot(contains('Typed venue')));
+    });
+
+    test('dataOr without app data prints the typed text', () async {
+      final text = extractPdfText(
+          await buildFormPdf(helperTpl, const {'venue': 'Typed venue'}));
+      expect(text, contains('Typed venue'));
+    });
+  });
 }
