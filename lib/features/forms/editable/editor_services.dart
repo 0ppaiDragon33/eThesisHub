@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
 import 'package:ethesishub/core/widgets/confirm.dart';
+import 'package:ethesishub/providers/auth_providers.dart';
 
 /// True while the open form editor holds edits that are not saved. Set by
 /// the editor; read by [confirmLeaveFormEditor] when its route is left.
@@ -21,13 +22,14 @@ final pdfSharerProvider = Provider<PdfSharer>(
   },
 );
 
-typedef FormPreviewBuilder = Widget Function(
-    Key key, Future<Uint8List> Function() build);
+typedef FormPreviewBuilder =
+    Widget Function(Key key, Future<Uint8List> Function() build);
 
 /// The live preview of the printed form. Rasterising a PDF needs the
 /// platform, so widget tests replace this with a stand-in.
 final formPreviewBuilderProvider = Provider<FormPreviewBuilder>(
-  (ref) => (key, build) => PdfPreview(
+  (ref) =>
+      (key, build) => PdfPreview(
         key: key,
         build: (_) => build(),
         useActions: false,
@@ -54,9 +56,22 @@ final formPreviewBuilderProvider = Provider<FormPreviewBuilder>(
 /// sidebar `go()`. With unsaved edits it asks first; otherwise it lets the
 /// reader go.
 Future<bool> confirmLeaveFormEditor(
-    BuildContext context, GoRouterState state) async {
+  BuildContext context,
+  GoRouterState state,
+) async {
   final container = ProviderScope.containerOf(context, listen: false);
   if (!container.read(unsavedFormEditsProvider)) return true;
+  // A redirect can also drive onExit: sign-out (-> /login) or deactivation
+  // (-> /deactivated). Asking "Leave without saving?" there would let
+  // "Keep editing" veto the redirect, stranding a signed-out reader on a
+  // copy that can no longer load. Let those through without asking.
+  final signedOut = container.read(signedInUidProvider) == null;
+  final deactivated =
+      container.read(currentUserProvider).valueOrNull?.active == false;
+  if (signedOut || deactivated) {
+    container.read(unsavedFormEditsProvider.notifier).state = false;
+    return true;
+  }
   final leave = await confirmAction(
     context,
     title: 'Leave without saving?',

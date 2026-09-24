@@ -48,6 +48,7 @@ Future<(GoRouter, Set<Key>, Shared)> pumpEditor(
   FakeFirebaseFirestore db, {
   String location = '/forms/form1/copies/c1',
   Size size = const Size(1400, 2400),
+  MockFirebaseAuth? auth,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -80,11 +81,12 @@ Future<(GoRouter, Set<Key>, Shared)> pumpEditor(
   await tester.pumpWidget(ProviderScope(
     overrides: [
       firestoreProvider.overrideWithValue(db),
-      firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
-        signedIn: true,
-        mockUser: MockUser(
-            uid: 'u1', email: 't@isufst.edu.ph', isEmailVerified: true),
-      )),
+      firebaseAuthProvider.overrideWithValue(auth ??
+          MockFirebaseAuth(
+            signedIn: true,
+            mockUser: MockUser(
+                uid: 'u1', email: 't@isufst.edu.ph', isEmailVerified: true),
+          )),
       // Rasterising a PDF needs the platform; record each preview instead.
       formPreviewBuilderProvider.overrideWithValue((key, build) {
         previews.add(key);
@@ -295,5 +297,56 @@ void main() {
     await pumpEditor(tester, await seedCopy(),
         location: '/forms/form1/copies/gone');
     expect(find.byKey(const Key('copyMissing')), findsOneWidget);
+  });
+
+  testWidgets(
+      'typing during a save is not silently lost when the save completes',
+      (tester) async {
+    final db = await seedCopy();
+    await pumpEditor(tester, db);
+
+    await tester.enterText(
+        find.byKey(const Key('field-salutation')), 'Dear Dean:');
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('saveCopy')));
+    // A pump alone advances the fake clock, not the real one the fake
+    // Firestore transaction resolves on -- so the save has started but not
+    // finished when the next keystroke below lands.
+    await tester.pump();
+    await tester.enterText(
+        find.byKey(const Key('field-salutation')), 'Dear Dean Reyes:');
+    await tester.pump();
+
+    await settleReal(tester);
+
+    expect(find.text('Unsaved changes'), findsOneWidget,
+        reason: 'the keystroke made during the save must still count as '
+            'unsaved');
+    final data = (await db.doc('users/u1/formCopies/c1').get()).data()!;
+    expect(data['overrides'], {'salutation': 'Dear Dean:'},
+        reason: 'only the snapshot taken at Save time was written');
+  });
+
+  testWidgets(
+      'signing out with unsaved edits leaves the editor without asking',
+      (tester) async {
+    final auth = MockFirebaseAuth(
+      signedIn: true,
+      mockUser:
+          MockUser(uid: 'u1', email: 't@isufst.edu.ph', isEmailVerified: true),
+    );
+    final (router, _, _) =
+        await pumpEditor(tester, await seedCopy(), auth: auth);
+    await tester.enterText(
+        find.byKey(const Key('field-salutation')), 'Dear Dean:');
+    await tester.pump();
+
+    await auth.signOut();
+    router.go('/forms');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('confirmLeaveEditor')), findsNothing);
+    expect(find.byKey(const Key('formsHome')), findsOneWidget);
   });
 }

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,6 +55,8 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
   Object? _error;
   Map<String, String> _previewOverrides = const {};
   int _previewVersion = 0;
+  Future<Uint8List> Function()? _previewBuild;
+  int? _previewBuildVersion;
   Timer? _debounce;
   _Pane _pane = _Pane.edit;
 
@@ -77,8 +81,9 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
     super.dispose();
   }
 
-  Map<String, String> _values() =>
-      {for (final e in _controllers.entries) e.key: e.value.text};
+  Map<String, String> _values() => {
+    for (final e in _controllers.entries) e.key: e.value.text,
+  };
 
   /// Fills the fields once per copy. Later snapshots of the same copy (its
   /// own save coming back) must not overwrite what is being typed.
@@ -95,8 +100,7 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
     _previewOverrides = template.overridesFrom(_values());
   }
 
-  void _onChanged(
-      FormTemplate template, String id, TextEditingController c) {
+  void _onChanged(FormTemplate template, String id, TextEditingController c) {
     // A controller also notifies on cursor and selection moves; only a
     // change of text is an edit.
     if (c.text == _lastTexts[id]) return;
@@ -121,16 +125,22 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
       _error = null;
     });
     try {
-      await ref.read(formCopyRepositoryProvider).saveOverrides(
-            uid: uid,
-            copyId: widget.copyId,
-            overrides: template.overridesFrom(_values()),
-          );
+      final saved = template.overridesFrom(_values());
+      await ref
+          .read(formCopyRepositoryProvider)
+          .saveOverrides(uid: uid, copyId: widget.copyId, overrides: saved);
       if (!mounted) return;
-      setState(() => _dirty = false);
-      ref.read(unsavedFormEditsProvider.notifier).state = false;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Saved')));
+      // Keystrokes made while the save was in flight are not covered by
+      // what was just written: only clear dirty (and the leave-guard flag)
+      // when the fields still match what was saved.
+      final stillDirty = !mapEquals(saved, template.overridesFrom(_values()));
+      setState(() => _dirty = stillDirty);
+      if (!stillDirty) {
+        ref.read(unsavedFormEditsProvider.notifier).state = false;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Saved')));
     } catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
@@ -140,13 +150,16 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
 
   Future<void> _download(FormTemplate template, FormCopy copy) async {
     try {
-      final bytes =
-          await buildFormPdf(template, template.overridesFrom(_values()));
+      final bytes = await buildFormPdf(
+        template,
+        template.overridesFrom(_values()),
+      );
       await ref.read(pdfSharerProvider)(bytes, '${_fileSafe(copy.name)}.pdf');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not make the PDF: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not make the PDF: $e')));
     }
   }
 
@@ -158,7 +171,8 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
     final reset = await confirmAction(
       context,
       title: 'Reset every field?',
-      message: 'All your edits in this copy go back to the form\'s original '
+      message:
+          'All your edits in this copy go back to the form\'s original '
           'wording. Nothing is saved until you press Save.',
       confirmLabel: 'Reset',
       confirmKey: const Key('confirmResetAll'),
@@ -173,34 +187,42 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
   Widget build(BuildContext context) {
     final template = templateFor(widget.formId);
     if (template == null) {
-      return const PageShell(children: [
-        EmptyState(
-          key: Key('formUnavailable'),
-          icon: Icons.description_outlined,
-          title: 'This form is no longer available',
-          message: 'It may have been removed in an update.',
-        ),
-      ]);
+      return const PageShell(
+        children: [
+          EmptyState(
+            key: Key('formUnavailable'),
+            icon: Icons.description_outlined,
+            title: 'This form is no longer available',
+            message: 'It may have been removed in an update.',
+          ),
+        ],
+      );
     }
 
     final uid = ref.watch(signedInUidProvider);
-    return ref.watch(formCopyProvider(widget.copyId)).when(
+    return ref
+        .watch(formCopyProvider(widget.copyId))
+        .when(
           loading: () => const PageShell(
             children: [LoadingState.page(label: 'Opening your copy…')],
           ),
-          error: (e, _) => PageShell(children: [
-            ErrorState(error: e, message: 'Could not open this copy.'),
-          ]),
+          error: (e, _) => PageShell(
+            children: [
+              ErrorState(error: e, message: 'Could not open this copy.'),
+            ],
+          ),
           data: (copy) {
             if (copy == null || copy.formId != widget.formId) {
-              return const PageShell(children: [
-                EmptyState(
-                  key: Key('copyMissing'),
-                  icon: Icons.description_outlined,
-                  title: 'This copy no longer exists',
-                  message: 'It may have been deleted.',
-                ),
-              ]);
+              return const PageShell(
+                children: [
+                  EmptyState(
+                    key: Key('copyMissing'),
+                    icon: Icons.description_outlined,
+                    title: 'This copy no longer exists',
+                    message: 'It may have been deleted.',
+                  ),
+                ],
+              );
             }
             _load(template, copy);
             return _editor(template, copy, uid);
@@ -222,13 +244,19 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
       ],
     );
 
-    // Captured, so the preview renders exactly the text it was keyed for.
-    final overrides = _previewOverrides;
+    // A new closure identity on every build makes PdfPreview re-raster
+    // (it rebuilds when `build` changes), so it is cached and only replaced
+    // when the overrides it closes over actually change.
+    if (_previewBuildVersion != _previewVersion) {
+      final overrides = _previewOverrides;
+      _previewBuild = () => buildFormPdf(template, overrides);
+      _previewBuildVersion = _previewVersion;
+    }
     final preview = SizedBox(
       height: 760,
       child: ref.watch(formPreviewBuilderProvider)(
         ValueKey(_previewVersion),
-        () => buildFormPdf(template, overrides),
+        _previewBuild!,
       ),
     );
 
