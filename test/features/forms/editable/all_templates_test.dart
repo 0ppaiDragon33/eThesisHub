@@ -33,6 +33,17 @@ void main() {
   // The forms embed Source Serif 4 via rootBundle, which needs the binding.
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('all nine forms can be edited as copies', () {
+    expect(formTemplates.keys.toSet(), {
+      'form1', 'form3', 'form4a', 'form4b', 'form5a', 'form5b', 'form5c',
+      'form7', 'form8',
+    });
+    expect(officialBlanks.keys.toSet(), {
+      'form3', 'form4a', 'form4b', 'form5a', 'form5b', 'form5c', 'form7',
+      'form8',
+    }, reason: 'every form with an official blank is checked against it');
+  });
+
   for (final template in formTemplates.values) {
     group(template.formId, () {
       test('every block id is unique', () {
