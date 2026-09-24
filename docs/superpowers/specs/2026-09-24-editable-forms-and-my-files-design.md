@@ -183,7 +183,7 @@ and adds:
 | field | type | notes |
 |---|---|---|
 | `name` | string | shown name, 1–200 chars; defaults to the original filename |
-| `storagePath` | string | `personal/{uid}/{fileId}/{filename}` |
+| `storagePath` | string | `personal/{uid}/{fileId}/{generated}.{ext}`: the last segment is generated; the person's own filename is kept in `name` |
 | `contentType` | string | from the extension |
 | `sizeBytes` | int | ≤ cap (§6.3) |
 | `folderId` | string \| null | |
@@ -251,6 +251,12 @@ Thesis documents cannot be deleted this way. That's intentional: nothing in
 the app deletes them today.
 
 One function, not two, so there is only one set of secrets and one deploy.
+
+**Phase 2 note.** The app deletes personal files through a separate
+`PersonalFileRemover` interface (implemented by the Supabase storage service),
+so `StorageService` and its test fakes stay unchanged. If a record write fails
+after an upload, the uploaded object is removed through this same delete
+action on a best-effort basis.
 
 ## 8. Security
 
