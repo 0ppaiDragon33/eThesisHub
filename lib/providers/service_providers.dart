@@ -16,6 +16,16 @@ final storageServiceProvider = Provider<StorageService>(
   ),
 );
 
+/// Deletes personal files through the `document-url` function. Its own
+/// provider, not a cast of [storageServiceProvider], so a test can replace
+/// one without the other.
+final personalFileRemoverProvider = Provider<PersonalFileRemover>(
+  (ref) => SupabaseStorageService(
+    ref.watch(supabaseClientProvider),
+    ref.watch(firebaseAuthProvider),
+  ),
+);
+
 final auditServiceProvider = Provider<AuditService>(
   (ref) => AuditService(ref.watch(firestoreProvider)),
 );

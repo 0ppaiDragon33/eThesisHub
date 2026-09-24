@@ -37,6 +37,21 @@ class StoragePaths {
   }) {
     return 'theses/$thesisId/$documentId/${_uuid.v4()}.$extension';
   }
+
+  /// A file in someone's My files:
+  /// `personal/{uid}/{fileId}/{uuid}.{extension}`.
+  ///
+  /// The person's own filename never goes in the path. It is kept in the
+  /// Firestore record, and a generated name always passes the
+  /// `document-url` function's strict filename check, which real filenames
+  /// (spaces, accents, brackets) do not.
+  static String personalFile({
+    required String uid,
+    required String fileId,
+    required String extension,
+  }) {
+    return 'personal/$uid/$fileId/${_uuid.v4()}.$extension';
+  }
 }
 
 /// A storage operation that failed, described in terms a screen can show.
@@ -167,4 +182,16 @@ abstract class StorageService {
   /// Throws [StorageFailure] — including `storage-forbidden` when the reader
   /// is not authorized for the thesis the path belongs to.
   Future<String> signedUrl(String path);
+}
+
+/// Deletes a file from the signed-in person's own My files.
+///
+/// Separate from [StorageService] on purpose. The bucket grants the
+/// anonymous client no delete, so this goes through the `document-url`
+/// function, which checks that the caller owns the path before it removes
+/// anything. Keeping it out of [StorageService] also leaves that interface's
+/// test fakes untouched.
+abstract class PersonalFileRemover {
+  /// Throws [StorageFailure] when the function refuses or fails.
+  Future<void> deletePersonal(String path);
 }

@@ -31,6 +31,7 @@ import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
+import 'package:ethesishub/features/files/my_files_screen.dart';
 import 'package:ethesishub/features/forms/editable/editor_services.dart';
 import 'package:ethesishub/features/forms/editable/form_copy_editor_screen.dart';
 import 'package:ethesishub/features/forms/forms_screen.dart';
@@ -710,6 +711,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => FormCopyEditorScreen(
           formId: state.pathParameters['formId']!,
           copyId: state.pathParameters['copyId']!,
+        ),
+      ),
+      // My files: a person's own form copies and uploads. Every role; the
+      // rules keep each person's to themselves. `?folder=` opens a folder
+      // (pushed, so the system back closes it).
+      GoRoute(
+        path: '/files',
+        builder: (context, state) => MyFilesScreen(
+          folderId: state.uri.queryParameters['folder'],
         ),
       ),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),

@@ -28,11 +28,13 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { create, getNumericDate, verify } from "jsr:@zaubrik/djwt@3";
 import {
+  Action,
   CallerFacts,
   mayReadDocument,
+  mayUsePersonalFile,
+  routeRequest,
   SIGNED_URL_TTL_SECONDS,
   ThesisFacts,
-  thesisIdForPath,
 } from "./authorize.ts";
 import { json, preflightResponse } from "./cors.ts";
 
@@ -226,6 +228,50 @@ async function getDoc(
 // Handler
 // ---------------------------------------------------------------------------
 
+/// A request for a file in someone's My files: open (sign) or delete it.
+///
+/// Owner only, and only while their account is active. `active` is read the
+/// same way the thesis branch reads it. A non-owner is refused before any
+/// Firestore read.
+async function handlePersonal(
+  projectId: string,
+  callerUid: string,
+  ownerUid: string,
+  action: Action,
+  path: string,
+): Promise<Response> {
+  if (callerUid !== ownerUid) return json(403, { error: "forbidden" });
+
+  const userDoc = await getDoc(projectId, `users/${callerUid}`);
+  const caller: CallerFacts = {
+    uid: callerUid,
+    role: (userDoc?.role as string | null) ?? null,
+    active: userDoc?.active === true,
+    hasNomination: false,
+  };
+  if (!mayUsePersonalFile(caller, ownerUid)) {
+    return json(403, { error: "forbidden" });
+  }
+
+  const bucket = createClient(
+    env("SUPABASE_URL"),
+    env("SUPABASE_SERVICE_ROLE_KEY"),
+  ).storage.from(DOCUMENTS_BUCKET);
+
+  if (action === "delete") {
+    const { error } = await bucket.remove([path]);
+    if (error) return json(502, { error: "delete_failed" });
+    return json(200, { deleted: true });
+  }
+
+  const { data, error } = await bucket.createSignedUrl(
+    path,
+    SIGNED_URL_TTL_SECONDS,
+  );
+  if (error || !data) return json(502, { error: "sign_failed" });
+  return json(200, { url: data.signedUrl, expiresIn: SIGNED_URL_TTL_SECONDS });
+}
+
 Deno.serve(async (req) => {
   // Before anything else: the browser will not send the real request until
   // this preflight is answered, so an authorization check here would never
@@ -238,25 +284,39 @@ Deno.serve(async (req) => {
   const auth = req.headers.get("authorization") ?? "";
   if (!auth.startsWith("Bearer ")) return json(401, { error: "unauthenticated" });
 
-  let path: string;
+  let body: { path?: unknown; action?: unknown };
   try {
-    const body = await req.json() as { path?: unknown };
-    if (typeof body.path !== "string") return json(400, { error: "bad_request" });
-    path = body.path;
+    body = await req.json() as { path?: unknown; action?: unknown };
   } catch {
     return json(400, { error: "bad_request" });
   }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return json(400, { error: "bad_request" });
+  }
 
-  // Shape first: an unparseable path is refused before it costs a token
-  // verification, a Firestore read, or a signature.
-  const thesisId = thesisIdForPath(path);
-  if (thesisId === null) return json(400, { error: "bad_path" });
-  const documentId = path.split("/")[2];
+  // Which check this request needs, from its body alone. A delete is only
+  // ever allowed on a personal path; see `routeRequest`.
+  const route = routeRequest(body.path, body.action ?? "sign");
+  if (route.kind === "error") {
+    return json(route.status, { error: route.error });
+  }
+  const path = body.path as string;
 
   const projectId = env("FIREBASE_PROJECT_ID");
   const claims = await verifyFirebaseToken(auth.slice(7), projectId);
   if (!claims) return json(401, { error: "unauthenticated" });
   if (!claims.emailVerified) return json(403, { error: "unverified" });
+
+  if (route.kind === "personal") {
+    return await handlePersonal(
+      projectId,
+      claims.uid,
+      route.ownerUid,
+      route.action,
+      path,
+    );
+  }
+  const { thesisId, documentId } = route;
 
   // The archive read is only worth paying for on a manuscript: a chapter
   // draft is never made public by archiving, so its authorization never

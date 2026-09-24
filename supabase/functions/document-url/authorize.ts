@@ -119,3 +119,76 @@ export function mayReadDocument(
 /// survive opening a PDF on a slow connection. A viewer that needs longer
 /// asks again — the client holds the path, never the URL.
 export const SIGNED_URL_TTL_SECONDS = 120;
+
+// ---------------------------------------------------------------------------
+// Personal files (My files)
+// ---------------------------------------------------------------------------
+
+/// The owner of a path in someone's My files, or null for any other path.
+///
+/// Exactly one shape exists, written by `StoragePaths.personalFile`:
+///   personal/{uid}/{fileId}/{generated}.{ext}
+/// with the same traversal defence as [thesisIdForPath].
+export function personalOwnerForPath(path: string): string | null {
+  if (path.length === 0 || path.length > 512) return null;
+  if (path.includes("..") || path.includes("\\") || path.includes("%")) {
+    return null;
+  }
+  if (path.startsWith("/")) return null;
+
+  const parts = path.split("/");
+  if (parts.length !== 4) return null;
+
+  const [root, uid, fileId, filename] = parts;
+  if (root !== "personal") return null;
+  if (!SEGMENT.test(uid)) return null;
+  if (!SEGMENT.test(fileId)) return null;
+  if (!FILENAME.test(filename)) return null;
+
+  return uid;
+}
+
+/// Whether [caller] may open or delete a file in [ownerUid]'s My files.
+///
+/// The owner alone, while active. No role reaches another person's personal
+/// files, the Dean and the Research Coordinator included: these are one
+/// person's working files, not thesis records (spec E9).
+export function mayUsePersonalFile(
+  caller: CallerFacts,
+  ownerUid: string,
+): boolean {
+  return caller.active && caller.uid === ownerUid;
+}
+
+export type Action = "sign" | "delete";
+
+/// What a request is asking for, decided from its body alone.
+export type Route =
+  | { kind: "thesis"; thesisId: string; documentId: string }
+  | { kind: "personal"; action: Action; ownerUid: string }
+  | { kind: "error"; status: 400 | 403; error: string };
+
+/// Routes a request body to the check it needs.
+///
+/// A thesis document can only be signed. Nothing in the app deletes one, so
+/// a delete on a thesis path is refused outright rather than attempted.
+export function routeRequest(path: unknown, action: unknown = "sign"): Route {
+  if (typeof path !== "string") {
+    return { kind: "error", status: 400, error: "bad_request" };
+  }
+  if (action !== "sign" && action !== "delete") {
+    return { kind: "error", status: 400, error: "bad_action" };
+  }
+
+  const ownerUid = personalOwnerForPath(path);
+  if (ownerUid !== null) return { kind: "personal", action, ownerUid };
+
+  const thesisId = thesisIdForPath(path);
+  if (thesisId === null) {
+    return { kind: "error", status: 400, error: "bad_path" };
+  }
+  if (action === "delete") {
+    return { kind: "error", status: 403, error: "forbidden" };
+  }
+  return { kind: "thesis", thesisId, documentId: path.split("/")[2] };
+}

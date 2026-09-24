@@ -110,6 +110,14 @@ List<ShellDestination> destinationsFor({
     route: '/forms',
     section: ShellSection.resources,
   );
+  // A person's own form copies and uploads. Every role, unconditionally,
+  // like Forms: an empty My files is still a useful page.
+  const myFiles = ShellDestination(
+    label: 'My files',
+    icon: Icons.folder_outlined,
+    route: '/files',
+    section: ShellSection.resources,
+  );
   // The activity log — coordinator and dean only, the two roles the rules
   // let read auditLogs.
   const audit = ShellDestination(
@@ -139,6 +147,7 @@ List<ShellDestination> destinationsFor({
         ],
         archive,
         forms,
+        myFiles,
       ],
     UserRole.faculty => [
         overview,
@@ -166,6 +175,7 @@ List<ShellDestination> destinationsFor({
         ),
         archive,
         forms,
+        myFiles,
       ],
     UserRole.dean => [
         overview,
@@ -188,6 +198,7 @@ List<ShellDestination> destinationsFor({
         audit,
         archive,
         forms,
+        myFiles,
       ],
     UserRole.coordinator => [
         overview,
@@ -217,6 +228,7 @@ List<ShellDestination> destinationsFor({
         audit,
         archive,
         forms,
+        myFiles,
       ],
   };
 }
