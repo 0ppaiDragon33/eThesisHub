@@ -155,6 +155,40 @@ service cloud.firestore {
                                     'nominableAsAdviser', 'nominableAsPanelist']);
 
       allow delete: if false;
+
+      // Personal form copies (editable forms, spec 2026-09-24). One person's
+      // working copies: readable and writable by that person alone. Not the
+      // Dean, not a Coordinator; these are not thesis records. Outside the
+      // theses block, so none of this counts against its expression budget.
+      match /formCopies/{copyId} {
+        function mine() {
+          return verified() && request.auth.uid == uid;
+        }
+
+        function validCopy(d) {
+          return d.keys().hasOnly(['formId', 'name', 'overrides', 'folderId',
+                                   'createdAt', 'updatedAt'])
+              && d.keys().hasAll(['formId', 'name', 'overrides', 'folderId',
+                                  'createdAt', 'updatedAt'])
+              && d.formId in ['form1', 'form3', 'form4a', 'form4b', 'form5a',
+                              'form5b', 'form5c', 'form7', 'form8']
+              && d.name is string && d.name.size() >= 1 && d.name.size() <= 100
+              && d.overrides is map && d.overrides.size() <= 300
+              && (d.folderId == null
+                  || (d.folderId is string && d.folderId.size() <= 128))
+              && d.updatedAt == request.time;
+        }
+
+        allow read: if mine();
+        allow create: if mine()
+                      && validCopy(request.resource.data)
+                      && request.resource.data.createdAt == request.time;
+        allow update: if mine()
+                      && validCopy(request.resource.data)
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.formId == resource.data.formId;
+        allow delete: if mine();
+      }
     }
 
     match /facultyInvites/{email} {

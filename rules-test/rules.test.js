@@ -5165,6 +5165,152 @@ test("reopen: a coordinator may NOT smuggle another field through it",
     );
   });
 
+// --- Personal form copies (editable forms, Phase 1) --------------------------
+//
+// users/{uid}/formCopies/{copyId}: one person's working copies. Owner-only:
+// not the Dean, not a Coordinator. asDefenceUser (memoised) for every
+// context; a second fresh context in one test throws "Firestore has already
+// been started".
+
+const FC_OWNER = ["fc-owner", "fcowner@isufst.edu.ph"];
+const FC_OTHER = ["fc-other", "fcother@isufst.edu.ph"];
+
+function formCopy(overrides = {}) {
+  return {
+    formId: "form1",
+    name: "Group 3 – Santos",
+    overrides: {},
+    folderId: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+async function seedFormCopy(uid, copyId, data = {}) {
+  const at = Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}/formCopies/${copyId}`), {
+      formId: "form1", name: "Seeded", overrides: {}, folderId: null,
+      createdAt: at, updatedAt: at,
+      ...data,
+    });
+  });
+}
+
+test("the owner may create a valid form copy", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertSucceeds(
+    setDoc(doc(owner, "users/fc-owner/formCopies/c-create"), formCopy()));
+});
+
+test("the owner may read and list their own form copies", async () => {
+  await seedFormCopy("fc-owner", "c-read");
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertSucceeds(getDoc(doc(owner, "users/fc-owner/formCopies/c-read")));
+  await assertSucceeds(getDocs(collection(owner, "users/fc-owner/formCopies")));
+});
+
+test("nobody else may read a form copy, not even a coordinator or dean",
+    async () => {
+  await seedFormCopy("fc-owner", "c-private");
+  await seedUser("fc-coord", "coordinator", "fccoord@isufst.edu.ph");
+  await seedUser("fc-dean", "dean", "fcdean@isufst.edu.ph");
+  for (const [uid, email] of [
+    FC_OTHER,
+    ["fc-coord", "fccoord@isufst.edu.ph"],
+    ["fc-dean", "fcdean@isufst.edu.ph"],
+  ]) {
+    const db = asDefenceUser(uid, email);
+    await assertFails(getDoc(doc(db, "users/fc-owner/formCopies/c-private")));
+    await assertFails(getDocs(collection(db, "users/fc-owner/formCopies")));
+  }
+});
+
+test("nobody may create a form copy in someone else's account", async () => {
+  const other = asDefenceUser(...FC_OTHER);
+  await assertFails(
+    setDoc(doc(other, "users/fc-owner/formCopies/c-planted"), formCopy()));
+});
+
+test("a form copy must name one of the nine forms", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-bad-form"),
+    formCopy({ formId: "form99" })));
+  await assertSucceeds(setDoc(doc(owner, "users/fc-owner/formCopies/c-form8"),
+    formCopy({ formId: "form8" })));
+});
+
+test("a form copy may carry no extra fields and must carry all six",
+    async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-extra"),
+    formCopy({ sharedWith: ["fc-other"] })));
+  const missing = formCopy();
+  delete missing.folderId;
+  await assertFails(
+    setDoc(doc(owner, "users/fc-owner/formCopies/c-missing"), missing));
+});
+
+test("a form copy's name must be 1 to 100 characters", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-n0"),
+    formCopy({ name: "" })));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-n101"),
+    formCopy({ name: "x".repeat(101) })));
+  await assertSucceeds(setDoc(doc(owner, "users/fc-owner/formCopies/c-n100"),
+    formCopy({ name: "x".repeat(100) })));
+});
+
+test("a form copy holds at most 300 edited blocks", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  const blocks = (n) =>
+    Object.fromEntries(Array.from({ length: n }, (_, i) => [`b${i}`, "x"]));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-301"),
+    formCopy({ overrides: blocks(301) })));
+  await assertSucceeds(setDoc(doc(owner, "users/fc-owner/formCopies/c-300"),
+    formCopy({ overrides: blocks(300) })));
+});
+
+test("a form copy's times must be the server's", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  const past = Timestamp.fromDate(new Date("2020-01-01T00:00:00Z"));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-t1"),
+    formCopy({ updatedAt: past })));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-t2"),
+    formCopy({ createdAt: past })));
+});
+
+test("the owner may save edits but not rewrite createdAt or formId",
+    async () => {
+  await seedFormCopy("fc-owner", "c-upd");
+  const owner = asDefenceUser(...FC_OWNER);
+  const ref = doc(owner, "users/fc-owner/formCopies/c-upd");
+  await assertSucceeds(updateDoc(ref, {
+    overrides: { salutation: "Dear Dean:" }, updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(ref, {
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(ref, {
+    formId: "form3", updatedAt: serverTimestamp(),
+  }));
+});
+
+test("nobody else may change or delete a form copy; the owner may delete",
+    async () => {
+  await seedFormCopy("fc-owner", "c-del");
+  const other = asDefenceUser(...FC_OTHER);
+  await assertFails(
+    updateDoc(doc(other, "users/fc-owner/formCopies/c-del"), {
+      name: "Hijacked", updatedAt: serverTimestamp(),
+    }));
+  await assertFails(deleteDoc(doc(other, "users/fc-owner/formCopies/c-del")));
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertSucceeds(
+    deleteDoc(doc(owner, "users/fc-owner/formCopies/c-del")));
+});
+
 test.after(async () => {
   await env.cleanup();
 });
