@@ -131,6 +131,15 @@ members, the Coordinator and the Dean. Blanks inside sentences are underscores
 in the editable text. The "Electronically completed in eThesisHub" notice is
 left off, since it would be false on a hand-edited copy.
 
+**Phase 3 note (forms 3, 4a, 4b, 5a, 5b, 5c, 7, 8).** A filled builder does not
+turn its app data into overrides. `_page` keeps its data parameter and prints
+the data where the official form does, falling back to the block (its typed
+text, or a ruled line while blank) when there is no data. Variable-length parts
+(a panel list, names joined into a sentence) therefore stay exactly as they are.
+An editable copy is simply the page with no data. On Form 5c the criterion
+weights stay fixed, because they define the scoring; the criterion names,
+prompts, scores and comments are editable.
+
 ## 5. Form copies
 
 ### 5.1 Data
