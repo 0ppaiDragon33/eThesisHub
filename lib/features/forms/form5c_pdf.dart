@@ -25,31 +25,31 @@ List<EvaluationCriterion> _criteriaIn(EvaluationSection section) =>
 /// only where the rubric has one), its score, and its comment (Section A
 /// only). The weight is not a block: it defines the scoring.
 List<FormBlock> _criterionBlocks(EvaluationCriterion c) => [
-      FormBlock(
-        id: 'criterion.${c.key}.label',
-        label: '${c.label}: criterion',
-        defaultText: c.label,
-      ),
-      if (c.takesComment && c.prompt.isNotEmpty)
-        FormBlock(
-          id: 'criterion.${c.key}.prompt',
-          label: '${c.label}: prompt',
-          defaultText: c.prompt,
-          multiline: true,
-        ),
-      FormBlock(
-        id: 'criterion.${c.key}.score',
-        label: '${c.label}: score (out of ${c.weight})',
-        kind: BlockKind.blank,
-      ),
-      if (c.takesComment)
-        FormBlock(
-          id: 'criterion.${c.key}.comment',
-          label: '${c.label}: comment',
-          kind: BlockKind.blank,
-          multiline: true,
-        ),
-    ];
+  FormBlock(
+    id: 'criterion.${c.key}.label',
+    label: '${c.label}: criterion',
+    defaultText: c.label,
+  ),
+  if (c.takesComment && c.prompt.isNotEmpty)
+    FormBlock(
+      id: 'criterion.${c.key}.prompt',
+      label: '${c.label}: prompt',
+      defaultText: c.prompt,
+      multiline: true,
+    ),
+  FormBlock(
+    id: 'criterion.${c.key}.score',
+    label: '${c.label}: score (out of ${c.weight})',
+    kind: BlockKind.blank,
+  ),
+  if (c.takesComment)
+    FormBlock(
+      id: 'criterion.${c.key}.comment',
+      label: '${c.label}: comment',
+      kind: BlockKind.blank,
+      multiline: true,
+    ),
+];
 
 /// Form 5c's text, block by block, for an editable copy.
 final FormTemplate form5cTemplate = FormTemplate(
@@ -61,7 +61,10 @@ final FormTemplate form5cTemplate = FormTemplate(
       formTitle: 'Form 5c. Evaluation Guide',
     ),
     const FormBlock(
-        id: 'guideHeading', label: 'Heading', defaultText: 'EVALUATION GUIDE'),
+      id: 'guideHeading',
+      label: 'Heading',
+      defaultText: 'EVALUATION GUIDE',
+    ),
     const FormBlock(
       id: 'guideSubheading',
       label: 'Subheading',
@@ -81,7 +84,10 @@ final FormTemplate form5cTemplate = FormTemplate(
     // other block. Scoring reads the fixed criterion weights below, not
     // this heading text, so editing it does not change how the form scores.
     const FormBlock(
-        id: 'sectionA', label: 'Section A heading', defaultText: 'A. CONTENT (50%)'),
+      id: 'sectionA',
+      label: 'Section A heading',
+      defaultText: 'A. CONTENT (50%)',
+    ),
     for (final c in _criteriaIn(EvaluationSection.content))
       ..._criterionBlocks(c),
     const FormBlock(
@@ -92,13 +98,19 @@ final FormTemplate form5cTemplate = FormTemplate(
     for (final c in _criteriaIn(EvaluationSection.presentation))
       ..._criterionBlocks(c),
     const FormBlock(
-        id: 'summaryHeading', label: 'Summary heading', defaultText: 'SUMMARY'),
+      id: 'summaryHeading',
+      label: 'Summary heading',
+      defaultText: 'SUMMARY',
+    ),
     ...fieldBlocks('summaryA', 'A. CONTENT'),
     ...fieldBlocks('summaryB', 'B. PRESENTATION AND DEFENSE'),
     ...fieldBlocks('average', 'Average Rating'),
     ...fieldBlocks('finalGrade', 'Final Grade'),
     const FormBlock(
-        id: 'rating.label', label: 'Rating (label)', defaultText: 'Rating (§8a):'),
+      id: 'rating.label',
+      label: 'Rating (label)',
+      defaultText: 'Rating (§8a):',
+    ),
     const FormBlock(id: 'rating', label: 'Rating', defaultText: '—'),
   ],
   layout: (t) => _page(t),
@@ -122,8 +134,8 @@ pw.Widget _criterionRow(
   final comment = !c.takesComment
       ? null
       : comments != null
-          ? comments[c.key]
-          : valueOr(null, t, 'criterion.${c.key}.comment');
+      ? comments[c.key]
+      : valueOr(null, t, 'criterion.${c.key}.comment');
   return pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: 6),
     child: pw.Column(
@@ -212,8 +224,10 @@ List<pw.Widget> _page(FormText t, {Form5cData? data}) {
     ),
     pw.SizedBox(height: 12),
 
-    formField(t.of('presenter.label'),
-        valueOr(data?.presenterNames.join(', '), t, 'presenter')),
+    formField(
+      t.of('presenter.label'),
+      valueOr(data?.presenterNames.join(', '), t, 'presenter'),
+    ),
     formField(t.of('degree.label'), valueOr(null, t, 'degree')),
     formField(
       t.of('presentedDate.label'),
@@ -221,7 +235,7 @@ List<pw.Widget> _page(FormText t, {Form5cData? data}) {
         presentedOn == null
             ? null
             : '${presentedOn.day} ${monthName(presentedOn.month)} '
-                '${presentedOn.year}',
+                  '${presentedOn.year}',
         t,
         'presentedDate',
       ),
@@ -232,20 +246,26 @@ List<pw.Widget> _page(FormText t, {Form5cData? data}) {
         presentedOn == null
             ? null
             : '${presentedOn.hour.toString().padLeft(2, '0')}:'
-                '${presentedOn.minute.toString().padLeft(2, '0')}',
+                  '${presentedOn.minute.toString().padLeft(2, '0')}',
         t,
         'presentedTime',
       ),
     ),
     formField(t.of('venue.label'), valueOr(data?.venue, t, 'venue')),
     formField(t.of('studyTitle.label'), valueOr(data?.title, t, 'studyTitle')),
-    formField(t.of('defence.label'),
-        valueOr(data?.defenceType.label, t, 'defence')),
-    formField(t.of('evaluator.label'),
-        valueOr(data?.evaluatorName, t, 'evaluator')),
+    formField(
+      t.of('defence.label'),
+      valueOr(data?.defenceType.label, t, 'defence'),
+    ),
+    formField(
+      t.of('evaluator.label'),
+      valueOr(data?.evaluatorName, t, 'evaluator'),
+    ),
     formField(t.of('rank.label'), valueOr(null, t, 'rank')),
-    formField(t.of('specialization.label'),
-        valueOr(data?.evaluatorField, t, 'specialization')),
+    formField(
+      t.of('specialization.label'),
+      valueOr(data?.evaluatorField, t, 'specialization'),
+    ),
 
     pw.SizedBox(height: 14),
     pw.Container(height: 1, color: PdfColors.grey400),
@@ -270,14 +290,20 @@ List<pw.Widget> _page(FormText t, {Form5cData? data}) {
       style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
     ),
     pw.SizedBox(height: 6),
-    _summaryRow(t.of('summaryA.label'),
-        valueOr(data?.sectionATotal.toString(), t, 'summaryA')),
-    _summaryRow(t.of('summaryB.label'),
-        valueOr(data?.sectionBTotal.toString(), t, 'summaryB')),
+    _summaryRow(
+      t.of('summaryA.label'),
+      valueOr(data?.sectionATotal.toString(), t, 'summaryA'),
+    ),
+    _summaryRow(
+      t.of('summaryB.label'),
+      valueOr(data?.sectionBTotal.toString(), t, 'summaryB'),
+    ),
     // The app does not compute an average (D62); a labelled blank says so.
     formField(t.of('average.label'), valueOr(null, t, 'average')),
-    _summaryRow(t.of('finalGrade.label'),
-        valueOr(data?.finalGrade.toString(), t, 'finalGrade')),
+    _summaryRow(
+      t.of('finalGrade.label'),
+      valueOr(data?.finalGrade.toString(), t, 'finalGrade'),
+    ),
     pw.SizedBox(height: 6),
     pw.Text(
       '${t.of('rating.label')} ${data?.rating?.label ?? t.of('rating')}',

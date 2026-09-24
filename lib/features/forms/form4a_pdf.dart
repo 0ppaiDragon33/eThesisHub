@@ -24,21 +24,30 @@ final FormTemplate form4aTemplate = FormTemplate(
       id: 'request',
       label: 'Request',
       multiline: true,
-      defaultText: 'I would like to request for the change of my '
+      defaultText:
+          'I would like to request for the change of my '
           'undergraduate Thesis Adviser',
     ),
     const FormBlock(
-        id: 'nominatedAdviser',
-        label: 'Nominated adviser',
-        kind: BlockKind.blank),
-    const FormBlock(id: 'toWord', label: 'Between the names', defaultText: 'to'),
+      id: 'nominatedAdviser',
+      label: 'Nominated adviser',
+      kind: BlockKind.blank,
+    ),
+    const FormBlock(
+      id: 'toWord',
+      label: 'Between the names',
+      defaultText: 'to',
+    ),
     const FormBlock(
       id: 'nominatedLabel',
       label: 'Label under the nominated adviser',
       defaultText: '(Nominated Adviser)',
     ),
     const FormBlock(
-        id: 'formerAdviser', label: 'Former adviser', kind: BlockKind.blank),
+      id: 'formerAdviser',
+      label: 'Former adviser',
+      kind: BlockKind.blank,
+    ),
     const FormBlock(
       id: 'formerLabel',
       label: 'Label under the former adviser',
@@ -57,14 +66,21 @@ final FormTemplate form4aTemplate = FormTemplate(
       defaultText: 'Your approval on this matter is highly appreciated.',
     ),
     const FormBlock(
-        id: 'valediction', label: 'Sign-off', defaultText: 'Respectfully yours,'),
+      id: 'valediction',
+      label: 'Sign-off',
+      defaultText: 'Respectfully yours,',
+    ),
     const FormBlock(id: 'student', label: 'Student: name'),
     const FormBlock(
-        id: 'student.role', label: 'Student: title', defaultText: 'Student'),
+      id: 'student.role',
+      label: 'Student: title',
+      defaultText: 'Student',
+    ),
     const FormBlock(
-        id: 'conformeHeading',
-        label: 'Conforme heading',
-        defaultText: 'Conforme:'),
+      id: 'conformeHeading',
+      label: 'Conforme heading',
+      defaultText: 'Conforme:',
+    ),
     const FormBlock(id: 'nominated', label: 'Nominated adviser: name'),
     const FormBlock(
       id: 'nominated.role',

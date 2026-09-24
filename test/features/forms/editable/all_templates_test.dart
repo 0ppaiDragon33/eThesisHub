@@ -36,13 +36,30 @@ void main() {
 
   test('all nine forms can be edited as copies', () {
     expect(formTemplates.keys.toSet(), {
-      'form1', 'form3', 'form4a', 'form4b', 'form5a', 'form5b', 'form5c',
-      'form7', 'form8',
-    });
-    expect(officialBlanks.keys.toSet(), {
-      'form3', 'form4a', 'form4b', 'form5a', 'form5b', 'form5c', 'form7',
+      'form1',
+      'form3',
+      'form4a',
+      'form4b',
+      'form5a',
+      'form5b',
+      'form5c',
+      'form7',
       'form8',
-    }, reason: 'every form with an official blank is checked against it');
+    });
+    expect(
+      officialBlanks.keys.toSet(),
+      {
+        'form3',
+        'form4a',
+        'form4b',
+        'form5a',
+        'form5b',
+        'form5c',
+        'form7',
+        'form8',
+      },
+      reason: 'every form with an official blank is checked against it',
+    );
   });
 
   test('block ids never change once shipped', () {
@@ -74,8 +91,9 @@ void main() {
       });
 
       test('the form title can be edited', () async {
-        final text = extractPdfText(await buildFormPdf(
-            template, const {'formTitle': 'EDITED TITLE 42'}));
+        final text = extractPdfText(
+          await buildFormPdf(template, const {'formTitle': 'EDITED TITLE 42'}),
+        );
         expect(text, contains('EDITED TITLE 42'));
       });
 
@@ -87,20 +105,27 @@ void main() {
             template.blocks[i].id: 'ZQ${i}Q',
         };
 
-        final text =
-            extractPdfText(await buildFormPdf(template, overrides));
+        final text = extractPdfText(await buildFormPdf(template, overrides));
 
         for (var i = 0; i < template.blocks.length; i++) {
           final block = template.blocks[i];
-          expect(text, contains('ZQ${i}Q'),
-              reason: 'block "${block.id}" should print what is typed '
-                  'into it');
+          expect(
+            text,
+            contains('ZQ${i}Q'),
+            reason:
+                'block "${block.id}" should print what is typed '
+                'into it',
+          );
         }
 
         final defaultTitle = template.block('formTitle')!.defaultText;
-        expect(text, isNot(contains(defaultTitle)),
-            reason: 'formTitle default text should be replaced once '
-                'every block is overridden');
+        expect(
+          text,
+          isNot(contains(defaultTitle)),
+          reason:
+              'formTitle default text should be replaced once '
+              'every block is overridden',
+        );
       });
 
       final blank = officialBlanks[template.formId];

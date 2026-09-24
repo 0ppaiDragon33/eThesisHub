@@ -59,7 +59,7 @@ pw.Widget _page(FormText t, {Form5bData? data}) {
           presentedOn == null
               ? null
               : '${presentedOn.day} ${monthName(presentedOn.month)} '
-                  '${presentedOn.year}',
+                    '${presentedOn.year}',
           t,
           'presentedDate',
         ),
@@ -70,20 +70,26 @@ pw.Widget _page(FormText t, {Form5bData? data}) {
           presentedOn == null
               ? null
               : '${presentedOn.hour.toString().padLeft(2, '0')}:'
-                  '${presentedOn.minute.toString().padLeft(2, '0')}',
+                    '${presentedOn.minute.toString().padLeft(2, '0')}',
           t,
           'presentedTime',
         ),
       ),
       formField(t.of('venue.label'), valueOr(data?.venue, t, 'venue')),
       formField(
-          t.of('studyTitle.label'), valueOr(data?.title, t, 'studyTitle')),
+        t.of('studyTitle.label'),
+        valueOr(data?.title, t, 'studyTitle'),
+      ),
       pw.SizedBox(height: 12),
-      formField(t.of('evaluator.label'),
-          valueOr(data?.evaluatorName, t, 'evaluator')),
+      formField(
+        t.of('evaluator.label'),
+        valueOr(data?.evaluatorName, t, 'evaluator'),
+      ),
       formField(t.of('rank.label'), valueOr(null, t, 'rank')),
-      formField(t.of('specialization.label'),
-          valueOr(data?.evaluatorField, t, 'specialization')),
+      formField(
+        t.of('specialization.label'),
+        valueOr(data?.evaluatorField, t, 'specialization'),
+      ),
     ],
   );
 }

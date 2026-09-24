@@ -15,43 +15,49 @@ const _body = pw.TextStyle(fontSize: 11);
 List<FormBlock> formHeadBlocks({
   required String rdCode,
   required String formTitle,
-}) =>
-    [
-      FormBlock(id: 'rdCode', label: 'Form code', defaultText: rdCode),
-      FormBlock(id: 'formTitle', label: 'Form title', defaultText: formTitle),
-    ];
+}) => [
+  FormBlock(id: 'rdCode', label: 'Form code', defaultText: rdCode),
+  FormBlock(id: 'formTitle', label: 'Form title', defaultText: formTitle),
+];
 
 /// Heading, date, address and greeting of a letter-shaped form.
 List<FormBlock> letterOpeningBlocks({
   required String rdCode,
   required String formTitle,
-}) =>
-    [
-      ...formHeadBlocks(rdCode: rdCode, formTitle: formTitle),
-      const FormBlock(id: 'date', label: 'Date', kind: BlockKind.blank),
-      const FormBlock(
-          id: 'dateLabel', label: 'Label under the date', defaultText: 'Date'),
-      const FormBlock(
-          id: 'addressee', label: 'Addressed to', defaultText: 'The Dean'),
-      FormBlock(
-        id: 'addressCollege',
-        label: 'Address: college',
-        defaultText: 'College of ${'_' * 20}',
-      ),
-      const FormBlock(
-        id: 'addressUniversity',
-        label: 'Address: university',
-        defaultText:
-            'Iloilo State University of Fisheries Science and Technology',
-      ),
-      const FormBlock(
-        id: 'addressCity',
-        label: 'Address: town',
-        defaultText: 'Barotac Nuevo, Iloilo',
-      ),
-      const FormBlock(
-          id: 'salutation', label: 'Greeting', defaultText: 'Sir/Madam:'),
-    ];
+}) => [
+  ...formHeadBlocks(rdCode: rdCode, formTitle: formTitle),
+  const FormBlock(id: 'date', label: 'Date', kind: BlockKind.blank),
+  const FormBlock(
+    id: 'dateLabel',
+    label: 'Label under the date',
+    defaultText: 'Date',
+  ),
+  const FormBlock(
+    id: 'addressee',
+    label: 'Addressed to',
+    defaultText: 'The Dean',
+  ),
+  FormBlock(
+    id: 'addressCollege',
+    label: 'Address: college',
+    defaultText: 'College of ${'_' * 20}',
+  ),
+  const FormBlock(
+    id: 'addressUniversity',
+    label: 'Address: university',
+    defaultText: 'Iloilo State University of Fisheries Science and Technology',
+  ),
+  const FormBlock(
+    id: 'addressCity',
+    label: 'Address: town',
+    defaultText: 'Barotac Nuevo, Iloilo',
+  ),
+  const FormBlock(
+    id: 'salutation',
+    label: 'Greeting',
+    defaultText: 'Sir/Madam:',
+  ),
+];
 
 /// The Recommending Approval / Approved chain a letter-shaped form ends on.
 /// Signature names default to empty, as the printed forms leave them.
@@ -68,57 +74,64 @@ const List<FormBlock> letterApprovalBlocks = [
     defaultText: 'College Research Coordinator',
   ),
   FormBlock(
-      id: 'approvedHeading', label: 'Approval heading', defaultText: 'Approved:'),
+    id: 'approvedHeading',
+    label: 'Approval heading',
+    defaultText: 'Approved:',
+  ),
   FormBlock(id: 'dean', label: 'Dean: name'),
-  FormBlock(id: 'dean.role', label: 'Dean: title', defaultText: 'Dean, ________'),
+  FormBlock(
+    id: 'dean.role',
+    label: 'Dean: title',
+    defaultText: 'Dean, ________',
+  ),
 ];
 
 /// A labelled field's two blocks: its label, and its value (a blank).
 List<FormBlock> fieldBlocks(String id, String label) => [
-      FormBlock(id: '$id.label', label: '$label (label)', defaultText: label),
-      FormBlock(id: id, label: label, kind: BlockKind.blank),
-    ];
+  FormBlock(id: '$id.label', label: '$label (label)', defaultText: label),
+  FormBlock(id: id, label: label, kind: BlockKind.blank),
+];
 
 /// The top of a letter-shaped form, down to the greeting. [college], when
 /// the app knows it, fills the college line as the filled form always has.
 List<pw.Widget> letterOpening(FormText t, {String college = ''}) => [
-      formChrome(rdCode: t.of('rdCode'), formTitle: t.of('formTitle')),
-      pw.SizedBox(height: 16),
-      pw.Align(
-        alignment: pw.Alignment.centerRight,
-        child: blankOr(t, 'date', width: 140, style: _body),
-      ),
-      pw.Align(
-        alignment: pw.Alignment.centerRight,
-        child: pw.Text(t.of('dateLabel'), style: const pw.TextStyle(fontSize: 8)),
-      ),
-      pw.SizedBox(height: 16),
-      pw.Text(t.of('addressee'), style: _body),
-      pw.Text(
-        college.isEmpty ? t.of('addressCollege') : 'College of $college',
-        style: _body,
-      ),
-      pw.Text(t.of('addressUniversity'), style: _body),
-      pw.Text(t.of('addressCity'), style: _body),
-      pw.SizedBox(height: 12),
-      pw.Text(t.of('salutation'), style: _body),
-      pw.SizedBox(height: 10),
-    ];
+  formChrome(rdCode: t.of('rdCode'), formTitle: t.of('formTitle')),
+  pw.SizedBox(height: 16),
+  pw.Align(
+    alignment: pw.Alignment.centerRight,
+    child: blankOr(t, 'date', width: 140, style: _body),
+  ),
+  pw.Align(
+    alignment: pw.Alignment.centerRight,
+    child: pw.Text(t.of('dateLabel'), style: const pw.TextStyle(fontSize: 8)),
+  ),
+  pw.SizedBox(height: 16),
+  pw.Text(t.of('addressee'), style: _body),
+  pw.Text(
+    college.isEmpty ? t.of('addressCollege') : 'College of $college',
+    style: _body,
+  ),
+  pw.Text(t.of('addressUniversity'), style: _body),
+  pw.Text(t.of('addressCity'), style: _body),
+  pw.SizedBox(height: 12),
+  pw.Text(t.of('salutation'), style: _body),
+  pw.SizedBox(height: 10),
+];
 
 /// The Recommending Approval / Approved chain at the foot of a letter-shaped
 /// form. [college], when the app knows it, names the Dean's college.
 List<pw.Widget> letterApproval(FormText t, {String college = ''}) => [
-      pw.Text(
-        t.of('recommendingHeading'),
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-      ),
-      signableLine(t.of('coordinator'), t.of('coordinator.role')),
-      pw.Text(
-        t.of('approvedHeading'),
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-      ),
-      signableLine(
-        t.of('dean'),
-        college.isEmpty ? t.of('dean.role') : 'Dean, $college',
-      ),
-    ];
+  pw.Text(
+    t.of('recommendingHeading'),
+    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+  ),
+  signableLine(t.of('coordinator'), t.of('coordinator.role')),
+  pw.Text(
+    t.of('approvedHeading'),
+    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+  ),
+  signableLine(
+    t.of('dean'),
+    college.isEmpty ? t.of('dean.role') : 'Dean, $college',
+  ),
+];

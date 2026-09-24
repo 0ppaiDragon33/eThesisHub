@@ -29,12 +29,16 @@ final FormTemplate form3Template = FormTemplate(
       id: 'request',
       label: 'Request',
       multiline: true,
-      defaultText: 'I would like to request the Undergraduate Thesis Panel '
+      defaultText:
+          'I would like to request the Undergraduate Thesis Panel '
           'Members consisting of:',
     ),
     for (var i = 1; i <= 3; i++)
       FormBlock(
-          id: 'panel.$i', label: 'Panel member $i', kind: BlockKind.blank),
+        id: 'panel.$i',
+        label: 'Panel member $i',
+        kind: BlockKind.blank,
+      ),
     const FormBlock(
       id: 'convene',
       label: 'Purpose',
@@ -42,9 +46,15 @@ final FormTemplate form3Template = FormTemplate(
       defaultText: 'To convene and deliberate on the proposal of',
     ),
     const FormBlock(
-        id: 'presenters', label: 'Presenters', kind: BlockKind.blank),
+      id: 'presenters',
+      label: 'Presenters',
+      kind: BlockKind.blank,
+    ),
     const FormBlock(
-        id: 'entitled', label: 'Before the title', defaultText: 'entitled'),
+      id: 'entitled',
+      label: 'Before the title',
+      defaultText: 'entitled',
+    ),
     const FormBlock(
       id: 'title',
       label: 'Thesis title',
@@ -53,7 +63,10 @@ final FormTemplate form3Template = FormTemplate(
     ),
     const FormBlock(id: 'onWord', label: 'Before the date', defaultText: 'on'),
     const FormBlock(
-        id: 'scheduledDate', label: 'Defense date', kind: BlockKind.blank),
+      id: 'scheduledDate',
+      label: 'Defense date',
+      kind: BlockKind.blank,
+    ),
     const FormBlock(id: 'inWord', label: 'Before the place', defaultText: 'in'),
     const FormBlock(id: 'venue', label: 'Place', kind: BlockKind.blank),
     const FormBlock(id: 'atWord', label: 'Before the time', defaultText: 'at'),
@@ -69,7 +82,10 @@ final FormTemplate form3Template = FormTemplate(
       defaultText: 'Your approval on this request is highly appreciated.',
     ),
     const FormBlock(
-        id: 'valediction', label: 'Sign-off', defaultText: 'Very truly yours,'),
+      id: 'valediction',
+      label: 'Sign-off',
+      defaultText: 'Very truly yours,',
+    ),
     const FormBlock(id: 'adviser', label: 'Thesis Adviser: name'),
     const FormBlock(
       id: 'adviser.role',
@@ -133,7 +149,7 @@ pw.Widget _page(FormText t, {Form3Data? data}) {
             scheduledAt == null
                 ? null
                 : '${scheduledAt.day} ${monthName(scheduledAt.month)} '
-                    '${scheduledAt.year}',
+                      '${scheduledAt.year}',
             t,
             'scheduledDate',
             width: 100,
@@ -151,7 +167,7 @@ pw.Widget _page(FormText t, {Form3Data? data}) {
             scheduledAt == null
                 ? null
                 : '${scheduledAt.hour.toString().padLeft(2, '0')}:'
-                    '${scheduledAt.minute.toString().padLeft(2, '0')}',
+                      '${scheduledAt.minute.toString().padLeft(2, '0')}',
             t,
             'time',
             width: 100,

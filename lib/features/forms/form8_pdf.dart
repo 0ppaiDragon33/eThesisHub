@@ -24,23 +24,27 @@ final FormTemplate form8Template = FormTemplate(
     ),
     const FormBlock(id: 'date', label: 'Date', kind: BlockKind.blank),
     const FormBlock(
-        id: 'dateLabel', label: 'Label under the date', defaultText: 'Date'),
-    const FormBlock(id: 'heading', label: 'Heading', defaultText: 'CERTIFICATION'),
+      id: 'dateLabel',
+      label: 'Label under the date',
+      defaultText: 'Date',
+    ),
+    const FormBlock(
+      id: 'heading',
+      label: 'Heading',
+      defaultText: 'CERTIFICATION',
+    ),
     const FormBlock(
       id: 'certifyLead',
       label: 'Before the names',
       defaultText: 'This is to certify that',
     ),
-    FormBlock(
-      id: 'students',
-      label: 'Student names',
-      defaultText: '_' * 31,
-    ),
+    FormBlock(id: 'students', label: 'Student names', defaultText: '_' * 31),
     const FormBlock(
       id: 'certifyMiddle',
       label: 'Between the names and the title',
       multiline: true,
-      defaultText: 'has submitted bound copies of his/her undergraduate '
+      defaultText:
+          'has submitted bound copies of his/her undergraduate '
           'thesis entitled',
     ),
     FormBlock(
@@ -69,8 +73,9 @@ final FormTemplate form8Template = FormTemplate(
 /// real data.
 pw.Widget _page(FormText t, {Form8Data? data}) {
   final issuedOn = data?.issuedOn;
-  final studentsText =
-      data == null ? t.of('students') : panelSentence(data.studentNames);
+  final studentsText = data == null
+      ? t.of('students')
+      : panelSentence(data.studentNames);
   final titleText = data == null ? t.of('thesisTitle') : data.title;
 
   final pw.Widget date;
@@ -126,7 +131,10 @@ pw.Widget _page(FormText t, {Form8Data? data}) {
           children: [
             pw.Container(width: 220, height: 1, color: PdfColors.grey700),
             pw.SizedBox(height: 3),
-            pw.Text(t.of('signer.role'), style: const pw.TextStyle(fontSize: 9)),
+            pw.Text(
+              t.of('signer.role'),
+              style: const pw.TextStyle(fontSize: 9),
+            ),
           ],
         ),
       ),

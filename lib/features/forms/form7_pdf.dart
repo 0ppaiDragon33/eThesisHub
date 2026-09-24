@@ -36,7 +36,10 @@ final FormTemplate form7Template = FormTemplate(
     ),
     const FormBlock(id: 'date', label: 'Date', kind: BlockKind.blank),
     const FormBlock(
-        id: 'dateLabel', label: 'Label under the date', defaultText: 'Date'),
+      id: 'dateLabel',
+      label: 'Label under the date',
+      defaultText: 'Date',
+    ),
     const FormBlock(
       id: 'heading',
       label: 'Heading',
@@ -46,19 +49,26 @@ final FormTemplate form7Template = FormTemplate(
       id: 'certify',
       label: 'Certification',
       multiline: true,
-      defaultText: 'This is to certify that the undersigned Thesis Panel '
+      defaultText:
+          'This is to certify that the undersigned Thesis Panel '
           'Members have reviewed and approved for reproduction of the '
           'manuscript of',
     ),
     const FormBlock(
-        id: 'presenters', label: 'Name of student', kind: BlockKind.blank),
+      id: 'presenters',
+      label: 'Name of student',
+      kind: BlockKind.blank,
+    ),
     const FormBlock(
       id: 'presentersLabel',
       label: 'Label under the name',
       defaultText: '(Name of Student)',
     ),
     const FormBlock(
-        id: 'entitled', label: 'Before the title', defaultText: 'Entitled'),
+      id: 'entitled',
+      label: 'Before the title',
+      defaultText: 'Entitled',
+    ),
     const FormBlock(
       id: 'title',
       label: 'Thesis title',
@@ -66,43 +76,55 @@ final FormTemplate form7Template = FormTemplate(
       multiline: true,
     ),
     const FormBlock(
-        id: 'table.member',
-        label: 'Column: panel member',
-        defaultText: 'Panel Member'),
+      id: 'table.member',
+      label: 'Column: panel member',
+      defaultText: 'Panel Member',
+    ),
     const FormBlock(
-        id: 'table.approved', label: 'Column: approved', defaultText: 'Approved'),
+      id: 'table.approved',
+      label: 'Column: approved',
+      defaultText: 'Approved',
+    ),
     const FormBlock(
-        id: 'table.remarks', label: 'Column: remarks', defaultText: 'Remarks'),
+      id: 'table.remarks',
+      label: 'Column: remarks',
+      defaultText: 'Remarks',
+    ),
     for (var i = 1; i <= _panelRoles.length; i++) ...[
       FormBlock(
-          id: 'panel.$i.name', label: 'Row $i: name', kind: BlockKind.blank),
+        id: 'panel.$i.name',
+        label: 'Row $i: name',
+        kind: BlockKind.blank,
+      ),
       FormBlock(
         id: 'panel.$i.role',
         label: 'Row $i: role',
         defaultText: _panelRoles[i - 1],
       ),
       FormBlock(
-          id: 'panel.$i.approved',
-          label: 'Row $i: approved',
-          kind: BlockKind.blank),
+        id: 'panel.$i.approved',
+        label: 'Row $i: approved',
+        kind: BlockKind.blank,
+      ),
       FormBlock(
-          id: 'panel.$i.remarks',
-          label: 'Row $i: remarks',
-          kind: BlockKind.blank),
+        id: 'panel.$i.remarks',
+        label: 'Row $i: remarks',
+        kind: BlockKind.blank,
+      ),
     ],
   ],
   layout: (t) => [_page(t)],
 );
 
 pw.Widget _tableCell(String text, {bool header = false}) => pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      child: pw.Text(
-        text,
-        style: header
-            ? pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)
-            : _cellStyle,
-      ),
-    );
+  padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+  child: pw.Text(
+    text,
+    style: header
+        ? pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)
+        : _cellStyle,
+  ),
+);
 
 /// The whole printed page, shared by a real certificate, the blank template
 /// and an editable copy. With app data, the presenter and the title print
@@ -125,7 +147,10 @@ pw.Widget _page(FormText t, {Form7Data? data}) {
       ),
       pw.Align(
         alignment: pw.Alignment.centerRight,
-        child: pw.Text(t.of('dateLabel'), style: const pw.TextStyle(fontSize: 8)),
+        child: pw.Text(
+          t.of('dateLabel'),
+          style: const pw.TextStyle(fontSize: 8),
+        ),
       ),
       pw.SizedBox(height: 16),
       pw.Center(
@@ -152,8 +177,13 @@ pw.Widget _page(FormText t, {Form7Data? data}) {
       pw.SizedBox(height: 8),
       pw.Text(t.of('entitled'), style: _bodyStyle),
       pw.SizedBox(height: 4),
-      dataOr(title == null ? null : '"$title"', t, 'title',
-          width: 460, style: _bodyStyle),
+      dataOr(
+        title == null ? null : '"$title"',
+        t,
+        'title',
+        width: 460,
+        style: _bodyStyle,
+      ),
       pw.SizedBox(height: 18),
       pw.Table(
         border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.6),
@@ -182,8 +212,13 @@ pw.Widget _page(FormText t, {Form7Data? data}) {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text('$i.', style: _cellStyle),
-                      blankOr(t, 'panel.$i.name',
-                          width: 140, height: 10, style: _cellStyle),
+                      blankOr(
+                        t,
+                        'panel.$i.name',
+                        width: 140,
+                        height: 10,
+                        style: _cellStyle,
+                      ),
                       pw.SizedBox(height: 3),
                       pw.Text(
                         t.of('panel.$i.role'),
@@ -200,16 +235,26 @@ pw.Widget _page(FormText t, {Form7Data? data}) {
                     horizontal: 4,
                     vertical: 10,
                   ),
-                  child: blankOr(t, 'panel.$i.approved',
-                      width: 100, height: 10, style: _cellStyle),
+                  child: blankOr(
+                    t,
+                    'panel.$i.approved',
+                    width: 100,
+                    height: 10,
+                    style: _cellStyle,
+                  ),
                 ),
                 pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(
                     horizontal: 4,
                     vertical: 10,
                   ),
-                  child: blankOr(t, 'panel.$i.remarks',
-                      width: 90, height: 10, style: _cellStyle),
+                  child: blankOr(
+                    t,
+                    'panel.$i.remarks',
+                    width: 90,
+                    height: 10,
+                    style: _cellStyle,
+                  ),
                 ),
               ],
             ),

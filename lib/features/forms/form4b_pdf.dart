@@ -23,7 +23,8 @@ final FormTemplate form4bTemplate = FormTemplate(
       id: 'request',
       label: 'Request',
       multiline: true,
-      defaultText: 'I would like to request for the change of my '
+      defaultText:
+          'I would like to request for the change of my '
           'undergraduate Thesis Title',
     ),
     const FormBlock(
@@ -32,7 +33,11 @@ final FormTemplate form4bTemplate = FormTemplate(
       kind: BlockKind.blank,
       multiline: true,
     ),
-    const FormBlock(id: 'toWord', label: 'Between the titles', defaultText: 'to'),
+    const FormBlock(
+      id: 'toWord',
+      label: 'Between the titles',
+      defaultText: 'to',
+    ),
     const FormBlock(
       id: 'newTitle',
       label: 'New title',
@@ -52,12 +57,21 @@ final FormTemplate form4bTemplate = FormTemplate(
       defaultText: 'Your approval on this matter is highly appreciated.',
     ),
     const FormBlock(
-        id: 'valediction', label: 'Sign-off', defaultText: 'Respectfully yours,'),
+      id: 'valediction',
+      label: 'Sign-off',
+      defaultText: 'Respectfully yours,',
+    ),
     const FormBlock(id: 'student', label: 'Student: name'),
     const FormBlock(
-        id: 'student.role', label: 'Student: title', defaultText: 'Student'),
+      id: 'student.role',
+      label: 'Student: title',
+      defaultText: 'Student',
+    ),
     const FormBlock(
-        id: 'notedHeading', label: 'Noted heading', defaultText: 'Noted:'),
+      id: 'notedHeading',
+      label: 'Noted heading',
+      defaultText: 'Noted:',
+    ),
     const FormBlock(id: 'adviser', label: 'Thesis Adviser: name'),
     const FormBlock(
       id: 'adviser.role',

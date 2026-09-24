@@ -24,7 +24,8 @@ final FormTemplate form5aTemplate = FormTemplate(
       id: 'request',
       label: 'Request',
       multiline: true,
-      defaultText: 'I have the honor to request for the final oral defense '
+      defaultText:
+          'I have the honor to request for the final oral defense '
           'of my undergraduate thesis entitled',
     ),
     const FormBlock(
@@ -39,7 +40,10 @@ final FormTemplate form5aTemplate = FormTemplate(
       defaultText: 'The final oral defense will be conducted on',
     ),
     const FormBlock(
-        id: 'scheduledDate', label: 'Defense date', kind: BlockKind.blank),
+      id: 'scheduledDate',
+      label: 'Defense date',
+      kind: BlockKind.blank,
+    ),
     const FormBlock(id: 'inWord', label: 'Before the place', defaultText: 'in'),
     const FormBlock(id: 'venue', label: 'Place', kind: BlockKind.blank),
     const FormBlock(id: 'atWord', label: 'Before the time', defaultText: 'at'),
@@ -55,12 +59,21 @@ final FormTemplate form5aTemplate = FormTemplate(
       defaultText: 'Your approval on this matter is highly appreciated.',
     ),
     const FormBlock(
-        id: 'valediction', label: 'Sign-off', defaultText: 'Respectfully yours,'),
+      id: 'valediction',
+      label: 'Sign-off',
+      defaultText: 'Respectfully yours,',
+    ),
     const FormBlock(id: 'student', label: 'Student: name'),
     const FormBlock(
-        id: 'student.role', label: 'Student: title', defaultText: 'Student'),
+      id: 'student.role',
+      label: 'Student: title',
+      defaultText: 'Student',
+    ),
     const FormBlock(
-        id: 'notedHeading', label: 'Noted heading', defaultText: 'Noted:'),
+      id: 'notedHeading',
+      label: 'Noted heading',
+      defaultText: 'Noted:',
+    ),
     const FormBlock(id: 'adviser', label: 'Thesis Adviser: name'),
     const FormBlock(
       id: 'adviser.role',
@@ -88,8 +101,13 @@ pw.Widget _page(FormText t, {Form5aData? data}) {
       ...letterOpening(t, college: college),
       pw.Text(t.of('request'), style: _bodyStyle),
       pw.SizedBox(height: 4),
-      dataOr(title == null ? null : '"$title".', t, 'title',
-          width: 400, style: _bodyStyle),
+      dataOr(
+        title == null ? null : '"$title".',
+        t,
+        'title',
+        width: 400,
+        style: _bodyStyle,
+      ),
       pw.SizedBox(height: 8),
       pw.Text(t.of('scheduleLead'), style: _bodyStyle),
       pw.SizedBox(height: 4),
@@ -100,7 +118,7 @@ pw.Widget _page(FormText t, {Form5aData? data}) {
             scheduledAt == null
                 ? null
                 : '${scheduledAt.day} ${monthName(scheduledAt.month)} '
-                    '${scheduledAt.year}',
+                      '${scheduledAt.year}',
             t,
             'scheduledDate',
             width: 100,
@@ -113,7 +131,7 @@ pw.Widget _page(FormText t, {Form5aData? data}) {
             scheduledAt == null
                 ? null
                 : '${scheduledAt.hour.toString().padLeft(2, '0')}:'
-                    '${scheduledAt.minute.toString().padLeft(2, '0')}',
+                      '${scheduledAt.minute.toString().padLeft(2, '0')}',
             t,
             'time',
             width: 80,
