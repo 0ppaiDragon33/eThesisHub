@@ -65,6 +65,14 @@ const kPresentationMaxBytes = 25 * 1024 * 1024;
 const kChapterTypes = {'pdf', 'doc', 'docx'};
 const kChapterMaxBytes = 15 * 1024 * 1024;
 
+/// What My files accepts: documents, slides and photos (spec §6.3).
+const kPersonalFileTypes = {
+  'pdf', 'doc', 'docx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg',
+};
+
+/// The same cap as a presentation, under the bucket's 50 MB ceiling.
+const kPersonalFileMaxBytes = 25 * 1024 * 1024;
+
 /// The MIME type a stored object should carry, from its extension.
 ///
 /// Everything used to be uploaded as `application/octet-stream`, which tells
@@ -82,6 +90,8 @@ String contentTypeFor(String extension) {
     'ppt' => 'application/vnd.ms-powerpoint',
     'pptx' =>
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'png' => 'image/png',
+    'jpg' || 'jpeg' => 'image/jpeg',
     _ => 'application/octet-stream',
   };
 }
@@ -97,6 +107,8 @@ String contentTypeFor(String extension) {
 const _pdfSig = [0x25, 0x50, 0x44, 0x46]; // "%PDF"
 const _zipSig = [0x50, 0x4B, 0x03, 0x04]; // "PK\x03\x04" — docx/pptx are zips
 const _oleSig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]; // legacy Office
+const _pngSig = [0x89, 0x50, 0x4E, 0x47]; // "\x89PNG"
+const _jpegSig = [0xFF, 0xD8, 0xFF]; // JPEG start-of-image marker
 
 bool _startsWith(List<int> bytes, List<int> signature) {
   if (bytes.length < signature.length) return false;
@@ -114,6 +126,8 @@ bool contentMatchesExtension(String extension, List<int> bytes) {
     'pdf' => _startsWith(bytes, _pdfSig),
     'docx' || 'pptx' => _startsWith(bytes, _zipSig),
     'doc' || 'ppt' => _startsWith(bytes, _oleSig),
+    'png' => _startsWith(bytes, _pngSig),
+    'jpg' || 'jpeg' => _startsWith(bytes, _jpegSig),
     _ => true,
   };
 }

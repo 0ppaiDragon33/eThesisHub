@@ -37,6 +37,21 @@ class StoragePaths {
   }) {
     return 'theses/$thesisId/$documentId/${_uuid.v4()}.$extension';
   }
+
+  /// A file in someone's My files:
+  /// `personal/{uid}/{fileId}/{uuid}.{extension}`.
+  ///
+  /// The person's own filename never goes in the path. It is kept in the
+  /// Firestore record, and a generated name always passes the
+  /// `document-url` function's strict filename check, which real filenames
+  /// (spaces, accents, brackets) do not.
+  static String personalFile({
+    required String uid,
+    required String fileId,
+    required String extension,
+  }) {
+    return 'personal/$uid/$fileId/${_uuid.v4()}.$extension';
+  }
 }
 
 /// A storage operation that failed, described in terms a screen can show.
