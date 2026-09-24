@@ -447,6 +447,10 @@ class _Form3Card extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form3',
+        defaultName: 'Form 3 copy',
+      ),
     );
   }
 }

@@ -5,12 +5,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/features/forms/editable/form_pdf.dart';
 import 'package:ethesishub/features/forms/editable/form_template.dart';
 import 'package:ethesishub/features/forms/editable/form_templates.dart';
+import 'package:ethesishub/features/forms/form3_pdf.dart';
+import 'package:ethesishub/features/forms/form4a_pdf.dart';
+import 'package:ethesishub/features/forms/form4b_pdf.dart';
+import 'package:ethesishub/features/forms/form5a_pdf.dart';
 
 import '../pdf_text.dart';
 
 /// Each converted form's official blank. A new copy of the form must start
 /// out printing exactly like it. Each conversion task adds its form here.
-final Map<String, Future<Uint8List> Function()> officialBlanks = {};
+final Map<String, Future<Uint8List> Function()> officialBlanks = {
+  'form3': buildForm3Blank,
+  'form4a': buildForm4aBlank,
+  'form4b': buildForm4bBlank,
+  'form5a': buildForm5aBlank,
+};
 
 void main() {
   // The forms embed Source Serif 4 via rootBundle, which needs the binding.
