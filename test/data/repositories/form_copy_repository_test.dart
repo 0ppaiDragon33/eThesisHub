@@ -76,6 +76,14 @@ void main() {
     expect(data['overrides'], {'closing': 'Thank you.'});
   });
 
+  test('saveOverrides on a copy that does not exist throws StateError',
+      () async {
+    expect(
+        () => repo.saveOverrides(
+            uid: 'u1', copyId: 'c1', overrides: {'salutation': 'Dear Dean:'}),
+        throwsA(isA<StateError>()));
+  });
+
   test('rename trims the new name and refuses an empty one', () async {
     await seed('u1', 'c1', 'form1', DateTime(2026, 9, 1));
     await repo.rename(uid: 'u1', copyId: 'c1', name: ' Renamed ');

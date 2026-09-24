@@ -62,15 +62,32 @@ class FormCopyRepository {
   }
 
   /// Replaces the copy's stored edits with [overrides].
+  ///
+  /// Uses a full-document write in a transaction rather than a field update,
+  /// because fake_cloud_firestore 4.2.0 deep-merges map values on update(),
+  /// while real Firestore replaces the field. A full set() ensures consistent
+  /// replacement behavior under both libraries.
   Future<void> saveOverrides({
     required String uid,
     required String copyId,
     required Map<String, String> overrides,
-  }) =>
-      _copies(uid).doc(copyId).update({
+  }) async {
+    final ref = _copies(uid).doc(copyId);
+    final failure = await _db.runTransaction<StateError?>((tx) async {
+      final doc = await tx.get(ref);
+      if (!doc.exists) {
+        return StateError('This copy no longer exists.');
+      }
+      final current = doc.data()!;
+      tx.set(ref, {
+        ...current,
         'overrides': overrides,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      return null;
+    });
+    if (failure != null) throw failure;
+  }
 
   Future<void> rename({
     required String uid,
