@@ -485,6 +485,10 @@ class _Form5aCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form5a',
+        defaultName: 'Form 5a copy',
+      ),
     );
   }
 }
