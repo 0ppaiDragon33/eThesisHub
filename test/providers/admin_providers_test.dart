@@ -88,8 +88,14 @@ void main() {
     expect(snap.data()!['nominableAsPanelist'], false);
   });
 
-  test(
-      'setDesignation does not create a directory entry when none exists',
+  // This used to assert the opposite: that no entry was created. That was
+  // forced by the rules, where the designation arm is update-only — but it
+  // left a designation set on an account that had never signed in sitting
+  // inert on `users`, invisible to the student-facing picker, which reads
+  // only `facultyDirectory`. The rules now allow a coordinator to create the
+  // entry with `fullName` and `role` pinned to `users/{uid}`, so it can be
+  // neither blank nor self-declared.
+  test('setDesignation creates the directory entry when none exists',
       () async {
     final db = FakeFirebaseFirestore();
     await db.collection('users').doc('u1').set(userDoc('Alma'));
@@ -98,7 +104,12 @@ void main() {
     await repo.setDesignation(uid: 'u1', adviser: true, panelist: false);
 
     final snap = await db.collection('facultyDirectory').doc('u1').get();
-    expect(snap.exists, isFalse);
+    expect(snap.exists, isTrue);
+    expect(snap.data()!['nominableAsAdviser'], true);
+    expect(snap.data()!['nominableAsPanelist'], false);
+    // Taken from `users`, never from the caller — this is what the rules pin.
+    expect(snap.data()!['fullName'], 'Alma');
+    expect(snap.data()!['role'], 'faculty');
   });
 
   test('FacultyDirectoryRepository.setDesignation never creates via set',

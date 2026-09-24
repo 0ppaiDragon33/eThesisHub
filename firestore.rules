@@ -155,6 +155,40 @@ service cloud.firestore {
                                     'nominableAsAdviser', 'nominableAsPanelist']);
 
       allow delete: if false;
+
+      // Personal form copies (editable forms, spec 2026-09-24). One person's
+      // working copies: readable and writable by that person alone. Not the
+      // Dean, not a Coordinator; these are not thesis records. Outside the
+      // theses block, so none of this counts against its expression budget.
+      match /formCopies/{copyId} {
+        function mine() {
+          return verified() && request.auth.uid == uid;
+        }
+
+        function validCopy(d) {
+          return d.keys().hasOnly(['formId', 'name', 'overrides', 'folderId',
+                                   'createdAt', 'updatedAt'])
+              && d.keys().hasAll(['formId', 'name', 'overrides', 'folderId',
+                                  'createdAt', 'updatedAt'])
+              && d.formId in ['form1', 'form3', 'form4a', 'form4b', 'form5a',
+                              'form5b', 'form5c', 'form7', 'form8']
+              && d.name is string && d.name.size() >= 1 && d.name.size() <= 100
+              && d.overrides is map && d.overrides.size() <= 300
+              && (d.folderId == null
+                  || (d.folderId is string && d.folderId.size() <= 128))
+              && d.updatedAt == request.time;
+        }
+
+        allow read: if mine();
+        allow create: if mine()
+                      && validCopy(request.resource.data)
+                      && request.resource.data.createdAt == request.time;
+        allow update: if mine()
+                      && validCopy(request.resource.data)
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.formId == resource.data.formId;
+        allow delete: if mine();
+      }
     }
 
     match /facultyInvites/{email} {
@@ -216,7 +250,21 @@ service cloud.firestore {
                     && request.resource.data.keys().hasOnly(
                          ['actorUid', 'action', 'targetType', 'targetId',
                           'metadata', 'timestamp'])
-                    && request.resource.data.timestamp == request.time;
+                    && request.resource.data.timestamp == request.time
+                    // `action` was any string, which made the log
+                    // unqueryable and left an entry able to say anything. A
+                    // namespaced pattern (`domain.event`) keeps it
+                    // structured and queryable and caps its size, without
+                    // hardcoding the exact set: an exact enum would refuse
+                    // every action added later — the same permission-denied
+                    // trap this file has been bitten by — so any new action
+                    // just has to follow the `lowercase.lowercase` shape.
+                    && request.resource.data.action is string
+                    && request.resource.data.action.size() <= 64
+                    && request.resource.data.action.matches('[a-z]+([.][a-z]+)+')
+                    // metadata was an unbounded map; bound its breadth so an
+                    // entry cannot carry an arbitrarily large payload.
+                    && request.resource.data.metadata.size() <= 12;
       allow get, list: if isCoordinator() || isDean();
       allow update, delete: if false;
     }
@@ -814,7 +862,11 @@ service cloud.firestore {
                          ['accepted', 'declined']
                       && (request.resource.data.respondedAt == request.time
                           || request.resource.data.respondedAt ==
-                             resource.data.respondedAt);
+                             resource.data.respondedAt)
+                      // Null on accept, a reason on decline — bound it either
+                      // way so a decline cannot carry a megabyte.
+                      && (request.resource.data.declineReason == null
+                          || request.resource.data.declineReason.size() < 2000);
 
         // Critical 3 — decline laundering. The leader correctly could not
         // UPDATE a declined nomination, but could delete it and re-create
@@ -897,6 +949,7 @@ service cloud.firestore {
                       && request.resource.data.position >= 0
                       && request.resource.data.titleText is string
                       && request.resource.data.titleText.size() > 0
+                      && request.resource.data.titleText.size() < 500
                       && request.resource.data.submittedAt == request.time;
 
         // Immutable once submitted: the panel must never be reading a title
@@ -924,6 +977,7 @@ service cloud.firestore {
                             'authorRole', 'body', 'createdAt'])
                       && request.resource.data.body is string
                       && request.resource.data.body.size() > 0
+                      && request.resource.data.body.size() < 4000
                       && request.resource.data.createdAt == request.time;
 
         // Append-only, per parent design §6.4. A remark that could be edited
@@ -1066,6 +1120,7 @@ service cloud.firestore {
                            == request.auth.uid
                         && request.resource.data.body is string
                         && request.resource.data.body.size() > 0
+                        && request.resource.data.body.size() < 4000
                         && request.resource.data.createdAt == request.time
                         && request.resource.data.version is int
                         && request.resource.data.version >= 1
@@ -1111,8 +1166,25 @@ service cloud.firestore {
       // profile inside isCoordinator(). Well inside the budget.
       allow create: if verified()
                     && isCoordinator()
+                    // The one create in this file that used to accept any
+                    // keys. This record is readable by every active user
+                    // (allow get, list above), so an unpinned create let a
+                    // coordinator plant arbitrary fields into a
+                    // college-wide-readable document. Every other create
+                    // pins its keys; this now matches.
+                    && incoming().keys().hasOnly(
+                         ['title', 'memberNames', 'abstract', 'college',
+                          'program', 'academicYear', 'adviserName',
+                          'panelNames', 'manuscriptUrl', 'manuscriptPath',
+                          'finalDefenceId', 'uploadedBy', 'uploadedAt',
+                          'archivedBy', 'archivedAt'])
                     && incoming().archivedBy == request.auth.uid
                     && incoming().archivedAt == request.time
+                    // The thesis must be at the status publishing advances
+                    // FROM. The batch's other write pins this too, but rules
+                    // evaluate each write in a batch independently, so that
+                    // write cannot guarantee it for this one.
+                    && thesis().status == 'titleApproved'
                     // The published file must be the one the STUDENT
                     // uploaded -- a coordinator cannot publish a
                     // substitute.
@@ -1261,7 +1333,8 @@ service cloud.firestore {
                     && incoming().diff(defence()).affectedKeys()
                        .hasOnly(['scheduledAt', 'venue'])
                     && incoming().venue is string
-                    && incoming().venue.size() > 0;
+                    && incoming().venue.size() > 0
+                    && incoming().venue.size() < 200;
 
       // Adviser arm: the release, once, and only after it is closed.
       // Guidelines §4d makes consolidation the adviser's act.
@@ -1347,6 +1420,7 @@ service cloud.firestore {
                       && request.resource.data.authorUid == request.auth.uid
                       && request.resource.data.body is string
                       && request.resource.data.body.size() > 0
+                      && request.resource.data.body.size() < 4000
                       && request.resource.data.createdAt == request.time;
 
         // Append-only, per D10: the defence record is evidence, and
@@ -1617,9 +1691,43 @@ service cloud.firestore {
                && onlyChanged(['nominableAsAdviser', 'nominableAsPanelist']);
       }
 
+      // A designation set before the subject has ever signed in.
+      //
+      // The entry is written by its own subject at sign-in, so an invited
+      // account that has never logged in has none — and the arm above is
+      // update-only. A coordinator designating such an account therefore
+      // wrote the authoritative flags to `users` and had nowhere to mirror
+      // them, and since the student-facing picker reads only this
+      // collection, the designation stayed inert until that person happened
+      // to sign in. The Users screen said so on the row, which made it
+      // visible but no less broken.
+      //
+      // The objection to a coordinator-created entry was that it would carry
+      // no name and show as a blank row in the picker. That is answered by
+      // pinning rather than by refusing: `fullName` and `role` must equal
+      // what `users/{uid}` already says, which the coordinator can read.
+      // Nothing becomes self-declarable — the caller is not the subject, and
+      // the role is taken from `users`, never from the request. A student is
+      // excluded here exactly as `mayWriteOwnDirectoryEntry` excludes one.
+      //
+      // Ordered last among the three arms: it is the only one that costs a
+      // `get()` on `users`, and it is the rarest case.
+      function mayCoordinatorCreateDirectoryEntry() {
+        let u = get(/databases/$(database)/documents/users/$(uid)).data;
+        return isCoordinator()
+               && resource == null
+               && u.role != 'student'
+               && request.resource.data.keys().hasOnly(
+                    ['fullName', 'role', 'college', 'specialization',
+                     'nominableAsAdviser', 'nominableAsPanelist'])
+               && request.resource.data.fullName == u.fullName
+               && request.resource.data.role == u.role;
+      }
+
       allow read: if verified();
       allow create, update: if mayWriteOwnDirectoryEntry()
-                             || mayCoordinatorSetDesignation();
+                             || mayCoordinatorSetDesignation()
+                             || mayCoordinatorCreateDirectoryEntry();
       // Nobody removes a directory entry: a deleted entry would silently
       // drop an office holder out of the ex-officio picker. Deactivation
       // lives on `users.active` instead.
@@ -1631,7 +1739,36 @@ service cloud.firestore {
     // get() lookup into any other collection is needed -- there is no
     // cross-user fact for a rule to verify.
     match /notifications/{uid}/items/{itemId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      // A reader's own feed (D70): every write is the owner's client
+      // reporting to itself, never one user notifying another. This was the
+      // one unbounded write left — `write: if own` accepted any shape, from
+      // any signed-in account, verified or not.
+      //
+      // Read stays open to the signed-in owner even before verification (a
+      // notice is harmless to read). Writing requires an active, verified
+      // account — verified() covers both — and create is bounded: the keys
+      // the client writes, a fresh notification is unread, and the message
+      // is a bounded string. Marking read is the only update, and only ever
+      // to true.
+      allow read: if signedIn() && request.auth.uid == uid;
+
+      allow create: if verified()
+                    && request.auth.uid == uid
+                    && request.resource.data.keys().hasOnly(
+                         ['type', 'thesisId', 'message', 'read', 'createdAt',
+                          'defenceId'])
+                    && request.resource.data.read == false
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() < 2000
+                    && request.resource.data.createdAt is timestamp;
+
+      allow update: if verified()
+                    && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['read'])
+                    && request.resource.data.read == true;
+
+      allow delete: if verified() && request.auth.uid == uid;
     }
 
     // Deny-by-default for everything not matched above.

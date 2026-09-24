@@ -131,6 +131,7 @@ void main() {
 
     await tester.enterText(
         find.byKey(const Key('defenceVenue')), 'Room 301');
+    await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
     await tester.pumpAndSettle();
 
@@ -160,6 +161,7 @@ void main() {
 
     await tester.enterText(
         find.byKey(const Key('defenceVenue')), 'Room 301');
+    await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
     await tester.pumpAndSettle();
 
@@ -189,6 +191,7 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'c1'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
     await tester.pumpAndSettle();
 
@@ -205,6 +208,7 @@ void main() {
 
     await tester.enterText(
         find.byKey(const Key('defenceVenue')), 'Room 301');
+    await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
     await tester.pumpAndSettle();
 

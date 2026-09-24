@@ -3,6 +3,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -87,8 +88,8 @@ void main() {
     // `find.textContaining('Working title')` matching a field's own
     // always-present labelText).
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('reason'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('reason'));
 
     final nom = await db
         .collection('theses').doc('t1')
@@ -174,9 +175,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, isNot(contains('StateError')));
-    expect(error.data!.toLowerCase(), contains('already'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, isNot(contains('StateError')));
+    expect(error.message.toLowerCase(), contains('already'));
 
     // Falsifiability for "loading state cleared on every path": if busy
     // state were never reset in the StateError branch, the button would

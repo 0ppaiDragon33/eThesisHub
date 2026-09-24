@@ -232,8 +232,18 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('[Dr. Noel A. Armada — Adviser]'), findsOneWidget);
-    expect(find.text('[Dr. Test Panelist — Panel Member]'), findsOneWidget);
+    // Each commenter block now shows an avatar, the name and a role badge
+    // rather than a bracketed '[Name — Role]' line. Assert name and role,
+    // scoped to the comments block.
+    final block = find.byKey(const Key('consolidatedComments'));
+    expect(
+        find.descendant(of: block, matching: find.text('Dr. Noel A. Armada')),
+        findsOneWidget);
+    expect(find.descendant(of: block, matching: find.text('Adviser')),
+        findsOneWidget);
+    expect(
+        find.descendant(of: block, matching: find.text('Dr. Test Panelist')),
+        findsOneWidget);
     expect(find.text('Narrow the respondents to one college.'), findsOneWidget);
     expect(find.text('Good direction overall.'), findsOneWidget);
 

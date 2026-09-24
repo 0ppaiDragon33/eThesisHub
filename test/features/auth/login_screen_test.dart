@@ -266,4 +266,28 @@ void main() {
 
     expect(find.textContaining('Failed to send'), findsOneWidget);
   });
+
+  testWidgets('renders at a phone width and at a desktop width',
+      (tester) async {
+    for (final size in [const Size(400, 900), const Size(1200, 900)]) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+            firebaseAuthProvider.overrideWithValue(MockFirebaseAuth()),
+          ],
+          child: const MaterialApp(home: LoginScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('email')), findsOneWidget);
+      expect(find.byKey(const Key('password')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
 }

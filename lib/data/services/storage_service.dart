@@ -2,11 +2,31 @@ import 'package:uuid/uuid.dart';
 
 class StoredFile {
   const StoredFile({required this.path, required this.url});
+
+  /// Where the object lives. This is the durable reference: Firestore stores
+  /// it (`storagePath`, `manuscriptPath`) and every read is a
+  /// [StorageService.signedUrl] call against it.
   final String path;
+
+  /// The object's canonical address.
+  ///
+  /// Recorded by Firestore as `fileUrl` / `manuscriptUrl` and pinned by
+  /// `firestore.rules` (the archive rule requires the published entry to name
+  /// the same manuscript the thesis does), so it is still written.
+  ///
+  /// It is an IDENTIFIER, not a capability. The bucket is private, so
+  /// fetching this URL directly returns an error — reading the file means
+  /// asking [StorageService.signedUrl] for a fresh, short-lived URL. Nothing
+  /// in the app should pass this to `launchUrl`.
   final String url;
 }
 
-/// The Supabase bucket is public, so paths must be unguessable (spec §7.2).
+/// Paths carry a UUID and never the original filename.
+///
+/// The bucket is private and the `document-url` function authorizes every
+/// read, so unguessability is no longer the access control it once had to be
+/// — it is now defence in depth, and it keeps a student's filename out of a
+/// URL that other readers of the thesis will see.
 class StoragePaths {
   static const _uuid = Uuid();
 
@@ -130,4 +150,21 @@ abstract class StorageService {
   });
 
   Future<void> delete(String path);
+
+  /// A short-lived URL for reading the object at [path].
+  ///
+  /// The bucket is private, so there is no durable URL to store and none of
+  /// these outlives a couple of minutes. Screens therefore hold the
+  /// **storage path** — which is what Firestore records — and ask for a URL
+  /// at the moment the reader opens the file.
+  ///
+  /// Authorization happens server-side, in the `document-url` edge function:
+  /// it verifies the caller's Firebase ID token, asks Firestore whether they
+  /// are on this thesis, and only then signs. Nothing about that decision is
+  /// made here, and a caller who is not entitled to the file gets a
+  /// [StorageFailure] rather than a URL.
+  ///
+  /// Throws [StorageFailure] — including `storage-forbidden` when the reader
+  /// is not authorized for the thesis the path belongs to.
+  Future<String> signedUrl(String path);
 }

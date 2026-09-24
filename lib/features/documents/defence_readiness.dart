@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis.dart';
@@ -74,8 +77,12 @@ class DefenceReadinessList extends ConsumerWidget {
           );
         }
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final thesis in theses) _ReadinessRow(thesis: thesis),
+            for (final thesis in theses) ...[
+              _ReadinessRow(thesis: thesis),
+              const SizedBox(height: AppTokens.sm + 2),
+            ],
           ],
         );
       },
@@ -106,57 +113,96 @@ class _ReadinessRow extends ConsumerWidget {
     final isCoordinator =
         ref.watch(currentUserProvider).valueOrNull?.role == UserRole.coordinator;
 
-    return Card(
-      child: ListTile(
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    final chapters = chaptersAsync.valueOrNull;
+    final approvedCount = chapters
+            ?.where((c) => c.status == ChapterStatus.approved)
+            .length ??
+        0;
+    final readiness = chapters == null ? null : readinessOf(chapters);
+    final tone = switch (readiness) {
+      DefenceReadiness.finalReady ||
+      DefenceReadiness.proposalReady =>
+        Tone.endorsed,
+      DefenceReadiness.notReady => Tone.awaiting,
+      null => Tone.neutral,
+    };
+
+    return Material(
+      color: p.paper,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radius),
+        side: BorderSide(color: p.rule),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         key: Key('readiness-${thesis.id}'),
-        // Spec §7 names the coordinator (and the dean, who reaches this
-        // list too) as audience for the chapter screens, and the rules
-        // already grant them read on `documents`/`versions`/`feedback` --
-        // but until this tap, nothing in `lib/` ever linked here. The
-        // router's `isChapterRoute` exemption already lets a non-student
-        // through to this route.
-        // '/thesis/chapters' is a destination for a student, but no
-        // coordinator or dean destination owns it -- both roles reach
-        // this list -- so for either reader it is a screen below nothing
-        // of their own and must be pushed (D23), not gone to: `go` would
-        // drop this readiness list off the stack, and the shell's back
-        // control would fall through to '/overview' instead of here.
         onTap: () => context.push('/thesis/chapters?id=${thesis.id}'),
-        title: Text(thesis.workingTitle),
-        subtitle: chaptersAsync.when(
-          loading: () => const Text('Chapters still loading…'),
-          error: (e, _) => const Text('Could not load this thesis\'s '
-              'chapters.'),
-          data: (chapters) {
-            final approvedCount = chapters
-                .where((c) => c.status == ChapterStatus.approved)
-                .length;
-            return Text('$approvedCount of 5 chapters approved');
-          },
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            chaptersAsync.when(
-              loading: () => const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+        child: Padding(
+          padding: const EdgeInsets.all(AppTokens.md),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(thesis.workingTitle, style: text.titleMedium),
+                    const SizedBox(height: AppTokens.sm),
+                    chaptersAsync.when(
+                      loading: () => Text('Chapters still loading…',
+                          style: text.bodySmall),
+                      error: (e, _) => Text(
+                          'Could not load this thesis\'s chapters.',
+                          style: text.bodySmall),
+                      data: (_) => Row(
+                        children: [
+                          SizedBox(
+                            width: 160,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: approvedCount / 5,
+                                minHeight: 6,
+                                color: Tone.endorsed.color(context),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppTokens.sm),
+                          Flexible(
+                            child: Text(
+                                '$approvedCount of 5 chapters approved',
+                                style: text.bodySmall),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              error: (e, _) => const Icon(Icons.error_outline),
-              data: (chapters) => Text(_labelFor(readinessOf(chapters))),
-            ),
-            if (isCoordinator) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                key: Key('schedule-${thesis.id}'),
-                icon: const Icon(Icons.event_outlined),
-                tooltip: 'Schedule a defence',
-                onPressed: () =>
-                    context.push('/defence/schedule?id=${thesis.id}'),
-              ),
+              const SizedBox(width: AppTokens.md),
+              if (readiness != null)
+                ToneBadge(label: _labelFor(readiness), tone: tone, dense: true)
+              else if (chaptersAsync.hasError)
+                const Icon(Icons.error_outline)
+              else
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              if (isCoordinator) ...[
+                const SizedBox(width: AppTokens.sm),
+                IconButton(
+                  key: Key('schedule-${thesis.id}'),
+                  icon: const Icon(Icons.event_available_outlined),
+                  tooltip: 'Schedule a defence',
+                  onPressed: () =>
+                      context.push('/defence/schedule?id=${thesis.id}'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

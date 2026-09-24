@@ -159,7 +159,7 @@ test("audit logs may be created but never deleted", async () => {
   await assertSucceeds(
     setDoc(doc(student, "auditLogs/log-1"), {
       actorUid: "student-uid",
-      action: "login",
+      action: "session.login",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -167,6 +167,67 @@ test("audit logs may be created but never deleted", async () => {
     })
   );
   await assertFails(deleteDoc(doc(student, "auditLogs/log-1")));
+});
+
+test("an audit action must be a namespaced, bounded string", async () => {
+  // Unstructured `action` made the log unqueryable and let an entry say
+  // anything. A `domain.event` shape keeps it structured without hardcoding
+  // the set, so a new action just follows the convention.
+  const base = {
+    actorUid: "student-uid", targetType: "session",
+    targetId: "student-uid", metadata: {}, timestamp: serverTimestamp(),
+  };
+
+  // Not namespaced.
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-1"), { ...base, action: "login" }));
+  // Not a lowercase.lowercase shape.
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-2"), { ...base, action: "Role.Promoted" }));
+  // Over the length cap.
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-3"),
+      { ...base, action: "x." + "a".repeat(70) }));
+  // A real, namespaced action is accepted.
+  await assertSucceeds(
+    setDoc(doc(student, "auditLogs/ok-1"),
+      { ...base, action: "role.promoted" }));
+});
+
+test("audit metadata may not be an unbounded map", async () => {
+  const wide = {};
+  for (let i = 0; i < 20; i++) wide["k" + i] = "v";
+  await assertFails(
+    setDoc(doc(student, "auditLogs/bad-meta"), {
+      actorUid: "student-uid", action: "role.promoted",
+      targetType: "user", targetId: "student-uid",
+      metadata: wide, timestamp: serverTimestamp(),
+    }));
+});
+
+test("only a coordinator or dean may read the audit log", async () => {
+  // asDefenceUser (memoised) for both readers: creating two fresh contexts
+  // in one test the other way throws "Firestore has already been started".
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "auditLogs/e1"), {
+      actorUid: "coord-x", action: "account.deactivated",
+      targetType: "user", targetId: "u1", metadata: {},
+      timestamp: serverTimestamp(),
+    });
+    await setDoc(doc(db, "users/coord-audit"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/dean-audit"),
+      { role: "dean", active: true });
+  });
+
+  const coordinator = asDefenceUser("coord-audit", "coordaudit@isufst.edu.ph");
+  const dean = asDefenceUser("dean-audit", "deanaudit@isufst.edu.ph");
+  await assertSucceeds(getDocs(collection(coordinator, "auditLogs")));
+  await assertSucceeds(getDocs(collection(dean, "auditLogs")));
+
+  // A student (the default `student` context) may not.
+  await assertFails(getDocs(collection(student, "auditLogs")));
 });
 
 test("unauthenticated access is denied", async () => {
@@ -297,7 +358,7 @@ test("an audit log may NOT be created with a foreign actorUid", async () => {
   await assertFails(
     setDoc(doc(student, "auditLogs/log-forged"), {
       actorUid: "someone-else-uid",
-      action: "login",
+      action: "session.login",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -310,7 +371,7 @@ test("an audit log may NOT be overwritten via setDoc on an existing id", async (
   await assertSucceeds(
     setDoc(doc(student, "auditLogs/log-overwrite"), {
       actorUid: "student-uid",
-      action: "login",
+      action: "session.login",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -321,7 +382,7 @@ test("an audit log may NOT be overwritten via setDoc on an existing id", async (
   await assertFails(
     setDoc(doc(student, "auditLogs/log-overwrite"), {
       actorUid: "student-uid",
-      action: "logout",
+      action: "session.logout",
       targetType: "session",
       targetId: "student-uid",
       metadata: {},
@@ -1781,6 +1842,101 @@ test("(g) a directory entry may NOT be deleted", async () => {
   );
 });
 
+// --- a coordinator designating an account that never signed in ------------
+//
+// The entry is written by its own subject at sign-in, so an invited account
+// that has never logged in has none, and the designation arm is update-only.
+// The coordinator's designation therefore reached `users` and stopped there,
+// while the student-facing picker reads only `facultyDirectory` — so the
+// designation did nothing until that person happened to sign in.
+
+test("a coordinator MAY create a directory entry for a designated account",
+  async () => {
+    const coordinator = await asCoordinator("coord-dir1", "coorddir1@isufst.edu.ph");
+    await seedUser("never-signed-in", "faculty", "nsi@isufst.edu.ph");
+
+    await assertSucceeds(
+      setDoc(doc(coordinator, "facultyDirectory/never-signed-in"), {
+        fullName: "U", role: "faculty",
+        nominableAsAdviser: true, nominableAsPanelist: true,
+      })
+    );
+  });
+
+test("a coordinator-created entry may NOT carry a name other than the real one",
+  async () => {
+    // The old objection to this arm was a blank row in the picker. The answer
+    // is to pin the name to `users/{uid}`, so it can be neither blank nor
+    // invented.
+    const coordinator = await asCoordinator("coord-dir2", "coorddir2@isufst.edu.ph");
+    await seedUser("nsi-2", "faculty", "nsi2@isufst.edu.ph");
+
+    await assertFails(
+      setDoc(doc(coordinator, "facultyDirectory/nsi-2"), {
+        fullName: "Someone Else", role: "faculty",
+        nominableAsAdviser: true, nominableAsPanelist: false,
+      })
+    );
+  });
+
+test("a coordinator-created entry may NOT invent a role", async () => {
+  // The whole point of finding (g): the role must come from `users`, never
+  // from the request. Creating on someone else's behalf must not reopen it.
+  const coordinator = await asCoordinator("coord-dir3", "coorddir3@isufst.edu.ph");
+  await seedUser("nsi-3", "faculty", "nsi3@isufst.edu.ph");
+
+  await assertFails(
+    setDoc(doc(coordinator, "facultyDirectory/nsi-3"), {
+      fullName: "U", role: "dean",
+      nominableAsAdviser: true, nominableAsPanelist: true,
+    })
+  );
+});
+
+test("a coordinator may NOT create a directory entry for a student", async () => {
+  const coordinator = await asCoordinator("coord-dir4", "coorddir4@isufst.edu.ph");
+  await seedUser("stu-dir", "student", "studir@isufst.edu.ph");
+
+  await assertFails(
+    setDoc(doc(coordinator, "facultyDirectory/stu-dir"), {
+      fullName: "U", role: "student",
+      nominableAsAdviser: true, nominableAsPanelist: true,
+    })
+  );
+});
+
+test("a NON-coordinator may NOT create an entry for somebody else", async () => {
+  await seedUser("nsi-5", "faculty", "nsi5@isufst.edu.ph");
+
+  await assertFails(
+    setDoc(doc(asUser("fac-a", "faca@isufst.edu.ph"), "facultyDirectory/nsi-5"), {
+      fullName: "U", role: "faculty",
+      nominableAsAdviser: true, nominableAsPanelist: true,
+    })
+  );
+});
+
+test("the create arm may NOT be used to overwrite an existing entry",
+  async () => {
+    // `resource == null` confines the new arm to creation. Without that pin
+    // a coordinator could rewrite a subject's own name and college through
+    // it, which the designation arm (onlyChanged) deliberately prevents.
+    const coordinator = await asCoordinator("coord-dir6", "coorddir6@isufst.edu.ph");
+    await seedUser("nsi-6", "faculty", "nsi6@isufst.edu.ph");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "facultyDirectory/nsi-6"), {
+        fullName: "U", role: "faculty", college: "CICT",
+      });
+    });
+
+    await assertFails(
+      setDoc(doc(coordinator, "facultyDirectory/nsi-6"), {
+        fullName: "U", role: "faculty", college: "CAS",
+        nominableAsAdviser: true, nominableAsPanelist: true,
+      })
+    );
+  });
+
 // --- MINOR (h): a pending nominee could not read the parent thesis ------
 
 test("(h) allow: a pending nominee MAY read the thesis they were nominated to", async () => {
@@ -2016,6 +2172,69 @@ test("M1b allow: a panel member MAY read comments during the defence", async () 
   await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComments")));
 });
 
+// An ex-officio dean sits on the panel by office. Whether they may post a
+// title-defence comment was never covered, and it is exactly the question a
+// crash raised: `isOnPanel()` accepts an `exOfficio` conformeStatus, so a
+// dean who holds that nomination seat MAY comment and mark composing. The
+// earlier permission-denied was a dean who had NO such seat — an account
+// with no facultyDirectory entry is never returned by fetchExOfficio and so
+// is never written an ex-officio nomination — not a rule that refuses deans.
+test("M1b allow: an ex-officio dean on the seat MAY post a title comment",
+  async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedDefence(db);
+      await setDoc(doc(db, "users/dean-uid"), {
+        fullName: "Dr. Dean", email: "dean@isufst.edu.ph", role: "dean",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+      });
+      // The ex-officio seat submitNominations writes for an office holder.
+      await setDoc(doc(db, "theses/td1/nominations/dean-uid"), {
+        nomineeUid: "dean-uid", nomineeName: "Dr. Dean", position: "dean",
+        exOfficio: true, conformeStatus: "exOfficio",
+      });
+    });
+
+    const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+    await assertSucceeds(
+      setDoc(doc(dean, "theses/td1/titleComments/dean-remark"), {
+        candidateTitleId: "ct1", authorUid: "dean-uid",
+        authorName: "Dr. Dean", authorRole: "Dean",
+        body: "Sharpen the scope.", createdAt: serverTimestamp(),
+      })
+    );
+  });
+
+test("M1b: a dean with NO ex-officio seat may NOT post a title comment",
+  async () => {
+    // The other half — this is the case the screen mishandles, showing a
+    // comment box to a dean the rules will refuse. The read arm lets any
+    // dean SEE the thread; the create arm requires the seat.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedDefence(db);
+      await setDoc(doc(db, "users/dean2-uid"), {
+        fullName: "Dr. Other", email: "dean2@isufst.edu.ph", role: "dean",
+        college: null, program: null, specialization: null, active: true,
+        createdAt: serverTimestamp(), createdBy: null,
+      });
+      // No nomination doc for this dean on this thesis.
+    });
+
+    const dean = asDefenceUser("dean2-uid", "dean2@isufst.edu.ph");
+    // They can read the thread...
+    await assertSucceeds(getDocs(collection(dean, "theses/td1/titleComments")));
+    // ...but not post to it.
+    await assertFails(
+      setDoc(doc(dean, "theses/td1/titleComments/dean2-remark"), {
+        candidateTitleId: "ct1", authorUid: "dean2-uid",
+        authorName: "Dr. Other", authorRole: "Dean",
+        body: "Not my seat.", createdAt: serverTimestamp(),
+      })
+    );
+  });
+
 test("M1b attack: the leader may NOT read comments before the decision", async () => {
   await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
   const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
@@ -2156,6 +2375,24 @@ test("M1b attack: a comment may NOT be edited or deleted", async () => {
   await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/appended"), {
     candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
     authorRole: "Panel Member", body: "a new remark", createdAt: serverTimestamp(),
+  }));
+});
+
+test("M1b: a comment body over the size cap is refused", async () => {
+  // Defence in depth: an authorized author could otherwise write a megabyte
+  // into a college-readable record. On Spark that is a quota problem too.
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertFails(setDoc(doc(panel, "theses/td1/titleComments/huge"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "x".repeat(4001),
+    createdAt: serverTimestamp(),
+  }));
+  // Control: just under the cap is fine.
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/okbody"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "x".repeat(3999),
+    createdAt: serverTimestamp(),
   }));
 });
 
@@ -4485,6 +4722,33 @@ test("M5a: the coordinator publishes a passed thesis", async () => {
     archiveDoc()));
 });
 
+test("M5a: an archive entry may NOT carry an unlisted key", async () => {
+  // This record is readable by the whole college; an unpinned create let a
+  // coordinator plant arbitrary fields into it.
+  await seedArchivable();
+  await assertFails(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc({ isDean: true })));
+});
+
+test("M5a: a thesis not at titleApproved may NOT be published", async () => {
+  // The batch's sibling write pins this, but rules judge each write in a
+  // batch independently, so the archive create must check it itself.
+  await seedArchivable();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/mt1"),
+      m5Thesis({
+        manuscriptPath: "theses/mt1/manuscript/abc.pdf",
+        manuscriptUrl: "https://example.test/abc.pdf",
+        manuscriptAbstract: "Fish were counted.",
+        status: "chapters",
+      }));
+  });
+  await assertFails(setDoc(
+    doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1"),
+    archiveDoc()));
+});
+
 // The whole college reads it -- that is the point of the collection.
 test("M5a: everyone signed in reads the archive", async () => {
   await seedArchivable();
@@ -4664,6 +4928,61 @@ test("notifications: an anonymous reader is denied both directions", async () =>
     setDoc(doc(anon, "notifications/student2/items/a"), notifDoc())
   );
 });
+
+test("notifications: a create may not carry an unlisted key", async () => {
+  const owner = asUser("notif-keys", "notifkeys@isufst.edu.ph");
+  await assertFails(setDoc(doc(owner, "notifications/notif-keys/items/x"),
+    notifDoc({ planted: true })));
+});
+
+test("notifications: a fresh notification must be unread", async () => {
+  // Planting a pre-read notice would let it slip past the badge unseen.
+  const owner = asUser("notif-read", "notifread@isufst.edu.ph");
+  await assertFails(setDoc(doc(owner, "notifications/notif-read/items/x"),
+    notifDoc({ read: true })));
+});
+
+test("notifications: the message is bounded", async () => {
+  const owner = asUser("notif-size", "notifsize@isufst.edu.ph");
+  await assertFails(setDoc(doc(owner, "notifications/notif-size/items/x"),
+    notifDoc({ message: "z".repeat(2001) })));
+});
+
+test("notifications: an update may only flip read to true", async () => {
+  const owner = asUser("notif-upd", "notifupd@isufst.edu.ph");
+  await setDoc(doc(owner, "notifications/notif-upd/items/a"), notifDoc());
+
+  // Some other field.
+  await assertFails(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
+    { message: "rewritten" }));
+  // read back to false is not a thing.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "notifications/notif-upd/items/a"),
+      { read: true });
+  });
+  await assertFails(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
+    { read: false }));
+  // The control — marking read is allowed.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "notifications/notif-upd/items/a"),
+      { read: false });
+  });
+  await assertSucceeds(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
+    { read: true }));
+});
+
+test("notifications: a deactivated account may not write to its own feed",
+  async () => {
+    // verified() folds in isActive(), so switching off the account stops the
+    // self-authored writes too.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/notif-off"),
+        { role: "student", active: false });
+    });
+    const off = asUser("notif-off", "notifoff@isufst.edu.ph");
+    await assertFails(setDoc(doc(off, "notifications/notif-off/items/x"),
+      notifDoc()));
+  });
 
 // ---------------------------------------------------------------------------
 // Account deactivation (users.active), enforced at the rules layer.
@@ -4845,6 +5164,172 @@ test("reopen: a coordinator may NOT smuggle another field through it",
       })
     );
   });
+
+// --- Personal form copies (editable forms, Phase 1) --------------------------
+//
+// users/{uid}/formCopies/{copyId}: one person's working copies. Owner-only:
+// not the Dean, not a Coordinator. asDefenceUser (memoised) for every
+// context; a second fresh context in one test throws "Firestore has already
+// been started".
+
+const FC_OWNER = ["fc-owner", "fcowner@isufst.edu.ph"];
+const FC_OTHER = ["fc-other", "fcother@isufst.edu.ph"];
+
+function formCopy(overrides = {}) {
+  return {
+    formId: "form1",
+    name: "Group 3 – Santos",
+    overrides: {},
+    folderId: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+async function seedFormCopy(uid, copyId, data = {}) {
+  const at = Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}/formCopies/${copyId}`), {
+      formId: "form1", name: "Seeded", overrides: {}, folderId: null,
+      createdAt: at, updatedAt: at,
+      ...data,
+    });
+  });
+}
+
+test("the owner may create a valid form copy", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertSucceeds(
+    setDoc(doc(owner, "users/fc-owner/formCopies/c-create"), formCopy()));
+});
+
+test("the owner may read and list their own form copies", async () => {
+  await seedFormCopy("fc-owner", "c-read");
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertSucceeds(getDoc(doc(owner, "users/fc-owner/formCopies/c-read")));
+  await assertSucceeds(getDocs(collection(owner, "users/fc-owner/formCopies")));
+});
+
+test("nobody else may read a form copy, not even a coordinator or dean",
+    async () => {
+  await seedFormCopy("fc-owner", "c-private");
+  await seedUser("fc-coord", "coordinator", "fccoord@isufst.edu.ph");
+  await seedUser("fc-dean", "dean", "fcdean@isufst.edu.ph");
+  for (const [uid, email] of [
+    FC_OTHER,
+    ["fc-coord", "fccoord@isufst.edu.ph"],
+    ["fc-dean", "fcdean@isufst.edu.ph"],
+  ]) {
+    const db = asDefenceUser(uid, email);
+    await assertFails(getDoc(doc(db, "users/fc-owner/formCopies/c-private")));
+    await assertFails(getDocs(collection(db, "users/fc-owner/formCopies")));
+  }
+});
+
+test("nobody may create a form copy in someone else's account", async () => {
+  const other = asDefenceUser(...FC_OTHER);
+  await assertFails(
+    setDoc(doc(other, "users/fc-owner/formCopies/c-planted"), formCopy()));
+});
+
+test("a form copy must name one of the nine forms", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-bad-form"),
+    formCopy({ formId: "form99" })));
+  await assertSucceeds(setDoc(doc(owner, "users/fc-owner/formCopies/c-form8"),
+    formCopy({ formId: "form8" })));
+});
+
+test("a form copy may carry no extra fields and must carry all six",
+    async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-extra"),
+    formCopy({ sharedWith: ["fc-other"] })));
+  const missing = formCopy();
+  delete missing.folderId;
+  await assertFails(
+    setDoc(doc(owner, "users/fc-owner/formCopies/c-missing"), missing));
+});
+
+test("a form copy's name must be 1 to 100 characters", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-n0"),
+    formCopy({ name: "" })));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-n101"),
+    formCopy({ name: "x".repeat(101) })));
+  await assertSucceeds(setDoc(doc(owner, "users/fc-owner/formCopies/c-n100"),
+    formCopy({ name: "x".repeat(100) })));
+});
+
+test("a form copy holds at most 300 edited blocks", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  const blocks = (n) =>
+    Object.fromEntries(Array.from({ length: n }, (_, i) => [`b${i}`, "x"]));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-301"),
+    formCopy({ overrides: blocks(301) })));
+  await assertSucceeds(setDoc(doc(owner, "users/fc-owner/formCopies/c-300"),
+    formCopy({ overrides: blocks(300) })));
+});
+
+test("a form copy's times must be the server's", async () => {
+  const owner = asDefenceUser(...FC_OWNER);
+  const past = Timestamp.fromDate(new Date("2020-01-01T00:00:00Z"));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-t1"),
+    formCopy({ updatedAt: past })));
+  await assertFails(setDoc(doc(owner, "users/fc-owner/formCopies/c-t2"),
+    formCopy({ createdAt: past })));
+});
+
+test("the owner may save edits but not rewrite createdAt or formId",
+    async () => {
+  await seedFormCopy("fc-owner", "c-upd");
+  const owner = asDefenceUser(...FC_OWNER);
+  const ref = doc(owner, "users/fc-owner/formCopies/c-upd");
+  await assertSucceeds(updateDoc(ref, {
+    overrides: { salutation: "Dear Dean:" }, updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(ref, {
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(ref, {
+    formId: "form3", updatedAt: serverTimestamp(),
+  }));
+});
+
+test("the owner may save edits with the app's real transactional shape",
+    async () => {
+  const at = Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"));
+  await seedFormCopy("fc-owner", "c-tx", { createdAt: at, updatedAt: at });
+  const owner = asDefenceUser(...FC_OWNER);
+  const ref = doc(owner, "users/fc-owner/formCopies/c-tx");
+  // The app's saveOverrides() spreads the stored document back into a full
+  // set() (not update()) and stamps updatedAt with serverTimestamp(), so
+  // createdAt must be re-sent as the stored Timestamp, unchanged.
+  await assertSucceeds(setDoc(ref, {
+    formId: "form1", name: "Seeded", overrides: { salutation: "Dear Dean:" },
+    folderId: null, createdAt: at, updatedAt: serverTimestamp(),
+  }));
+  const other = Timestamp.fromDate(new Date("2020-01-01T00:00:00Z"));
+  await assertFails(setDoc(ref, {
+    formId: "form1", name: "Seeded", overrides: { salutation: "Dear Dean:" },
+    folderId: null, createdAt: other, updatedAt: serverTimestamp(),
+  }));
+});
+
+test("nobody else may change or delete a form copy; the owner may delete",
+    async () => {
+  await seedFormCopy("fc-owner", "c-del");
+  const other = asDefenceUser(...FC_OTHER);
+  await assertFails(
+    updateDoc(doc(other, "users/fc-owner/formCopies/c-del"), {
+      name: "Hijacked", updatedAt: serverTimestamp(),
+    }));
+  await assertFails(deleteDoc(doc(other, "users/fc-owner/formCopies/c-del")));
+  const owner = asDefenceUser(...FC_OWNER);
+  await assertSucceeds(
+    deleteDoc(doc(owner, "users/fc-owner/formCopies/c-del")));
+});
 
 test.after(async () => {
   await env.cleanup();

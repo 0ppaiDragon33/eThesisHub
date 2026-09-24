@@ -14,3 +14,12 @@ enum UserRole {
     return null;
   }
 }
+
+/// The name a role is shown under. Display only — what the app does with a
+/// role is decided elsewhere and never defaulted from this.
+String roleLabel(UserRole role) => switch (role) {
+      UserRole.student => 'Student researcher',
+      UserRole.faculty => 'Faculty',
+      UserRole.coordinator => 'Research Coordinator',
+      UserRole.dean => 'Dean',
+    };

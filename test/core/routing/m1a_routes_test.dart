@@ -78,7 +78,7 @@ void main() {
     await pumpApp(tester, c);
 
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('My thesis')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('My thesis')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToCreateThesis')), findsOneWidget);
@@ -110,7 +110,7 @@ void main() {
     // thesis by TAPPING, not only by typing the URL -- and the tap is on
     // the destination rather than on a button that pointed at it.
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('My thesis')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('My thesis')));
     await tester.pumpAndSettle();
 
     // The destination screen's own Key, never a heading the origin shares
@@ -127,7 +127,7 @@ void main() {
 
     c.read(goRouterProvider).go('/nominations');
     await tester.pumpAndSettle();
-    expect(find.text('Nomination inbox'), findsOneWidget);
+    expect(find.byKey(const Key('nominationInboxScreen')), findsOneWidget);
   });
 
   testWidgets(
@@ -143,7 +143,7 @@ void main() {
     // Nominations tab and pointed at this same route; the destination goes
     // there directly.
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Nominations')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('Nominations')));
     await tester.pumpAndSettle();
 
     // The destination screen's own Key, never a heading the origin shares.
@@ -160,7 +160,7 @@ void main() {
     // its own key sits on the Recommendations destination, which is a
     // sidebar entry in the shell now rather than a dashboard tab.
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Recommendations')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('Recommendations')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToReview')), findsOneWidget);
@@ -189,7 +189,7 @@ void main() {
     // Overview lands first; the link with its own key sits on the
     // Recommendations destination.
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Recommendations')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('Recommendations')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToFaculty')), findsOneWidget);
@@ -217,7 +217,7 @@ void main() {
     await pumpApp(tester, c);
 
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Users')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('Users')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('usersScreen')), findsOneWidget);
@@ -235,7 +235,7 @@ void main() {
     // own key sits on the Approvals destination, which is a sidebar entry
     // in the shell now rather than a dashboard tab.
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail), matching: find.text('Approvals')));
+        of: find.byKey(const Key('shellSidebar')), matching: find.text('Approvals')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToReview')), findsOneWidget);

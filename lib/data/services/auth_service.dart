@@ -33,6 +33,20 @@ class AuthService {
     await _auth.currentUser?.sendEmailVerification();
   }
 
+  /// Forces a fresh ID token to be minted.
+  ///
+  /// The security rules read `request.auth.token.email_verified`, which is
+  /// baked into the ID token at sign-in and cached for about an hour.
+  /// `reload()` updates the local `User.emailVerified` — so the app lets a
+  /// just-verified user in — but does NOT reissue the token, so Firestore
+  /// keeps seeing `email_verified: false` and refuses every write the rules
+  /// gate on `verified()`. Passing `true` here discards the cached token and
+  /// fetches one carrying the current claims, which is the only thing that
+  /// closes that window short of signing out and back in.
+  Future<void> refreshIdToken() async {
+    await _auth.currentUser?.getIdToken(true);
+  }
+
   Future<void> sendPasswordReset(String email) {
     return _auth.sendPasswordResetEmail(email: email.trim());
   }

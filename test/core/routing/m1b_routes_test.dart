@@ -108,7 +108,7 @@ void main() {
     // narrow layout's hamburger -- and the Overview body's own
     // panelist-mode tile is ALSO labelled "Panels", so the finder must be
     // scoped to the rail or it would match both.
-    final rail = find.byType(NavigationRail);
+    final rail = find.byKey(const Key('shellSidebar'));
     expect(find.descendant(of: rail, matching: find.text('Panels')),
         findsOneWidget,
         reason: 'a panelist-only member must not land in adviser mode');
@@ -157,7 +157,7 @@ void main() {
     // dashboard tab. Scoped to the rail: the page this lands on is headed
     // with the same two words.
     await tester.tap(find.descendant(
-        of: find.byType(NavigationRail),
+        of: find.byKey(const Key('shellSidebar')),
         matching: find.text('Title defences')));
     await tester.pumpAndSettle();
 

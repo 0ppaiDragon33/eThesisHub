@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/features/titles/submit_titles_screen.dart';
@@ -30,11 +31,16 @@ class _FakeStorage implements StorageService {
 
   @override
   Future<void> delete(String path) async {}
+
+  @override
+  Future<String> signedUrl(String path) async =>
+      'https://example.test/signed/$path';
 }
 
 PickedDocument _validDoc([String name = 'doc.pdf']) => PickedDocument(
       name: name,
-      bytes: Uint8List(10),
+      // Leads with the %PDF signature so it passes the content check.
+      bytes: Uint8List.fromList([0x25, 0x50, 0x44, 0x46, ...List.filled(6, 0)]),
       extension: 'pdf',
       contentType: 'application/octet-stream',
     );
@@ -120,12 +126,12 @@ void main() {
     await tester.tap(find.byKey(const Key('submitTitles')));
     await tester.pumpAndSettle();
 
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
     // Full-string match: 'title' alone also appears in the next
     // validation's message ('Attach a justification for every candidate
     // title.'), so a substring check on 'title' would still pass with the
     // blank-title check deleted entirely.
-    expect(error.data, 'Give every candidate a title.');
+    expect(error.message, 'Give every candidate a title.');
     expect((await db.collection('theses/t1/candidateTitles').get()).docs,
         isEmpty);
   });
@@ -143,8 +149,8 @@ void main() {
     await tester.tap(find.byKey(const Key('submitTitles')));
     await tester.pumpAndSettle();
 
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('justification'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('justification'));
     expect((await db.collection('theses/t1/candidateTitles').get()).docs,
         isEmpty);
   });
@@ -162,7 +168,7 @@ void main() {
     }
     expect(find.byKey(const Key('titleText9')), findsOneWidget);
     expect(
-      tester.widget<TextButton>(find.byKey(const Key('addCandidate')))
+      tester.widget<ButtonStyleButton>(find.byKey(const Key('addCandidate')))
           .onPressed,
       isNull,
     );
@@ -250,9 +256,14 @@ void main() {
     await tester.tap(find.byKey(const Key('pickJustification0')));
     await tester.pumpAndSettle();
 
-    final button =
-        tester.widget<TextButton>(find.byKey(const Key('pickJustification0')));
-    expect((button.child! as Text).data, 'Attach justification');
+    // The pick button is an OutlinedButton.icon now, so its child is an
+    // icon+label wrapper, not a bare Text — assert the label by finding it
+    // inside the button.
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('pickJustification0')),
+            matching: find.text('Attach justification')),
+        findsOneWidget);
     expect(find.byKey(const Key('error')), findsNothing);
     expect(storage.uploads, isEmpty);
   });
@@ -279,11 +290,16 @@ void main() {
     await tester.tap(find.byKey(const Key('pickJustification0')));
     await tester.pumpAndSettle();
 
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('MB'));
-    final button =
-        tester.widget<TextButton>(find.byKey(const Key('pickJustification0')));
-    expect((button.child! as Text).data, 'Attach justification');
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('MB'));
+    // The pick button is an OutlinedButton.icon now, so its child is an
+    // icon+label wrapper, not a bare Text — assert the label by finding it
+    // inside the button.
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('pickJustification0')),
+            matching: find.text('Attach justification')),
+        findsOneWidget);
     expect(storage.uploads, isEmpty,
         reason: 'validation must run before any upload is attempted');
   });
@@ -316,11 +332,11 @@ void main() {
     await tester.tap(find.byKey(const Key('submitTitles')));
     await tester.pumpAndSettle();
 
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, contains('Could not reach file storage'));
-    expect(error.data, contains('storage-unreachable'),
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, contains('Could not reach file storage'));
+    expect(error.message, contains('storage-unreachable'),
         reason: 'the code is the only diagnostic that reaches anyone');
-    expect(error.data, isNot(contains('try again')),
+    expect(error.message, isNot(contains('try again')),
         reason: 'retrying cannot fix an unreachable host, and saying so '
             'sends the student chasing their own connection');
 
@@ -348,4 +364,8 @@ class _UnreachableStorage implements StorageService {
 
   @override
   Future<void> delete(String path) async {}
+
+  @override
+  Future<String> signedUrl(String path) async =>
+      'https://example.test/signed/$path';
 }

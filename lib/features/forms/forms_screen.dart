@@ -3,16 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/data/models/user_role.dart';
-import 'package:ethesishub/features/forms/form5c_pdf.dart';
+import 'package:ethesishub/features/forms/editable/form_copies_section.dart';
 import 'package:ethesishub/features/forms/form3_pdf.dart';
 import 'package:ethesishub/features/forms/form4a_pdf.dart';
 import 'package:ethesishub/features/forms/form4b_pdf.dart';
 import 'package:ethesishub/features/forms/form5a_pdf.dart';
 import 'package:ethesishub/features/forms/form5b_pdf.dart';
+import 'package:ethesishub/features/forms/form5c_pdf.dart';
 import 'package:ethesishub/features/forms/form7_pdf.dart';
 import 'package:ethesishub/features/forms/form8_data.dart';
 import 'package:ethesishub/features/forms/form8_pdf.dart';
@@ -39,10 +42,12 @@ class FormsScreen extends StatelessWidget {
   Widget _framed(List<Widget> children) => KeyedSubtree(
     key: const Key('forms'),
     child: PageShell(
+      maxWidth: AppTokens.measureWide,
       title: 'Forms',
       subtitle:
-          'Blank templates for every research form, and the '
-          'filled versions you have on file.',
+          'Blank templates for every research form, and the filled '
+          'versions you have on file, grouped by where they fall in the '
+          'thesis.',
       children: children,
     ),
   );
@@ -50,36 +55,65 @@ class FormsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _framed(const [
-      _Form1Card(),
-      Gap.md(),
-      _Form3Card(),
-      Gap.md(),
-      _Form4aCard(),
-      Gap.md(),
-      _Form4bCard(),
-      Gap.md(),
-      _Form5aCard(),
-      Gap.md(),
-      _Form5bCard(),
-      Gap.md(),
-      _Form5cCard(),
-      Gap.md(),
-      _Form7Card(),
-      Gap.md(),
-      _Form8Card(),
+      _FormGroup(
+        title: 'Nomination and changes',
+        forms: [_Form1Card(), _Form4aCard(), _Form4bCard()],
+      ),
+      _FormGroup(
+        title: 'Pre-oral defence',
+        forms: [_Form3Card()],
+      ),
+      _FormGroup(
+        title: 'Final defence',
+        forms: [_Form5aCard(), _Form5bCard(), _Form5cCard()],
+      ),
+      _FormGroup(
+        title: 'Completion and archive',
+        forms: [_Form7Card(), _Form8Card()],
+      ),
     ]);
   }
 }
 
-/// The one shape every card on this screen shares: a name, a one-line
-/// account of what the form is for, and whatever action widgets the
-/// specific card adds beneath that.
+/// A stage heading and its forms, two across when there is room.
+class _FormGroup extends StatelessWidget {
+  const _FormGroup({required this.title, required this.forms});
+
+  final String title;
+  final List<Widget> forms;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionRule(title),
+        LayoutBuilder(builder: (context, c) {
+          final across = c.maxWidth >= 760 ? 2 : 1;
+          final w = (c.maxWidth - (across - 1) * AppTokens.md) / across;
+          return Wrap(
+            spacing: AppTokens.md,
+            runSpacing: AppTokens.md,
+            children: [
+              for (final f in forms) SizedBox(width: w, child: f),
+            ],
+          );
+        }),
+        const Gap.md(),
+      ],
+    );
+  }
+}
+
+/// The shape every form on this screen shares: its code, its name, what
+/// it is for, and the card's own actions.
 class _FormCard extends StatelessWidget {
   const _FormCard({
     required this.cardKey,
     required this.name,
     required this.purpose,
     required this.actions,
+    this.footer,
   });
 
   final Key cardKey;
@@ -87,26 +121,74 @@ class _FormCard extends StatelessWidget {
   final String purpose;
   final List<Widget> actions;
 
+  /// Drawn under the actions: the card's saved copies, where a form can be
+  /// edited in the app.
+  final Widget? footer;
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final p = Palette.of(context);
+    final parts = name.split(' — ');
+    final code = parts.first.replaceFirst('Form ', '');
+    final title = parts.length > 1 ? parts.sublist(1).join(' — ') : name;
 
-    return Card(
+    return Container(
       key: cardKey,
-      margin: const EdgeInsets.only(bottom: AppTokens.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, style: text.titleMedium),
-            const SizedBox(height: AppTokens.xs),
-            Text(purpose, style: text.bodyMedium?.copyWith(color: muted)),
-            const SizedBox(height: AppTokens.sm),
-            ...actions,
-          ],
-        ),
+      padding: const EdgeInsets.all(AppTokens.md + 2),
+      decoration: BoxDecoration(
+        color: p.paper,
+        borderRadius: BorderRadius.circular(AppTokens.radius + 2),
+        border: Border.all(color: p.rule),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // A paper sheet with the form's code on it.
+          Container(
+            width: 48,
+            height: 60,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: p.seal.withValues(alpha: 0.06),
+              border: Border.all(color: p.seal.withValues(alpha: 0.35)),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(4),
+                topRight: Radius.circular(12),
+              ),
+            ),
+            child: Semantics(
+              label: parts.first,
+              excludeSemantics: true,
+              child: Text(code,
+                  style: text.titleMedium?.copyWith(color: p.seal)),
+            ),
+          ),
+          const SizedBox(width: AppTokens.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(parts.first, style: text.labelSmall),
+                Text(title, style: text.titleMedium),
+                const SizedBox(height: AppTokens.xs),
+                Text(purpose, style: text.bodySmall),
+                const SizedBox(height: AppTokens.md - 4),
+                Wrap(
+                  spacing: AppTokens.sm,
+                  runSpacing: AppTokens.sm,
+                  children: actions,
+                ),
+                if (footer != null) ...[
+                  const SizedBox(height: AppTokens.md - 4),
+                  footer!,
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -123,13 +205,11 @@ void _reportFailure(BuildContext context, String form, Object error) {
 
 /// Form 1 — Nomination of Thesis Adviser and Panel Members.
 ///
-/// No blank template button here, deliberately. `Form1Data` requires a
-/// whole `Thesis` (and its layout is a table of nominees built from real
-/// nominations, not a fixed rubric with ruled blanks), so there is no
-/// honest way to hand back a blank Form 1 without fabricating a thesis
-/// that does not exist. This card still lists the form and, when the
-/// reader has a thesis of their own, links to the screen that already
-/// generates it filled — Form 1's status page, `/thesis`.
+/// No blank template download, still deliberately: the official Form 1 is
+/// generated from a thesis's own nominations, so this card links to the
+/// thesis page for it. What it adds is the editable copy (spec 2026-09-24):
+/// anyone can start a named copy of a blank Form 1, reword it in the app and
+/// download it, from [FormCopiesSection] below the actions.
 class _Form1Card extends ConsumerWidget {
   const _Form1Card();
 
@@ -145,8 +225,9 @@ class _Form1Card extends ConsumerWidget {
           'its adviser and panel.',
       actions: [
         Text(
-          'Generated from a thesis\'s own nominations, so there is no '
-          'blank template — open your thesis to download it filled in.',
+          'The filled Form 1 is made from a thesis\'s own nominations. '
+          'Open your thesis to download it, or start your own copy to '
+          'edit here.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -160,6 +241,10 @@ class _Form1Card extends ConsumerWidget {
           ),
         ],
       ],
+      footer: const FormCopiesSection(
+        formId: 'form1',
+        defaultName: 'Form 1 copy',
+      ),
     );
   }
 }

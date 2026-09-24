@@ -1,5 +1,6 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/data/models/audit_entry.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/title_defence_repository.dart';
 import 'package:ethesishub/data/services/audit_service.dart';
@@ -121,4 +122,8 @@ class _FailingAudit implements AuditService {
   }) async {
     throw Exception('audit unavailable');
   }
+
+  @override
+  Stream<List<AuditEntry>> watchRecent({int limit = kAuditFeedLimit}) =>
+      const Stream.empty();
 }

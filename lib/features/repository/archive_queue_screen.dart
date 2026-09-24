@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/candidate_title.dart';
@@ -12,6 +16,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
@@ -24,7 +29,8 @@ class ArchiveQueueScreen extends ConsumerWidget {
   Widget _framed(List<Widget> children) => KeyedSubtree(
         key: const Key('archiveQueue'),
         child: PageShell(
-          title: 'Publish Queue',
+          kicker: 'Research office',
+          title: 'Publish to archive',
           subtitle: 'Theses ready to be added to the college archive.',
           children: children,
         ),
@@ -140,6 +146,19 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   }
 
   Future<void> _publish() async {
+    // Publishing makes the manuscript readable to the whole college and is
+    // the one write in this screen with a public, lasting effect — worth a
+    // pause even though a coordinator can retract it.
+    final confirmed = await confirmAction(
+      context,
+      title: 'Publish to the archive?',
+      message: 'The manuscript becomes readable to everyone in the college. '
+          'It can be retracted, but only by a coordinator.',
+      confirmLabel: 'Publish',
+      confirmKey: Key('confirmPublish-${widget.thesis.id}'),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() {
       _publishing = true;
       _error = null;
@@ -180,6 +199,15 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
             finalDefenceId: finalDefence.id,
             coordinatorUid: coordinatorUid,
           );
+      // Best-effort, after the entry is published, swallowing its own failure.
+      try {
+        await ref.read(auditServiceProvider).log(
+              actorUid: coordinatorUid,
+              action: 'archive.published',
+              targetType: 'thesis',
+              targetId: thesis.id,
+            );
+      } catch (_) {/* audit must never block the action */}
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -209,41 +237,68 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
     final uploadedAt = thesis.manuscriptUploadedAt;
     final uploadedLabel = uploadedAt == null
         ? 'Manuscript uploaded'
-        : 'Uploaded ${uploadedAt.year}-${uploadedAt.month.toString().padLeft(2, '0')}-'
-            '${uploadedAt.day.toString().padLeft(2, '0')}';
+        : 'Uploaded ${Dates.day(uploadedAt)}';
 
-    return Card(
+    return Padding(
       key: Key('queueRow-${thesis.id}'),
-      margin: const EdgeInsets.only(bottom: AppTokens.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.md),
+      padding: const EdgeInsets.only(bottom: AppTokens.md),
+      child: Panel(
+        emphasis: true,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Wrap(
+              spacing: AppTokens.sm,
+              runSpacing: AppTokens.xs,
+              children: [
+                ToneBadge(
+                  label: 'Final defence passed',
+                  tone: Tone.endorsed,
+                  dense: true,
+                ),
+                ToneBadge(
+                  label: 'Manuscript on file',
+                  tone: Tone.endorsed,
+                  icon: Icons.picture_as_pdf_outlined,
+                  dense: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTokens.sm + 2),
             Text(title,
                 key: Key('queueTitle-${thesis.id}'),
-                style: text.titleMedium),
+                style: text.titleLarge),
             const SizedBox(height: AppTokens.xs),
             Text(authors, style: text.bodyMedium?.copyWith(color: muted)),
             const SizedBox(height: AppTokens.xs),
             Text(uploadedLabel, style: text.bodySmall?.copyWith(color: muted)),
+            if ((thesis.manuscriptAbstract ?? '').isNotEmpty) ...[
+              const SizedBox(height: AppTokens.sm + 2),
+              Text(
+                thesis.manuscriptAbstract!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: text.bodyMedium,
+              ),
+            ],
             if (_error != null) ...[
-              const SizedBox(height: AppTokens.sm),
+              const SizedBox(height: AppTokens.md),
               ErrorState(message: _error!),
             ],
             const SizedBox(height: AppTokens.md),
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton(
+              child: FilledButton.icon(
                 key: Key('publish-${thesis.id}'),
                 onPressed: _publishing ? null : _publish,
-                child: _publishing
+                icon: _publishing
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Publish to archive'),
+                    : const Icon(Icons.local_library_outlined, size: 18),
+                label: const Text('Publish to archive'),
               ),
             ),
           ],

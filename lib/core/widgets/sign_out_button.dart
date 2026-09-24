@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// Sign-out action shared by every dashboard's app bar, and by
@@ -22,6 +23,16 @@ class SignOutButton extends ConsumerWidget {
   }
 
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Sign out?',
+      message: 'You will need your ISUFST account to sign back in.',
+      confirmLabel: 'Sign out',
+      cancelLabel: 'Stay signed in',
+      confirmKey: const Key('confirmSignOut'),
+    );
+    if (!confirmed || !context.mounted) return;
+
     try {
       await ref.read(authServiceProvider).signOut();
     } catch (_) {

@@ -1,5 +1,5 @@
 name: ethesishub
-description: "A new Flutter project."
+description: "eThesisHub — undergraduate thesis nomination, defence and records for ISUFST."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -34,8 +34,14 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  firebase_core: ^4.13.0
-  firebase_auth: ^6.5.7
+  # Pinned exactly: firebase_core 4.15.0 removed a symbol firebase_auth 6.5.7's
+  # Android plugin still calls (FlutterFirebaseCorePlugin.customAuthDomain), so
+  # the two only build together at 4.13.0. Adding Crashlytics pulled core up and
+  # broke the build; holding it here keeps the known-good pair and lets pub
+  # pick a Crashlytics that fits. Bump all FlutterFire packages together, never
+  # one at a time.
+  firebase_core: 4.13.0
+  firebase_auth: 6.5.7
   cloud_firestore: ^6.8.0
   flutter_riverpod: 2.6.1
   go_router: ^17.5.0
@@ -50,6 +56,9 @@ dependencies:
   # depend_on_referenced_packages. No version moves — see pubspec.lock.
   url_launcher: 6.3.2
   fl_chart: ^1.2.0
+  # 5.2.7 is the newest Crashlytics that resolves against the pinned
+  # firebase_core 4.13.0; 5.4.0 pulls core to 4.15.0 and breaks firebase_auth.
+  firebase_crashlytics: ^5.2.7
 dev_dependencies:
   flutter_test:
     sdk: flutter

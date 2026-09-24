@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -9,6 +12,7 @@ import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 /// Research Form 5c, the other half: release, deliberation and the
 /// recorded verdict.
@@ -65,6 +69,17 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
   Future<void> _release(String defenceId, String adviserUid) async {
     if (_releasing) return;
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Release evaluations to the group?',
+      message: 'The students will be able to see their scores and comments. '
+          'This cannot be taken back.',
+      confirmLabel: 'Release',
+      confirmKey: const Key('confirmRelease'),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() {
       _releasing = true;
       _releaseError = null;
@@ -73,6 +88,15 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       await ref
           .read(defenceRepositoryProvider)
           .releaseEvaluations(defenceId: defenceId, adviserUid: adviserUid);
+      // Best-effort, after the release, swallowing its own failure.
+      try {
+        await ref.read(auditServiceProvider).log(
+              actorUid: adviserUid,
+              action: 'evaluations.released',
+              targetType: 'defence',
+              targetId: defenceId,
+            );
+      } catch (_) {/* audit must never block the action */}
     } on StateError catch (e) {
       if (mounted) setState(() => _releaseError = e.message);
     } catch (_) {
@@ -97,6 +121,18 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     PassFail? verdict,
   ) async {
     if (_recording || verdict == null) return;
+
+    final pass = verdict == PassFail.pass;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Record a ${pass ? 'Pass' : 'Fail'} verdict?',
+      message: "This is the panel's decision on the defence and goes into the "
+          'permanent record.',
+      confirmLabel: 'Record ${pass ? 'Pass' : 'Fail'}',
+      confirmKey: const Key('confirmVerdict'),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() {
       _recording = true;
       _recordError = null;
@@ -145,7 +181,12 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   Widget _framed(List<Widget> children, {String? title, String? subtitle}) =>
       KeyedSubtree(
         key: const Key('grades'),
-        child: PageShell(title: title, subtitle: subtitle, children: children),
+        child: PageShell(
+          maxWidth: 1000,
+          kicker: subtitle == null ? null : 'Research Form 5c, $subtitle',
+          title: title,
+          children: children,
+        ),
       );
 
   /// The pre-release block. Everything here is decided from `defence`
@@ -336,12 +377,9 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         // a form -- which is what a panel comparing three columns needs.
         Container(
           decoration: BoxDecoration(
-            border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.6),
-            ),
-            borderRadius: BorderRadius.circular(AppTokens.radius),
+            color: Palette.of(context).paper,
+            border: Border.all(color: Palette.of(context).rule),
+            borderRadius: BorderRadius.circular(AppTokens.radius + 2),
           ),
           clipBehavior: Clip.antiAlias,
           child: DataTable(
@@ -396,7 +434,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
                       SizedBox(
                         width: _labelWidth,
                         child: Text(
-                          '${section.label} — ${EvaluationSection.sectionTotal}',
+                          '${section.label}, out of ${EvaluationSection.sectionTotal}',
                           style: Theme.of(context).textTheme.labelMedium,
                         ),
                       ),
@@ -468,40 +506,81 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           ),
         ),
         const Gap.lg(),
-        Text('Panel mean', style: Theme.of(context).textTheme.labelMedium),
-        Text(
-          // One decimal place, not .round(): 83.5 and 84.4 both rendered
-          // as "84", on the one number the panel deliberates over.
-          mean!.toStringAsFixed(1),
-          key: const Key('panelMean'),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const Gap.lg(),
-        Text(
-          'Remarks by criterion',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-        const Gap.sm(),
-        for (final key in contentKeys)
-          if (evaluations.any((e) => e.comments[key] != null))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    criterionFor(key)?.label ?? key,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  for (final e in evaluations)
-                    if (e.comments[key] != null)
-                      Text('${_evaluatorLabel(e)}: ${e.comments[key]}'),
-                ],
+        Panel(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Panel mean',
+                        style: Theme.of(context).textTheme.labelMedium),
+                    Text(
+                      // One decimal place: 83.5 and 84.4 must not both
+                      // read as 84.
+                      mean!.toStringAsFixed(1),
+                      key: const Key('panelMean'),
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                  ],
+                ),
               ),
+              ToneBadge(
+                label: meanClearsPassingMark(mean)
+                    ? 'At or above $passingMark'
+                    : 'Below $passingMark',
+                tone: meanClearsPassingMark(mean)
+                    ? Tone.endorsed
+                    : Tone.returned,
+              ),
+            ],
+          ),
+        ),
+        if (contentKeys
+            .any((k) => evaluations.any((e) => e.comments[k] != null))) ...[
+          const Gap.md(),
+          Panel(
+            title: 'Remarks by criterion',
+            icon: Icons.notes_rounded,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final key in contentKeys)
+                  if (evaluations.any((e) => e.comments[key] != null))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppTokens.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            criterionFor(key)?.label ?? key,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          for (final e in evaluations)
+                            if (e.comments[key] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                    '${_evaluatorLabel(e)}: ${e.comments[key]}'),
+                              ),
+                        ],
+                      ),
+                    ),
+              ],
             ),
+          ),
+        ],
       ],
-      const Gap.lg(),
-      ..._verdictBlock(context, defence, uid, isAdviser, mean),
+      const Gap.md(),
+      Panel(
+        title: 'Panel verdict',
+        icon: Icons.gavel_outlined,
+        emphasis: isAdviser && !defence.hasVerdict,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _verdictBlock(context, defence, uid, isAdviser, mean),
+        ),
+      ),
     ];
 
     return children;
@@ -519,7 +598,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         Text(
           'Panel verdict: ${defence.panelVerdict?.label ?? '—'}',
           key: const Key('verdict'),
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         const Gap.sm(),
         Text(
@@ -581,7 +660,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ],
-      const Gap.sm(),
+      const Gap.md(),
       SegmentedButton<PassFail>(
         segments: [
           ButtonSegment(

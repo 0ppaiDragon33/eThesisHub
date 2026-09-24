@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
-import 'package:ethesishub/core/widgets/states.dart';
-import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/thesis_queue.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// The Dean's Approvals destination: theses the Coordinator has
+/// The Dean's Approvals destination: nominations the Coordinator has
 /// recommended, waiting on the Dean's decision.
 class ApprovalsScreen extends ConsumerWidget {
   const ApprovalsScreen({super.key});
@@ -18,47 +18,35 @@ class ApprovalsScreen extends ConsumerWidget {
     final queueAsync =
         ref.watch(thesesByStatusProvider(ThesisStatus.nominationPendingDean));
 
+    // '/review' is below every destination, so it is pushed (D23).
+    void openReview() => context.push('/review');
+
     return PageShell(
       key: const Key('approvalsScreen'),
+      maxWidth: AppTokens.measureWide,
+      kicker: 'Office of the Dean',
       title: 'Nomination approvals',
-      subtitle: 'Theses the Coordinator has recommended, waiting on you.',
-      children: [
-        queueAsync.when(
-          loading: () => const LoadingState(),
-          error: (e, _) => ErrorState(
-            error: e,
-            message: 'Could not load the approval queue.',
-          ),
-          data: (theses) {
-            if (theses.isEmpty) {
-              return const EmptyState(
-                icon: Icons.task_alt,
-                title: 'Nothing waiting',
-                message: 'Nominations appear here once the College '
-                    'Research Coordinator has recommended them.',
-              );
-            }
-            return Column(
-              children: [
-                for (final t in theses)
-                  ListTile(
-                    title: Text(t.workingTitle),
-                    subtitle: Text('${t.program} · ${t.college}'),
-                    trailing: StatusChip(t.status, dense: true),
-                  ),
-              ],
-            );
-          },
-        ),
-        const Gap.lg(),
+      subtitle: 'Nominations the Research Coordinator has recommended. '
+          'Approving one issues the group\'s Form 1.',
+      actions: [
         FilledButton(
           key: const Key('goToReview'),
-          // `/review` is not a `ShellDestination` for any role -- no
-          // sidebar entry owns it -- so it is pushed, not gone to, per
-          // D23: a screen below a destination gets a real back stop
-          // rather than replacing this destination on the stack.
-          onPressed: () => context.push('/review'),
+          onPressed: openReview,
           child: const Text('Open approval queue'),
+        ),
+      ],
+      children: [
+        ThesisQueue(
+          theses: queueAsync,
+          waitingSince: (t) => t.coordinatorRecommendedAt,
+          errorMessage: 'Could not load the approval queue.',
+          emptyTitle: 'Nothing waiting',
+          emptyMessage: 'Nominations appear here once the College Research '
+              'Coordinator has recommended them.',
+          rowAction: (context, t) => FilledButton.tonal(
+            onPressed: openReview,
+            child: const Text('Decide'),
+          ),
         ),
       ],
     );

@@ -1,3 +1,4 @@
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -267,10 +268,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
     expect(
         find.descendant(
-            of: find.byType(NavigationRail), matching: find.text('Overview')),
+            of: find.byKey(const Key('shellSidebar')), matching: find.text('Dashboard')),
         findsOneWidget);
     // No back control here on purpose: for a student whose title is
     // approved, Chapters IS a destination, and the shell offers back only
@@ -313,7 +314,7 @@ void main() {
     // No rail at this width, and no bottom bar either: on narrow the
     // destinations live behind this hamburger, which is present on EVERY
     // screen rather than only on the four that used to be dashboards.
-    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byKey(const Key('shellSidebar')), findsNothing);
   });
 
   testWidgets('an old home route redirects to /overview', (tester) async {
@@ -609,18 +610,24 @@ void main() {
     c.read(goRouterProvider).go('/users');
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('usersScreen')), findsOneWidget);
-    var rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    final usersIndex = rail.destinations
-        .indexWhere((d) => (d.label as Text).data == 'Users');
-    expect(usersIndex, isNonNegative);
-    expect(rail.selectedIndex, usersIndex,
+    // The sidebar marks its selected destination with a `Semantics(selected:)`
+    // wrapping the `nav-<route>` item (the rebuild dropped
+    // `NavigationRail.selectedIndex`). Read the flag off that Semantics
+    // widget — the property that both paints the highlight and is announced.
+    bool usersSelected() => tester
+        .widgetList<Semantics>(find.ancestor(
+          of: find.byKey(const Key('nav-/users')),
+          matching: find.byType(Semantics),
+        ))
+        .any((w) => w.properties.selected == true);
+
+    expect(usersSelected(), isTrue,
         reason: '/users must select the Users destination');
 
     c.read(goRouterProvider).go('/invites');
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('facultyInvitesScreen')), findsOneWidget);
-    rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    expect(rail.selectedIndex, usersIndex,
+    expect(usersSelected(), isTrue,
         reason: '/invites must ALSO select the Users destination');
   });
 
@@ -651,11 +658,14 @@ void main() {
     // And the strip is on THIS screen too, selected the other way.
     expect(find.byKey(const Key('usersTabAccounts')), findsOneWidget);
     expect(find.byKey(const Key('usersTabInvites')), findsOneWidget);
+    // The tabs are underlined InkWells now, not ChoiceChips. The selected
+    // tab is the one whose tap is disabled — selecting the section you are
+    // already on is a no-op.
     expect(
         tester
-            .widget<ChoiceChip>(find.byKey(const Key('usersTabInvites')))
-            .selected,
-        isTrue);
+            .widget<InkWell>(find.byKey(const Key('usersTabInvites')))
+            .onTap,
+        isNull);
 
     // Invites -> Accounts.
     await tester.tap(find.byKey(const Key('usersTabAccounts')));

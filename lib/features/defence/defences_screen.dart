@@ -49,12 +49,11 @@ class _DefencesScreenState extends State<DefencesScreen> {
   Widget build(BuildContext context) {
     return PageShell(
       key: const Key('defencesScreen'),
+      maxWidth: AppTokens.measureWide,
       title: widget.title,
       subtitle: widget.subtitle,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SegmentedButton<_DefencesView>(
+      actions: [
+        SegmentedButton<_DefencesView>(
             // Keyed on the control itself, not its segments --
             // `ButtonSegment` carries no `key` parameter on the pinned
             // Flutter version. `faculty_mode_switch.dart`'s
@@ -78,8 +77,8 @@ class _DefencesScreenState extends State<DefencesScreen> {
             onSelectionChanged: (selection) =>
                 setState(() => _view = selection.first),
           ),
-        ),
-        const SizedBox(height: AppTokens.md),
+      ],
+      children: [
         switch (_view) {
           _DefencesView.list => const DefencesList(),
           _DefencesView.calendar => const DefenceCalendar(),

@@ -10,6 +10,14 @@ import 'package:ethesishub/data/models/app_notification.dart';
 /// detectors in `notification_providers.dart`) is a self-authored write
 /// (D70) and must be explicit about whose feed it is writing into. There
 /// is no method that touches another user's `uid`.
+/// The most recent items a feed streams. Without a bound, `watchItems`
+/// re-streamed every notification a user had ever received on every listen —
+/// the single largest avoidable read cost in the app, and it only grows. A
+/// feed shows the recent past; older items age out of view, not out of the
+/// record. Chosen well under Firestore's 500-write batch limit so
+/// `markAllRead` over a full feed always commits in one batch.
+const int kNotificationFeedLimit = 50;
+
 class NotificationRepository {
   NotificationRepository(this._firestore);
 
@@ -23,6 +31,7 @@ class NotificationRepository {
   Stream<List<AppNotification>> watchItems(String uid) {
     return _items(uid)
         .orderBy('createdAt', descending: true)
+        .limit(kNotificationFeedLimit)
         .snapshots()
         .map((s) => s.docs
             .map((d) => AppNotification.fromMap(d.id, {

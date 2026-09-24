@@ -4,8 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'package:ethesishub/data/repositories/title_defence_repository.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
+import 'package:ethesishub/providers/title_providers.dart';
 
 /// [withPreviousRound] seeds a SUPERSEDED candidate from the round before,
 /// which is the only way the screen's round filter can be tested at all.
@@ -32,22 +38,52 @@ Future<FakeFirebaseFirestore> seeded({
   });
   if (withPreviousRound) {
     await db.collection('theses/t1/candidateTitles').doc('old1').set({
-      'titleText': 'Candidate old1', 'justificationPath': 'p',
+      'titleText': 'Candidate old1',
+      'justificationPath': 'theses/t1/old1/uuid.pdf',
       'justificationUrl': 'https://example.test/old1.pdf', 'round': 1,
     });
   }
   for (final id in ['ct1', 'ct2', 'ct3']) {
     await db.collection('theses/t1/candidateTitles').doc(id).set({
-      'titleText': 'Candidate $id', 'justificationPath': 'p',
+      'titleText': 'Candidate $id',
+      'justificationPath': 'theses/t1/$id/uuid.pdf',
       'justificationUrl': 'https://example.test/$id.pdf', 'round': round,
     });
   }
   return db;
 }
 
-Widget wrap(FakeFirebaseFirestore db, {UrlOpener? openUrl}) => ProviderScope(
+/// The bucket is private, so the screen opens a document by asking the
+/// storage service for a signed URL from its PATH. This stands in for the
+/// `document-url` round trip: a URL derived from the path, so a test can
+/// assert which document was opened without a live Supabase.
+class _FakeStorage implements StorageService {
+  @override
+  Future<String> signedUrl(String path) async => 'https://signed.test/$path';
+
+  @override
+  Future<StoredFile> upload({
+    required List<int> bytes,
+    required String path,
+    required String contentType,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> delete(String path) async => throw UnimplementedError();
+}
+
+Widget wrap(
+  FakeFirebaseFirestore db, {
+  UrlOpener? openUrl,
+  TitleDefenceRepository? repository,
+}) =>
+    ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
+        if (repository != null)
+          titleDefenceRepositoryProvider.overrideWithValue(repository),
+        storageServiceProvider.overrideWithValue(_FakeStorage()),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
           signedIn: true,
           mockUser: MockUser(
@@ -119,7 +155,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(opened.map((u) => u.toString()),
-        ['https://example.test/ct2.pdf'],
+        ['https://signed.test/theses/t1/ct2/uuid.pdf'],
         reason: 'the link must open THAT candidate, not the first one');
   });
 
@@ -136,7 +172,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(opened.map((u) => u.toString()),
-        ['https://example.test/presentation.pptx']);
+        ['https://signed.test/theses/t1/presentation/uuid.pptx']);
   });
 
   testWidgets('a document that will not open says so rather than failing '
@@ -273,4 +309,60 @@ void main() {
         reason: 'nothing should have been recorded');
     expect(find.byKey(const Key('error')), findsOneWidget);
   });
+
+  // The "is writing" marker is decoration, and the rules refuse it outright
+  // to anyone who is not on the panel: `titleComposing` allows create only
+  // for isOnPanel(), while get/list also allows the Coordinator and the
+  // Dean. So a Dean or Coordinator reading this screen is shown a comment
+  // box, focuses it, and the marker write is denied — once on focus and then
+  // again every five seconds by the heartbeat.
+  //
+  // Nothing awaits those writes, so each refusal escaped as an uncaught
+  // rejection: "Uncaught (in promise) [cloud_firestore/permission-denied]".
+  // Presence failing costs a reader nothing and must stay silent.
+  testWidgets('a refused composing marker does not surface as an error',
+      (tester) async {
+    final db = await seeded(viewerRole: 'dean');
+
+    await tester.pumpWidget(
+      wrap(db, repository: _RefusingComposingRepository(db)),
+    );
+    await tester.pumpAndSettle();
+
+    // Focus rather than tap: the box sits below the fold, so a tap never
+    // reaches it and the focus listener would never run.
+    await tester.showKeyboard(find.byKey(const Key('commentBox-ct1')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// Stands in for a panel-only `titleComposing` rule refusing a reader who may
+/// watch the screen but not write to it.
+class _RefusingComposingRepository extends TitleDefenceRepository {
+  _RefusingComposingRepository(super.db);
+
+  static final _denied = FirebaseException(
+    plugin: 'cloud_firestore',
+    code: 'permission-denied',
+    message: 'Missing or insufficient permissions.',
+  );
+
+  @override
+  Future<void> markComposing({
+    required String thesisId,
+    required String uid,
+    required String name,
+    required String role,
+    required String candidateTitleId,
+  }) =>
+      Future.error(_denied);
+
+  @override
+  Future<void> clearComposing({
+    required String thesisId,
+    required String uid,
+  }) =>
+      Future.error(_denied);
 }

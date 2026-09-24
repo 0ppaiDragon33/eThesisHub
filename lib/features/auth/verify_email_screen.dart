@@ -2,6 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -45,6 +48,16 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
         });
         return;
       }
+
+      // The email is verified, but `reload()` above only refreshed the local
+      // User — the cached ID token still says `email_verified: false`, and
+      // the security rules read the TOKEN. Force a fresh one now, before the
+      // invite write below and before the user reaches any create screen, so
+      // Firestore does not refuse a genuinely-verified account. Without this
+      // a just-verified student was told, on creating their thesis group,
+      // that their email was not verified.
+      await ref.read(authServiceProvider).refreshIdToken();
+      if (!mounted) return;
 
       // User is now verified; apply any pending invite.
       if (user.email != null) {
@@ -138,53 +151,48 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Verify your email')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'We sent a verification link to your institutional email. '
-                  'Open it, then return here and continue.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                if (_message != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      _message!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                FilledButton(
-                  key: const Key('reload'),
-                  onPressed: _busy ? null : _handleContinue,
-                  child: Text(_busy ? 'Checking…' : "I've verified — continue"),
-                ),
-                TextButton(
-                  key: const Key('resend'),
-                  onPressed: _busy ? null : _handleResend,
-                  child: const Text('Resend link'),
-                ),
-                TextButton(
-                  key: const Key('signout'),
-                  onPressed: _busy ? null : _handleSignOut,
-                  child: const Text('Sign out'),
-                ),
-              ],
+    return AuthScaffold(
+      title: 'Verify your email',
+      // No subtitle: the paragraph below already says it, and says what to do
+      // next as well. Two paraphrases of one sentence is the duplication this
+      // direction removes.
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.mark_email_unread_outlined,
+                size: 28, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: AppTokens.md),
+            const Expanded(
+              child: Text(
+                'We sent a verification link to your institutional email. '
+                'Open it, then return here and continue.',
+              ),
             ),
-          ),
+          ],
         ),
-      ),
+        const SizedBox(height: AppTokens.lg),
+        if (_message != null) ...[
+          ErrorState(message: _message!),
+          const SizedBox(height: AppTokens.md),
+        ],
+        FilledButton(
+          key: const Key('reload'),
+          onPressed: _busy ? null : _handleContinue,
+          child: Text(_busy ? 'Checking…' : "I've verified — continue"),
+        ),
+        const SizedBox(height: AppTokens.sm),
+        OutlinedButton(
+          key: const Key('resend'),
+          onPressed: _busy ? null : _handleResend,
+          child: const Text('Resend link'),
+        ),
+        TextButton(
+          key: const Key('signout'),
+          onPressed: _busy ? null : _handleSignOut,
+          child: const Text('Sign out'),
+        ),
+      ],
     );
   }
 }

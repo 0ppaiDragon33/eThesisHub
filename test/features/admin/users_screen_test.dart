@@ -128,7 +128,7 @@ void main() {
 
     expect(find.byKey(const Key('roleText-u1')), findsOneWidget);
     final roleText = tester.widget<Text>(find.byKey(const Key('roleText-u1')));
-    expect(roleText.data, 'faculty');
+    expect(roleText.data, 'Faculty');
 
     // The only two DropdownButtons on the whole screen are the role and
     // active FILTERS -- never one per row.
@@ -165,9 +165,38 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
     await tester.tap(find.byKey(const Key('activeSwitch-u1')));
     await tester.pumpAndSettle();
+    // Deactivation confirms first.
+    await tester.tap(find.byKey(const Key('confirmDeactivate-u1')));
+    await tester.pumpAndSettle();
 
     final doc = await db.collection('users').doc('u1').get();
     expect(doc.data()!['active'], isFalse);
+
+    // The deactivation is recorded, naming who did it and to whom.
+    final logs = await db.collection('auditLogs').get();
+    expect(logs.docs, hasLength(1));
+    final entry = logs.docs.first.data();
+    expect(entry['action'], 'account.deactivated');
+    expect(entry['actorUid'], 'coord-1');
+    expect(entry['targetId'], 'u1');
+  });
+
+  testWidgets('cancelling the deactivation writes nothing', (tester) async {
+    useWideSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('users').doc('u1').set(userDoc('Alma Cruz'));
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
+    await tester.tap(find.byKey(const Key('activeSwitch-u1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep active'));
+    await tester.pumpAndSettle();
+
+    final doc = await db.collection('users').doc('u1').get();
+    expect(doc.data()!['active'], isTrue, reason: 'still active — cancelled');
   });
 
   testWidgets('setting a designation calls through to the repository',
@@ -206,7 +235,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('roleFilter')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('dean').last);
+    await tester.tap(find.text('Dean').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Alma Faculty'), findsNothing);
@@ -351,7 +380,7 @@ void main() {
     expect(find.textContaining('Alma Cruz'), findsWidgets);
     expect(find.byKey(const Key('errorCode')), findsOneWidget);
     expect(
-        tester.widget<Text>(find.byKey(const Key('errorCode'))).data,
+        tester.widget<SelectableText>(find.byKey(const Key('errorCode'))).data,
         '[permission-denied]');
   });
 
@@ -369,10 +398,12 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('activeSwitch-u1')));
     await tester.tap(find.byKey(const Key('activeSwitch-u1')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmDeactivate-u1')));
+    await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('activeWriteError-u1')), findsOneWidget);
     expect(
-        tester.widget<Text>(find.byKey(const Key('errorCode'))).data,
+        tester.widget<SelectableText>(find.byKey(const Key('errorCode'))).data,
         '[permission-denied]');
   });
 
@@ -417,11 +448,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.widget<Text>(find.byKey(const Key('positions-adv'))).data,
-        '2 advising · 3 panel');
+        '2 advising, 3 on panels');
     // Advises nothing, but sits on three panels -- exactly the D30 case
     // the column exists to put in front of the coordinator.
     expect(tester.widget<Text>(find.byKey(const Key('positions-pan'))).data,
-        '0 advising · 3 panel');
+        '0 advising, 3 on panels');
     // Genuinely holds nothing.
     expect(find.byKey(const Key('positions-idle')), findsNothing);
   });

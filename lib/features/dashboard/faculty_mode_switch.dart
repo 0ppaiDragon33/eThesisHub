@@ -74,9 +74,19 @@ class FacultyModeSwitch extends ConsumerWidget {
         child: narrow
             ? IconButton(
                 key: const Key('facultyModeCompact'),
-                icon: Icon(mode == FacultyMode.adviser
-                    ? Icons.school_outlined
-                    : Icons.forum_outlined),
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, a) => RotationTransition(
+                    turns: Tween<double>(begin: 0.75, end: 1).animate(a),
+                    child: ScaleTransition(scale: a, child: child),
+                  ),
+                  child: Icon(
+                    mode == FacultyMode.adviser
+                        ? Icons.school_outlined
+                        : Icons.forum_outlined,
+                    key: ValueKey(mode),
+                  ),
+                ),
                 tooltip: mode == FacultyMode.adviser
                     ? 'Adviser mode — tap to switch to Panelist'
                     : 'Panelist mode — tap to switch to Adviser',

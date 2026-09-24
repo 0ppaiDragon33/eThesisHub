@@ -3,7 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/password_field.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -141,75 +147,93 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // signed in as and let them escape via sign-out.
     final signedInUser = ref.watch(authStateProvider).valueOrNull;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Sign in')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    return AuthScaffold(
+      title: 'Sign in',
+      subtitle: 'Use your ISUFST account.',
+      children: [
+        if (signedInUser != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: AppTokens.lg),
+            padding: const EdgeInsets.fromLTRB(
+                AppTokens.md, AppTokens.sm, AppTokens.xs, AppTokens.sm),
+            decoration: BoxDecoration(
+              color: Tone.awaiting.color(context).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+            ),
+            child: Row(
               children: [
-                if (signedInUser != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Signed in as ${signedInUser.email} — sign out?',
-                          ),
-                        ),
-                        const SignOutButton(),
-                      ],
-                    ),
+                Expanded(
+                  child: Text(
+                    'Signed in as ${signedInUser.email}. Sign out to use '
+                    'another account.',
                   ),
-                TextField(
-                  key: const Key('email'),
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email'),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('password'),
-                  controller: _password,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                ),
-                const SizedBox(height: 20),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                FilledButton(
-                  key: const Key('submit'),
-                  onPressed: _busy ? null : _submit,
-                  child: Text(_busy ? 'Signing in…' : 'Sign in'),
-                ),
-                TextButton(
-                  key: const Key('reset'),
-                  onPressed: _busy ? null : _resetPassword,
-                  child: const Text('Forgot password?'),
-                ),
-                TextButton(
-                  key: const Key('goToRegister'),
-                  onPressed: () => context.go('/register'),
-                  child: const Text('New here? Create account'),
-                ),
+                const SignOutButton(),
               ],
             ),
           ),
+        FormRow(
+          label: 'Email',
+          child: TextField(
+            key: const Key('email'),
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              hintText: 'you@isufst.edu.ph',
+              prefixIcon: Icon(Icons.alternate_email_rounded),
+            ),
+          ),
         ),
-      ),
+        FormRow(
+          label: 'Password',
+          child: PasswordField(
+            fieldKey: const Key('password'),
+            controller: _password,
+            autofillHints: const [AutofillHints.password],
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_busy) _submit();
+            },
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            key: const Key('reset'),
+            onPressed: _busy ? null : _resetPassword,
+            child: const Text('Forgot password?'),
+          ),
+        ),
+        const SizedBox(height: AppTokens.sm),
+        if (_error != null) ...[
+          ErrorState(message: _error!),
+          const SizedBox(height: AppTokens.md),
+        ],
+        FilledButton(
+          key: const Key('submit'),
+          style: FilledButton.styleFrom(minimumSize: const Size(64, 50)),
+          onPressed: _busy ? null : _submit,
+          child: Text(_busy ? 'Signing in…' : 'Sign in'),
+        ),
+        const SizedBox(height: AppTokens.lg),
+        const Divider(),
+        const SizedBox(height: AppTokens.md),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('New to eThesisHub?',
+                style: Theme.of(context).textTheme.bodyMedium),
+            TextButton(
+              key: const Key('goToRegister'),
+              onPressed: () => context.go('/register'),
+              child: const Text('Create an account'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -27,7 +29,8 @@ class ArchiveEntryScreen extends ConsumerWidget {
   Widget _framed(List<Widget> children) => KeyedSubtree(
         key: const Key('archiveEntry'),
         child: PageShell(
-          title: 'Thesis',
+          maxWidth: AppTokens.measureWide,
+          kicker: 'College archive',
           children: children,
         ),
       );
@@ -85,7 +88,7 @@ class ArchiveEntryScreen extends ConsumerWidget {
   }
 }
 
-class _EntryView extends StatefulWidget {
+class _EntryView extends ConsumerStatefulWidget {
   const _EntryView({required this.entry, required this.profile});
 
   final ArchiveEntry entry;
@@ -95,10 +98,10 @@ class _EntryView extends StatefulWidget {
   final AsyncValue<AppUser?> profile;
 
   @override
-  State<_EntryView> createState() => _EntryViewState();
+  ConsumerState<_EntryView> createState() => _EntryViewState();
 }
 
-class _EntryViewState extends State<_EntryView> {
+class _EntryViewState extends ConsumerState<_EntryView> {
   /// Builds and shares Form 8 straight from the [ArchiveEntry] already on
   /// screen. No further read: a second fetch would be a chance for the
   /// certificate to disagree with what the reader is looking at.
@@ -145,7 +148,7 @@ class _EntryViewState extends State<_EntryView> {
     // No spinner: a widget test that pumpAndSettle()s would never settle on
     // one, and this is a line of text's worth of waiting.
     Widget note(String key, String message) => Padding(
-          padding: const EdgeInsets.only(top: AppTokens.md),
+          padding: const EdgeInsets.only(top: AppTokens.md - 4),
           child: Text(
             message,
             key: Key(key),
@@ -165,7 +168,7 @@ class _EntryViewState extends State<_EntryView> {
       ],
       data: (user) => user?.role == UserRole.coordinator
           ? [
-              const Gap.md(),
+              const Gap.sm(),
               OutlinedButton(
                 key: const Key('downloadForm8'),
                 onPressed: () => _downloadForm8(entry),
@@ -187,53 +190,86 @@ class _EntryViewState extends State<_EntryView> {
     final authors =
         entry.authorsLabel.isNotEmpty ? entry.authorsLabel : 'Unknown authors';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(entry.title, style: text.headlineSmall),
-        const SizedBox(height: AppTokens.xs),
-        Text(authors, style: text.bodyMedium?.copyWith(color: muted)),
-        const SizedBox(height: AppTokens.xs),
-        Text(
-          '${entry.college} · ${entry.program} · ${entry.academicYear}',
-          style: text.bodySmall?.copyWith(color: muted),
-        ),
-        const Gap.md(),
-        Text('Adviser: ${entry.adviserName}', style: text.bodyMedium),
-        const SizedBox(height: AppTokens.xs),
-        Text(
-          'Panel: ${entry.panelNames.isNotEmpty ? entry.panelNames.join(', ') : 'Unknown panel'}',
-          style: text.bodyMedium,
-        ),
-        const Gap.lg(),
-        Text('Abstract', style: text.titleMedium),
-        const SizedBox(height: AppTokens.xs),
-        Text(entry.abstract, style: text.bodyMedium),
-        const Gap.lg(),
-        if (entry.manuscriptUrl.isNotEmpty)
-          FilledButton.icon(
+    final manuscript = entry.manuscriptPath.isNotEmpty
+        ? FilledButton.icon(
             key: const Key('openManuscript'),
-            icon: const Icon(Icons.open_in_new),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
             label: const Text('Open manuscript'),
-            // Deliberately leaves the app: the manuscript lives in a public
-            // Supabase bucket and there is no in-app PDF viewer, so the only
-            // way to read it is to hand the URL to the platform.
-            onPressed: () => launchUrl(
-              Uri.parse(entry.manuscriptUrl),
-              mode: LaunchMode.externalApplication,
+            // Leaves the app: there is no in-app PDF viewer. The bucket is
+            // private, so this asks the `document-url` function for a
+            // short-lived link. An archived manuscript opens for any active
+            // reader — the repository is meant to be browsed — while the
+            // function still refuses in-progress theses to non-members.
+            onPressed: () => openStoredDocument(
+              context,
+              ref,
+              entry.manuscriptPath,
+              label: 'the manuscript',
             ),
           )
-        else
-          // A manuscript-less archive entry is possible (an upload step
-          // failed after the record was written, say) but a button that
-          // launches nothing is worse than no button -- it invites a tap
-          // that silently does nothing. Say so instead.
-          Text(
+        // A button that launches nothing invites a silent tap; say so.
+        : Text(
             'No manuscript is on file for this thesis.',
             key: const Key('manuscriptMissing'),
             style: text.bodyMedium?.copyWith(color: muted),
-          ),
-        ..._form8Control(entry, text, muted),
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(entry.title,
+            style: Breakpoint.of(context) == Breakpoint.compact
+                ? text.headlineSmall
+                : text.headlineMedium),
+        const SizedBox(height: AppTokens.sm),
+        Text(authors, style: text.bodyLarge?.copyWith(color: muted)),
+        const Gap.lg(),
+        SplitColumns(
+          primary: [
+            Panel(
+              title: 'Abstract',
+              icon: Icons.subject_rounded,
+              child: Text(entry.abstract,
+                  style: text.bodyLarge?.copyWith(height: 1.65)),
+            ),
+          ],
+          secondary: [
+            Panel(
+              title: 'Manuscript',
+              icon: Icons.picture_as_pdf_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [manuscript, ..._form8Control(entry, text, muted)],
+              ),
+            ),
+            Panel(
+              title: 'Record',
+              icon: Icons.info_outline_rounded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FactLine(label: 'College', value: entry.college),
+                  FactLine(label: 'Program', value: entry.program),
+                  FactLine(label: 'Academic year', value: entry.academicYear),
+                ],
+              ),
+            ),
+            Panel(
+              title: 'Adviser and panel',
+              icon: Icons.groups_outlined,
+              child: Column(
+                children: [
+                  PersonLine(name: entry.adviserName, role: 'Adviser'),
+                  if (entry.panelNames.isEmpty)
+                    const PersonLine(name: 'Unknown panel', role: 'Panel')
+                  else
+                    for (final n in entry.panelNames)
+                      PersonLine(name: n, role: 'Panel member'),
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

@@ -116,4 +116,32 @@ class FacultyDirectoryRepository {
       'nominableAsPanelist': panelist,
     });
   }
+
+  /// Creates the entry for an account that has not signed in yet, so a
+  /// coordinator's designation reaches the nomination picker now instead of
+  /// waiting for that person's first login.
+  ///
+  /// [user] comes from `users/{uid}`, not from the caller: the rules pin
+  /// `fullName` and `role` to what that document says, which is what keeps a
+  /// coordinator-created entry from being blank or from inventing a role.
+  /// The subject's own `upsertOwnEntry` merges over this at sign-in and
+  /// leaves the two designation keys alone.
+  Future<void> createForDesignation({
+    required AppUser user,
+    required bool adviser,
+    required bool panelist,
+  }) async {
+    if (user.role == UserRole.student) return;
+    final college = user.college;
+    final specialization = user.specialization;
+    await _col.doc(user.uid).set({
+      'fullName': user.fullName,
+      'role': user.role.value,
+      if (college != null && college.isNotEmpty) 'college': college,
+      if (specialization != null && specialization.isNotEmpty)
+        'specialization': specialization,
+      'nominableAsAdviser': adviser,
+      'nominableAsPanelist': panelist,
+    });
+  }
 }

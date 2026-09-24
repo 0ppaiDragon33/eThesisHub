@@ -95,7 +95,7 @@ Widget _wrap(
         ...overrides,
       ],
       child: const MaterialApp(
-        home: Scaffold(body: DefencesList()),
+        home: Scaffold(body: SingleChildScrollView(child: DefencesList())),
       ),
     );
 
@@ -243,7 +243,7 @@ void main() {
           routes: [
             GoRoute(
               path: '/defences',
-              builder: (_, _) => const Scaffold(body: DefencesList()),
+              builder: (_, _) => const Scaffold(body: SingleChildScrollView(child: DefencesList())),
             ),
             GoRoute(
               path: '/defence/room/:defenceId',
@@ -443,7 +443,7 @@ void main() {
               routes: [
                 GoRoute(
                   path: '/defences',
-                  builder: (_, _) => const Scaffold(body: DefencesList()),
+                  builder: (_, _) => const Scaffold(body: SingleChildScrollView(child: DefencesList())),
                 ),
                 GoRoute(
                   path: '/defence/room/:defenceId/evaluate',
@@ -500,7 +500,10 @@ void main() {
 
     expect(find.text('On Widget Trees'), findsOneWidget);
     // The type moved beneath the title rather than disappearing.
-    expect(find.textContaining('Pre-oral defence'), findsOneWidget);
+    // The row joins type, date and venue into one line ('Pre-oral defence,
+    // …'); the trailing comma distinguishes it from the 'Pre-oral defences'
+    // section heading.
+    expect(find.textContaining('Pre-oral defence,'), findsOneWidget);
   });
 
   testWidgets(
@@ -602,8 +605,8 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
-    final preOralHeading = find.text('Pre-oral');
-    final finalHeading = find.text('Final');
+    final preOralHeading = find.text('Pre-oral defences');
+    final finalHeading = find.text('Final defences');
     expect(preOralHeading, findsOneWidget);
     expect(finalHeading, findsOneWidget);
 
@@ -638,7 +641,7 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Final'), findsOneWidget);
-    expect(find.text('Pre-oral'), findsNothing);
+    expect(find.text('Final defences'), findsOneWidget);
+    expect(find.textContaining('Pre-oral'), findsNothing);
   });
 }

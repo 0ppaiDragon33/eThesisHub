@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
@@ -193,9 +194,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
-    final error = tester.widget<Text>(find.byKey(const Key('error')));
-    expect(error.data, isNot(contains('StateError')));
-    expect(error.data!.toLowerCase(), contains('already'));
+    final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
+    expect(error.message, isNot(contains('StateError')));
+    expect(error.message.toLowerCase(), contains('already'));
 
     // Falsifiability for "busy state cleared on every path": if the finally
     // block never ran for the StateError branch, the button would stay

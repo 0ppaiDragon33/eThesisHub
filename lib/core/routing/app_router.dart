@@ -9,6 +9,7 @@ import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
+import 'package:ethesishub/features/admin/audit_log_screen.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/deactivated_screen.dart';
@@ -30,6 +31,8 @@ import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
+import 'package:ethesishub/features/forms/editable/editor_services.dart';
+import 'package:ethesishub/features/forms/editable/form_copy_editor_screen.dart';
 import 'package:ethesishub/features/forms/forms_screen.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
@@ -268,6 +271,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.coordinator) {
                 return home;
               }
+              // '/audit' is the activity log — coordinator and dean, the two
+              // roles the rules let `list` auditLogs. UX guard, not the
+              // boundary: the rules deny the read to everyone else.
+              if (location == '/audit' &&
+                  profile.role != UserRole.coordinator &&
+                  profile.role != UserRole.dean) {
+                return home;
+              }
               // '/archive/queue' is the coordinator's publish control, not
               // a destination anyone can navigate to directly -- reachable
               // only from a link inside '/users' (UsersScreen). Unlike the
@@ -487,9 +498,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             //
             // No Scaffold of its own: the shell above supplies it, and a
             // second one here would stack a second app bar.
-            return const Center(
+            return const PageShell(
               key: Key('nominateBareVisitLoading'),
-              child: CircularProgressIndicator(),
+              children: [LoadingState.page(label: 'Finding your thesis…')],
             );
           }
           return NominateScreen(thesisId: id);
@@ -503,9 +514,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // parameter, and distinguish loading from absent while doing it.
           final id = state.uri.queryParameters['id'];
           if (id == null) {
-            return const Center(
+            return const PageShell(
               key: Key('submitTitlesBareVisitLoading'),
-              child: CircularProgressIndicator(),
+              children: [LoadingState.page(label: 'Finding your thesis…')],
             );
           }
           return SubmitTitlesScreen(thesisId: id);
@@ -628,6 +639,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/users',
         builder: (_, _) => const UsersScreen(),
       ),
+      GoRoute(
+        path: '/audit',
+        builder: (_, _) => const AuditLogScreen(),
+      ),
       // '/thesis/chapters' (the list) is registered before
       // '/thesis/chapters/:chapterId' (one chapter's detail) only because
       // that is source order here, not because order matters between them:
@@ -685,6 +700,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/archive', builder: (_, _) => const ArchiveScreen()),
       GoRoute(path: '/forms', builder: (_, _) => const FormsScreen()),
+      // One saved copy of a form, in the editor. Open to every role: a copy
+      // belongs to whoever made it, and the rules keep it theirs. Below the
+      // Forms destination, so the shell draws a back control; `onExit` asks
+      // before leaving with unsaved edits, however the reader leaves.
+      GoRoute(
+        path: '/forms/:formId/copies/:copyId',
+        onExit: confirmLeaveFormEditor,
+        builder: (context, state) => FormCopyEditorScreen(
+          formId: state.pathParameters['formId']!,
+          copyId: state.pathParameters['copyId']!,
+        ),
+      ),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       // '/archive/queue' MUST be registered BEFORE '/archive/:thesisId'
       // below. This is the OPPOSITE situation from '/defence/room/:id' vs

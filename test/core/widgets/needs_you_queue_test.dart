@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../support/no_animations.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/theme/app_theme.dart';
 import 'package:ethesishub/core/widgets/needs_you_queue.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
@@ -56,6 +58,7 @@ void main() {
 
   testWidgets('a loading queue is distinguishable from an empty one',
       (tester) async {
+    disableAnimationsForTest(tester);
     final controller = StreamController<List<NeedsYouItem>>();
     addTearDown(controller.close);
 
@@ -77,7 +80,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Nothing needs you'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LoadingState), findsOneWidget);
   });
 
   testWidgets('the headline count equals the number of rows rendered',
@@ -96,7 +99,11 @@ void main() {
     ])));
 
     expect(find.textContaining('2 things need you today'), findsOneWidget);
-    expect(find.byType(ListTile), findsNWidgets(2));
+    expect(
+        find.byWidgetPredicate((w) =>
+            w.key is ValueKey<String> &&
+            (w.key as ValueKey<String>).value.startsWith('needsYouEntry-')),
+        findsNWidgets(2));
   });
 
   testWidgets('the headline is singular for one item', (tester) async {
@@ -193,9 +200,16 @@ void main() {
       return router;
     }
 
-    /// The button inside the row titled [title].
+    /// The tap target for the row titled [title]. The featured (first) entry
+    /// keeps an explicit 'Open' button; the queue below it is whole-row
+    /// tappable. Both single-item cases here render the featured entry, so
+    /// the 'Open' button is the trigger, scoped to the row for [title].
     Finder openButtonFor(String title) => find.descendant(
-          of: find.widgetWithText(ListTile, title),
+          of: find.ancestor(
+              of: find.text(title),
+              matching: find.byWidgetPredicate((w) =>
+                  w.key is ValueKey<String> &&
+                  (w.key as ValueKey<String>).value.startsWith('needsYouEntry-'))),
           matching: find.widgetWithText(FilledButton, 'Open'),
         );
 

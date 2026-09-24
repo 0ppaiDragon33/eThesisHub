@@ -2,92 +2,209 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/core/widgets/status_chip.dart';
+import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
-/// The panelist mode's own destination on the faculty dashboard: theses
-/// whose candidate titles are ready for you to review as a panel member.
+/// The panelist's desk: title sets waiting for your judgement first, then
+/// every other thesis you sit on, with where each stands.
 class PanelsScreen extends ConsumerWidget {
   const PanelsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final myThesisIdsAsync = ref.watch(myThesisIdsProvider);
+    final idsAsync = ref.watch(myThesisIdsProvider);
 
     return PageShell(
       key: const Key('panelsScreen'),
+      maxWidth: AppTokens.measureWide,
+      kicker: 'Panelist',
       title: 'My panels',
-      subtitle: 'Theses whose candidate titles are ready for you to review '
-          'as a panel member.',
+      subtitle: 'Candidate titles ready for your review, and the other '
+          'theses you sit on.',
       children: [
-        myThesisIdsAsync.when(
-          loading: () => const LoadingState(),
-          error: (e, _) => ErrorState(
-            error: e,
-            message: 'Could not load your panels.',
-          ),
-          data: (thesisIds) => _DefencesList(thesisIds: thesisIds),
+        idsAsync.when(
+          loading: () => const LoadingState(label: 'Loading your panels…'),
+          error: (e, _) =>
+              ErrorState(error: e, message: 'Could not load your panels.'),
+          data: (ids) => PanelRegister(thesisIds: ids),
         ),
       ],
     );
   }
 }
 
-/// Resolves each thesis id the signed-in faculty member holds a position on
-/// and lists the ones currently at [ThesisStatus.titlePendingDefence].
-///
-/// A separate widget because it watches one [thesisByIdProvider] per id --
-/// a dynamic number of family instances that the parent's single build
-/// cannot loop over with `ref.watch` outside of a build method of its own.
-class _DefencesList extends ConsumerWidget {
-  const _DefencesList({required this.thesisIds});
+/// Resolves each thesis id and splits it into "to review" and "others".
+/// Its own widget: it watches a dynamic number of family instances.
+class PanelRegister extends ConsumerWidget {
+  const PanelRegister({
+    super.key,
+    required this.thesisIds,
+    this.reviewOnly = false,
+  });
 
   final List<String> thesisIds;
+
+  /// The overview shows only the actionable section.
+  final bool reviewOnly;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (thesisIds.isEmpty) {
       return const EmptyState(
         icon: Icons.forum_outlined,
-        title: 'No defences yet',
-        message: 'When you are nominated on a thesis whose candidate titles '
-            'reach the panel, it appears here.',
+        title: 'No panels yet',
+        message: 'When you are nominated onto a thesis panel and accept, '
+            'it appears here.',
       );
     }
 
-    final rows = <Widget>[];
+    final advised = ref
+            .watch(myAdviseesProvider)
+            .valueOrNull
+            ?.map((t) => t.id)
+            .toSet() ??
+        const <String>{};
+
+    final review = <Thesis>[];
+    final others = <Thesis>[];
+    var pending = 0;
     for (final id in thesisIds) {
-      final thesis = ref.watch(thesisByIdProvider(id)).valueOrNull;
-      if (thesis == null || thesis.status != ThesisStatus.titlePendingDefence) {
+      final async = ref.watch(thesisByIdProvider(id));
+      final t = async.valueOrNull;
+      if (t == null) {
+        if (async.isLoading) pending++;
         continue;
       }
-      rows.add(
-        Card(
-          child: ListTile(
-            title: Text(thesis.workingTitle),
-            subtitle: const Text(
-                'Candidate titles are ready for the panel to review.'),
-            trailing: FilledButton(
-              key: Key('goToDefence-$id'),
-              onPressed: () => context.push('/defence/$id'),
-              child: const Text('Open'),
+      if (t.status == ThesisStatus.titlePendingDefence) {
+        review.add(t);
+      } else if (!advised.contains(t.id)) {
+        others.add(t);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (review.isEmpty)
+          EmptyState(
+            icon: Icons.forum_outlined,
+            title: 'No title sets waiting',
+            message: pending > 0
+                ? 'Still loading $pending of your theses…'
+                : 'None of your theses are at title defence right now.',
+          )
+        else
+          Panel(
+            title: 'Title sets to review',
+            subtitle: 'Read the candidates and leave your comments',
+            icon: Icons.fact_check_outlined,
+            emphasis: true,
+            flush: true,
+            trailing: ToneBadge(
+              label: '${review.length} waiting',
+              tone: Tone.act,
+              dense: true,
+            ),
+            child: Column(
+              children: [
+                for (final t in review)
+                  _PanelRow(
+                    thesis: t,
+                    action: FilledButton(
+                      key: Key('goToDefence-${t.id}'),
+                      onPressed: () => context.push('/defence/${t.id}'),
+                      child: const Text('Open title defence'),
+                    ),
+                  ),
+              ],
             ),
           ),
-        ),
-      );
-    }
+        if (!reviewOnly && others.isNotEmpty) ...[
+          const Gap.lg(),
+          Panel(
+            title: 'Your other panels',
+            subtitle: 'For reference; nothing waits on you here',
+            icon: Icons.groups_outlined,
+            flush: true,
+            child: Column(
+              children: [
+                for (final t in others)
+                  _PanelRow(
+                    thesis: t,
+                    action: t.status == ThesisStatus.titleApproved
+                        ? TextButton(
+                            onPressed: () => context.go('/defences'),
+                            child: const Text('View defences'),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
 
-    if (rows.isEmpty) {
-      return const EmptyState(
-        icon: Icons.forum_outlined,
-        title: 'No defences waiting',
-        message: 'None of your theses are currently at title defence.',
-      );
-    }
+class _PanelRow extends StatelessWidget {
+  const _PanelRow({required this.thesis, required this.action});
 
-    return Column(children: rows);
+  final Thesis thesis;
+  final Widget action;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.lg - 4, vertical: AppTokens.md - 2),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: p.rule)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppTokens.md,
+        runSpacing: AppTokens.sm,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(thesis.workingTitle, style: text.titleMedium),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    StatusChip(thesis.status, dense: true),
+                    const SizedBox(width: AppTokens.sm),
+                    Flexible(
+                      child: Text(
+                        thesis.program,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          action,
+        ],
+      ),
+    );
   }
 }

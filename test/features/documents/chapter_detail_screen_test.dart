@@ -59,7 +59,13 @@ void main() {
     expect(find.byKey(const Key('versionRow-1')), findsOneWidget);
     expect(find.byKey(const Key('versionRow-2')), findsOneWidget);
 
-    final rows = tester.widgetList(find.byType(ListTile)).length;
+    // Rows are keyed containers now, not ListTiles; count the versionRow keys.
+    final rows = find
+        .byWidgetPredicate((w) =>
+            w.key is ValueKey<String> &&
+            (w.key as ValueKey<String>).value.startsWith('versionRow-'))
+        .evaluate()
+        .length;
     expect(rows, greaterThanOrEqualTo(2));
 
     final first = tester.getTopLeft(find.byKey(const Key('versionRow-2')));

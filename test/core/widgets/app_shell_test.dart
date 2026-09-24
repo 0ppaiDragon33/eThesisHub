@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -107,6 +109,17 @@ class _FakeAccountFooter extends StatelessWidget {
   }
 }
 
+/// Whether the sidebar is showing its expanded (labelled) form.
+///
+/// The shell no longer uses `NavigationRail`, so there is no `extended`
+/// flag to read. The sidebar's rendered width IS the collapsed/expanded
+/// distinction — it animates between [AppShell.collapsedRailWidth] and
+/// [AppShell.expandedRailWidth] — so measuring it asserts the same property
+/// the old `rail.extended` did, against what the reader actually sees.
+bool sidebarExpanded(WidgetTester tester) =>
+    tester.getSize(find.byKey(const Key('shellSidebar'))).width ==
+        AppShell.expandedRailWidth;
+
 void main() {
   group('wide', () {
     testWidgets('shows labels when expanded', (tester) async {
@@ -122,13 +135,16 @@ void main() {
 
     testWidgets('hides labels when collapsed but keeps the destinations',
         (tester) async {
-      // `NavigationRail` deliberately keeps a collapsed destination's
-      // label mounted (Visibility.maintain) so it stays in the
-      // accessibility tree — find.text would therefore still match it
-      // even though nothing is painted. What "collapsed" must actually
-      // mean is: visually collapsed (rail.extended == false), the icon
-      // still there, and the accessible name still carried, since a
-      // screen-reader user gets nothing else to tell destinations apart.
+      // What "collapsed" must mean is: visually collapsed, the icon still
+      // there, and the accessible name still carried, since a screen-reader
+      // user gets nothing else to tell destinations apart.
+      //
+      // The old `NavigationRail` kept a collapsed label mounted
+      // (Visibility.maintain) purely to hold it in the accessibility tree,
+      // so find.text matched even when nothing was painted. The sidebar
+      // that replaced it drops the label widget outright and carries the
+      // name on an explicit `Semantics(label:)` instead — so the text is
+      // genuinely gone AND the accessible name survives. Both are asserted.
       final handle = tester.ensureSemantics();
 
       await setSize(tester, 1400);
@@ -138,8 +154,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail.extended, isFalse);
+      expect(sidebarExpanded(tester), isFalse);
+      expect(find.text('Chapters'), findsNothing);
 
       expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
       final semantics =
@@ -154,10 +170,8 @@ void main() {
     });
 
     testWidgets('the edge strip toggles the sidebar', (tester) async {
-      // As above: NavigationRail keeps the label mounted even when
-      // collapsed, so the visible property to assert on is
-      // `rail.extended`, not find.text — find.text stays true either
-      // way, which is the point of keeping the accessible name.
+      // The property to assert on is the sidebar's own collapsed/expanded
+      // state, measured by width — see [sidebarExpanded].
       //
       // The dedicated `Key('sidebarToggle')` button is gone -- the rail's
       // own edge is now the control (`Key('sidebarEdgeToggle')`).
@@ -168,18 +182,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Chapters'), findsOneWidget);
-      NavigationRail rail() =>
-          tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail().extended, isTrue);
+      expect(sidebarExpanded(tester), isTrue);
       expect(find.byKey(const Key('sidebarToggle')), findsNothing);
 
       await tester.tap(find.byKey(const Key('sidebarEdgeToggle')));
       await tester.pumpAndSettle();
-      expect(rail().extended, isFalse);
+      expect(sidebarExpanded(tester), isFalse);
 
       await tester.tap(find.byKey(const Key('sidebarEdgeToggle')));
       await tester.pumpAndSettle();
-      expect(rail().extended, isTrue);
+      expect(sidebarExpanded(tester), isTrue);
     });
 
     testWidgets('Key(sidebarToggle) no longer exists anywhere',
@@ -222,15 +234,13 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      NavigationRail rail() =>
-          tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail().extended, isTrue);
+      expect(sidebarExpanded(tester), isTrue);
 
       await tester.tap(find.text('Chapters'));
       await tester.pumpAndSettle();
 
       expect(navigatedTo, '/thesis/chapters');
-      expect(rail().extended, isTrue); // unchanged -- the tap navigated,
+      expect(sidebarExpanded(tester), isTrue); // unchanged -- the tap navigated,
       // it did not fall through to the background toggle.
     });
 
@@ -246,11 +256,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      NavigationRail rail() =>
-          tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail().extended, isTrue);
+      expect(sidebarExpanded(tester), isTrue);
 
-      final railRect = tester.getRect(find.byType(NavigationRail));
+      final railRect = tester.getRect(find.byKey(const Key('shellSidebar')));
       // Well clear of the destination icons/labels, which sit near the
       // top of the rail, and well clear of the edge strip, which is a
       // separate 8px-wide widget entirely outside the rail's own bounds.
@@ -261,7 +269,7 @@ void main() {
       await tester.tapAt(emptyBackground);
       await tester.pumpAndSettle();
 
-      expect(rail().extended, isFalse);
+      expect(sidebarExpanded(tester), isFalse);
     });
 
     testWidgets('has no hamburger — the sidebar is already visible',
@@ -368,7 +376,11 @@ void main() {
       expect(find.byKey(const Key('shellSkeleton')), findsNothing);
 
       await tester.tap(find.byKey(const Key('shellMenu')));
-      await tester.pumpAndSettle();
+      // Not pumpAndSettle: the skeleton shimmers on a repeating controller,
+      // so this frame tree never reaches a settled state. Pumping past the
+      // drawer's open animation is enough to observe what it holds.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byKey(const Key('shellSkeleton')), findsOneWidget);
     });
@@ -383,7 +395,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byKey(const Key('shellSidebar')), findsNothing);
       expect(find.byKey(const Key('shellMenu')), findsNothing);
       expect(find.text('PAGE BODY'), findsOneWidget);
     });
@@ -398,7 +410,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byKey(const Key('shellSidebar')), findsNothing);
     });
   });
 
@@ -539,8 +551,20 @@ void main() {
   });
 
   group('highlighting', () {
+    // Selection used to be `NavigationRail.selectedIndex`. The sidebar that
+    // replaced it marks the owning destination with `Semantics(selected:)`,
+    // which is both what paints the highlight and what a screen reader
+    // announces — so asserting the flag covers the sighted and the
+    // non-sighted reader at once.
+    bool isSelected(WidgetTester tester, String route) => tester
+        .getSemantics(find.byKey(Key('nav-$route')))
+            .flagsCollection
+            .isSelected ==
+        Tristate.isTrue;
+
     testWidgets('a nested route highlights its owning destination',
         (tester) async {
+      final handle = tester.ensureSemantics();
       await setSize(tester, 1400);
       await tester.pumpWidget(await wrap(
         destinations: const AsyncValue.data(_destinations),
@@ -548,13 +572,16 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail.selectedIndex, 1); // Chapters
+      expect(isSelected(tester, '/thesis/chapters'), isTrue);
+      expect(isSelected(tester, '/overview'), isFalse);
+      expect(isSelected(tester, '/defences'), isFalse);
+      handle.dispose();
     });
 
     testWidgets('an unowned route highlights nothing', (tester) async {
       // Spec D24: a wrong highlight tells the reader they are somewhere
       // they are not, which is worse than no highlight.
+      final handle = tester.ensureSemantics();
       await setSize(tester, 1400);
       await tester.pumpWidget(await wrap(
         destinations: const AsyncValue.data(_destinations),
@@ -562,17 +589,20 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail.selectedIndex, isNull);
+      for (final d in _destinations) {
+        expect(isSelected(tester, d.route), isFalse,
+            reason: '${d.label} must not be highlighted on an unowned route');
+      }
+      handle.dispose();
     });
   });
 
   group('short-rail account footer', () {
-    // Coordinator: eight destinations (Task 11 added Archive; the Forms
-    // milestone added Forms), the worst case for how much vertical space
-    // the rail's own content claims before the footer gets a turn.
+    // Coordinator: nine destinations (Archive, Forms, and now the Activity
+    // log), the worst case for how much vertical space the rail's own content
+    // claims before the footer gets a turn.
     final coordinatorDestinations = destinationsFor(role: UserRole.coordinator);
-    assert(coordinatorDestinations.length == 8); // guards the "worst case" claim
+    assert(coordinatorDestinations.length == 9); // guards the "worst case" claim
 
     for (final height in [320.0, 420.0, 600.0, 1000.0]) {
       testWidgets('rail height=$height overflows nothing', (tester) async {
@@ -697,5 +727,24 @@ void main() {
         expect(width, AppTokens.measureWide - (2 * AppTokens.lg));
       });
     }
+  });
+
+  // Flutter web hands the app a near-zero canvas for a frame or two before
+  // the browser settles its size, and a desktop window can be dragged
+  // shorter than the top bar at any time. The shell stacks a fixed-height
+  // top bar above an Expanded body, so any viewport shorter than that bar
+  // is an overflow — it paints outside itself and stripes the screen.
+  //
+  // Nothing readable fits in a viewport this small; the requirement is only
+  // that the shell yields quietly instead of raising.
+  testWidgets('does not overflow a viewport shorter than the top bar',
+      (tester) async {
+    await setViewSize(tester, 1.6, 1.6);
+
+    await tester.pumpWidget(
+      await wrap(destinations: const AsyncValue.data(_destinations)),
+    );
+
+    expect(tester.takeException(), isNull);
   });
 }

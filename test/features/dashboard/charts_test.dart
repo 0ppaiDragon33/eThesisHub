@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/no_animations.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -100,11 +102,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('No theses yet'), findsOneWidget);
+    expect(find.textContaining('No theses yet'), findsOneWidget);
     expect(find.byType(PieChart), findsNothing);
   });
 
   testWidgets('a loading donut is not an empty donut', (tester) async {
+    disableAnimationsForTest(tester);
     // Single pump against a never-emitting controller.
     final controller = StreamController<List<Thesis>>();
     addTearDown(controller.close);
@@ -117,7 +120,7 @@ void main() {
     ));
     await tester.pump();
 
-    expect(find.text('No theses yet'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.textContaining('No theses yet'), findsNothing);
+    expect(find.byType(LoadingState), findsOneWidget);
   });
 }

@@ -1,6 +1,9 @@
-# ethesishub
+# eThesisHub
 
-A new Flutter project.
+Undergraduate thesis management for ISUFST: nomination, title defence,
+chapter review, defence scheduling and grading, and the college archive.
+Flutter + Firebase (Firestore, Auth) with a Supabase Storage bucket for
+documents. Authorization lives in `firestore.rules`.
 
 ## Getting Started
 

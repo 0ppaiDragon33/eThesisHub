@@ -90,18 +90,53 @@ String contentTypeFor(String extension) {
 ///
 /// Enforced here because the Supabase bucket is public and enforces nothing:
 /// there is no server-side check between this and the object store.
+// File signatures ("magic bytes"), so a validated document is actually the
+// kind of file its extension claims. The bucket is served to a defence panel
+// and the college; an extension check alone accepts a renamed executable or
+// a corrupt file that only fails when someone tries to open it in the room.
+const _pdfSig = [0x25, 0x50, 0x44, 0x46]; // "%PDF"
+const _zipSig = [0x50, 0x4B, 0x03, 0x04]; // "PK\x03\x04" — docx/pptx are zips
+const _oleSig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]; // legacy Office
+
+bool _startsWith(List<int> bytes, List<int> signature) {
+  if (bytes.length < signature.length) return false;
+  for (var i = 0; i < signature.length; i++) {
+    if (bytes[i] != signature[i]) return false;
+  }
+  return true;
+}
+
+/// Whether [bytes] carries the signature its [extension] implies. Extensions
+/// outside the allow-list never reach here; unknown ones pass rather than
+/// guess.
+bool contentMatchesExtension(String extension, List<int> bytes) {
+  return switch (extension) {
+    'pdf' => _startsWith(bytes, _pdfSig),
+    'docx' || 'pptx' => _startsWith(bytes, _zipSig),
+    'doc' || 'ppt' => _startsWith(bytes, _oleSig),
+    _ => true,
+  };
+}
+
 String? validateDocument(
   PickedDocument file, {
   required Set<String> allowed,
   required int maxBytes,
 }) {
-  if (!allowed.contains(file.extension.toLowerCase())) {
+  final ext = file.extension.toLowerCase();
+  if (!allowed.contains(ext)) {
     final names = allowed.map((e) => e.toUpperCase()).join(', ');
     return 'Choose a $names file.';
   }
   if (file.bytes.length > maxBytes) {
     final mb = (maxBytes / (1024 * 1024)).round();
     return 'That file is larger than $mb MB.';
+  }
+  // Content check last: the cheap extension and size checks reject the common
+  // mistakes first, and this catches the file that lies about what it is.
+  if (!contentMatchesExtension(ext, file.bytes)) {
+    return 'That file does not look like a real ${ext.toUpperCase()} — it '
+        'may have been renamed or is damaged. Choose the original file.';
   }
   return null;
 }

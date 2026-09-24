@@ -217,6 +217,7 @@ void main() {
     expect(find.text('Sign in'), findsWidgets);
 
     // Tap the "goToRegister" button to navigate to registration
+    await tester.ensureVisible(find.byKey(const Key('goToRegister')));
     await tester.tap(find.byKey(const Key('goToRegister')));
     await tester.pumpAndSettle();
 
@@ -281,6 +282,10 @@ void main() {
     expect(find.byKey(const Key('signOut')), findsOneWidget,
         reason: 'exactly one sign-out, in the shell, not one per screen');
     await tester.tap(find.byKey(const Key('signOut')));
+    await tester.pumpAndSettle();
+    // Sign-out now confirms first, so nothing has happened yet.
+    expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirmSignOut')));
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in'), findsWidgets);

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/app.dart';
 import 'package:ethesishub/features/dashboard/advisees_screen.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
@@ -16,6 +17,8 @@ import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
+
+import '../../support/no_animations.dart';
 
 /// Seeds two theses: one advised by `a1`, one advised by `other`. Each has
 /// the fields `Thesis.fromMap` requires, matching the shape written by
@@ -142,7 +145,7 @@ void main() {
     // Overview is destination 0 regardless of position; it is the
     // destination AFTER it -- the mode's own work -- that must be Advisees
     // (the stored preference's default), not absent and not a dead end.
-    final rail = find.byType(NavigationRail);
+    final rail = find.byKey(const Key('shellSidebar'));
     expect(find.descendant(of: rail, matching: find.text('Advisees')),
         findsOneWidget);
     expect(find.byType(ErrorWidget), findsNothing);
@@ -171,6 +174,7 @@ void main() {
     // The mode is resolved up front so this test isolates the stream it is
     // actually about. Without it the dashboard-level mode gate renders its
     // own spinner first and the assertion would target the wrong one.
+    disableAnimationsForTest(tester);
     await tester.pumpWidget(await _wrap(db, uid: 'a1', overrides: [
       effectiveFacultyModeProvider
           .overrideWith((ref) async => FacultyMode.adviser),
@@ -194,7 +198,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    expect(find.byType(LoadingState), findsWidgets);
     expect(find.text('My Advised Thesis'), findsNothing);
     expect(find.text('No advisees yet'), findsNothing);
   });
@@ -237,6 +241,7 @@ void main() {
     // The mode is resolved up front so this test isolates the stream it is
     // actually about. Without it the dashboard-level mode gate renders its
     // own spinner first and the assertion would target the wrong one.
+    disableAnimationsForTest(tester);
     await tester.pumpWidget(await _wrap(db, uid: 'a1', overrides: [
       effectiveFacultyModeProvider
           .overrideWith((ref) async => FacultyMode.adviser),
@@ -253,7 +258,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Awaiting review: still loading…'), findsOneWidget);
+    // The point is that a loading chapter stream is NOT rendered as "0
+    // awaiting" or "Nothing awaiting" — a distinct loading line stands in
+    // its place. The exact wording ('Checking chapters…') is the screen's.
+    expect(find.text('Checking chapters…'), findsOneWidget);
     expect(find.textContaining('0 chapters awaiting review'), findsNothing);
     expect(find.text('Nothing awaiting review'), findsNothing);
   });

@@ -42,4 +42,33 @@ void main() {
     expect(tester.getSize(find.byKey(const Key('content'))).width,
         greaterThan(AppTokens.measure));
   });
+
+  testWidgets('renders an optional kicker above the title', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: PageShell(
+          kicker: 'Dean',
+          title: 'Approvals',
+          children: [Text('body')],
+        ),
+      ),
+    ));
+
+    expect(find.text('Dean'), findsOneWidget);
+    expect(find.text('Approvals'), findsOneWidget);
+  });
+
+  testWidgets('omitting the kicker changes nothing', (tester) async {
+    // 26 screens already call PageShell without one; this pins that the new
+    // parameter is genuinely optional rather than quietly required.
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: PageShell(title: 'Approvals', children: [Text('body')]),
+      ),
+    ));
+
+    expect(find.text('Approvals'), findsOneWidget);
+    expect(find.text('body'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

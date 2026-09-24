@@ -55,11 +55,17 @@ class _FakeStorage implements StorageService {
 
   @override
   Future<void> delete(String path) async => deleted.add(path);
+
+  @override
+  Future<String> signedUrl(String path) async =>
+      'https://example.test/signed/$path';
 }
 
 PickedDocument doc() => PickedDocument(
       name: 'chapter1.pdf',
-      bytes: Uint8List.fromList(List.filled(32, 0)),
+      // Leads with the %PDF signature so it passes the content check.
+      bytes: Uint8List.fromList(
+          [0x25, 0x50, 0x44, 0x46, ...List.filled(28, 0)]),
       extension: 'pdf',
       contentType: 'application/pdf',
     );

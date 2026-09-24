@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -251,95 +254,139 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
 
     final atCap = _titles.length >= TitleDefenceRepository.maxCandidates;
 
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+
+    Widget attachment({
+      required Key key,
+      required String emptyLabel,
+      required String? fileName,
+      required VoidCallback onPressed,
+    }) {
+      final attached = fileName != null;
+      return OutlinedButton.icon(
+        key: key,
+        onPressed: onPressed,
+        icon: Icon(
+          attached ? Icons.check_circle_outline : Icons.attach_file_rounded,
+          size: 18,
+          color: attached ? Tone.endorsed.color(context) : null,
+        ),
+        label: Text(
+          fileName ?? emptyLabel,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
     return KeyedSubtree(
       key: const Key('submitTitlesScreen'),
       child: PageShell(
+        kicker: thesis.status == ThesisStatus.titleRejected
+            ? 'Step 3 of 3, round ${thesis.titleRound + 1}'
+            : 'Step 3 of 3',
         title: 'Candidate titles',
-        subtitle: 'Submit at least ${TitleDefenceRepository.minCandidates} '
-            'candidate titles, each with a justification, plus one '
-            'presentation.',
+        subtitle: 'Propose at least ${TitleDefenceRepository.minCandidates} '
+            'titles, each with a justification, plus one presentation for '
+            'the panel.',
         children: [
           if (thesis.status == ThesisStatus.titleRejected &&
-              (thesis.titleRejectionRemark ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: ErrorState(
-                message: 'This set was rejected: '
-                    '${thesis.titleRejectionRemark}',
-              ),
+              (thesis.titleRejectionRemark ?? '').isNotEmpty) ...[
+            ErrorState(
+              message: 'This set was rejected: '
+                  '${thesis.titleRejectionRemark}',
             ),
-          for (var i = 0; i < _titles.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+            const Gap.md(),
+          ],
+          for (var i = 0; i < _titles.length; i++) ...[
+            Panel(
+              title: 'Candidate ${i + 1}',
+              icon: Icons.title_rounded,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextField(
                     key: Key('titleText$i'),
                     controller: _titles[i],
+                    maxLines: 3,
+                    minLines: 1,
+                    style: text.titleMedium,
                     decoration: InputDecoration(
                       labelText: 'Candidate title ${i + 1}',
                     ),
                   ),
-                  const Gap.sm(),
-                  Row(
-                    children: [
-                      TextButton(
-                        key: Key('pickJustification$i'),
-                        onPressed: () => _pickJustification(i),
-                        child: Text(_justifications[i] == null
-                            ? 'Attach justification'
-                            : 'Justification: ${_justifications[i]!.name}'),
-                      ),
-                    ],
+                  const Gap.md(),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: attachment(
+                      key: Key('pickJustification$i'),
+                      emptyLabel: 'Attach justification',
+                      fileName: _justifications[i]?.name,
+                      onPressed: () => _pickJustification(i),
+                    ),
                   ),
                 ],
               ),
             ),
+            const Gap.md(),
+          ],
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton(
+            child: TextButton.icon(
               key: const Key('addCandidate'),
               onPressed: atCap ? null : _addCandidate,
-              child: const Text('+ Add candidate title'),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add candidate title'),
             ),
           ),
           if (atCap)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Candidate titles are capped at '
-                '${TitleDefenceRepository.maxCandidates} per submission: '
-                'each one costs a security-rules check, and a larger batch '
-                'is denied.',
-                key: const Key('candidateCapReason'),
-                style: Theme.of(context).textTheme.bodySmall,
+            Text(
+              'Candidate titles are capped at '
+              '${TitleDefenceRepository.maxCandidates} per submission: '
+              'each one costs a security-rules check, and a larger batch '
+              'is denied.',
+              key: const Key('candidateCapReason'),
+              style: text.bodySmall,
+            ),
+          const Gap.md(),
+          Panel(
+            title: 'Presentation',
+            subtitle: 'One file for the whole set',
+            icon: Icons.slideshow_outlined,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: attachment(
+                key: const Key('pickPresentation'),
+                emptyLabel: 'Attach presentation',
+                fileName: _presentation?.name,
+                onPressed: _pickPresentation,
               ),
             ),
-          const Gap.lg(),
-          TextButton(
-            key: const Key('pickPresentation'),
-            onPressed: _pickPresentation,
-            child: Text(_presentation == null
-                ? 'Attach presentation'
-                : 'Presentation: ${_presentation!.name}'),
           ),
           const Gap.lg(),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _error!,
-                key: const Key('error'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+          if (_error != null) ...[
+            ErrorState(key: const Key('error'), message: _error!),
+            const Gap.md(),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'The panel comments on each candidate; the Dean records '
+                  'the approved title.',
+                  style: text.bodySmall?.copyWith(color: p.muted),
+                ),
               ),
-            ),
-          FilledButton(
-            key: const Key('submitTitles'),
-            onPressed: _busy || leaderUid == null
-                ? null
-                : () => _submit(leaderUid),
-            child: Text(_busy ? 'Submitting…' : 'Submit candidate titles'),
+              const SizedBox(width: AppTokens.md),
+              FilledButton.icon(
+                key: const Key('submitTitles'),
+                onPressed: _busy || leaderUid == null
+                    ? null
+                    : () => _submit(leaderUid),
+                icon: const Icon(Icons.send_outlined, size: 18),
+                label: Text(_busy ? 'Submitting…' : 'Submit titles'),
+              ),
+            ],
           ),
         ],
       ),

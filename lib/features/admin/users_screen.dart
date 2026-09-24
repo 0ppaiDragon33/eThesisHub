@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -10,6 +13,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/admin_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Active-state buckets the coordinator can narrow by. Defaults to
@@ -111,29 +115,28 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     return PageShell(
       key: const Key('usersScreen'),
       maxWidth: AppTokens.measureWide,
+      kicker: 'Research office',
       title: 'Users',
       subtitle: 'Every account in the college. Activate, deactivate, and set '
           'who may be nominated as an adviser or a panelist.',
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const UsersTabs(selected: UsersTab.accounts),
-            // The archive publish queue's one link into the app --
-            // ArchiveQueueScreen is reachable from nowhere else, on
-            // purpose (spec: it is not a shell destination for anyone,
-            // including the coordinator). Living beside the Users tabs
-            // keeps it in the coordinator's admin area rather than
-            // promoting it to a destination the way Task 11 explicitly
-            // avoids.
-            TextButton.icon(
-              key: const Key('archiveQueueLink'),
-              onPressed: () => context.go('/archive/queue'),
-              icon: const Icon(Icons.upload_outlined),
-              label: const Text('Publish queue'),
-            ),
-          ],
+      actions: [
+        OutlinedButton.icon(
+          key: const Key('stalledLink'),
+          onPressed: () => context.push('/stalled'),
+          icon: const Icon(Icons.report_outlined, size: 18),
+          label: const Text('Stalled nominations'),
         ),
+        // The publish queue's link from the coordinator's admin area; it
+        // is deliberately not a destination.
+        OutlinedButton.icon(
+          key: const Key('archiveQueueLink'),
+          onPressed: () => context.go('/archive/queue'),
+          icon: const Icon(Icons.upload_outlined, size: 18),
+          label: const Text('Publish queue'),
+        ),
+      ],
+      children: [
+        const UsersTabs(selected: UsersTab.accounts),
         const Gap.lg(),
         _Filters(
           roleFilter: _roleFilter,
@@ -239,28 +242,58 @@ class UsersTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Selecting the tab already showing is a no-op rather than a route
-    // change with no destination-changing effect.
-    return Row(
-      children: [
-        ChoiceChip(
-          key: const Key('usersTabAccounts'),
-          label: const Text('Accounts'),
-          selected: selected == UsersTab.accounts,
-          onSelected: (_) {
-            if (selected != UsersTab.accounts) context.go('/users');
-          },
+    // Selecting the tab already showing is a no-op.
+    final p = Palette.of(context);
+    Widget tab(Key key, String label, IconData icon, UsersTab value,
+        String route) {
+      final on = selected == value;
+      return InkWell(
+        key: key,
+        onTap: on ? null : () => context.go(route),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.md, vertical: AppTokens.sm + 4),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: on ? p.seal : Colors.transparent,
+                width: 2.5,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: on ? p.seal : p.muted),
+              const SizedBox(width: AppTokens.sm),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: on ? p.seal : p.muted,
+                    ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(width: AppTokens.sm),
-        ChoiceChip(
-          key: const Key('usersTabInvites'),
-          label: const Text('Invites'),
-          selected: selected == UsersTab.invites,
-          onSelected: (_) {
-            if (selected != UsersTab.invites) context.go('/invites');
-          },
+      );
+    }
+
+    return Semantics(
+      container: true,
+      label: 'Users sections',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: p.rule)),
         ),
-      ],
+        child: Row(
+          children: [
+            tab(const Key('usersTabAccounts'), 'Accounts',
+                Icons.people_outline, UsersTab.accounts, '/users'),
+            tab(const Key('usersTabInvites'), 'Invites',
+                Icons.mail_outline_rounded, UsersTab.invites, '/invites'),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -296,7 +329,7 @@ class _Filters extends StatelessWidget {
           items: [
             const DropdownMenuItem(value: null, child: Text('All roles')),
             for (final r in UserRole.values)
-              DropdownMenuItem(value: r, child: Text(r.value)),
+              DropdownMenuItem(value: r, child: Text(roleLabel(r))),
           ],
         ),
         if (roleFilter == null)
@@ -355,67 +388,128 @@ class _UsersTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rule = Theme.of(context).colorScheme.outlineVariant;
+    final p = Palette.of(context);
+    final headStyle = Theme.of(context)
+        .textTheme
+        .labelMedium
+        ?.copyWith(color: p.muted);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Row(
-          flex: _flex,
-          cells: const [
-            Text('Name and email', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('Role', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('Positions', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('Designation', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('Active', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        Divider(height: AppTokens.lg, color: rule),
-        for (final u in users) ...[
-          _Row(
-            key: ValueKey('userRow-${u.uid}'),
-            flex: _flex,
-            cells: [
-              _NameCell(
-                user: u,
-                // A student never gets a directory entry at all (see
-                // FacultyDirectoryRepository.upsertOwnEntry), so this
-                // marker means nothing for one and is suppressed.
-                notSignedIn: u.isFaculty &&
-                    directoryLoaded &&
-                    !directoryUids.contains(u.uid),
-              ),
-              // Plain text, no control: a coordinator may never write
-              // `role` (the rules pin it to the invite/promotion path),
-              // and a control that always fails reads as a broken app.
-              Text(u.role.value, key: Key('roleText-${u.uid}')),
-              _PositionsCell(
-                user: u,
-                counts: positions[u.uid],
-                failed: positionsFailed,
-              ),
-              // A student can never be nominated, so a designation
-              // control here would be meaningless -- not merely denied,
-              // but asking a question that does not apply to this role.
-              u.isFaculty
-                  ? _DesignationCell(user: u, isOwnRow: u.uid == myUid)
-                  : const Text('—'),
-              _ActiveCell(user: u, isOwnRow: u.uid == myUid),
-            ],
+    List<Widget> cellsFor(AppUser u) => [
+          _NameCell(
+            user: u,
+            // A student never gets a directory entry, so the marker means
+            // nothing for one and is suppressed.
+            notSignedIn: u.isFaculty &&
+                directoryLoaded &&
+                !directoryUids.contains(u.uid),
           ),
-          Divider(height: AppTokens.lg, color: rule),
-        ],
-      ],
+          // Plain text, no control: a coordinator may never write `role`.
+          Text(roleLabel(u.role), key: Key('roleText-${u.uid}')),
+          _PositionsCell(
+            user: u,
+            counts: positions[u.uid],
+            failed: positionsFailed,
+          ),
+          // A student can never be nominated.
+          u.isFaculty
+              ? _DesignationCell(user: u, isOwnRow: u.uid == myUid)
+              : const Text('Not applicable'),
+          _ActiveCell(user: u, isOwnRow: u.uid == myUid),
+        ];
+
+    return Panel(
+      title: users.length == 1 ? '1 account' : '${users.length} accounts',
+      icon: Icons.badge_outlined,
+      flush: true,
+      child: LayoutBuilder(builder: (context, c) {
+        if (c.maxWidth < 820) {
+          const labels = [
+            'Account',
+            'Role',
+            'Positions',
+            'May be nominated as',
+            'Active',
+          ];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final u in users)
+                Container(
+                  key: ValueKey('userRow-${u.uid}'),
+                  padding: const EdgeInsets.all(AppTokens.md),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: p.rule)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final (i, cell) in cellsFor(u).indexed)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppTokens.sm),
+                          child: i == 0
+                              ? cell
+                              : Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: 120,
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 2),
+                                        child: Text(labels[i],
+                                            style: headStyle),
+                                      ),
+                                    ),
+                                    Expanded(child: cell),
+                                  ],
+                                ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              color: p.canvas,
+              padding: const EdgeInsets.symmetric(vertical: AppTokens.sm + 2),
+              child: _Row(
+                flex: _flex,
+                cells: [
+                  Text('Account', style: headStyle),
+                  Text('Role', style: headStyle),
+                  Text('Positions', style: headStyle),
+                  Text('May be nominated as', style: headStyle),
+                  Text('Active', style: headStyle),
+                ],
+              ),
+            ),
+            for (final u in users)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: AppTokens.md),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: p.rule)),
+                ),
+                child: _Row(
+                  key: ValueKey('userRow-${u.uid}'),
+                  flex: _flex,
+                  cells: cellsFor(u),
+                ),
+              ),
+          ],
+        );
+      }),
     );
   }
 }
 
-/// One row, header or data: five cells laid out with shared flex weights so
-/// the header and every row line up, and each cell free to take whatever
-/// height its own content needs -- unlike `DataTable`, which clips a cell
-/// taller than its fixed row height. Several cells here genuinely run to two
-/// or three lines: name+email, name+email+the "not yet signed in" notice, or
-/// the active switch plus its refusal reason on the reader's own row.
+/// One row, header or data: cells laid out with shared flex weights so the
+/// header and every row line up, each free to take the height it needs.
 class _Row extends StatelessWidget {
   const _Row({super.key, required this.flex, required this.cells});
 
@@ -425,7 +519,7 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppTokens.sm),
+      padding: const EdgeInsets.symmetric(horizontal: AppTokens.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -452,13 +546,21 @@ class _NameCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 260),
-      child: Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InitialsAvatar(user.fullName, size: 32),
+        const SizedBox(width: AppTokens.sm + 2),
+        Expanded(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(user.fullName, overflow: TextOverflow.ellipsis),
+          Text(user.fullName,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
           Text(user.email,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall),
@@ -481,7 +583,8 @@ class _NameCell extends StatelessWidget {
               ),
             ),
         ],
-      ),
+      )),
+      ],
     );
   }
 }
@@ -514,9 +617,9 @@ class _PositionsCell extends StatelessWidget {
     }
     final c = counts;
     if (!user.isFaculty || c == null || (c.advising == 0 && c.panelling == 0)) {
-      return const Text('—');
+      return const Text('None');
     }
-    return Text('${c.advising} advising · ${c.panelling} panel',
+    return Text('${c.advising} advising, ${c.panelling} on panels',
         key: Key('positions-${user.uid}'));
   }
 }
@@ -635,12 +738,45 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
   Object? _error;
 
   Future<void> _setActive(bool value) async {
+    // Only deactivation needs a guard: it signs the person out and locks them
+    // out until reactivated, and the control is a switch a stray tap flips.
+    // Reactivating is harmless and stays a single tap.
+    if (!value) {
+      final confirmed = await confirmAction(
+        context,
+        title: 'Deactivate this account?',
+        message: '${widget.user.fullName} will be signed out and cannot sign '
+            'back in until an account is reactivated.',
+        confirmLabel: 'Deactivate',
+        cancelLabel: 'Keep active',
+        confirmKey: Key('confirmDeactivate-${widget.user.uid}'),
+      );
+      if (!confirmed || !mounted) return;
+    }
+
     try {
       await ref.read(userRepositoryProvider).setActive(widget.user.uid, value);
+      await _logActiveChange(value);
       if (mounted && _error != null) setState(() => _error = null);
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
+  }
+
+  /// Records who switched an account on or off. Best-effort and after the
+  /// write: it swallows its own failure so the log can never block or undo
+  /// the action — the same treatment the sign-in audit entries already get.
+  Future<void> _logActiveChange(bool active) async {
+    final actor = ref.read(signedInUidProvider);
+    if (actor == null) return;
+    try {
+      await ref.read(auditServiceProvider).log(
+            actorUid: actor,
+            action: active ? 'account.activated' : 'account.deactivated',
+            targetType: 'user',
+            targetId: widget.user.uid,
+          );
+    } catch (_) {/* audit must never block the action */}
   }
 
   @override

@@ -5,6 +5,14 @@ import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 
+/// Thrown when a nominee answers a request whose thesis has been reopened to
+/// `draft` for re-nomination. The request they hold is stale and a fresh one
+/// is on its way, so this is NOT the "already completed" case — the inbox
+/// tells them to wait rather than that they missed their chance.
+class NominationBeingRevised implements Exception {
+  const NominationBeingRevised();
+}
+
 class ThesisRepository {
   ThesisRepository(this._db);
 
@@ -202,28 +210,96 @@ class ThesisRepository {
       conformeStatus: ConformeStatus.pending,
     );
 
+    // What is already on record. Read before the batch rather than inside
+    // it: a batch is not a transaction and cannot read. The window is safe
+    // because a leader may only submit while the thesis is still 'draft',
+    // and nothing else writes nominations in that state.
+    final prior = {
+      for (final d in (await noms.get()).docs) d.id: d.data(),
+    };
+
+    // A FIRST submission finds nothing here and simply writes the roster.
+    //
+    // A SECOND one — after `reopenForRenomination` hands a stalled thesis
+    // back to the group — is deliberately much narrower, because rewriting
+    // the roster wholesale is wrong twice over. It would reset everyone who
+    // had already answered back to `pending`, asking people to accept a
+    // second time; and `firestore.rules` refuses it anyway, since the
+    // nomination update arm is pinned to `request.auth.uid == nomineeUid`
+    // — answering is the nominee's alone, never the leader's. The leader may
+    // only DELETE, only while `draft`, and only a seat whose
+    // `conformeStatus` is `declined`.
+    //
+    // So a re-submission touches exactly the refused seat: whoever accepted
+    // stays accepted and is left alone, and the replacement is a fresh
+    // create. Everything else here is about refusing, with a reason, the
+    // cases the rules would reject as a bare permission-denied.
     for (final entry in writes.entries) {
-      batch.set(noms.doc(entry.key), entry.value);
+      final before = prior[entry.key];
+      if (before == null) {
+        batch.set(noms.doc(entry.key), entry.value);
+        continue;
+      }
+
+      final status = before['conformeStatus'] as String?;
+      final sameSeat = before['position'] == entry.value['position'] &&
+          before['exOfficio'] == entry.value['exOfficio'];
+
+      if (status == 'declined') {
+        // Re-asking the same person who refused would mean deleting and
+        // re-creating the same document. In a batch both operations are
+        // judged against the state BEFORE the batch, so the create is seen
+        // as an update and refused. Naming that is better than emitting a
+        // permission-denied the screen would blame on availability.
+        throw ArgumentError(
+          '${entry.value['nomineeName']} declined this nomination, so they '
+          'cannot be nominated again on this round. Choose someone else for '
+          'that seat.',
+        );
+      }
+
+      if (!sameSeat) {
+        throw ArgumentError(
+          '${entry.value['nomineeName']} has already been asked to serve as '
+          '${before['position']} on this thesis, and a seat that has been '
+          'asked cannot be changed. Only a nominee who declined can be '
+          'replaced.',
+        );
+      }
+
+      // Same person, same seat, already asked: leave their answer alone.
+      // This is the case that makes a reopen usable — an accepted nominee
+      // is not asked to accept again.
     }
 
-    // Prune nominations that are no longer on the roster.
-    //
-    // Submission used to only ever WRITE, which was harmless while a thesis
-    // could be submitted exactly once: nothing stale could exist. Reopening
-    // a stalled thesis (`reopenForRenomination`) makes a second submission
-    // real, and without this the rescue path defeats itself -- the nominee
-    // who declined keeps their `declined` document even after being replaced,
-    // `respondToNomination` counts it outstanding forever, and the thesis
-    // stalls again on the very action meant to free it.
-    //
-    // Read before the batch rather than inside it: a batch is not a
-    // transaction and cannot read. The window is safe because a leader may
-    // only submit while the thesis is still 'draft', and nothing else writes
-    // nominations in that state.
-    for (final existing in (await noms.get()).docs) {
-      if (!writes.containsKey(existing.id)) {
-        batch.delete(noms.doc(existing.id));
+    // Clear out the refused seat so it stops counting as outstanding. Before
+    // this existed the rescue path defeated itself: the nominee who declined
+    // kept their document even after being replaced, `respondToNomination`
+    // counted it forever, and the thesis stalled again on the very action
+    // meant to free it.
+    for (final entry in prior.entries) {
+      if (writes.containsKey(entry.key)) continue;
+
+      final status = entry.value['conformeStatus'] as String?;
+      if (status == 'declined') {
+        batch.delete(noms.doc(entry.key));
+        continue;
       }
+
+      // Anything else dropped from the roster would have to be deleted, and
+      // the rules permit deleting only a declined seat. Leaving it in place
+      // silently would be worse than refusing: it would count as outstanding
+      // forever and stall the thesis exactly as the decline did.
+      final who = entry.value['nomineeName'] ?? entry.key;
+      final why = switch (status) {
+        'accepted' => 'has already accepted',
+        'exOfficio' => 'sits on this panel by office',
+        _ => 'has been asked and has not answered yet',
+      };
+      throw ArgumentError(
+        '$who $why, so their seat cannot be removed. Only a nominee who '
+        'declined can be replaced.',
+      );
     }
 
     batch.update(_theses.doc(thesisId), {
@@ -316,12 +392,18 @@ class ThesisRepository {
   }) async {
     final ids = await _nominationIds(thesisId);
 
-    await _db.runTransaction((tx) async {
+    // The guard returns its failure rather than throwing it: an exception
+    // thrown inside `runTransaction` aborts the transaction through a native
+    // `cancel` call that this cloud_firestore version does not implement on
+    // Android, surfacing as a fatal `MissingPluginException` instead of the
+    // StateError. Returning the failure lets the transaction commit its
+    // (empty) write set normally; we throw once we are back outside it.
+    final failure = await _db.runTransaction<Object?>((tx) async {
       // --- reads first, all of them, before any write ---
       final thesisRef = _theses.doc(thesisId);
       final thesisSnap = await tx.get(thesisRef);
       if (!thesisSnap.exists) {
-        throw StateError('Thesis $thesisId does not exist.');
+        return StateError('Thesis $thesisId does not exist.');
       }
       final status = _toThesis(thesisSnap.id, thesisSnap.data()!).status;
 
@@ -333,8 +415,13 @@ class ThesisRepository {
         }
       }
 
+      if (status == ThesisStatus.draft) {
+        // A coordinator reopened this thesis for re-nomination; the request
+        // in this nominee's inbox is stale, not completed.
+        return const NominationBeingRevised();
+      }
       if (status != ThesisStatus.nominationPendingConforme) {
-        throw StateError(
+        return StateError(
             'Cannot respond to a nomination: this thesis is no longer '
             'awaiting Conforme (current status: ${status.value}).');
       }
@@ -347,7 +434,7 @@ class ThesisRepository {
         'declineReason': accept ? null : declineReason,
       });
 
-      if (!accept) return;
+      if (!accept) return null;
 
       // nomineeUid is excluded rather than trusted from the (pre-write)
       // fresh read above, since this write is what makes it accepted.
@@ -361,7 +448,10 @@ class ThesisRepository {
           'status': ThesisStatus.nominationPendingCoordinator.value,
         });
       }
+      return null;
     });
+
+    if (failure != null) throw failure;
   }
 
   /// Returns a stalled thesis to `draft` so the group can re-nominate.
@@ -386,22 +476,28 @@ class ThesisRepository {
     required String thesisId,
     required String coordinatorUid,
   }) async {
-    await _db.runTransaction((tx) async {
+    // Returns its failure rather than throwing inside the transaction — see
+    // `respondToNomination` for why (the Android `MissingPluginException` on
+    // transaction cancel).
+    final failure = await _db.runTransaction<StateError?>((tx) async {
       final ref = _theses.doc(thesisId);
       final snap = await tx.get(ref);
       if (!snap.exists) {
-        throw StateError('Thesis $thesisId does not exist.');
+        return StateError('Thesis $thesisId does not exist.');
       }
 
       final status = _toThesis(snap.id, snap.data()!).status;
       if (status != ThesisStatus.nominationPendingConforme) {
-        throw StateError(
+        return StateError(
             'Cannot reopen this thesis: it is not awaiting Conforme '
             '(current status: ${status.value}).');
       }
 
       tx.update(ref, {'status': ThesisStatus.draft.value});
+      return null;
     });
+
+    if (failure != null) throw failure;
   }
 
   /// A Research Coordinator recommends the thesis to the Dean. Only valid
@@ -445,7 +541,10 @@ class ThesisRepository {
   }) async {
     final ids = await _nominationIds(thesisId);
 
-    await _db.runTransaction((tx) async {
+    // Returns its failure rather than throwing inside the transaction — see
+    // `respondToNomination` for why (the Android `MissingPluginException` on
+    // transaction cancel).
+    final failure = await _db.runTransaction<StateError?>((tx) async {
       // --- reads first, all of them, before any write ---
       final thesisRef = _theses.doc(thesisId);
       final thesisSnap = await tx.get(thesisRef);
@@ -462,7 +561,7 @@ class ThesisRepository {
       }
 
       if (status != ThesisStatus.nominationPendingDean) {
-        throw StateError(
+        return StateError(
             'Cannot approve a thesis that is not pending dean review.');
       }
 
@@ -479,10 +578,10 @@ class ThesisRepository {
           .toList();
 
       if (adviser.isEmpty) {
-        throw StateError('Cannot approve without an accepted adviser.');
+        return StateError('Cannot approve without an accepted adviser.');
       }
       if (panelists.length < 3) {
-        throw StateError('Cannot approve with fewer than three panel members.');
+        return StateError('Cannot approve with fewer than three panel members.');
       }
 
       // --- then the write ---
@@ -493,7 +592,10 @@ class ThesisRepository {
         'deanApprovedAt': FieldValue.serverTimestamp(),
         'deanApprovedBy': deanUid,
       });
+      return null;
     });
+
+    if (failure != null) throw failure;
   }
 
   /// Every nomination addressed to this user that still needs their

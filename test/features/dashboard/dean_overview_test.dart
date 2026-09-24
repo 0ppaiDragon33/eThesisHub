@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ethesishub/app.dart';
+import '../../support/no_animations.dart';
+import 'package:ethesishub/core/design/metrics.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 import 'package:ethesishub/features/dashboard/dean_overview.dart';
 import 'package:ethesishub/features/dashboard/overview_screen.dart';
@@ -62,7 +64,9 @@ Future<Widget> wrap(
       )),
       ...overrides,
     ],
-    child: MaterialApp(home: dashboard),
+    // Scaffold: the overview draws Material widgets (search/filter, tiles)
+    // that in the app sit under the shell's Scaffold.
+    child: MaterialApp(home: Scaffold(body: dashboard)),
   );
 }
 
@@ -111,8 +115,8 @@ void main() {
     expect(find.byKey(const Key('deanOverview')), findsOneWidget);
     expect(find.text('Nomination approvals'), findsNothing);
 
-    final rail = find.byType(NavigationRail);
-    expect(find.descendant(of: rail, matching: find.text('Overview')),
+    final rail = find.byKey(const Key('shellSidebar'));
+    expect(find.descendant(of: rail, matching: find.text('Dashboard')),
         findsOneWidget);
   });
 
@@ -129,7 +133,10 @@ void main() {
         await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));
     await tester.pumpAndSettle();
 
-    expect(find.text('A Working Title'), findsOneWidget);
+    // The awaiting thesis surfaces on the overview (the needs-you queue and
+    // the title-defences-to-close list can both name it), with an Approve
+    // action — that action is the signal this test is really about.
+    expect(find.text('A Working Title'), findsWidgets);
     expect(find.text('Approve'), findsOneWidget);
   });
 
@@ -140,7 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Theses by stage'), findsOneWidget);
-    expect(find.textContaining('Past 7 months'), findsOneWidget);
+    expect(find.textContaining('past 7 months'), findsOneWidget);
   });
 
   testWidgets('the four tiles render', (tester) async {
@@ -150,13 +157,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Awaiting your approval'), findsOneWidget);
-    expect(find.text('Title defences'), findsOneWidget);
+    expect(find.text('At title defence'), findsOneWidget);
     expect(find.text('Defences this week'), findsOneWidget);
     expect(find.text('Active theses'), findsOneWidget);
   });
 
   testWidgets('a loading queue is distinguishable from an empty one',
       (tester) async {
+    disableAnimationsForTest(tester);
     final db = FakeFirebaseFirestore();
 
     await tester.pumpWidget(await wrap(
@@ -241,7 +249,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final tile = find.ancestor(
-        of: find.text('Defences this week'), matching: find.byKey(const Key('statTilePadding')));
+        of: find.text('Defences this week'), matching: find.byWidgetPredicate((w) => w is Metric));
     expect(find.descendant(of: tile, matching: find.text('1')),
         findsOneWidget);
     expect(find.descendant(of: tile, matching: find.text('0')),

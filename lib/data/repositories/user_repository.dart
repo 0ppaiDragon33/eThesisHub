@@ -74,10 +74,45 @@ class UserRepository {
     required bool adviser,
     required bool panelist,
   }) async {
+    // The authoritative flags. `users` is what every rule reads, and this
+    // write is the one that has to succeed.
     await _users.doc(uid).update({
       'nominableAsAdviser': adviser,
       'nominableAsPanelist': panelist,
     });
+
+    // `facultyDirectory` only mirrors them, for the student-facing nomination
+    // picker, which cannot read `users`. The entry is written client-side by
+    // its own subject at sign-in, so an invited account that has never signed
+    // in has none — spec §4.2.1 names that window, and the Users screen says
+    // so on the row.
+    //
+    // Updating a missing entry is REFUSED, not merely absent:
+    // `mayCoordinatorSetDesignation` requires `resource != null` on purpose,
+    // because a coordinator-created entry would carry no name and show as a
+    // blank row in the picker. Firestore reports a refused rule as
+    // permission-denied and never as not-found, so catching not-found alone
+    // let designating a never-signed-in account fail the whole call with "the
+    // security rules refused this read for your account" — after the
+    // authoritative write above had already succeeded.
+    //
+    // Asking first, rather than widening the catch, is what keeps a genuine
+    // refusal loud: a coordinator who has lost the role still hears about it.
+    if (await _directory.fetch(uid) == null) {
+      // No entry to mirror into, so create one from `users` rather than
+      // leaving the designation inert until this person's first sign-in.
+      // The rules pin `fullName` and `role` to that document, so this cannot
+      // be a blank row or an invented role.
+      final profile = await fetchUser(uid);
+      if (profile == null) return;
+      await _directory.createForDesignation(
+        user: profile,
+        adviser: adviser,
+        panelist: panelist,
+      );
+      return;
+    }
+
     try {
       await _directory.setDesignation(
         uid: uid,
@@ -85,6 +120,8 @@ class UserRepository {
         panelist: panelist,
       );
     } on FirebaseException catch (e) {
+      // Still reachable if the subject signed in between the read and this
+      // write, or deleted in the same gap.
       if (e.code != 'not-found') rethrow;
     }
   }

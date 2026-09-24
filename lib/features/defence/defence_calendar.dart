@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/design/layout.dart';
+import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -125,86 +127,110 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
     final selectedDefences = [...(byDay[_selected] ?? const <Defence>[])]
       ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
 
-    return Column(
-      key: const Key('defenceCalendar'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Legend(brightness: brightness),
-        const SizedBox(height: AppTokens.md),
-        if (awaiting.isNotEmpty) ...[
-          Text(
-            key: const Key('awaitingDateHeading'),
-            '${awaiting.length} defence${awaiting.length == 1 ? '' : 's'} '
-            'awaiting a date',
-            style: text.titleSmall,
-          ),
-          const SizedBox(height: AppTokens.sm),
-          for (final d in awaiting) DefenceRow(defence: d),
-          const SizedBox(height: AppTokens.md),
-        ],
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final grid = Panel(
+      flush: true,
+      child: Padding(
+        padding: const EdgeInsets.all(AppTokens.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            IconButton(
-              key: const Key('calendarPrevMonth'),
-              icon: const Icon(Icons.chevron_left),
-              onPressed: () => _changeMonth(-1),
-            ),
-            Text('${_monthNames[_month.month - 1]} ${_month.year}',
-                style: text.titleMedium),
-            IconButton(
-              key: const Key('calendarNextMonth'),
-              icon: const Icon(Icons.chevron_right),
-              onPressed: () => _changeMonth(1),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            for (final label in _weekdayLabels)
-              Expanded(
-                child: Center(
-                  child: Text(label,
-                      style: text.labelSmall?.copyWith(color: muted)),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppTokens.xs),
-        for (var w = 0; w < 6; w++)
-          Row(
-            children: [
-              for (var i = 0; i < 7; i++)
+            Row(
+              children: [
                 Expanded(
-                  child: _DayCell(
-                    day: days[w * 7 + i],
-                    inMonth: days[w * 7 + i].month == _month.month,
-                    isToday: days[w * 7 + i] == today,
-                    isSelected: days[w * 7 + i] == _selected,
-                    defences: byDay[days[w * 7 + i]] ?? const [],
-                    brightness: brightness,
-                    onTap: () => _select(days[w * 7 + i]),
+                  child: Text(
+                    '${_monthNames[_month.month - 1]} ${_month.year}',
+                    style: text.headlineSmall,
                   ),
                 ),
-            ],
-          ),
-        const SizedBox(height: AppTokens.lg),
-        Container(
-          key: const Key('calendarDayPanel'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(_dayPanelHeading(_selected, today), style: text.titleSmall),
-              const SizedBox(height: AppTokens.sm),
-              if (selectedDefences.isEmpty)
-                Text('No defences this day.',
-                    style: text.bodySmall?.copyWith(color: muted))
-              else
-                for (final d in selectedDefences) DefenceRow(defence: d),
-            ],
-          ),
+                IconButton(
+                  key: const Key('calendarPrevMonth'),
+                  tooltip: 'Previous month',
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  onPressed: () => _changeMonth(-1),
+                ),
+                IconButton(
+                  key: const Key('calendarNextMonth'),
+                  tooltip: 'Next month',
+                  icon: const Icon(Icons.chevron_right_rounded),
+                  onPressed: () => _changeMonth(1),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTokens.sm),
+            Row(
+              children: [
+                for (final label in _weekdayLabels)
+                  Expanded(
+                    child: Center(
+                      child: Text(label,
+                          style: text.labelSmall?.copyWith(color: muted)),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppTokens.xs),
+            for (var w = 0; w < 6; w++)
+              Row(
+                children: [
+                  for (var i = 0; i < 7; i++)
+                    Expanded(
+                      child: _DayCell(
+                        day: days[w * 7 + i],
+                        inMonth: days[w * 7 + i].month == _month.month,
+                        isToday: days[w * 7 + i] == today,
+                        isSelected: days[w * 7 + i] == _selected,
+                        defences: byDay[days[w * 7 + i]] ?? const [],
+                        brightness: brightness,
+                        onTap: () => _select(days[w * 7 + i]),
+                      ),
+                    ),
+                ],
+              ),
+            const SizedBox(height: AppTokens.md),
+            _Legend(brightness: brightness),
+          ],
         ),
-      ],
+      ),
+    );
+
+    final dayPanel = Panel(
+      key: const Key('calendarDayPanel'),
+      title: _dayPanelHeading(_selected, today),
+      icon: Icons.today_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (selectedDefences.isEmpty)
+            Text('No defences this day.',
+                style: text.bodySmall?.copyWith(color: muted))
+          else
+            for (final d in selectedDefences) DefenceRow(defence: d),
+        ],
+      ),
+    );
+
+    final awaitingPanel = awaiting.isEmpty
+        ? null
+        : Panel(
+            title: '${awaiting.length} '
+                'defence${awaiting.length == 1 ? '' : 's'} awaiting a date',
+            icon: Icons.event_busy_outlined,
+            child: Column(
+              key: const Key('awaitingDateHeading'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [for (final d in awaiting) DefenceRow(defence: d)],
+            ),
+          );
+
+    return KeyedSubtree(
+      key: const Key('defenceCalendar'),
+      child: SplitColumns(
+        primaryFlex: 7,
+        secondaryFlex: 5,
+        stackBelow: 940,
+        primary: [grid],
+        secondary: [dayPanel, ?awaitingPanel],
+      ),
     );
   }
 
@@ -280,66 +306,74 @@ class _DayCell extends StatelessWidget {
         : defences;
     final overflow = defences.length - shown.length;
 
-    return GestureDetector(
-      key: Key(_DefenceCalendarState._cellKey(day)),
-      onTap: onTap,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.all(1),
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: isToday ? scheme.primary.withValues(alpha: 0.08) : null,
-          border: Border.all(
+    final count = defences.length;
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '${day.day}, '
+          '${count == 0 ? 'no defences' : '$count defence${count == 1 ? '' : 's'}'}',
+      excludeSemantics: true,
+      child: InkWell(
+        key: Key(_DefenceCalendarState._cellKey(day)),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: 64,
+          margin: const EdgeInsets.all(2),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
             color: isSelected
                 ? scheme.primary
-                : scheme.outlineVariant.withValues(alpha: 0.4),
-            width: isSelected ? 2 : 1,
+                : count > 0
+                    ? scheme.primary.withValues(alpha: 0.06)
+                    : null,
+            border: isToday && !isSelected
+                ? Border.all(color: scheme.primary, width: 1.5)
+                : null,
+            borderRadius: BorderRadius.circular(10),
           ),
-          borderRadius: BorderRadius.circular(AppTokens.radiusSm),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              '${day.day}',
-              style: text.labelSmall?.copyWith(
-                color: inMonth ? null : muted.withValues(alpha: 0.5),
-                fontWeight: isToday ? FontWeight.bold : null,
-              ),
-            ),
-            const SizedBox(height: 2),
-            SizedBox(
-              height: 8,
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 2,
-                children: [
-                  for (final d in shown)
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: defenceStatusColor(d.status, brightness),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  if (overflow > 0)
-                    Text('+$overflow',
-                        style: TextStyle(fontSize: 7, color: muted)),
-                ],
-              ),
-            ),
-            if (defences.isNotEmpty) ...[
-              const SizedBox(height: 2),
+          child: Column(
+            children: [
               Text(
-                '${defences.length} defence${defences.length == 1 ? '' : 's'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 7, color: muted),
+                '${day.day}',
+                style: text.labelLarge?.copyWith(
+                  color: isSelected
+                      ? scheme.onPrimary
+                      : inMonth
+                          ? null
+                          : muted.withValues(alpha: 0.45),
+                  fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                height: 10,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 3,
+                  children: [
+                    for (final d in shown)
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? scheme.onPrimary
+                              : defenceStatusColor(d.status, brightness),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    if (overflow > 0)
+                      Text('+$overflow',
+                          style: TextStyle(
+                              fontSize: 8,
+                              color: isSelected ? scheme.onPrimary : muted)),
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );

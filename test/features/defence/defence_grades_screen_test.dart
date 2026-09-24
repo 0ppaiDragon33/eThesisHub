@@ -607,6 +607,30 @@ void main() {
     expect(segmentEnabled(seg, PassFail.fail), isTrue);
   });
 
+  testWidgets('recording a verdict confirms before it is written', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'a1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<PassFail>),
+        matching: find.text('Pass'),
+      ),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('recordVerdict')));
+    await tester.pumpAndSettle();
+
+    // A verdict is final, so pressing Record asks first.
+    expect(find.byKey(const Key('confirmVerdict')), findsOneWidget);
+    expect(find.text('Record a Pass verdict?'), findsOneWidget);
+  });
+
   // Defence in depth: the record button must not act on a Pass the gate
   // forbids, even if selection state drifted there somehow.
   testWidgets('under 75, tapping Pass never arms the record button', (

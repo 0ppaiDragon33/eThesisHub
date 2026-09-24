@@ -82,8 +82,9 @@ void main() {
     // `widget.chapter.label` in the AppBar on every branch, loading, error
     // and not-started alike -- so this is a stable signal that the detail
     // route, not the chapters list, is what actually rendered.
-    expect(find.widgetWithText(AppBar, 'Chapter III — Methodology'),
-        findsOneWidget);
+    expect(
+        tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
+        'Chapter III — Methodology');
   });
 
   testWidgets(
@@ -98,7 +99,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chapterDetailScreen')), findsNothing);
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     expect(find.text('No such chapter'), findsOneWidget);
   });
 
@@ -120,7 +121,7 @@ void main() {
     expect(find.byKey(const Key('chaptersScreen')), findsNothing);
     // Exactly one app bar -- the shell's, which also carries the sidebar
     // and so the way out.
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     expect(find.text('No thesis given'), findsOneWidget);
   });
 

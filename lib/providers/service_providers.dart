@@ -10,7 +10,10 @@ final supabaseClientProvider =
     Provider<SupabaseClient>((ref) => Supabase.instance.client);
 
 final storageServiceProvider = Provider<StorageService>(
-  (ref) => SupabaseStorageService(ref.watch(supabaseClientProvider)),
+  (ref) => SupabaseStorageService(
+    ref.watch(supabaseClientProvider),
+    ref.watch(firebaseAuthProvider),
+  ),
 );
 
 final auditServiceProvider = Provider<AuditService>(

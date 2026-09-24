@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/user_role.dart';
@@ -206,100 +211,137 @@ class _ScheduleDefenceScreenState
 
     final isCoordinator = me?.role == UserRole.coordinator;
 
+    final chaptersAsync = ref.watch(chaptersProvider(widget.thesisId));
+
     return KeyedSubtree(
       key: const Key('scheduleDefenceScreen'),
       child: PageShell(
+        kicker: 'Research office',
         title: 'Schedule a defence',
         subtitle: thesis.workingTitle,
         children: [
-          SegmentedButton<DefenceType>(
-            key: const Key('defenceType'),
-            segments: const [
-              ButtonSegment(
-                value: DefenceType.preOral,
-                label: Text('Pre-oral defence'),
-              ),
-              ButtonSegment(
-                value: DefenceType.final_,
-                label: Text('Final defence'),
-              ),
-            ],
-            selected: {_type},
-            onSelectionChanged: (selection) =>
-                setState(() => _type = selection.first),
-          ),
-          const Gap.md(),
-          InkWell(
-            key: const Key('defenceDate'),
-            onTap: _pickDateTime,
-            child: InputDecorator(
-              decoration: const InputDecoration(labelText: 'Date and time'),
-              child: Text(_formatDateTime(_scheduledAt)),
+          Panel(
+            title: 'Session',
+            icon: Icons.event_available_outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FormRow(
+                  label: 'Kind of defence',
+                  child: SegmentedButton<DefenceType>(
+                    key: const Key('defenceType'),
+                    segments: const [
+                      ButtonSegment(
+                        value: DefenceType.preOral,
+                        label: Text('Pre-oral defence'),
+                      ),
+                      ButtonSegment(
+                        value: DefenceType.final_,
+                        label: Text('Final defence'),
+                      ),
+                    ],
+                    selected: {_type},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _type = selection.first),
+                  ),
+                ),
+                FormRow(
+                  label: 'Date and time',
+                  child: InkWell(
+                    key: const Key('defenceDate'),
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: _pickDateTime,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.schedule_rounded),
+                        suffixIcon: Icon(Icons.edit_calendar_outlined),
+                      ),
+                      child: Text(_formatDateTime(_scheduledAt)),
+                    ),
+                  ),
+                ),
+                FormRow(
+                  label: 'Venue',
+                  child: TextField(
+                    key: const Key('defenceVenue'),
+                    controller: _venueController,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.meeting_room_outlined),
+                      hintText: 'Room or online link',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const Gap.md(),
-          TextField(
-            key: const Key('defenceVenue'),
-            controller: _venueController,
-            decoration: const InputDecoration(labelText: 'Venue'),
+          // Its own loading/error branch: chapters still connecting must
+          // not read as "0 approved, not ready".
+          Panel(
+            title: 'Chapter readiness',
+            icon: Icons.menu_book_outlined,
+            child: chaptersAsync.when(
+              loading: () => const LoadingState(label: 'Loading chapters…'),
+              error: (e, _) => ErrorState(
+                error: e,
+                message: 'Could not load this thesis\'s chapters.',
+              ),
+              data: (chapters) {
+                final readiness = readinessOf(chapters);
+                // finalReady implies the pre-oral gate is also met.
+                final gateMet = _type == DefenceType.preOral
+                    ? readiness != DefenceReadiness.notReady
+                    : readiness == DefenceReadiness.finalReady;
+                final approved = chapters
+                    .where((c) => c.status == ChapterStatus.approved)
+                    .length;
+                if (gateMet) {
+                  return Row(
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          color: Tone.endorsed.color(context)),
+                      const SizedBox(width: AppTokens.sm),
+                      Expanded(
+                        child: Text('$approved of 5 chapters approved. '
+                            'Ready for this defence.'),
+                      ),
+                    ],
+                  );
+                }
+                final message = _type == DefenceType.preOral
+                    ? 'Chapters I–III are not all approved yet. You can '
+                        'still schedule this defence.'
+                    : 'Chapters I–V are not all approved yet. You can '
+                        'still schedule this defence.';
+                return ErrorState(
+                  key: const Key('readinessWarning'),
+                  message: message,
+                );
+              },
+            ),
           ),
           const Gap.lg(),
-          // Its own isLoading/hasError branch, kept separate from the
-          // thesis stream above: a thesis that has loaded but whose
-          // chapters are still connecting must not read as "0 approved,
-          // not ready" -- see _ReadinessRow in defence_readiness.dart for
-          // the same reasoning applied to the dean/coordinator list.
-          ref.watch(chaptersProvider(widget.thesisId)).when(
-                loading: () =>
-                    const LoadingState(label: 'Loading chapters…'),
-                error: (e, _) => ErrorState(
-                  error: e,
-                  message: 'Could not load this thesis\'s chapters.',
-                ),
-                data: (chapters) {
-                  final readiness = readinessOf(chapters);
-                  // finalReady implies the pre-oral gate is also met, so a
-                  // pre-oral defence only warns on notReady, while a final
-                  // defence warns unless every chapter is approved.
-                  final gateMet = _type == DefenceType.preOral
-                      ? readiness != DefenceReadiness.notReady
-                      : readiness == DefenceReadiness.finalReady;
-                  if (gateMet) return const SizedBox.shrink();
-
-                  final message = _type == DefenceType.preOral
-                      ? 'Chapters I–III are not all approved yet. You can '
-                          'still schedule this defence.'
-                      : 'Chapters I–V are not all approved yet. You can '
-                          'still schedule this defence.';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: ErrorState(
-                      key: const Key('readinessWarning'),
-                      message: message,
-                    ),
-                  );
-                },
-              ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _error!,
-                key: const Key('error'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          // Hidden rather than merely disabled for anyone who is not the
-          // coordinator: the rules deny the write either way, but a button
-          // that always fails is worse than no button at all.
+          if (_error != null) ...[
+            ErrorState(key: const Key('error'), message: _error!),
+            const Gap.md(),
+          ],
+          // Hidden rather than disabled for anyone but the coordinator: a
+          // button that always fails is worse than none.
           if (isCoordinator)
-            FilledButton(
-              key: const Key('scheduleDefence'),
-              onPressed: _busy || uid == null
-                  ? null
-                  : () => _schedule(thesis: thesis, coordinatorUid: uid),
-              child: Text(_busy ? 'Scheduling…' : 'Schedule defence'),
-            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                key: const Key('scheduleDefence'),
+                onPressed: _busy || uid == null
+                    ? null
+                    : () => _schedule(thesis: thesis, coordinatorUid: uid),
+                icon: const Icon(Icons.event_available_outlined, size: 18),
+                label: Text(_busy ? 'Scheduling…' : 'Schedule defence'),
+              ),
+            )
+          else
+            Text('Only the Research Coordinator can schedule defences.',
+                style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );

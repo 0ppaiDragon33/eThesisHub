@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -13,7 +17,9 @@ import 'package:ethesishub/data/models/composing_indicator.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/title_comment.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
@@ -102,28 +108,44 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     });
   }
 
+  /// Fires a presence write and swallows its refusal.
+  ///
+  /// The "is writing" marker is decoration, and `firestore.rules` refuses it
+  /// outright to anyone not on the panel: `titleComposing` allows create
+  /// only for `isOnPanel()`, while get/list also allows the Coordinator and
+  /// the Dean. So a Coordinator or Dean reading this screen is shown a
+  /// comment box, focuses it, and the write is denied — once on focus and
+  /// then again on every heartbeat.
+  ///
+  /// Nothing awaits these writes, so each refusal escaped to the browser as
+  /// "Uncaught (in promise) [cloud_firestore/permission-denied]". Losing a
+  /// marker costs a reader nothing; it must not be reported as a failure.
+  void _presence(Future<void> write) {
+    write.catchError((Object _) {});
+  }
+
   void _startComposing(String candidateId, AppUser me, Thesis thesis) {
     _composingCandidateId = candidateId;
     final role = _roleOnThisThesis(thesis, me);
     final repo = ref.read(titleDefenceRepositoryProvider);
-    repo.markComposing(
+    _presence(repo.markComposing(
       thesisId: widget.thesisId,
       uid: me.uid,
       name: me.fullName,
       role: role,
       candidateTitleId: candidateId,
-    );
+    ));
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(const Duration(seconds: 5), (_) {
       final id = _composingCandidateId;
       if (id == null) return;
-      repo.markComposing(
+      _presence(repo.markComposing(
         thesisId: widget.thesisId,
         uid: me.uid,
         name: me.fullName,
         role: role,
         candidateTitleId: id,
-      );
+      ));
     });
   }
 
@@ -131,30 +153,38 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     _heartbeat?.cancel();
     _heartbeat = null;
     _composingCandidateId = null;
-    ref
+    _presence(ref
         .read(titleDefenceRepositoryProvider)
-        .clearComposing(thesisId: widget.thesisId, uid: me.uid);
+        .clearComposing(thesisId: widget.thesisId, uid: me.uid));
   }
 
   /// The uploaded documents were written on submission and rendered
   /// nowhere: the panel could see three title strings and had no way to
   /// read a single justification, let alone the presentation.
-  Future<void> _open(String? url, String what) async {
-    if (url == null || url.isEmpty) {
+  ///
+  /// Takes the storage PATH, not a URL. The bucket is private, so the link
+  /// is minted per-open by the `document-url` function, which checks that
+  /// this panel member is on this thesis before it signs — a stored public
+  /// URL would have opened for anyone who ever saw it.
+  Future<void> _open(String? path, String what) async {
+    if (path == null || path.isEmpty) {
       setState(() => _error = 'No $what was uploaded for this thesis.');
-      return;
-    }
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      setState(() => _error = 'That $what link is not a valid address.');
       return;
     }
     setState(() => _error = null);
     try {
+      final url = await ref.read(storageServiceProvider).signedUrl(path);
+      final uri = Uri.tryParse(url);
+      if (uri == null) {
+        if (mounted) setState(() => _error = 'That $what link is not valid.');
+        return;
+      }
       final opened = await (widget.openUrl ?? _realOpener)(uri);
       if (!opened && mounted) {
         setState(() => _error = 'Could not open the $what.');
       }
+    } on StorageFailure catch (e) {
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not open the $what.');
     }
@@ -311,7 +341,10 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     // it, along with the app bar and the sidebar, for every signed-in
     // route.
     if (meAsync.isLoading || thesisAsync.isLoading) {
-      return const LoadingState(label: 'Loading the title defence…');
+      return const PageShell(
+        maxWidth: 900,
+        children: [LoadingState.page(label: 'Loading the title defence…')],
+      );
     }
     if (meAsync.hasError) {
       return PageShell(children: [
@@ -345,19 +378,32 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
 
     final isDean = me.role == UserRole.dean;
 
+    final text = Theme.of(context).textTheme;
+
     return KeyedSubtree(
       key: const Key('titleDefenceScreen'),
       child: PageShell(
-        title: 'Title defence',
-        subtitle: thesis.workingTitle,
+        maxWidth: 900,
+        kicker: 'Title defence, round ${thesis.titleRound}',
+        title: thesis.workingTitle,
+        subtitle: isDean
+            ? 'Read each candidate and the panel\'s remarks, then approve '
+                'one title or return the set.'
+            : 'Read each candidate and its justification, and leave your '
+                'remarks for the group.',
+        actions: [
+          OutlinedButton.icon(
+            key: const Key('openPresentation'),
+            icon: const Icon(Icons.slideshow_outlined, size: 18),
+            onPressed: () => _open(thesis.presentationPath, 'presentation'),
+            label: const Text('Open presentation'),
+          ),
+        ],
         children: [
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Text(_error!,
-                  key: const Key('error'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+          if (_error != null) ...[
+            ErrorState(key: const Key('error'), message: _error!),
+            const Gap.md(),
+          ],
           candidatesAsync.when(
             loading: () => const LoadingState(label: 'Loading candidates…'),
             error: (e, _) => ErrorState(
@@ -368,7 +414,8 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
               final candidates = allCandidates
                   .where((c) => c.round == thesis.titleRound)
                   .toList();
-              final comments = commentsAsync.valueOrNull ?? const <TitleComment>[];
+              final comments =
+                  commentsAsync.valueOrNull ?? const <TitleComment>[];
               final composing =
                   composingAsync.valueOrNull ?? const <ComposingIndicator>[];
 
@@ -376,110 +423,125 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
               final active = composing
                   .where((c) => c.uid != me.uid && !c.isStaleAt(now))
                   .toList();
+              final canDecide =
+                  thesis.status.value == 'titlePendingDefence';
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // One presentation for the whole defence, so it sits
-                  // above the candidates rather than inside each card.
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      key: const Key('openPresentation'),
-                      icon: const Icon(Icons.slideshow_outlined),
-                      onPressed: () => _open(
-                          thesis.presentationUrl, 'presentation'),
-                      label: const Text('Open the presentation'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (active.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Container(
-                        key: const Key('composingBanner'),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          active
-                              .map((c) => _composingText(c, candidates))
-                              .join('\n'),
-                        ),
-                      ),
-                    ),
-                  for (final (index, candidate) in candidates.indexed)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: _CandidateCard(
-                        candidate: candidate,
-                        ordinal: index + 1,
-                        onOpenJustification: () => _open(
-                            candidate.justificationUrl, 'justification'),
-                        comments: comments
-                            .where((c) => c.candidateTitleId == candidate.id)
-                            .toList(),
-                        controller: _controllerFor(candidate.id),
-                        focusNode: _focusNodeFor(candidate.id, me, thesis),
-                        busy: _busyCandidateId(candidate.id),
-                        isDean: isDean,
-                        canDecide: thesis.status.value == 'titlePendingDefence',
-                        onPost: () => _postComment(candidate.id, me, thesis),
-                        onApprove: () => _approve(candidate.id, me.uid),
-                      ),
-                    ),
-                  if (isDean) ...[
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    if (!_rejecting)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton(
-                          key: const Key('rejectSet'),
-                          onPressed: () => setState(() => _rejecting = true),
-                          child: const Text('Reject this set'),
-                        ),
-                      )
-                    else
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextField(
-                            key: const Key('rejectRemark'),
-                            controller: _rejectController,
-                            decoration: const InputDecoration(
-                              labelText: 'Why is this set being rejected?',
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    child: active.isEmpty
+                        ? const SizedBox(width: double.infinity)
+                        : Container(
+                            key: const Key('composingBanner'),
+                            width: double.infinity,
+                            margin:
+                                const EdgeInsets.only(bottom: AppTokens.md),
+                            padding: const EdgeInsets.all(AppTokens.md - 4),
+                            decoration: BoxDecoration(
+                              color: Palette.of(context)
+                                  .seal
+                                  .withValues(alpha: 0.07),
+                              borderRadius:
+                                  BorderRadius.circular(AppTokens.radiusSm),
                             ),
-                            minLines: 2,
-                            maxLines: 4,
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_note_rounded,
+                                    color: Palette.of(context).seal),
+                                const SizedBox(width: AppTokens.sm),
+                                Expanded(
+                                  child: Text(
+                                    active
+                                        .map((c) =>
+                                            _composingText(c, candidates))
+                                        .join('\n'),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              FilledButton(
-                                key: const Key('confirmReject'),
-                                onPressed: _busyReject
-                                    ? null
-                                    : () => _confirmReject(me.uid),
-                                child: Text(_busyReject
-                                    ? 'Rejecting…'
-                                    : 'Confirm rejection'),
-                              ),
-                              const SizedBox(width: 12),
-                              TextButton(
-                                onPressed: () =>
-                                    setState(() => _rejecting = false),
-                                child: const Text('Cancel'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                  ),
+                  for (final (index, candidate) in candidates.indexed) ...[
+                    _CandidateCard(
+                      candidate: candidate,
+                      ordinal: index + 1,
+                      onOpenJustification: () => _open(
+                          candidate.justificationPath, 'justification'),
+                      comments: comments
+                          .where((c) => c.candidateTitleId == candidate.id)
+                          .toList(),
+                      controller: _controllerFor(candidate.id),
+                      focusNode: _focusNodeFor(candidate.id, me, thesis),
+                      busy: _busyCandidateId(candidate.id),
+                      isDean: isDean,
+                      canDecide: canDecide,
+                      onPost: () => _postComment(candidate.id, me, thesis),
+                      onApprove: () => _approve(candidate.id, me.uid),
+                    ),
+                    const Gap.md(),
                   ],
+                  if (isDean)
+                    Panel(
+                      title: 'Return the whole set',
+                      subtitle: 'The group reads your remark and submits a '
+                          'new round',
+                      icon: Icons.undo_rounded,
+                      child: !_rejecting
+                          ? Align(
+                              alignment: Alignment.centerLeft,
+                              child: OutlinedButton(
+                                key: const Key('rejectSet'),
+                                onPressed: () =>
+                                    setState(() => _rejecting = true),
+                                child: const Text('Reject this set'),
+                              ),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                FormRow(
+                                  label: 'Why is this set being rejected?',
+                                  child: TextField(
+                                    key: const Key('rejectRemark'),
+                                    controller: _rejectController,
+                                    minLines: 2,
+                                    maxLines: 4,
+                                    autofocus: true,
+                                  ),
+                                ),
+                                Wrap(
+                                  spacing: AppTokens.sm,
+                                  children: [
+                                    FilledButton(
+                                      key: const Key('confirmReject'),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor:
+                                            Tone.returned.color(context),
+                                      ),
+                                      onPressed: _busyReject
+                                          ? null
+                                          : () => _confirmReject(me.uid),
+                                      child: Text(_busyReject
+                                          ? 'Rejecting…'
+                                          : 'Confirm rejection'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          setState(() => _rejecting = false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                    )
+                  else
+                    Text(
+                      'Only the Dean records the decision.',
+                      style: text.bodySmall,
+                    ),
                 ],
               );
             },
@@ -526,90 +588,148 @@ class _CandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Each candidate is numbered and its own remarks are boxed
-            // beneath it, so a panel scrolling a ten-candidate defence can
-            // tell where one ends and the next begins. Previously every
-            // title, comment and box ran together in one column.
-            Text('Candidate $ordinal',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                    )),
-            const SizedBox(height: 4),
-            Text(candidate.titleText,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: Key('openJustification-${candidate.id}'),
-                icon: const Icon(Icons.description_outlined, size: 18),
-                onPressed: onOpenJustification,
-                label: const Text('Open the justification'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (comments.isEmpty)
-                    Text('No remarks on this candidate yet.',
-                        style: Theme.of(context).textTheme.bodySmall)
-                  else
-                    for (final comment in comments)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          '${comment.authorName} — ${comment.authorRole}: '
-                          '${comment.body}',
-                        ),
-                      ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              key: Key('commentBox-${candidate.id}'),
-              controller: controller,
-              focusNode: focusNode,
-              decoration: const InputDecoration(labelText: 'Add a comment'),
-              minLines: 1,
-              maxLines: 3,
-            ),
-            const SizedBox(height: 8),
-            Row(
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+
+    return Panel(
+      flush: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The candidate.
+          Padding(
+            padding: const EdgeInsets.all(AppTokens.lg - 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                FilledButton(
-                  key: Key('postComment-${candidate.id}'),
-                  onPressed: busy ? null : onPost,
-                  child: Text(busy ? 'Posting…' : 'Post comment'),
-                ),
-                if (isDean && canDecide) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      key: Key('approve-${candidate.id}'),
-                      onPressed: busy ? null : onApprove,
-                      child: const Text('Approve this title'),
-                    ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: p.seal,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ],
+                  child: Text(
+                    '$ordinal',
+                    semanticsLabel: 'Candidate $ordinal',
+                    style: text.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimary),
+                  ),
+                ),
+                const SizedBox(width: AppTokens.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Candidate $ordinal',
+                          style: text.labelMedium?.copyWith(color: p.seal)),
+                      const SizedBox(height: 2),
+                      Text(candidate.titleText, style: text.titleLarge),
+                      const SizedBox(height: AppTokens.xs),
+                      TextButton.icon(
+                        key: Key('openJustification-${candidate.id}'),
+                        style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 36)),
+                        icon: const Icon(Icons.description_outlined, size: 18),
+                        onPressed: onOpenJustification,
+                        label: const Text('Open the justification'),
+                      ),
+                      if (isDean && canDecide) ...[
+                        const SizedBox(height: AppTokens.sm),
+                        FilledButton.icon(
+                          key: Key('approve-${candidate.id}'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Tone.endorsed.color(context),
+                          ),
+                          onPressed: busy ? null : onApprove,
+                          icon: const Icon(Icons.verified_outlined, size: 18),
+                          label: const Text('Approve this title'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          // The remarks.
+          Container(
+            color: p.canvas,
+            padding: const EdgeInsets.fromLTRB(
+                AppTokens.lg - 4, AppTokens.md, AppTokens.lg - 4, AppTokens.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  comments.isEmpty
+                      ? 'Remarks'
+                      : comments.length == 1
+                          ? '1 remark'
+                          : '${comments.length} remarks',
+                  style: text.labelMedium,
+                ),
+                const SizedBox(height: AppTokens.sm),
+                if (comments.isEmpty)
+                  Text('No remarks on this candidate yet.',
+                      style: text.bodySmall)
+                else
+                  for (final comment in comments)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppTokens.md - 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InitialsAvatar(comment.authorName, size: 30),
+                          const SizedBox(width: AppTokens.sm + 2),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${comment.authorName}, '
+                                  '${comment.authorRole}',
+                                  style: text.labelMedium,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(comment.body, style: text.bodyMedium),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                const SizedBox(height: AppTokens.xs),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: Key('commentBox-${candidate.id}'),
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          hintText: 'Add a remark on this candidate',
+                        ),
+                        minLines: 1,
+                        maxLines: 4,
+                      ),
+                    ),
+                    const SizedBox(width: AppTokens.sm),
+                    FilledButton(
+                      key: Key('postComment-${candidate.id}'),
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size(64, 52)),
+                      onPressed: busy ? null : onPost,
+                      child: Text(busy ? 'Posting…' : 'Post'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

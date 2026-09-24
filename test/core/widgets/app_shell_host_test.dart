@@ -89,7 +89,7 @@ void main() {
       expect(find.byKey(const Key('accountFooterName')), findsOneWidget);
       expect(find.text('Dr. Jane Dela Cruz'), findsOneWidget);
       expect(find.byKey(const Key('accountFooterRole')), findsOneWidget);
-      expect(find.text('College Research Coordinator'), findsOneWidget);
+      expect(find.text('Research Coordinator'), findsOneWidget);
       expect(find.byKey(const Key('signOut')), findsOneWidget);
     });
 
@@ -307,15 +307,30 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('accountFooterName')), findsOneWidget);
-      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
     });
   });
 
   group('shellTitleFor', () {
-    test('/overview reads "Overview", matching the sidebar\'s own label -- '
+    test('/overview reads "Dashboard", matching the sidebar\'s own label -- '
         'not the app name (spec §5.4)', () {
       expect(shellTitleFor('/overview', const {}, UserRole.student),
-          'Overview');
+          'Dashboard');
+    });
+
+    test('a form copy in the editor reads "Edit form"', () {
+      expect(
+          shellTitleFor('/forms/form1/copies/c1', const {}, UserRole.student),
+          'Edit form');
+      expect(shellTitleFor('/forms', const {}, UserRole.student), 'Forms',
+          reason: 'the Forms destination itself keeps its own title');
+    });
+
+    test('a /forms/... route that is not the editor does not read "Edit '
+        'form"', () {
+      expect(shellTitleFor('/forms/form1', const {}, UserRole.student),
+          isNot('Edit form'),
+          reason: 'only .../copies/... is the editor');
     });
   });
 

@@ -88,7 +88,8 @@ void main() {
     // the defence type moved to the page's own heading -- which is still
     // the thing that only renders once the defence document (not just the
     // loading state, which shares the same key) has actually resolved.
-    expect(find.widgetWithText(AppBar, 'Defence room'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
+        'Defence room');
     expect(find.text('Pre-oral defence'), findsOneWidget);
   });
 
@@ -105,8 +106,8 @@ void main() {
     // Same as the room above: the shell's app bar names the route, and the
     // defence type -- which only appears once the document resolves -- is
     // the page's own heading.
-    expect(find.widgetWithText(AppBar, 'Consolidated comments'),
-        findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
+        'Consolidated comments');
     expect(find.text('Pre-oral defence'), findsOneWidget);
   });
 
@@ -138,7 +139,7 @@ void main() {
     // key as its loaded state (see `_framed` in defence_room_screen.dart),
     // so the real assertion is the shell's single AppBar plus the
     // not-found copy, not the key's absence.
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(const Key('shellTitle')), findsOneWidget);
     expect(find.text('Defence not found'), findsOneWidget);
   });
 

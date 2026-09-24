@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -67,7 +70,15 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   @override
   void initState() {
     super.initState();
-    _loadExOfficio();
+    _init();
+  }
+
+  // Ex-officio seats first (they set the panel-slot cap), then the surviving
+  // roster from any earlier round.
+  Future<void> _init() async {
+    await _loadExOfficio();
+    if (!mounted) return;
+    await _loadExistingRoster();
   }
 
   Future<void> _loadExOfficio() async {
@@ -80,6 +91,61 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       if (_panelUids.length > max) {
         _panelUids = _panelUids.sublist(0, max < 0 ? 0 : max);
       }
+    });
+  }
+
+  /// Pre-selects the roster that survived a reopen.
+  ///
+  /// After a coordinator hands a stalled thesis back to `draft`, whoever
+  /// accepted — or is still awaiting an answer — keeps their seat:
+  /// [ThesisRepository.submitNominations] and the rules refuse to remove
+  /// them, and only a declined seat may be refilled. A blank form here read
+  /// as though every answer were lost and let the leader accidentally drop an
+  /// accepted nominee (which submit then refuses with a confusing error).
+  /// Pre-selecting the survivors shows who is still on the panel and leaves
+  /// only the declined seats empty for a fresh pick — re-nominating the
+  /// person who declined is refused, so their seat is deliberately not
+  /// restored. A first nomination finds nothing here and stays blank.
+  Future<void> _loadExistingRoster() async {
+    final List<Nomination> existing;
+    try {
+      existing = await ref
+          .read(thesisRepositoryProvider)
+          .watchNominations(widget.thesisId)
+          .first;
+    } catch (_) {
+      return; // nothing to prefill; the form simply stays blank
+    }
+    if (!mounted || existing.isEmpty) return;
+
+    String? adviser;
+    final panel = <String>[];
+    for (final n in existing) {
+      if (n.exOfficio) continue; // added automatically, never chosen here
+      if (n.conformeStatus == ConformeStatus.declined) continue; // must refill
+      switch (n.position) {
+        case NominationPosition.adviser:
+          adviser = n.nomineeUid;
+        case NominationPosition.panelist:
+          panel.add(n.nomineeUid);
+        case NominationPosition.coordinator:
+        case NominationPosition.dean:
+          break; // office holders sit ex officio, not in a chosen seat
+      }
+    }
+
+    if (adviser == null && panel.isEmpty) return;
+
+    setState(() {
+      _adviserUid = adviser;
+      final slots = <String?>[...panel];
+      // Always leave at least three seats so a refill has somewhere to land,
+      // and never exceed the cap the ex-officio count leaves.
+      while (slots.length < 3) {
+        slots.add(null);
+      }
+      final max = _maxPanelists;
+      _panelUids = max > 0 && slots.length > max ? slots.sublist(0, max) : slots;
     });
   }
 
@@ -441,9 +507,12 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     // No Scaffold and no AppBar: the app shell owns both for every
     // signed-in route now.
     return directoryAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, _) =>
-          const Center(child: Text('Could not load the faculty directory.')),
+      loading: () => const PageShell(children: [
+        LoadingState.page(label: 'Loading the faculty directory…'),
+      ]),
+      error: (e, _) => PageShell(children: [
+        ErrorState(error: e, message: 'Could not load the faculty directory.'),
+      ]),
       data: (directory) {
         // A student can never be nominated, and the leader cannot nominate
         // themselves. The directory is not expected to contain students —
@@ -459,7 +528,9 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
         // produced the bug above: "still loading" was reported to the
         // user as "this thesis has moved past draft".
         if (thesisAsync.isLoading) {
-          return const LoadingState(label: 'Loading your thesis…');
+          return const PageShell(children: [
+            LoadingState.page(label: 'Loading your thesis…'),
+          ]);
         }
         if (thesisAsync.hasError) {
           return PageShell(children: [
@@ -484,133 +555,138 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
 
         final stillDraft = thesis.status == ThesisStatus.draft;
         if (!stillDraft) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Nominations can only be submitted while this thesis is '
-                'still a draft. This thesis has already moved past that '
-                'stage.',
-                key: const Key('notDraft'),
-                textAlign: TextAlign.center,
-              ),
+          return const PageShell(children: [
+            EmptyState(
+              key: Key('notDraft'),
+              icon: Icons.how_to_reg_outlined,
+              title: 'Nominations already sent',
+              message: 'Nominations can only be submitted while this thesis '
+                  'is still a draft. This thesis has already moved past that '
+                  'stage.',
             ),
-          );
+          ]);
         }
 
         final atCap = _panelUids.length >= _maxPanelists;
 
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+        final text = Theme.of(context).textTheme;
+        final chosen = _panelUids.whereType<String>().length;
+
+        return PageShell(
+          kicker: 'Step 2 of 3',
+          title: 'Nominate your adviser and panel',
+          subtitle: thesis.workingTitle,
+          children: [
+            Panel(
+              title: 'Thesis adviser',
+              subtitle: 'Guides your chapters and signs your forms',
+              icon: Icons.school_outlined,
+              child: _picker('adviser', 'Thesis Adviser', _adviserUid,
+                  faculty, (v) => setState(() => _adviserUid = v),
+                  isAdviserSlot: true),
+            ),
+            const Gap.md(),
+            Panel(
+              title: 'Panel members',
+              subtitle: 'At least 3, at most $_maxPanelists',
+              icon: Icons.groups_outlined,
+              trailing: ToneBadge(
+                label: '$chosen chosen',
+                tone: chosen >= 3 ? Tone.endorsed : Tone.awaiting,
+                dense: true,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _picker('adviser', 'Thesis Adviser', _adviserUid, faculty,
-                      (v) => setState(() => _adviserUid = v),
-                      isAdviserSlot: true),
-                  const SizedBox(height: 20),
-                  Text('Panel members (minimum 3, at most $_maxPanelists)'),
                   for (var i = 0; i < _panelUids.length; i++)
                     Padding(
-                      padding: const EdgeInsets.only(top: 10),
+                      padding: EdgeInsets.only(top: i == 0 ? 0 : 10),
                       child: _picker('panel$i', 'Panel member ${i + 1}',
                           _panelUids[i], faculty,
                           (v) => setState(() => _panelUids[i] = v)),
                     ),
+                  const Gap.sm(),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(
+                    child: TextButton.icon(
                       key: const Key('addPanelist'),
                       onPressed: atCap
                           ? null
                           : () => setState(() => _panelUids.add(null)),
-                      child: const Text('+ Add panel member'),
+                      icon: const Icon(Icons.person_add_alt_outlined,
+                          size: 18),
+                      label: const Text('Add panel member'),
                     ),
                   ),
                   if (atCap)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Panel limited to $_maxPanelists member(s): this '
-                        'thesis reserves ${_exOfficio.length} ex-officio '
-                        'seat(s), and nominations per thesis are capped at '
-                        '$kMaxNominationDocs total.',
-                        key: const Key('panelCapReason'),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                    Text(
+                      'Panel limited to $_maxPanelists member(s): this '
+                      'thesis reserves ${_exOfficio.length} ex-officio '
+                      'seat(s), and nominations per thesis are capped at '
+                      '$kMaxNominationDocs total.',
+                      key: const Key('panelCapReason'),
+                      style: text.bodySmall,
                     ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                              'Also on your panel — added automatically'),
-                          const SizedBox(height: 6),
-                          for (final e in _exOfficio)
-                            Text('${e.fullName} — ${e.role}'),
-                          const SizedBox(height: 6),
-                          Text(
-                            'They sit on every panel by role, so there is '
-                            'nothing to choose and nothing for them to '
-                            'accept. That is why they are not listed as '
-                            'panel members above — though one of them may '
-                            'still be chosen as your thesis adviser, which '
-                            'they would be asked to accept.',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
+                ],
+              ),
+            ),
+            const Gap.md(),
+            Panel(
+              title: 'Also on your panel',
+              subtitle: 'Added automatically, by office',
+              icon: Icons.account_balance_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final e in _exOfficio)
+                    PersonLine(
+                      name: e.fullName,
+                      role: switch (e.role) {
+                        'dean' => 'Dean',
+                        'coordinator' => 'Research Coordinator',
+                        _ => e.role,
+                      },
+                      trailing: const ToneBadge(
+                          label: 'Ex officio',
+                          tone: Tone.neutral,
+                          dense: true),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_error!,
-                              key: const Key('error'),
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error)),
-                          // The code underneath the sentence, same pattern
-                          // as `ErrorState`: there are no server-side logs
-                          // on the Spark plan, so if the friendly copy is
-                          // ever wrong about the cause, the code is the
-                          // only way left to tell.
-                          if (_errorCause is FirebaseException)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                '[${(_errorCause as FirebaseException).code}]',
-                                key: const Key('errorCode'),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                        color:
-                                            Theme.of(context).colorScheme.error),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  FilledButton(
-                    key: const Key('submitNomination'),
-                    onPressed: _busy ? null : () => _submit(faculty),
-                    child: Text(
-                        _busy ? 'Submitting…' : 'Submit nomination'),
+                  const Gap.sm(),
+                  Text(
+                    'They sit on every panel by role, so there is nothing to '
+                    'choose and nothing for them to accept. One of them may '
+                    'still be chosen as your adviser, which they would be '
+                    'asked to accept.',
+                    style: text.bodySmall,
                   ),
                 ],
               ),
             ),
-          ),
+            const Gap.lg(),
+            if (_error != null) ...[
+              ErrorState(
+                key: const Key('error'),
+                error: _errorCause,
+                message: _error!,
+              ),
+              const Gap.md(),
+            ],
+            Text(
+              'Each nominee is asked to accept. Once all have, the Research '
+              'Coordinator and then the Dean review the nomination.',
+              style: text.bodySmall,
+            ),
+            const Gap.md(),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                key: const Key('submitNomination'),
+                onPressed: _busy ? null : () => _submit(faculty),
+                icon: const Icon(Icons.send_outlined, size: 18),
+                label: Text(_busy ? 'Submitting…' : 'Submit nomination'),
+              ),
+            ),
+          ],
         );
       },
     );

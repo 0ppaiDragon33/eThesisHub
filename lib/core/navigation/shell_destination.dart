@@ -10,16 +10,36 @@ import 'package:ethesishub/data/models/user_role.dart';
 /// and are different screens; a naive `startsWith` lights Defences for
 /// the defence room and tells the reader they are somewhere they are
 /// not. Ownership is therefore declared, never inferred.
+/// The sidebar's section headings, in the order they appear. Grouping the
+/// destinations under these — rather than one flat list — is what lets a
+/// reader see at a glance what each area is for: where you are (Overview),
+/// the work in front of you (Workflow), the accounts you administer
+/// (Management), and the reference material open to everyone (Resources).
+class ShellSection {
+  static const overview = 'Overview';
+  static const workflow = 'Workflow';
+  static const management = 'Management';
+  static const resources = 'Resources';
+
+  /// Render order. A section with no destinations for the current role is
+  /// simply skipped.
+  static const order = [overview, workflow, management, resources];
+}
+
 class ShellDestination {
   const ShellDestination({
     required this.label,
     required this.icon,
     required this.route,
+    this.section = ShellSection.workflow,
     this.alsoOwns = const [],
   });
 
   final String label;
   final IconData icon;
+
+  /// The sidebar heading this destination sits under. See [ShellSection].
+  final String section;
 
   /// Where selecting this destination navigates. Always a `context.go`.
   final String route;
@@ -43,8 +63,9 @@ class ShellDestination {
 
 /// The destinations a given role may see, in sidebar order.
 ///
-/// Overview is always first: landing on a work queue was the complaint
-/// the previous milestone existed to answer, and it must not creep back.
+/// The Dashboard is always first (the Overview section): landing on a work
+/// queue was the complaint the previous milestone existed to answer, and it
+/// must not creep back.
 ///
 /// Destinations that would lead to a screen refusing the reader are not
 /// declared at all. A control that does nothing when tapped reads as a
@@ -59,14 +80,16 @@ List<ShellDestination> destinationsFor({
   FacultyMode? facultyMode = FacultyMode.adviser,
 }) {
   const overview = ShellDestination(
-    label: 'Overview',
+    label: 'Dashboard',
     icon: Icons.dashboard_outlined,
     route: '/overview',
+    section: ShellSection.overview,
   );
   const defences = ShellDestination(
     label: 'Defences',
     icon: Icons.event_note_outlined,
     route: '/defences',
+    section: ShellSection.workflow,
   );
   // The one destination not scoped to what the reader is personally
   // involved in: a student browses theses they had nothing to do with,
@@ -76,6 +99,7 @@ List<ShellDestination> destinationsFor({
     label: 'Archive',
     icon: Icons.local_library_outlined,
     route: '/archive',
+    section: ShellSection.resources,
   );
   // Blank templates for all three forms are reachable with no data at all
   // (see forms_screen.dart's own doc comment) — unlike everything else on
@@ -84,6 +108,15 @@ List<ShellDestination> destinationsFor({
     label: 'Forms',
     icon: Icons.description_outlined,
     route: '/forms',
+    section: ShellSection.resources,
+  );
+  // The activity log — coordinator and dean only, the two roles the rules
+  // let read auditLogs.
+  const audit = ShellDestination(
+    label: 'Activity log',
+    icon: Icons.history_rounded,
+    route: '/audit',
+    section: ShellSection.management,
   );
 
   return switch (role) {
@@ -152,6 +185,7 @@ List<ShellDestination> destinationsFor({
           icon: Icons.checklist_outlined,
           route: '/readiness',
         ),
+        audit,
         archive,
         forms,
       ],
@@ -177,8 +211,10 @@ List<ShellDestination> destinationsFor({
           label: 'Users',
           icon: Icons.people_outline,
           route: '/users',
+          section: ShellSection.management,
           alsoOwns: ['/invites'],
         ),
+        audit,
         archive,
         forms,
       ],

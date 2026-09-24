@@ -49,3 +49,16 @@ app.*.map.json
 
 # Firestore rules test dependencies
 rules-test/node_modules/
+
+# Secrets handed to `supabase secrets set --env-file`, and the GCP service
+# account it carries. The service-role key signs storage URLs and bypasses
+# RLS; it must never reach the repository.
+.env
+.env.*
+!.env.example
+service-account*.json
+*firebase-adminsdk*.json
+*-service-account*.json
+
+# Supabase CLI link state (holds the project ref and access token cache)
+supabase/.temp/
