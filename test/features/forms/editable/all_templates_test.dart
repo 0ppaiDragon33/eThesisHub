@@ -15,6 +15,7 @@ import 'package:ethesishub/features/forms/form7_pdf.dart';
 import 'package:ethesishub/features/forms/form8_pdf.dart';
 
 import '../pdf_text.dart';
+import 'template_ids_snapshot.dart';
 
 /// Each converted form's official blank. A new copy of the form must start
 /// out printing exactly like it. Each conversion task adds its form here.
@@ -44,6 +45,19 @@ void main() {
     }, reason: 'every form with an official blank is checked against it');
   });
 
+  test('block ids never change once shipped', () {
+    // Saved copies key their overrides by block id (see
+    // FormTemplate.overridesFrom). Renaming or reordering an id here
+    // silently orphans anything a user already typed into that block, with
+    // no error to surface it. Only change this snapshot deliberately,
+    // alongside a migration for existing saved copies.
+    final actual = {
+      for (final template in formTemplates.values)
+        template.formId: template.blocks.map((b) => b.id).toList(),
+    };
+    expect(actual, templateIdsSnapshot);
+  });
+
   for (final template in formTemplates.values) {
     group(template.formId, () {
       test('every block id is unique', () {
@@ -63,6 +77,30 @@ void main() {
         final text = extractPdfText(await buildFormPdf(
             template, const {'formTitle': 'EDITED TITLE 42'}));
         expect(text, contains('EDITED TITLE 42'));
+      });
+
+      test('every block prints what is typed into it', () async {
+        // A unique, short, alphanumeric marker per block, keyed by index.
+        // The closing Q stops ZQ1Q from being a substring of ZQ11Q.
+        final overrides = {
+          for (var i = 0; i < template.blocks.length; i++)
+            template.blocks[i].id: 'ZQ${i}Q',
+        };
+
+        final text =
+            extractPdfText(await buildFormPdf(template, overrides));
+
+        for (var i = 0; i < template.blocks.length; i++) {
+          final block = template.blocks[i];
+          expect(text, contains('ZQ${i}Q'),
+              reason: 'block "${block.id}" should print what is typed '
+                  'into it');
+        }
+
+        final defaultTitle = template.block('formTitle')!.defaultText;
+        expect(text, isNot(contains(defaultTitle)),
+            reason: 'formTitle default text should be replaced once '
+                'every block is overridden');
       });
 
       final blank = officialBlanks[template.formId];
