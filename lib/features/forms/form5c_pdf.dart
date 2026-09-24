@@ -4,6 +4,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
+import 'package:ethesishub/features/forms/editable/form_parts.dart';
+import 'package:ethesishub/features/forms/editable/form_pdf.dart';
+import 'package:ethesishub/features/forms/editable/form_template.dart';
 import 'package:ethesishub/features/forms/form5c_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
 
@@ -15,25 +18,109 @@ const _sectionHeaderStyle = pw.TextStyle(
   color: formAccent,
 );
 
-/// One rubric row: label + weight, the prompt (Section A only), the score
-/// out of the weight, and a comment line where one was written (Section A
-/// only — Section B takes neither on the printed form).
+List<EvaluationCriterion> _criteriaIn(EvaluationSection section) =>
+    evaluationCriteria.where((c) => c.section == section).toList();
+
+/// A criterion's editable blocks: its name, its prompt (Section A only, and
+/// only where the rubric has one), its score, and its comment (Section A
+/// only). The weight is not a block: it defines the scoring.
+List<FormBlock> _criterionBlocks(EvaluationCriterion c) => [
+      FormBlock(
+        id: 'criterion.${c.key}.label',
+        label: '${c.label}: criterion',
+        defaultText: c.label,
+      ),
+      if (c.takesComment && c.prompt.isNotEmpty)
+        FormBlock(
+          id: 'criterion.${c.key}.prompt',
+          label: '${c.label}: prompt',
+          defaultText: c.prompt,
+          multiline: true,
+        ),
+      FormBlock(
+        id: 'criterion.${c.key}.score',
+        label: '${c.label}: score (out of ${c.weight})',
+        kind: BlockKind.blank,
+      ),
+      if (c.takesComment)
+        FormBlock(
+          id: 'criterion.${c.key}.comment',
+          label: '${c.label}: comment',
+          kind: BlockKind.blank,
+          multiline: true,
+        ),
+    ];
+
+/// Form 5c's text, block by block, for an editable copy.
+final FormTemplate form5cTemplate = FormTemplate(
+  formId: 'form5c',
+  title: 'Form 5c — Evaluation Guide',
+  blocks: [
+    ...formHeadBlocks(
+      rdCode: 'RD-37-06/24-04',
+      formTitle: 'Form 5c. Evaluation Guide',
+    ),
+    const FormBlock(
+        id: 'guideHeading', label: 'Heading', defaultText: 'EVALUATION GUIDE'),
+    const FormBlock(
+      id: 'guideSubheading',
+      label: 'Subheading',
+      defaultText: 'FOR REPORTS ON RESEARCHES AND TECHNICAL PAPERS',
+    ),
+    ...fieldBlocks('presenter', 'Name of Presenter'),
+    ...fieldBlocks('degree', 'Degree and Field of Specialization'),
+    ...fieldBlocks('presentedDate', 'Date of Presentation'),
+    ...fieldBlocks('presentedTime', 'Time of Presentation'),
+    ...fieldBlocks('venue', 'Venue'),
+    ...fieldBlocks('studyTitle', 'Title of the Study'),
+    ...fieldBlocks('defence', 'Defence'),
+    ...fieldBlocks('evaluator', 'Evaluator'),
+    ...fieldBlocks('rank', 'Academic Rank'),
+    ...fieldBlocks('specialization', 'Field of Specialization'),
+    const FormBlock(
+        id: 'sectionA', label: 'Section A heading', defaultText: 'A. CONTENT (50%)'),
+    for (final c in _criteriaIn(EvaluationSection.content))
+      ..._criterionBlocks(c),
+    const FormBlock(
+      id: 'sectionB',
+      label: 'Section B heading',
+      defaultText: 'B. PRESENTATION AND DEFENSE (50%)',
+    ),
+    for (final c in _criteriaIn(EvaluationSection.presentation))
+      ..._criterionBlocks(c),
+    const FormBlock(
+        id: 'summaryHeading', label: 'Summary heading', defaultText: 'SUMMARY'),
+    ...fieldBlocks('summaryA', 'A. CONTENT'),
+    ...fieldBlocks('summaryB', 'B. PRESENTATION AND DEFENSE'),
+    ...fieldBlocks('average', 'Average Rating'),
+    ...fieldBlocks('finalGrade', 'Final Grade'),
+    const FormBlock(
+        id: 'rating.label', label: 'Rating (label)', defaultText: 'Rating (§8a):'),
+    const FormBlock(id: 'rating', label: 'Rating', defaultText: '—'),
+  ],
+  layout: (t) => _page(t),
+);
+
+/// One rubric row: name + weight, the prompt (Section A only), the score out
+/// of the weight, and a comment line where one was written (Section A only).
 ///
-/// Takes [scores]/[comments] directly rather than a whole [Form5cData] so
-/// [_page] can pass empty maps for a blank template without fabricating a
-/// data object. A criterion absent from [scores] rules a blank rather than
-/// printing a mark — that covers both a real evaluation missing a key and
-/// the blank template's empty map alike. Defaulting to 0 would render
-/// "0 / 25" — a genuine zero, indistinguishable from a panelist who scored
-/// the criterion nothing. The denominator still prints, so the row stays a
-/// scoring row with a mark to be written in.
+/// With app data ([scores] non-null) a missing score rules a blank, never a
+/// 0: "0 / 25" would read as a genuine zero. Without app data (the blank
+/// template, an editable copy) the score and comment come from the blocks.
 pw.Widget _criterionRow(
-  Map<String, int> scores,
-  Map<String, String> comments,
-  EvaluationCriterion c,
-) {
-  final score = scores[c.key];
-  final comment = c.takesComment ? comments[c.key] : null;
+  FormText t,
+  EvaluationCriterion c, {
+  Map<String, int>? scores,
+  Map<String, String>? comments,
+}) {
+  final score = scores != null
+      ? scores[c.key]?.toString()
+      : valueOr(null, t, 'criterion.${c.key}.score');
+  final comment = !c.takesComment
+      ? null
+      : comments != null
+          ? comments[c.key]
+          : valueOr(null, t, 'criterion.${c.key}.comment');
   return pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: 6),
     child: pw.Column(
@@ -44,7 +131,7 @@ pw.Widget _criterionRow(
           children: [
             pw.Expanded(
               child: pw.Text(
-                '${c.label} (${c.weight}%)',
+                '${t.of('criterion.${c.key}.label')} (${c.weight}%)',
                 style: const pw.TextStyle(
                   fontSize: 10.5,
                   fontWeight: pw.FontWeight.bold,
@@ -66,7 +153,7 @@ pw.Widget _criterionRow(
           ],
         ),
         if (c.takesComment && c.prompt.isNotEmpty)
-          pw.Text(c.prompt, style: _promptStyle),
+          pw.Text(t.of('criterion.${c.key}.prompt'), style: _promptStyle),
         if (comment != null)
           pw.Padding(
             padding: const pw.EdgeInsets.only(top: 2),
@@ -77,10 +164,9 @@ pw.Widget _criterionRow(
   );
 }
 
-/// A "label ... total" summary row. [value] rules a blank exactly as
-/// [_field] does, for the same reason — the blank template has no section
-/// totals to print, and a genuine total of 0 must not be confused with one.
-pw.Widget _summaryRow(String label, int? value) {
+/// A "label ... total" summary row. A null [value] rules a blank rather than
+/// printing a total of 0.
+pw.Widget _summaryRow(String label, String? value) {
   return pw.Padding(
     padding: const pw.EdgeInsets.only(bottom: 3),
     child: pw.Row(
@@ -89,46 +175,33 @@ pw.Widget _summaryRow(String label, int? value) {
         pw.Text(label, style: _valueStyle),
         value == null
             ? formRule(width: 40)
-            : pw.Text('$value', style: _valueStyle),
+            : pw.Text(value, style: _valueStyle),
       ],
     ),
   );
 }
 
-/// The whole printed page, shared by a real evaluation and the blank
-/// template. `data == null` is the template case: every field, every
-/// criterion score, and every total rules a blank, using exactly the same
-/// blank-rendering `_field`/`_criterionRow`/`_summaryRow` already use for a
-/// real evaluation's missing values (D60-D62) — a template is structurally
-/// nothing but a page with nothing filled in, so it is the same code, not
-/// a parallel layout that could drift from it.
-List<pw.Widget> _page({Form5cData? data}) {
-  final contentCriteria = evaluationCriteria
-      .where((c) => c.section == EvaluationSection.content)
-      .toList();
-  final presentationCriteria = evaluationCriteria
-      .where((c) => c.section == EvaluationSection.presentation)
-      .toList();
-
+/// The whole printed sheet, shared by a real evaluation, the blank template
+/// and an editable copy. `data == null` is the template and copy case: every
+/// field, score and total comes from its block (typed text, or a ruled
+/// blank). With app data, the data prints exactly as it always has.
+List<pw.Widget> _page(FormText t, {Form5cData? data}) {
   final presentedOn = data?.presentedOn;
-  final scores = data?.scores ?? const <String, int>{};
-  final comments = data?.comments ?? const <String, String>{};
+  final scores = data?.scores;
+  final comments = data?.comments;
 
   return [
-    formChrome(
-      rdCode: 'RD-37-06/24-04',
-      formTitle: 'Form 5c. Evaluation Guide',
-    ),
+    formChrome(rdCode: t.of('rdCode'), formTitle: t.of('formTitle')),
     pw.SizedBox(height: 10),
     pw.Center(
       child: pw.Column(
         children: [
           pw.Text(
-            'EVALUATION GUIDE',
+            t.of('guideHeading'),
             style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
-            'FOR REPORTS ON RESEARCHES AND TECHNICAL PAPERS',
+            t.of('guideSubheading'),
             style: const pw.TextStyle(fontSize: 9),
           ),
         ],
@@ -136,102 +209,106 @@ List<pw.Widget> _page({Form5cData? data}) {
     ),
     pw.SizedBox(height: 12),
 
-    // D60: the 5b-style identifying header the printed 5c lacks.
-    formField('Name of Presenter', data?.presenterNames.join(', ')),
-    // D61: the app holds neither. Ruled blank.
-    formField('Degree and Field of Specialization', null),
+    formField(t.of('presenter.label'),
+        valueOr(data?.presenterNames.join(', '), t, 'presenter')),
+    formField(t.of('degree.label'), valueOr(null, t, 'degree')),
     formField(
-      'Date of Presentation',
-      presentedOn == null
-          ? null
-          : '${presentedOn.day} ${monthName(presentedOn.month)} '
+      t.of('presentedDate.label'),
+      valueOr(
+        presentedOn == null
+            ? null
+            : '${presentedOn.day} ${monthName(presentedOn.month)} '
                 '${presentedOn.year}',
+        t,
+        'presentedDate',
+      ),
     ),
     formField(
-      'Time of Presentation',
-      presentedOn == null
-          ? null
-          : '${presentedOn.hour.toString().padLeft(2, '0')}:'
+      t.of('presentedTime.label'),
+      valueOr(
+        presentedOn == null
+            ? null
+            : '${presentedOn.hour.toString().padLeft(2, '0')}:'
                 '${presentedOn.minute.toString().padLeft(2, '0')}',
+        t,
+        'presentedTime',
+      ),
     ),
-    formField('Venue', data?.venue),
-    formField('Title of the Study', data?.title),
-    formField('Defence', data?.defenceType.label),
-    formField('Evaluator', data?.evaluatorName),
-    // D61: the app holds neither. Ruled blank.
-    formField('Academic Rank', null),
-    formField('Field of Specialization', data?.evaluatorField),
+    formField(t.of('venue.label'), valueOr(data?.venue, t, 'venue')),
+    formField(t.of('studyTitle.label'), valueOr(data?.title, t, 'studyTitle')),
+    formField(t.of('defence.label'),
+        valueOr(data?.defenceType.label, t, 'defence')),
+    formField(t.of('evaluator.label'),
+        valueOr(data?.evaluatorName, t, 'evaluator')),
+    formField(t.of('rank.label'), valueOr(null, t, 'rank')),
+    formField(t.of('specialization.label'),
+        valueOr(data?.evaluatorField, t, 'specialization')),
 
     pw.SizedBox(height: 14),
     pw.Container(height: 1, color: PdfColors.grey400),
     pw.SizedBox(height: 8),
 
-    pw.Text('A. CONTENT (50%)', style: _sectionHeaderStyle),
+    pw.Text(t.of('sectionA'), style: _sectionHeaderStyle),
     pw.SizedBox(height: 4),
-    for (final c in contentCriteria) _criterionRow(scores, comments, c),
+    for (final c in _criteriaIn(EvaluationSection.content))
+      _criterionRow(t, c, scores: scores, comments: comments),
 
     pw.SizedBox(height: 8),
-    pw.Text('B. PRESENTATION AND DEFENSE (50%)', style: _sectionHeaderStyle),
+    pw.Text(t.of('sectionB'), style: _sectionHeaderStyle),
     pw.SizedBox(height: 4),
-    for (final c in presentationCriteria) _criterionRow(scores, comments, c),
+    for (final c in _criteriaIn(EvaluationSection.presentation))
+      _criterionRow(t, c, scores: scores, comments: comments),
 
     pw.SizedBox(height: 14),
     pw.Container(height: 1, color: PdfColors.grey400),
     pw.SizedBox(height: 8),
     pw.Text(
-      'SUMMARY',
+      t.of('summaryHeading'),
       style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
     ),
     pw.SizedBox(height: 6),
-    _summaryRow('A. CONTENT', data?.sectionATotal),
-    _summaryRow('B. PRESENTATION AND DEFENSE', data?.sectionBTotal),
-    // D62: M4 deliberately does not compute this. A labelled blank line
-    // says so; deleting the row would silently alter the office's form.
-    formField('Average Rating', null),
-    _summaryRow('Final Grade', data?.finalGrade),
+    _summaryRow(t.of('summaryA.label'),
+        valueOr(data?.sectionATotal.toString(), t, 'summaryA')),
+    _summaryRow(t.of('summaryB.label'),
+        valueOr(data?.sectionBTotal.toString(), t, 'summaryB')),
+    // The app does not compute an average (D62); a labelled blank says so.
+    formField(t.of('average.label'), valueOr(null, t, 'average')),
+    _summaryRow(t.of('finalGrade.label'),
+        valueOr(data?.finalGrade.toString(), t, 'finalGrade')),
     pw.SizedBox(height: 6),
     pw.Text(
-      'Rating (§8a): ${data?.rating?.label ?? '—'}',
+      '${t.of('rating.label')} ${data?.rating?.label ?? t.of('rating')}',
       style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
     ),
   ];
 }
 
 /// Generates Form 5c — Evaluation Guide — one panelist's completed scoring
-/// sheet, as a PDF. `compress: false` keeps the content streams
-/// text-greppable; see `form1_pdf.dart` for why that matters.
+/// sheet, as a PDF. MultiPage: eleven criteria with prompts and comments do
+/// not fit one sheet (see form1_pdf.dart for why Page silently clips).
 Future<Uint8List> buildForm5cPdf(Form5cData data) async {
   final doc = pw.Document(compress: false, theme: await formTheme());
-
   doc.addPage(
-    // MultiPage, not Page: eleven criteria with prompts and comments will
-    // not fit one sheet. See form1_pdf.dart for why Page silently clips.
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(40, 26, 40, 26),
-      build: (context) => _page(data: data),
+      build: (context) => _page(FormText(form5cTemplate), data: data),
     ),
   );
-
   return doc.save();
 }
 
-/// A blank Form 5c: the same chrome, the same eleven criteria, the same
-/// section headings and summary rows as [buildForm5cPdf] — nothing filled
-/// in, because there is no [Form5cData] to fill it with. Unlike Form 8, an
-/// unfilled rubric needs no template marking: a page of ruled lines and
-/// blank score boxes is obviously unfilled on its face, and marking it
-/// would only clutter a form meant to be printed and written on.
+/// A blank Form 5c: the same chrome, criteria, headings and summary rows as
+/// [buildForm5cPdf], nothing filled in. An unfilled rubric needs no template
+/// marking; a page of ruled lines is obviously unfilled.
 Future<Uint8List> buildForm5cBlank() async {
   final doc = pw.Document(compress: false, theme: await formTheme());
-
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(40, 26, 40, 26),
-      build: (context) => _page(),
+      build: (context) => _page(FormText(form5cTemplate)),
     ),
   );
-
   return doc.save();
 }

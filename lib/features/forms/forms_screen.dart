@@ -304,6 +304,10 @@ class _Form5cCardState extends State<_Form5cCard> {
           child: const Text('Open Defences'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form5c',
+        defaultName: 'Form 5c copy',
+      ),
     );
   }
 }
@@ -525,6 +529,10 @@ class _Form5bCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form5b',
+        defaultName: 'Form 5b copy',
+      ),
     );
   }
 }

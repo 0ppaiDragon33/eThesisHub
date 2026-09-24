@@ -9,6 +9,8 @@ import 'package:ethesishub/features/forms/form3_pdf.dart';
 import 'package:ethesishub/features/forms/form4a_pdf.dart';
 import 'package:ethesishub/features/forms/form4b_pdf.dart';
 import 'package:ethesishub/features/forms/form5a_pdf.dart';
+import 'package:ethesishub/features/forms/form5b_pdf.dart';
+import 'package:ethesishub/features/forms/form5c_pdf.dart';
 
 import '../pdf_text.dart';
 
@@ -19,6 +21,8 @@ final Map<String, Future<Uint8List> Function()> officialBlanks = {
   'form4a': buildForm4aBlank,
   'form4b': buildForm4bBlank,
   'form5a': buildForm5aBlank,
+  'form5b': buildForm5bBlank,
+  'form5c': buildForm5cBlank,
 };
 
 void main() {
