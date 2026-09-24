@@ -131,3 +131,21 @@ After deploying, verify by hand:
    **fails** (proves the bucket is private).
 5. Open an archived thesis's manuscript as any active user → succeeds
    (the repository is meant to be browsed).
+
+## My files (personal uploads)
+
+Each person's own files live under `personal/{uid}/{fileId}/…` in the same
+private bucket. The Firestore record at `users/{uid}/files/{fileId}` is what
+makes a file appear in their My files. `document-url` signs a personal path
+only for its owner, and is the only thing that can delete one (the
+`{"path": …, "action": "delete"}` request, owner only). A delete on a thesis
+path is always refused.
+
+To turn it on (once):
+
+1. SQL Editor: run the updated `policies.sql`. It replaces the upload policy
+   so uploads may go under `theses/` or `personal/`.
+2. Storage → `thesis-documents` → settings: if an allowed-MIME list is set,
+   add `image/png` and `image/jpeg`.
+3. Redeploy the function: `supabase functions deploy document-url --no-verify-jwt`.
+4. Deploy the Firestore rules: `firebase deploy --only firestore:rules`.

@@ -15,7 +15,7 @@
 --   * READ  — no anon SELECT policy at all, so anon cannot read a byte. This
 --             is what makes the bucket private: the only way to read is a
 --             signed URL the edge function mints after authorizing the caller.
---   * UPLOAD — anon MAY insert, but only under the `theses/` prefix, so a
+--   * UPLOAD — anon MAY insert, but only under the `theses/` or `personal/` prefix, so a
 --             client cannot scribble elsewhere in the bucket. This is not a
 --             full authorization (an anon caller can upload an orphan), but a
 --             private bucket makes an orphan unreadable and unreferenced: the
@@ -29,15 +29,19 @@
 --             after a failed Firestore write, and it is allowed to fail. The
 --             cost is that a failed upload can leave an orphan, which is the
 --             safe trade against letting anyone delete anyone's manuscript.
+--             Personal files (My files) are deleted by the `document-url`
+--             function with service_role, after it checks the caller owns
+--             the path. Still no anonymous delete.
 
--- Uploads, confined to the theses/ prefix. ------------------------------------
+-- Uploads, confined to the theses/ and personal/ prefixes. -------------------
 drop policy if exists "ethesishub anon upload under theses" on storage.objects;
-create policy "ethesishub anon upload under theses"
+drop policy if exists "ethesishub anon upload under theses or personal" on storage.objects;
+create policy "ethesishub anon upload under theses or personal"
 on storage.objects for insert
 to anon
 with check (
   bucket_id = 'thesis-documents'
-  and (storage.foldername(name))[1] = 'theses'
+  and (storage.foldername(name))[1] in ('theses', 'personal')
 );
 
 -- Deliberately NO select / update / delete policy for anon. Reads go through

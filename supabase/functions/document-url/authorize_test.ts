@@ -10,6 +10,9 @@ import {
   CallerFacts,
   mayReadDocument,
   mayReadThesis,
+  mayUsePersonalFile,
+  personalOwnerForPath,
+  routeRequest,
   ThesisFacts,
   thesisIdForPath,
 } from "./authorize.ts";
@@ -179,4 +182,98 @@ Deno.test("being on thesis A grants nothing on thesis B", () => {
   for (const uid of ["leader", "adviser", "panelA"]) {
     assertEquals(mayReadThesis(caller({ uid }), otherThesis), false, uid);
   }
+});
+
+// --- personal files (My files) ---------------------------------------------
+
+Deno.test("a well-formed personal path yields its owner", () => {
+  assertEquals(
+    personalOwnerForPath("personal/u1/f1/3f9a-b2.png"),
+    "u1",
+  );
+});
+
+Deno.test("personal paths of any other shape are refused", () => {
+  for (
+    const bad of [
+      "personal/u1/f1",                  // too short
+      "personal/u1/f1/a/b.png",          // too deep
+      "personal/../f1/a.png",            // traversal
+      "/personal/u1/f1/a.png",           // absolute
+      "personal/u1/f1/my photo.png",     // filename with a space
+      "personal/u1/f1/a%2Fb.png",        // encoded separator
+      "personal/u1\\f1/a.png",           // backslash
+      "privat/u1/f1/a.png",              // wrong root
+      "",
+    ]
+  ) {
+    assertEquals(personalOwnerForPath(bad), null, bad);
+  }
+});
+
+Deno.test("a thesis path is not a personal path", () => {
+  assertEquals(personalOwnerForPath("theses/t1/chapterI/a.pdf"), null);
+});
+
+Deno.test("only the active owner may use a personal file", () => {
+  assertEquals(mayUsePersonalFile(caller({ uid: "u1" }), "u1"), true);
+  assertEquals(mayUsePersonalFile(caller({ uid: "u2" }), "u1"), false);
+  assertEquals(
+    mayUsePersonalFile(caller({ uid: "u1", active: false }), "u1"),
+    false,
+  );
+});
+
+Deno.test("no role reaches another person's personal files", () => {
+  for (const role of ["coordinator", "dean", "faculty", "student"]) {
+    assertEquals(
+      mayUsePersonalFile(caller({ uid: "someone", role }), "u1"),
+      false,
+      role,
+    );
+  }
+});
+
+Deno.test("routeRequest: personal paths may be signed or deleted", () => {
+  assertEquals(routeRequest("personal/u1/f1/a.png"), {
+    kind: "personal",
+    action: "sign",
+    ownerUid: "u1",
+  });
+  assertEquals(routeRequest("personal/u1/f1/a.png", "delete"), {
+    kind: "personal",
+    action: "delete",
+    ownerUid: "u1",
+  });
+});
+
+Deno.test("routeRequest: a thesis path may be signed, never deleted", () => {
+  assertEquals(routeRequest("theses/t1/chapterI/a.pdf", "sign"), {
+    kind: "thesis",
+    thesisId: "t1",
+    documentId: "chapterI",
+  });
+  assertEquals(routeRequest("theses/t1/chapterI/a.pdf", "delete"), {
+    kind: "error",
+    status: 403,
+    error: "forbidden",
+  });
+});
+
+Deno.test("routeRequest: malformed requests are refused", () => {
+  assertEquals(routeRequest(42), {
+    kind: "error",
+    status: 400,
+    error: "bad_request",
+  });
+  assertEquals(routeRequest("theses/t1/chapterI/a.pdf", "rename"), {
+    kind: "error",
+    status: 400,
+    error: "bad_action",
+  });
+  assertEquals(routeRequest("elsewhere/a.pdf"), {
+    kind: "error",
+    status: 400,
+    error: "bad_path",
+  });
 });
