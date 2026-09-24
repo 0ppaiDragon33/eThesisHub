@@ -103,4 +103,24 @@ void main() {
     expect(copy.overrides, {'salutation': 'Dear Dean:'});
     expect(copy.updatedAt, isNull);
   });
+
+  test('watchAllCopies lists every form\'s copies, newest first', () async {
+    await seed('u1', 'a', 'form1', DateTime(2026, 9, 1));
+    await seed('u1', 'b', 'form3', DateTime(2026, 9, 2));
+    await seed('u2', 'c', 'form1', DateTime(2026, 9, 3));
+    final copies = await repo.watchAllCopies('u1').first;
+    expect(copies.map((c) => c.id), ['b', 'a']);
+  });
+
+  test('moveToFolder sets the folder and keeps the edits', () async {
+    await seed('u1', 'a', 'form1', DateTime(2026, 9, 1));
+    await repo.saveOverrides(
+        uid: 'u1', copyId: 'a', overrides: {'salutation': 'Dear Dean:'});
+    await repo.moveToFolder(uid: 'u1', copyId: 'a', folderId: 'fold');
+    final data = (await db.doc('users/u1/formCopies/a').get()).data()!;
+    expect(data['folderId'], 'fold');
+    expect(data['overrides'], {'salutation': 'Dear Dean:'});
+    await repo.moveToFolder(uid: 'u1', copyId: 'a', folderId: null);
+    expect((await db.doc('users/u1/formCopies/a').get())['folderId'], isNull);
+  });
 }

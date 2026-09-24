@@ -20,21 +20,30 @@ class FormCopyRepository {
   /// handful of copies, and a `where` + `orderBy` pair would need a
   /// composite index deployed before the screen could load at all.
   Stream<List<FormCopy>> watchCopies(String uid, {required String formId}) {
-    return _copies(uid).snapshots().map((s) {
-      final copies = [
-        for (final d in s.docs) FormCopy.fromMap(d.id, d.data()),
-      ].where((c) => c.formId == formId).toList();
-      copies.sort((a, b) {
-        final at = a.updatedAt;
-        final bt = b.updatedAt;
-        // Not yet stamped means written a moment ago: newest.
-        if (at == null && bt == null) return 0;
-        if (at == null) return -1;
-        if (bt == null) return 1;
-        return bt.compareTo(at);
-      });
-      return copies;
+    return _copies(uid).snapshots().map((s) => _newestFirst([
+          for (final d in s.docs) FormCopy.fromMap(d.id, d.data()),
+        ].where((c) => c.formId == formId)));
+  }
+
+  /// Every copy this person holds, of every form, newest first (My files).
+  Stream<List<FormCopy>> watchAllCopies(String uid) {
+    return _copies(uid).snapshots().map((s) => _newestFirst([
+          for (final d in s.docs) FormCopy.fromMap(d.id, d.data()),
+        ]));
+  }
+
+  // Not yet stamped by the server means written a moment ago: newest.
+  static List<FormCopy> _newestFirst(Iterable<FormCopy> copies) {
+    final list = copies.toList();
+    list.sort((a, b) {
+      final at = a.updatedAt;
+      final bt = b.updatedAt;
+      if (at == null && bt == null) return 0;
+      if (at == null) return -1;
+      if (bt == null) return 1;
+      return bt.compareTo(at);
     });
+    return list;
   }
 
   /// One copy, or null once it has been deleted.
@@ -96,6 +105,18 @@ class FormCopyRepository {
   }) =>
       _copies(uid).doc(copyId).update({
         'name': _checkedName(name),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+  /// Puts the copy in a My files folder, or at the top level for null.
+  /// Stamps `updatedAt`, as the rules require on every update.
+  Future<void> moveToFolder({
+    required String uid,
+    required String copyId,
+    String? folderId,
+  }) =>
+      _copies(uid).doc(copyId).update({
+        'folderId': folderId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
