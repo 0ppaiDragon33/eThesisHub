@@ -5522,6 +5522,25 @@ test("the owner may move a form copy into a folder", async () => {
     { folderId: "fo1", updatedAt: serverTimestamp() }));
 });
 
+test("deleting a folder moves its copy and file out and removes it, in one batch",
+    async () => {
+  await seedMf("users/mf-owner/folders/fo-b", { name: "Group B", createdAt: MF_AT });
+  await seedMf("users/mf-owner/formCopies/c-fo-b", {
+    formId: "form1", name: "Copy", overrides: {}, folderId: "fo-b",
+    createdAt: MF_AT, updatedAt: MF_AT,
+  });
+  await seedMf("users/mf-owner/files/fi-fo-b", {
+    ...fileRecord("fi-fo-b"), folderId: "fo-b", createdAt: MF_AT,
+  });
+  const owner = asDefenceUser(...MF_OWNER);
+  const batch = writeBatch(owner);
+  batch.update(doc(owner, "users/mf-owner/formCopies/c-fo-b"),
+    { folderId: null, updatedAt: serverTimestamp() });
+  batch.update(doc(owner, "users/mf-owner/files/fi-fo-b"), { folderId: null });
+  batch.delete(doc(owner, "users/mf-owner/folders/fo-b"));
+  await assertSucceeds(batch.commit());
+});
+
 test.after(async () => {
   await env.cleanup();
 });
