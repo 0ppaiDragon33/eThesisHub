@@ -598,11 +598,11 @@ void main() {
   });
 
   group('short-rail account footer', () {
-    // Coordinator: nine destinations (Archive, Forms, and now the Activity
-    // log), the worst case for how much vertical space the rail's own content
-    // claims before the footer gets a turn.
+    // Coordinator: ten destinations (Archive, Forms, My files, and the
+    // Activity log), the worst case for how much vertical space the rail's
+    // own content claims before the footer gets a turn.
     final coordinatorDestinations = destinationsFor(role: UserRole.coordinator);
-    assert(coordinatorDestinations.length == 9); // guards the "worst case" claim
+    assert(coordinatorDestinations.length == 10); // guards the "worst case" claim
 
     for (final height in [320.0, 420.0, 600.0, 1000.0]) {
       testWidgets('rail height=$height overflows nothing', (tester) async {

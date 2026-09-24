@@ -113,6 +113,7 @@ const _staticTitles = {
   '/archive': 'Archive',
   '/archive/queue': 'Publish to archive',
   '/forms': 'Forms',
+  '/files': 'My files',
 };
 
 /// Wires [AppShell] to this app's providers and router.

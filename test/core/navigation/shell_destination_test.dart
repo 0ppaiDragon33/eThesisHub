@@ -195,7 +195,7 @@ void main() {
         '/overview', '/thesis', '/thesis/chapters', '/defences',
         '/advisees', '/panels', '/nominations', '/approvals',
         '/recommendations', '/title-defences', '/readiness', '/users',
-        '/audit', '/archive', '/forms',
+        '/audit', '/archive', '/forms', '/files',
       };
       for (final role in UserRole.values) {
         for (final d in destinationsFor(
@@ -227,6 +227,17 @@ void main() {
         final routes =
             destinationsFor(role: role).map((d) => d.route).toList();
         expect(routes, contains('/forms'), reason: role.name);
+      }
+    });
+
+    test('every role gets My files, in Resources', () {
+      for (final role in UserRole.values) {
+        final files = destinationsFor(role: role)
+            .where((d) => d.route == '/files')
+            .toList();
+        expect(files, hasLength(1), reason: role.name);
+        expect(files.single.section, ShellSection.resources,
+            reason: role.name);
       }
     });
 

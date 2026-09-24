@@ -8,6 +8,7 @@ Future<String?> promptForName(
   required String title,
   required String initial,
   required String confirmLabel,
+  int maxLength = kFormCopyNameMax,
 }) {
   return showDialog<String>(
     context: context,
@@ -15,6 +16,7 @@ Future<String?> promptForName(
       title: title,
       initial: initial,
       confirmLabel: confirmLabel,
+      maxLength: maxLength,
     ),
   );
 }
@@ -24,11 +26,13 @@ class _NameDialog extends StatefulWidget {
     required this.title,
     required this.initial,
     required this.confirmLabel,
+    required this.maxLength,
   });
 
   final String title;
   final String initial;
   final String confirmLabel;
+  final int maxLength;
 
   @override
   State<_NameDialog> createState() => _NameDialogState();
@@ -46,7 +50,7 @@ class _NameDialogState extends State<_NameDialog> {
 
   bool get _valid {
     final name = _controller.text.trim();
-    return name.isNotEmpty && name.length <= kFormCopyNameMax;
+    return name.isNotEmpty && name.length <= widget.maxLength;
   }
 
   void _submit() {
@@ -61,7 +65,7 @@ class _NameDialogState extends State<_NameDialog> {
         key: const Key('copyNameField'),
         controller: _controller,
         autofocus: true,
-        maxLength: kFormCopyNameMax,
+        maxLength: widget.maxLength,
         decoration: const InputDecoration(labelText: 'Name'),
         onChanged: (_) => setState(() {}),
         onSubmitted: (_) => _submit(),
