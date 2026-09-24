@@ -290,6 +290,9 @@ Deno.serve(async (req) => {
   } catch {
     return json(400, { error: "bad_request" });
   }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return json(400, { error: "bad_request" });
+  }
 
   // Which check this request needs, from its body alone. A delete is only
   // ever allowed on a personal path; see `routeRequest`.
