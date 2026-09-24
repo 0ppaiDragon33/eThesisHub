@@ -31,6 +31,8 @@ import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
+import 'package:ethesishub/features/forms/editable/editor_services.dart';
+import 'package:ethesishub/features/forms/editable/form_copy_editor_screen.dart';
 import 'package:ethesishub/features/forms/forms_screen.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
@@ -698,6 +700,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/archive', builder: (_, _) => const ArchiveScreen()),
       GoRoute(path: '/forms', builder: (_, _) => const FormsScreen()),
+      // One saved copy of a form, in the editor. Open to every role: a copy
+      // belongs to whoever made it, and the rules keep it theirs. Below the
+      // Forms destination, so the shell draws a back control; `onExit` asks
+      // before leaving with unsaved edits, however the reader leaves.
+      GoRoute(
+        path: '/forms/:formId/copies/:copyId',
+        onExit: confirmLeaveFormEditor,
+        builder: (context, state) => FormCopyEditorScreen(
+          formId: state.pathParameters['formId']!,
+          copyId: state.pathParameters['copyId']!,
+        ),
+      ),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       // '/archive/queue' MUST be registered BEFORE '/archive/:thesisId'
       // below. This is the OPPOSITE situation from '/defence/room/:id' vs

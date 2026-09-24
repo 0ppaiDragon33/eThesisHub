@@ -70,6 +70,10 @@ String shellTitleFor(
     return 'Archive record';
   }
 
+  // A saved form copy, '/forms/<formId>/copies/<copyId>'. The copy's own
+  // name is on the page; the bar says what kind of page this is.
+  if (location.startsWith('/forms/')) return 'Edit form';
+
   return _staticTitles[location] ?? 'eThesisHub';
 }
 

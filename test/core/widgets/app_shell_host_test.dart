@@ -317,6 +317,14 @@ void main() {
       expect(shellTitleFor('/overview', const {}, UserRole.student),
           'Dashboard');
     });
+
+    test('a form copy in the editor reads "Edit form"', () {
+      expect(
+          shellTitleFor('/forms/form1/copies/c1', const {}, UserRole.student),
+          'Edit form');
+      expect(shellTitleFor('/forms', const {}, UserRole.student), 'Forms',
+          reason: 'the Forms destination itself keeps its own title');
+    });
   });
 
   group('AppShellHost', () {
