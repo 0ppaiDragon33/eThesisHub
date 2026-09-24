@@ -561,6 +561,10 @@ class _Form4aCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form4a',
+        defaultName: 'Form 4a copy',
+      ),
     );
   }
 }
@@ -596,6 +600,10 @@ class _Form4bCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form4b',
+        defaultName: 'Form 4b copy',
+      ),
     );
   }
 }
