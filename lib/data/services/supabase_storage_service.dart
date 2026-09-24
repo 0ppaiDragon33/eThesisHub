@@ -112,17 +112,27 @@ class SupabaseStorageService implements StorageService, PersonalFileRemover {
         body: request,
         headers: {'Authorization': 'Bearer $token'},
       );
-      final Map<String, dynamic> body = switch (res.data) {
+      return (res.status, _asBody(res.data));
+    } on FunctionException catch (e) {
+      // functions_client 2.7.1 never returns a non-2xx `FunctionResponse`
+      // from `invoke`: it throws instead. Without this catch, every refusal
+      // (wrong owner, deactivated account, expired session) falls into the
+      // generic `catch` below and is misreported as a generic storage
+      // failure, so it must be caught before that one runs.
+      return (e.status, _asBody(e.details));
+    } catch (e) {
+      throw classifyStorageError(e);
+    }
+  }
+
+  /// Decodes a function response/exception body, which arrives as a `Map`,
+  /// a JSON-encoded `String`, or nothing at all.
+  static Map<String, dynamic> _asBody(Object? data) => switch (data) {
         final Map<String, dynamic> m => m,
         final String s when s.isNotEmpty =>
           jsonDecode(s) as Map<String, dynamic>,
         _ => const {},
       };
-      return (res.status, body);
-    } catch (e) {
-      throw classifyStorageError(e);
-    }
-  }
 
   /// Turns the function's refusal into something a screen can show.
   ///
