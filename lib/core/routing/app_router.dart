@@ -29,6 +29,7 @@ import 'package:ethesishub/features/defence/defence_stage.dart';
 import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
+import 'package:ethesishub/features/defence/schedule_redefence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/features/files/my_files_screen.dart';
@@ -544,6 +545,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/defence/schedule',
         builder: (context, state) {
+          final redefenceOf = state.uri.queryParameters['redefenceOf'];
+          if (redefenceOf != null && redefenceOf.isNotEmpty) {
+            return ScheduleRedefenceScreen(failedDefenceId: redefenceOf);
+          }
           final id = state.uri.queryParameters['id'];
           // No force-unwrap: a bare visit (typed directly, or a stale link)
           // must not crash into a blank screen with no way back -- same
