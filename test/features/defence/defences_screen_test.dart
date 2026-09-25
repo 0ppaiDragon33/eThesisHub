@@ -203,6 +203,13 @@ void main() {
   });
 
   testWidgets('the stage switch offers the four stages', (tester) async {
+    // Wide enough that the switch (Task: the stage switch fits by its own
+    // width) chooses full labels over short ones -- the default test
+    // surface is narrower than that and would otherwise show 'Title'
+    // rather than 'Title defence'.
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     final db = await _seedUser('a1');
     await tester.pumpWidget(_wrap(db, uid: 'a1', stage: DefenceStage.title));
     await tester.pumpAndSettle();
@@ -307,5 +314,38 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Title'), findsOneWidget);
     expect(find.text('Pre-oral (1)'), findsOneWidget);
+  });
+
+  testWidgets(
+      'at a medium width the switch fits by its own width, not the window '
+      'Breakpoint -- every segment, Re-defence included, is directly '
+      'hittable', (tester) async {
+    // 720-1050px is exactly the band the bug lived in: wide enough to read
+    // as the window's "medium" Breakpoint (full labels, by the old logic),
+    // too narrow for four full labels with icons and counts to actually
+    // fit -- so the last segment clipped inside a horizontal scroll view a
+    // mouse cannot drag. `tester.tap` fails with a "hit test" warning if
+    // the widget is not actually the topmost hittable thing at its
+    // location, so a bare tap (no `ensureVisible`) proves the segment is
+    // both on screen and unobstructed.
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = await _seedUser('a1');
+    await _seedDefence(db, id: 'open', adviserUid: 'a1',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+    await tester.pumpWidget(_wrap(db, uid: 'a1', stage: DefenceStage.title));
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      'Title defence',
+      'Pre-oral (1)',
+      'Final defence',
+      'Re-defence',
+    ]) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: label);
+    }
   });
 }

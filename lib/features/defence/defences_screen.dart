@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -68,7 +67,6 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = Breakpoint.of(context) == Breakpoint.compact;
     final counts = ref.watch(defenceStageCountsProvider);
     final calendar = _view == _DefencesView.calendar;
 
@@ -100,28 +98,36 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
           ),
       ],
       children: [
-        // Scrolls sideways if even the short labels do not fit, so the page
-        // itself never overflows.
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SegmentedButton<DefenceStage>(
-              key: const Key('defenceStageSwitch'),
-              segments: [
-                for (final s in DefenceStage.values)
-                  ButtonSegment(
-                    value: s,
-                    label: Text(s.labelFor(counts[s] ?? 0, compact: compact)),
-                    icon: compact ? null : Icon(s.icon),
-                  ),
-              ],
-              selected: {_stage},
-              onSelectionChanged: (selection) =>
-                  _selectStage(selection.first),
+        // The switch's own available width decides short vs. full labels --
+        // NOT the window's Breakpoint. Between about 720 and 1050px the
+        // window is medium, but this switch (sharing the page with a title
+        // and the List/Calendar toggle) has nowhere near enough room for
+        // four full labels with icons and counts, and the horizontal scroll
+        // below is a last resort a mouse cannot drag, not a fix.
+        LayoutBuilder(builder: (context, constraints) {
+          final short = constraints.maxWidth < 760;
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<DefenceStage>(
+                key: const Key('defenceStageSwitch'),
+                segments: [
+                  for (final s in DefenceStage.values)
+                    ButtonSegment(
+                      value: s,
+                      label:
+                          Text(s.labelFor(counts[s] ?? 0, compact: short)),
+                      icon: short ? null : Icon(s.icon),
+                    ),
+                ],
+                selected: {_stage},
+                onSelectionChanged: (selection) =>
+                    _selectStage(selection.first),
+              ),
             ),
-          ),
-        ),
+          );
+        }),
         const Gap.lg(),
         switch (_stage) {
           DefenceStage.title => const TitleDefenceStage(),
