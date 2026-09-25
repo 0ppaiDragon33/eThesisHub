@@ -78,31 +78,38 @@ Future<(GoRouter, Set<Key>, Shared)> pumpEditor(
   );
   addTearDown(router.dispose);
 
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      firestoreProvider.overrideWithValue(db),
-      firebaseAuthProvider.overrideWithValue(auth ??
-          MockFirebaseAuth(
-            signedIn: true,
-            mockUser: MockUser(
-                uid: 'u1', email: 't@isufst.edu.ph', isEmailVerified: true),
-          )),
-      // Rasterising a PDF needs the platform; record each preview instead.
-      formPreviewBuilderProvider.overrideWithValue((key, build) {
-        previews.add(key);
-        return KeyedSubtree(
-          key: key,
-          child: const Text('preview stub', key: Key('previewStub')),
-        );
-      }),
-      pdfSharerProvider.overrideWithValue((bytes, filename) async {
-        shared
-          ..bytes = bytes
-          ..filename = filename;
-      }),
-    ],
-    child: MaterialApp.router(routerConfig: router),
-  ));
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(
+          auth ??
+              MockFirebaseAuth(
+                signedIn: true,
+                mockUser: MockUser(
+                  uid: 'u1',
+                  email: 't@isufst.edu.ph',
+                  isEmailVerified: true,
+                ),
+              ),
+        ),
+        // Rasterising a PDF needs the platform; record each preview instead.
+        formPreviewBuilderProvider.overrideWithValue((key, build) {
+          previews.add(key);
+          return KeyedSubtree(
+            key: key,
+            child: const Text('preview stub', key: Key('previewStub')),
+          );
+        }),
+        pdfSharerProvider.overrideWithValue((bytes, filename) async {
+          shared
+            ..bytes = bytes
+            ..filename = filename;
+        }),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    ),
+  );
   await tester.pumpAndSettle();
   router.push(location);
   await tester.pumpAndSettle();
@@ -128,14 +135,18 @@ Future<void> settleReal(WidgetTester tester, [bool Function()? done]) async {
 }
 
 void main() {
-  testWidgets('opens a copy with its saved edits in the fields',
-      (tester) async {
+  testWidgets('opens a copy with its saved edits in the fields', (
+    tester,
+  ) async {
     final db = await seedCopy(overrides: {'salutation': 'Dear Dean Reyes:'});
     await pumpEditor(tester, db);
 
     expect(fieldText(tester, 'salutation'), 'Dear Dean Reyes:');
-    expect(fieldText(tester, 'addressee'), 'The Dean',
-        reason: 'an unedited block shows the form\'s own wording');
+    expect(
+      fieldText(tester, 'addressee'),
+      'The Dean',
+      reason: 'an unedited block shows the form\'s own wording',
+    );
     expect(find.text('Group 3 – Santos'), findsOneWidget);
     expect(find.text('All changes saved'), findsOneWidget);
   });
@@ -143,17 +154,21 @@ void main() {
   testWidgets('Save stays off until something changes', (tester) async {
     await pumpEditor(tester, await seedCopy());
     final save = tester.widget<ButtonStyleButton>(
-        find.byKey(const Key('saveCopy')));
+      find.byKey(const Key('saveCopy')),
+    );
     expect(save.onPressed, isNull);
   });
 
-  testWidgets('saving stores only the blocks that were changed',
-      (tester) async {
+  testWidgets('saving stores only the blocks that were changed', (
+    tester,
+  ) async {
     final db = await seedCopy();
     await pumpEditor(tester, db);
 
     await tester.enterText(
-        find.byKey(const Key('field-salutation')), 'Dear Dean:');
+      find.byKey(const Key('field-salutation')),
+      'Dear Dean:',
+    );
     await tester.pump();
     expect(find.text('Unsaved changes'), findsOneWidget);
 
@@ -180,10 +195,13 @@ void main() {
     expect(data['overrides'], isEmpty);
   });
 
-  testWidgets('Reset all asks first, then puts every field back',
-      (tester) async {
-    await pumpEditor(tester,
-        await seedCopy(overrides: {'salutation': 'Dear Dean:', 'closing': 'x'}));
+  testWidgets('Reset all asks first, then puts every field back', (
+    tester,
+  ) async {
+    await pumpEditor(
+      tester,
+      await seedCopy(overrides: {'salutation': 'Dear Dean:', 'closing': 'x'}),
+    );
 
     await tester.tap(find.byKey(const Key('resetAllCopy')));
     await tester.pumpAndSettle();
@@ -191,12 +209,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fieldText(tester, 'salutation'), 'Sir/Madam:');
-    expect(fieldText(tester, 'closing'),
-        'Your approval on this matter is highly appreciated.');
+    expect(
+      fieldText(tester, 'closing'),
+      'Your approval on this matter is highly appreciated.',
+    );
   });
 
-  testWidgets('the preview is rebuilt only once typing pauses',
-      (tester) async {
+  testWidgets('the preview is rebuilt only once typing pauses', (tester) async {
     final (_, previews, _) = await pumpEditor(tester, await seedCopy());
     expect(previews, hasLength(1));
 
@@ -215,7 +234,9 @@ void main() {
     final (_, _, shared) = await pumpEditor(tester, await seedCopy());
 
     await tester.enterText(
-        find.byKey(const Key('field-researcher.1')), 'MARIA SANTOS');
+      find.byKey(const Key('field-researcher.1')),
+      'MARIA SANTOS',
+    );
     await tester.pump();
     await tester.tap(find.byKey(const Key('downloadCopy')));
     await settleReal(tester, () => shared.bytes != null);
@@ -227,7 +248,9 @@ void main() {
   testWidgets('leaving with unsaved edits asks first', (tester) async {
     final (router, _, _) = await pumpEditor(tester, await seedCopy());
     await tester.enterText(
-        find.byKey(const Key('field-salutation')), 'Dear Dean:');
+      find.byKey(const Key('field-salutation')),
+      'Dear Dean:',
+    );
     await tester.pump();
 
     router.pop();
@@ -236,8 +259,11 @@ void main() {
 
     await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('field-salutation')), findsOneWidget,
-        reason: 'Keep editing stays on the copy');
+    expect(
+      find.byKey(const Key('field-salutation')),
+      findsOneWidget,
+      reason: 'Keep editing stays on the copy',
+    );
 
     router.pop();
     await tester.pumpAndSettle();
@@ -246,11 +272,14 @@ void main() {
     expect(find.byKey(const Key('formsHome')), findsOneWidget);
   });
 
-  testWidgets('going to another page with unsaved edits asks too',
-      (tester) async {
+  testWidgets('going to another page with unsaved edits asks too', (
+    tester,
+  ) async {
     final (router, _, _) = await pumpEditor(tester, await seedCopy());
     await tester.enterText(
-        find.byKey(const Key('field-salutation')), 'Dear Dean:');
+      find.byKey(const Key('field-salutation')),
+      'Dear Dean:',
+    );
     await tester.pump();
 
     router.go('/forms');
@@ -266,8 +295,9 @@ void main() {
     expect(find.byKey(const Key('formsHome')), findsOneWidget);
   });
 
-  testWidgets('a wide screen shows the fields and the preview side by side',
-      (tester) async {
+  testWidgets('a wide screen shows the fields and the preview side by side', (
+    tester,
+  ) async {
     await pumpEditor(tester, await seedCopy());
     expect(find.byKey(const Key('editorFields')), findsOneWidget);
     expect(find.byKey(const Key('previewStub')), findsOneWidget);
@@ -286,67 +316,95 @@ void main() {
     expect(find.byKey(const Key('editorFields')), findsNothing);
   });
 
-  testWidgets('a form that cannot be edited says so instead of crashing',
-      (tester) async {
-    await pumpEditor(tester, await seedCopy(),
-        location: '/forms/form99/copies/c1');
+  testWidgets('a form that cannot be edited says so instead of crashing', (
+    tester,
+  ) async {
+    await pumpEditor(
+      tester,
+      await seedCopy(),
+      location: '/forms/form99/copies/c1',
+    );
     expect(find.byKey(const Key('formUnavailable')), findsOneWidget);
   });
 
   testWidgets('a deleted copy says so', (tester) async {
-    await pumpEditor(tester, await seedCopy(),
-        location: '/forms/form1/copies/gone');
+    await pumpEditor(
+      tester,
+      await seedCopy(),
+      location: '/forms/form1/copies/gone',
+    );
     expect(find.byKey(const Key('copyMissing')), findsOneWidget);
   });
 
   testWidgets(
-      'typing during a save is not silently lost when the save completes',
-      (tester) async {
-    final db = await seedCopy();
-    await pumpEditor(tester, db);
+    'typing during a save is not silently lost when the save completes',
+    (tester) async {
+      final db = await seedCopy();
+      await pumpEditor(tester, db);
 
-    await tester.enterText(
-        find.byKey(const Key('field-salutation')), 'Dear Dean:');
-    await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('field-salutation')),
+        'Dear Dean:',
+      );
+      await tester.pump();
 
-    await tester.tap(find.byKey(const Key('saveCopy')));
-    // A pump alone advances the fake clock, not the real one the fake
-    // Firestore transaction resolves on -- so the save has started but not
-    // finished when the next keystroke below lands.
-    await tester.pump();
-    await tester.enterText(
-        find.byKey(const Key('field-salutation')), 'Dear Dean Reyes:');
-    await tester.pump();
+      await tester.tap(find.byKey(const Key('saveCopy')));
+      // A pump alone advances the fake clock, not the real one the fake
+      // Firestore transaction resolves on -- so the save has started but not
+      // finished when the next keystroke below lands.
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('field-salutation')),
+        'Dear Dean Reyes:',
+      );
+      await tester.pump();
 
-    await settleReal(tester);
+      await settleReal(tester);
 
-    expect(find.text('Unsaved changes'), findsOneWidget,
-        reason: 'the keystroke made during the save must still count as '
-            'unsaved');
-    final data = (await db.doc('users/u1/formCopies/c1').get()).data()!;
-    expect(data['overrides'], {'salutation': 'Dear Dean:'},
-        reason: 'only the snapshot taken at Save time was written');
-  });
+      expect(
+        find.text('Unsaved changes'),
+        findsOneWidget,
+        reason:
+            'the keystroke made during the save must still count as '
+            'unsaved',
+      );
+      final data = (await db.doc('users/u1/formCopies/c1').get()).data()!;
+      expect(
+        data['overrides'],
+        {'salutation': 'Dear Dean:'},
+        reason: 'only the snapshot taken at Save time was written',
+      );
+    },
+  );
 
   testWidgets(
-      'signing out with unsaved edits leaves the editor without asking',
-      (tester) async {
-    final auth = MockFirebaseAuth(
-      signedIn: true,
-      mockUser:
-          MockUser(uid: 'u1', email: 't@isufst.edu.ph', isEmailVerified: true),
-    );
-    final (router, _, _) =
-        await pumpEditor(tester, await seedCopy(), auth: auth);
-    await tester.enterText(
-        find.byKey(const Key('field-salutation')), 'Dear Dean:');
-    await tester.pump();
+    'signing out with unsaved edits leaves the editor without asking',
+    (tester) async {
+      final auth = MockFirebaseAuth(
+        signedIn: true,
+        mockUser: MockUser(
+          uid: 'u1',
+          email: 't@isufst.edu.ph',
+          isEmailVerified: true,
+        ),
+      );
+      final (router, _, _) = await pumpEditor(
+        tester,
+        await seedCopy(),
+        auth: auth,
+      );
+      await tester.enterText(
+        find.byKey(const Key('field-salutation')),
+        'Dear Dean:',
+      );
+      await tester.pump();
 
-    await auth.signOut();
-    router.go('/forms');
-    await tester.pumpAndSettle();
+      await auth.signOut();
+      router.go('/forms');
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('confirmLeaveEditor')), findsNothing);
-    expect(find.byKey(const Key('formsHome')), findsOneWidget);
-  });
+      expect(find.byKey(const Key('confirmLeaveEditor')), findsNothing);
+      expect(find.byKey(const Key('formsHome')), findsOneWidget);
+    },
+  );
 }
