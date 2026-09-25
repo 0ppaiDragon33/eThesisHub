@@ -304,6 +304,10 @@ class _Form5cCardState extends State<_Form5cCard> {
           child: const Text('Open Defences'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form5c',
+        defaultName: 'Form 5c copy',
+      ),
     );
   }
 }
@@ -406,6 +410,10 @@ class _Form8CardState extends State<_Form8Card> {
                 ),
             ],
           ],
+          footer: const FormCopiesSection(
+            formId: 'form8',
+            defaultName: 'Form 8 copy',
+          ),
         );
       },
     );
@@ -447,6 +455,10 @@ class _Form3Card extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form3',
+        defaultName: 'Form 3 copy',
+      ),
     );
   }
 }
@@ -481,6 +493,10 @@ class _Form5aCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form5a',
+        defaultName: 'Form 5a copy',
+      ),
     );
   }
 }
@@ -517,6 +533,10 @@ class _Form5bCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form5b',
+        defaultName: 'Form 5b copy',
+      ),
     );
   }
 }
@@ -557,6 +577,10 @@ class _Form4aCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form4a',
+        defaultName: 'Form 4a copy',
+      ),
     );
   }
 }
@@ -592,6 +616,10 @@ class _Form4bCard extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form4b',
+        defaultName: 'Form 4b copy',
+      ),
     );
   }
 }
@@ -627,6 +655,10 @@ class _Form7Card extends StatelessWidget {
           child: const Text('Blank template'),
         ),
       ],
+      footer: const FormCopiesSection(
+        formId: 'form7',
+        defaultName: 'Form 7 copy',
+      ),
     );
   }
 }

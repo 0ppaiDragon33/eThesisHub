@@ -215,4 +215,26 @@ void main() {
     expect(find.byKey(const Key('form1BlankButton')), findsNothing,
         reason: 'still no blank download for Form 1');
   });
+
+  testWidgets('every form card offers a copy to edit in the app',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seedUser('s1');
+    await tester.pumpWidget(app(db, 's1'));
+    await tester.pumpAndSettle();
+
+    for (final form in [
+      'form1', 'form3', 'form4a', 'form4b', 'form5a', 'form5b', 'form5c',
+      'form7', 'form8',
+    ]) {
+      expect(
+        find.descendant(
+          of: find.byKey(Key('${form}Card')),
+          matching: find.byKey(Key('${form}NewCopy')),
+        ),
+        findsOneWidget,
+        reason: form,
+      );
+    }
+  });
 }

@@ -3,51 +3,93 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'package:ethesishub/features/forms/editable/form_parts.dart';
+import 'package:ethesishub/features/forms/editable/form_pdf.dart';
+import 'package:ethesishub/features/forms/editable/form_template.dart';
 import 'package:ethesishub/features/forms/form5b_data.dart';
 import 'package:ethesishub/features/forms/form_chrome.dart';
 
-/// The whole printed page, shared by a real profile and the blank
-/// template — the identical header block Form 5c already renders,
-/// standing on its own. `formField` rules a blank for a null or empty
-/// value on both, so a template is provably the same layout as a filled
-/// profile with nothing filled in.
-pw.Widget _page({Form5bData? data}) {
+/// Form 5b's text, block by block, for an editable copy: each field's label
+/// and its value.
+final FormTemplate form5bTemplate = FormTemplate(
+  formId: 'form5b',
+  title: 'Form 5b — Presenter and Evaluator Profile',
+  blocks: [
+    ...formHeadBlocks(
+      rdCode: 'RD-37-06/24-04',
+      formTitle: 'Res. Form 5b. Presenter and Evaluator Profile',
+    ),
+    ...fieldBlocks('presenter', 'Name of Presenter'),
+    ...fieldBlocks('degree', 'Degree and Field of Specialization'),
+    ...fieldBlocks('presentedDate', 'Date of Presentation'),
+    ...fieldBlocks('presentedTime', 'Time of Presentation'),
+    ...fieldBlocks('venue', 'Venue'),
+    ...fieldBlocks('studyTitle', 'Title of the Study'),
+    ...fieldBlocks('evaluator', 'Evaluator'),
+    ...fieldBlocks('rank', 'Academic Rank'),
+    ...fieldBlocks('specialization', 'Field of Specialization'),
+  ],
+  layout: (t) => [_page(t)],
+);
+
+/// The whole printed page, shared by a real profile, the blank template and
+/// an editable copy. A field prints the app's value when there is one,
+/// otherwise its typed text, otherwise a ruled blank.
+pw.Widget _page(FormText t, {Form5bData? data}) {
+  final presentedOn = data?.presentedOn;
   return pw.Column(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
-      formChrome(
-        rdCode: 'RD-37-06/24-04',
-        formTitle: 'Res. Form 5b. Presenter and Evaluator Profile',
-      ),
+      formChrome(rdCode: t.of('rdCode'), formTitle: t.of('formTitle')),
       pw.SizedBox(height: 16),
       formField(
-        'Name of Presenter',
-        data == null || data.presenterNames.isEmpty
-            ? null
-            : data.presenterNames.join(', '),
+        t.of('presenter.label'),
+        valueOr(
+          data == null || data.presenterNames.isEmpty
+              ? null
+              : data.presenterNames.join(', '),
+          t,
+          'presenter',
+        ),
       ),
-      formField('Degree and Field of Specialization', null),
+      formField(t.of('degree.label'), valueOr(null, t, 'degree')),
       formField(
-        'Date of Presentation',
-        data?.presentedOn == null
-            ? null
-            : '${data!.presentedOn!.day} '
-                  '${monthName(data.presentedOn!.month)} '
-                  '${data.presentedOn!.year}',
+        t.of('presentedDate.label'),
+        valueOr(
+          presentedOn == null
+              ? null
+              : '${presentedOn.day} ${monthName(presentedOn.month)} '
+                    '${presentedOn.year}',
+          t,
+          'presentedDate',
+        ),
       ),
       formField(
-        'Time of Presentation',
-        data?.presentedOn == null
-            ? null
-            : '${data!.presentedOn!.hour.toString().padLeft(2, '0')}:'
-                  '${data.presentedOn!.minute.toString().padLeft(2, '0')}',
+        t.of('presentedTime.label'),
+        valueOr(
+          presentedOn == null
+              ? null
+              : '${presentedOn.hour.toString().padLeft(2, '0')}:'
+                    '${presentedOn.minute.toString().padLeft(2, '0')}',
+          t,
+          'presentedTime',
+        ),
       ),
-      formField('Venue', data?.venue),
-      formField('Title of the Study', data?.title),
+      formField(t.of('venue.label'), valueOr(data?.venue, t, 'venue')),
+      formField(
+        t.of('studyTitle.label'),
+        valueOr(data?.title, t, 'studyTitle'),
+      ),
       pw.SizedBox(height: 12),
-      formField('Evaluator', data?.evaluatorName),
-      formField('Academic Rank', null),
-      formField('Field of Specialization', data?.evaluatorField),
+      formField(
+        t.of('evaluator.label'),
+        valueOr(data?.evaluatorName, t, 'evaluator'),
+      ),
+      formField(t.of('rank.label'), valueOr(null, t, 'rank')),
+      formField(
+        t.of('specialization.label'),
+        valueOr(data?.evaluatorField, t, 'specialization'),
+      ),
     ],
   );
 }
@@ -60,7 +102,7 @@ Future<Uint8List> buildForm5bPdf(Form5bData data) async {
     pw.Page(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(40, 26, 40, 26),
-      build: (context) => _page(data: data),
+      build: (context) => _page(FormText(form5bTemplate), data: data),
     ),
   );
   return doc.save();
@@ -74,7 +116,7 @@ Future<Uint8List> buildForm5bBlank() async {
     pw.Page(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(40, 26, 40, 26),
-      build: (context) => _page(),
+      build: (context) => _page(FormText(form5bTemplate)),
     ),
   );
   return doc.save();
