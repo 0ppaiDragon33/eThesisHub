@@ -108,7 +108,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
-    expect(find.text('Scheduled defences'), findsOneWidget);
+    expect(find.text('Defences'), findsOneWidget);
   });
 
   testWidgets('advisees screen renders the adviser roster standalone',

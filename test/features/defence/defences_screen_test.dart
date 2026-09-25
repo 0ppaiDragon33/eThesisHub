@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ethesishub/features/defence/defence_stage.dart';
 import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -13,10 +14,13 @@ Future<void> _seedDefence(
   required String adviserUid,
   DateTime? scheduledAt,
   String status = 'scheduled',
+  String type = 'preOral',
+  String? redefenceOf,
+  String? panelVerdict,
 }) async {
   await db.collection('defenses').doc(id).set({
     'thesisId': 't-$id',
-    'type': 'preOral',
+    'type': type,
     'scheduledAt': scheduledAt == null ? null : Timestamp.fromDate(scheduledAt),
     'venue': 'Room $id',
     'panelUids': const <String>[],
@@ -25,21 +29,28 @@ Future<void> _seedDefence(
     'status': status,
     'createdBy': 'c1',
     'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
+    if (redefenceOf != null) 'redefenceOf': redefenceOf,
+    if (panelVerdict != null) 'panelVerdict': panelVerdict,
   });
 }
 
-Future<FakeFirebaseFirestore> _seedUser(String uid) async {
+Future<FakeFirebaseFirestore> _seedUser(String uid, {String role = 'faculty'}) async {
   final db = FakeFirebaseFirestore();
   await db.collection('users').doc(uid).set({
     'fullName': 'Faculty $uid',
     'email': '$uid@isufst.edu.ph',
-    'role': 'faculty',
+    'role': role,
     'active': true,
   });
   return db;
 }
 
-Widget _wrap(FakeFirebaseFirestore db, {required String uid}) => ProviderScope(
+Widget _wrap(
+  FakeFirebaseFirestore db, {
+  required String uid,
+  DefenceStage stage = DefenceStage.preOral,
+}) =>
+    ProviderScope(
       overrides: [
         firestoreProvider.overrideWithValue(db),
         firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
@@ -48,7 +59,8 @@ Widget _wrap(FakeFirebaseFirestore db, {required String uid}) => ProviderScope(
               uid: uid, email: '$uid@isufst.edu.ph', isEmailVerified: true),
         )),
       ],
-      child: const MaterialApp(home: Scaffold(body: DefencesScreen())),
+      child: MaterialApp(
+          home: Scaffold(body: DefencesScreen(initialStage: stage))),
     );
 
 /// PageShell scrolls, but the default 800x600 test surface still leaves
@@ -188,5 +200,112 @@ void main() {
     // Every id the list showed is reachable somewhere in the calendar
     // presentation too -- the same set, not a subset.
     expect(find.byKey(const Key('defenceRow-d4')), findsOneWidget);
+  });
+
+  testWidgets('the stage switch offers the four stages', (tester) async {
+    final db = await _seedUser('a1');
+    await tester.pumpWidget(_wrap(db, uid: 'a1', stage: DefenceStage.title));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceStageSwitch')), findsOneWidget);
+    for (final label in ['Title defence', 'Pre-oral', 'Final defence',
+        'Re-defence']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+  });
+
+  testWidgets('List and Calendar are hidden on the title stage',
+      (tester) async {
+    final db = await _seedUser('a1');
+    await tester.pumpWidget(_wrap(db, uid: 'a1', stage: DefenceStage.title));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('defencesViewToggle')), findsNothing);
+
+    await tester.tap(find.text('Pre-oral'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('defencesViewToggle')), findsOneWidget);
+  });
+
+  testWidgets('each stage lists only its own defences', (tester) async {
+    final db = await _seedUser('a1');
+    await _seedDefence(db, id: 'p', adviserUid: 'a1',
+        status: 'completed', panelVerdict: 'fail',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+    await _seedDefence(db, id: 'f', adviserUid: 'a1', type: 'final',
+        scheduledAt: DateTime(2026, 9, 2, 9));
+    await _seedDefence(db, id: 'p_redefence', adviserUid: 'a1',
+        redefenceOf: 'p', scheduledAt: DateTime(2026, 9, 3, 9));
+
+    Future<void> expectRows(DefenceStage stage, Set<String> ids) async {
+      await tester.pumpWidget(_wrap(db, uid: 'a1', stage: stage));
+      await tester.pumpAndSettle();
+      for (final id in ['p', 'f', 'p_redefence']) {
+        expect(find.byKey(Key('defenceRow-$id')),
+            ids.contains(id) ? findsOneWidget : findsNothing,
+            reason: '$stage / $id');
+      }
+    }
+
+    await expectRows(DefenceStage.preOral, {'p'});
+    await expectRows(DefenceStage.finalDefence, {'f'});
+    await expectRows(DefenceStage.redefence, {'p_redefence'});
+  });
+
+  testWidgets('a stage counts what still needs attention', (tester) async {
+    final db = await _seedUser('a1');
+    await _seedDefence(db, id: 'open', adviserUid: 'a1',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+    await _seedDefence(db, id: 'done', adviserUid: 'a1', status: 'completed',
+        scheduledAt: DateTime(2026, 9, 2, 9));
+    await tester.pumpWidget(_wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pre-oral (1)'), findsOneWidget);
+  });
+
+  testWidgets('the coordinator is offered the re-defence of a failed '
+      'defence; others are told it is coming', (tester) async {
+    final coordDb = await _seedUser('c1', role: 'coordinator');
+    await _seedDefence(coordDb, id: 'p', adviserUid: 'a1',
+        status: 'completed', panelVerdict: 'fail',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+    await tester.pumpWidget(
+        _wrap(coordDb, uid: 'c1', stage: DefenceStage.redefence));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('scheduleRedefence-p')), findsOneWidget);
+
+    final advDb = await _seedUser('a1');
+    await _seedDefence(advDb, id: 'p', adviserUid: 'a1',
+        status: 'completed', panelVerdict: 'fail',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+    await tester.pumpWidget(
+        _wrap(advDb, uid: 'a1', stage: DefenceStage.redefence));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('scheduleRedefence-p')), findsNothing);
+    expect(find.byKey(const Key('awaitingRedefenceNote-p')), findsOneWidget);
+  });
+
+  testWidgets('an empty re-defence stage says what a re-defence is',
+      (tester) async {
+    final db = await _seedUser('a1');
+    await tester.pumpWidget(
+        _wrap(db, uid: 'a1', stage: DefenceStage.redefence));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('noRedefences')), findsOneWidget);
+  });
+
+  testWidgets('on a phone the switch fits, with short labels',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = await _seedUser('a1');
+    await _seedDefence(db, id: 'open', adviserUid: 'a1',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+    await tester.pumpWidget(_wrap(db, uid: 'a1', stage: DefenceStage.title));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Title'), findsOneWidget);
+    expect(find.text('Pre-oral (1)'), findsOneWidget);
   });
 }
