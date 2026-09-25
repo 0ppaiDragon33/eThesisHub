@@ -437,7 +437,7 @@ class _NextDefencePanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(next.type.label, style: text.titleMedium),
+                      Text(next.label, style: text.titleMedium),
                       Text(
                         at == null
                             ? 'Date to be confirmed'

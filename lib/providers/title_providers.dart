@@ -89,8 +89,9 @@ final myTitleDefencesProvider = Provider<AsyncValue<List<Thesis>>>((ref) {
         if (byId.containsKey(id)) continue;
         final t = ref.watch(thesisByIdProvider(id));
         if (!t.hasValue && !t.hasError) return const AsyncLoading();
-        // A thesis the reader can no longer read (a declined nomination) or
-        // that no longer exists is simply not theirs to open.
+        // A thesis the reader can no longer read -- a nomination since
+        // removed, or a thesis that no longer exists -- is simply not
+        // theirs to open.
         final thesis = t.valueOrNull;
         if (thesis != null) byId[id] = thesis;
       }

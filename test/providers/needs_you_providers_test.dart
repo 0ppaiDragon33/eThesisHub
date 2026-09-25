@@ -178,6 +178,35 @@ void main() {
       expect(row.single.title, 'Final defence');
     });
 
+    // Fix: re-defences are named as re-defences. `d.type.label` names only
+    // the kind ('Final defence'), even on a defence that redoes a failed
+    // one -- `d.label` is the one that reads 'Final re-defence'.
+    test('a panelist owes a sheet on a re-defence, named as one', () async {
+      final db = await seedFacultyWorld();
+      await db.collection('defenses').doc('d-orig').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 1, 9)),
+        'venue': 'AVR', 'panelUids': <String>['fac-uid'],
+        'adviserUid': 'a1', 'leaderUid': 'l1', 'status': 'completed',
+        'createdBy': 'c1', 'panelVerdict': 'fail',
+      });
+      await db.collection('defenses').doc('d9').set({
+        'thesisId': 't1', 'type': 'final',
+        'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 23, 9)),
+        'venue': 'AVR', 'panelUids': <String>['fac-uid'],
+        'adviserUid': 'a1', 'leaderUid': 'l1', 'status': 'completed',
+        'createdBy': 'c1', 'redefenceOf': 'd-orig',
+      });
+      final c = facultyContainer(db, 'fac-uid');
+      addTearDown(c.dispose);
+
+      final items = await c.read(facultyNeedsYouProvider.future);
+      final row = items.where((i) => i.route == '/defence/room/d9/evaluate');
+
+      expect(row, hasLength(1));
+      expect(row.single.title, 'Final re-defence');
+    });
+
     test('the row goes once that panelist has submitted', () async {
       final db = await seedFacultyWorld();
       await db.collection('defenses').doc('d9').set({

@@ -47,6 +47,7 @@ Future<void> _seedDefence(
   String type = 'preOral',
   String? thesisId,
   DateTime? evaluationsReleasedAt,
+  String? redefenceOf,
 }) async {
   await db.collection('defenses').doc(id).set({
     'thesisId': thesisId ?? 't-$id',
@@ -62,6 +63,7 @@ Future<void> _seedDefence(
     'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
     if (evaluationsReleasedAt != null)
       'evaluationsReleasedAt': Timestamp.fromDate(evaluationsReleasedAt),
+    if (redefenceOf != null) 'redefenceOf': redefenceOf,
   });
 }
 
@@ -643,6 +645,62 @@ void main() {
 
     expect(find.text('Final defences'), findsOneWidget);
     expect(find.textContaining('Pre-oral'), findsNothing);
+  });
+
+  // Fix: section headings on the Re-defence stage. A section reads
+  // "re-defences" only once EVERY defence inside it is one -- a section
+  // holding a mix (an ordinary defence alongside a re-defence, which the
+  // stage-less DefencesList used in this file can show together) stays the
+  // plain heading.
+  testWidgets(
+      'a section mixing an ordinary defence and a re-defence keeps the '
+      'plain heading', (tester) async {
+    final db = await _seedUser('f1');
+    await _seedDefence(
+      db,
+      id: 'failed',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+      status: 'completed',
+    );
+    await _seedDefence(
+      db,
+      id: 'redone',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 10, 9),
+      redefenceOf: 'failed',
+    );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    // Both pre-oral (the failed original and its re-defence), so mixed --
+    // the plain heading, not "re-defences".
+    expect(find.text('Pre-oral defences'), findsOneWidget);
+    expect(find.text('Pre-oral re-defences'), findsNothing);
+  });
+
+  testWidgets(
+      'a section heading reads "re-defences" when nothing in it is an '
+      'ordinary defence', (tester) async {
+    final db = await _seedUser('f1');
+    await _seedDefence(
+      db,
+      id: 'redoneOnly',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 10, 9),
+      type: 'final',
+      redefenceOf: 'some-failed-defence',
+    );
+
+    await tester.pumpWidget(_wrap(db, uid: 'f1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Final re-defences'), findsOneWidget);
+    expect(find.text('Final defences'), findsNothing);
   });
 
   testWidgets('a where filter narrows the list and its empty state',

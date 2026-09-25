@@ -264,7 +264,7 @@ final facultyNeedsYouProvider =
           !d.evaluationsReleased &&
           !submittedOn.contains(d.id)) {
         items.add(NeedsYouItem(
-          title: d.type.label,
+          title: d.label,
           detail: 'Score this defence against Form 5c.',
           route: '/defence/room/${d.id}/evaluate',
           chipLabel: 'Evaluate',
@@ -278,7 +278,7 @@ final facultyNeedsYouProvider =
           d.status == DefenceStatus.completed &&
           d.consolidatedAt == null) {
         items.add(NeedsYouItem(
-          title: d.type.label,
+          title: d.label,
           detail: 'The defence concluded — release your consolidation to '
               'the group.',
           // ConsolidatedDefenceScreen, where the adviser releases. NOT
@@ -303,7 +303,7 @@ final facultyNeedsYouProvider =
           at.day == now.day;
       if (d.status == DefenceStatus.inProgress || scheduledToday) {
         items.add(NeedsYouItem(
-          title: d.type.label,
+          title: d.label,
           detail: d.status == DefenceStatus.inProgress
               ? 'This defence is in progress now.'
               : 'Scheduled for today at ${d.venue}.',

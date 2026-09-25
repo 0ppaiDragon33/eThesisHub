@@ -95,6 +95,12 @@ class DefencesList extends ConsumerWidget {
             shown.where((d) => d.type == DefenceType.preOral).toList());
         final final_ = _sorted(
             shown.where((d) => d.type == DefenceType.final_).toList());
+        // A section reads "re-defences" only when EVERY defence in it is
+        // one -- a mixed section (the ordinary Defences list, where a
+        // pre-oral and its re-defence can both appear) still reads as a
+        // plain pre-oral/final section.
+        bool allRedefences(List<Defence> ds) =>
+            ds.isNotEmpty && ds.every((d) => d.isRedefence);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,14 +108,18 @@ class DefencesList extends ConsumerWidget {
             if (preOral.isNotEmpty) ...[
               _SectionHeading(
                   key: const Key('defenceSection-preOral'),
-                  label: 'Pre-oral defences',
+                  label: allRedefences(preOral)
+                      ? 'Pre-oral re-defences'
+                      : 'Pre-oral defences',
                   count: preOral.length),
               for (final d in preOral) DefenceRow(defence: d),
             ],
             if (final_.isNotEmpty) ...[
               _SectionHeading(
                   key: const Key('defenceSection-final'),
-                  label: 'Final defences',
+                  label: allRedefences(final_)
+                      ? 'Final re-defences'
+                      : 'Final defences',
                   count: final_.length),
               for (final d in final_) DefenceRow(defence: d),
             ],
