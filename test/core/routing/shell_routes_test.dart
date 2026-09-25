@@ -601,6 +601,39 @@ void main() {
     }
   });
 
+  testWidgets('coordinator and dean reach /change-requests', (tester) async {
+    for (final role in ['coordinator', 'dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/change-requests');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('changeRequestQueueScreen')), findsOneWidget,
+          reason: '$role must reach /change-requests');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets(
+      'student and faculty are redirected home from /change-requests',
+      (tester) async {
+    for (final role in ['student', 'faculty']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/change-requests');
+      await tester.pumpAndSettle();
+      expect(locationOf(c), '/overview', reason: '$role must not stay');
+      expect(find.byKey(const Key('changeRequestQueueScreen')), findsNothing,
+          reason: '$role must be redirected off /change-requests');
+
+      c.dispose();
+    }
+  });
+
   testWidgets('every role reaching /title-defences lands on the Title stage',
       (tester) async {
     for (final role in ['student', 'faculty', 'coordinator', 'dean']) {
