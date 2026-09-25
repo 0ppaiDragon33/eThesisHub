@@ -19,8 +19,10 @@ import 'package:ethesishub/features/dashboard/progress_rail.dart';
 import 'package:ethesishub/features/documents/manuscript_upload.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
+import 'package:ethesishub/features/thesis/change_request_tracker.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/change_request_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -258,6 +260,8 @@ class _Workspace extends ConsumerWidget {
           primary: [
             _NextAction(thesis: thesis, nominations: nominations,
                 onDownloadForm1: onDownloadForm1),
+            _ChangeRequestActions(thesis: thesis),
+            ChangeRequestTracker(thesisId: thesis.id),
             if (thesis.status == ThesisStatus.titleApproved &&
                 thesis.approvedTitleId != null)
               _ApprovedTitle(
@@ -417,6 +421,57 @@ class _NextAction extends StatelessWidget {
             Text('Nothing for your group to do right now.',
                 style: text.bodySmall?.copyWith(color: p.muted)),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The two buttons that open the change-of-adviser / change-of-title
+/// request forms (spec 2026-09-25). Leader-only, and gated per-kind on
+/// [canRequestAdviserChange] / [canRequestTitleChange] -- the finer
+/// defence-state eligibility the security rules do not themselves check
+/// (they only gate on `status == 'titleApproved'` and leader identity).
+/// Renders nothing at all for a non-leader, or once neither kind of change
+/// is currently allowed.
+class _ChangeRequestActions extends ConsumerWidget {
+  const _ChangeRequestActions({required this.thesis});
+
+  final Thesis thesis;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider).valueOrNull;
+    if (me == null || me.uid != thesis.leaderUid) return const SizedBox.shrink();
+
+    final defences = ref.watch(myDefencesProvider).valueOrNull ?? const [];
+    final canAdviser = canRequestAdviserChange(thesis, defences);
+    final canTitle = canRequestTitleChange(thesis, defences);
+    if (!canAdviser && !canTitle) return const SizedBox.shrink();
+
+    return Panel(
+      title: 'Request a change',
+      icon: Icons.sync_alt_outlined,
+      child: Wrap(
+        spacing: AppTokens.sm,
+        runSpacing: AppTokens.sm,
+        children: [
+          if (canAdviser)
+            OutlinedButton.icon(
+              key: const Key('requestAdviserChange'),
+              icon: const Icon(Icons.switch_account_outlined, size: 18),
+              label: const Text('Request change of adviser'),
+              onPressed: () =>
+                  context.push('/thesis/change-adviser?id=${thesis.id}'),
+            ),
+          if (canTitle)
+            OutlinedButton.icon(
+              key: const Key('requestTitleChange'),
+              icon: const Icon(Icons.edit_document, size: 18),
+              label: const Text('Request change of title'),
+              onPressed: () =>
+                  context.push('/thesis/change-title?id=${thesis.id}'),
+            ),
         ],
       ),
     );
