@@ -96,7 +96,7 @@ Existing `schedule()` is unchanged.
 `redefenceOf == its id`. It is exposed through a provider built on
 `myDefencesProvider` (per-reader) for the Re-defence tab.
 
-## 5. Security rules (`firestore.rules`, `match /defenses/{defenceId}`)
+## 5. Security rules (`firestore.rules`, `match /defenses/{defenseId}`)
 
 The create rule gains an optional `redefenceOf`:
 
@@ -104,16 +104,16 @@ The create rule gains an optional `redefenceOf`:
 allow create: if verified() && isCoordinator()
   && incoming().keys().hasOnly([... existing ..., 'redefenceOf'])
   && (existing checks unchanged)
-  && (!('redefenceOf' in incoming()) || validRedefence(defenceId));
+  && (!('redefenceOf' in incoming()) || validRedefence(defenseId));
 ```
 
-`validRedefence(defenceId)`, with `failed = get(defenses/incoming().redefenceOf)`:
+`validRedefence(defenseId)`, with `failed = get(defenses/incoming().redefenceOf)`:
 - `failed` exists;
 - `failed.thesisId == incoming().thesisId` and `failed.type == incoming().type`;
 - `failed.panelVerdict == 'fail'`;
 - `!('redefenceOf' in failed)`. This is the one-re-defence limit. Changing
   the limit changes only this line.
-- `defenceId == incoming().redefenceOf + '_redefence'`. This, together with
+- `defenseId == incoming().redefenceOf + '_redefence'`. This, together with
   create-only semantics, makes a second re-defence of the same Fail
   impossible: a second write is an update, and no update arm allows it.
 
