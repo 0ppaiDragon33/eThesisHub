@@ -197,4 +197,86 @@ void main() {
     expect(d.panelVerdict, isNull);
     expect(d.hasVerdict, isFalse);
   });
+
+  Defence defence(
+    String id, {
+    DefenceType type = DefenceType.preOral,
+    PassFail? verdict,
+    String? redefenceOf,
+    DefenceStatus status = DefenceStatus.completed,
+  }) =>
+      Defence(
+        id: id,
+        thesisId: 't1',
+        type: type,
+        venue: 'AVR',
+        panelUids: const ['p1'],
+        adviserUid: 'a1',
+        leaderUid: 'l1',
+        status: status,
+        createdBy: 'c1',
+        panelVerdict: verdict,
+        redefenceOf: redefenceOf,
+      );
+
+  group('re-defence', () {
+    test('reads redefenceOf, and a defence without it is not a re-defence',
+        () {
+      final plain = Defence.fromMap('d1', {'type': 'final'});
+      expect(plain.redefenceOf, isNull);
+      expect(plain.isRedefence, isFalse);
+
+      final again = Defence.fromMap('d1_redefence', {
+        'type': 'final',
+        'redefenceOf': 'd1',
+      });
+      expect(again.redefenceOf, 'd1');
+      expect(again.isRedefence, isTrue);
+    });
+
+    test('names all four kinds', () {
+      expect(defence('a').label, 'Pre-oral defence');
+      expect(defence('a', type: DefenceType.final_).label, 'Final defence');
+      expect(defence('a', redefenceOf: 'x').label, 'Pre-oral re-defence');
+      expect(defence('a', type: DefenceType.final_, redefenceOf: 'x').label,
+          'Final re-defence');
+    });
+
+    test('a re-defence has the id derived from the failed defence', () {
+      expect(Defence.redefenceIdFor('abc'), 'abc_redefence');
+    });
+
+    test('a failed defence with no re-defence awaits one', () {
+      final failed = defence('d1', verdict: PassFail.fail);
+      expect(awaitingRedefence([failed]), [failed]);
+    });
+
+    test('a failed defence that has its re-defence awaits nothing', () {
+      final failed = defence('d1', verdict: PassFail.fail);
+      final again = defence('d1_redefence', redefenceOf: 'd1',
+          status: DefenceStatus.scheduled);
+      expect(awaitingRedefence([failed, again]), isEmpty);
+      expect(hasRedefence(failed, [failed, again]), isTrue);
+    });
+
+    test('a cancelled re-defence still uses up the one re-defence', () {
+      // The rules refuse a second document at the same derived id, so the
+      // app must not offer a re-defence it cannot create.
+      final failed = defence('d1', verdict: PassFail.fail);
+      final cancelled = defence('d1_redefence', redefenceOf: 'd1',
+          status: DefenceStatus.cancelled);
+      expect(awaitingRedefence([failed, cancelled]), isEmpty);
+    });
+
+    test('a failed re-defence, a pass and no verdict await nothing', () {
+      expect(
+        awaitingRedefence([
+          defence('r', verdict: PassFail.fail, redefenceOf: 'x'),
+          defence('p', verdict: PassFail.pass),
+          defence('n'),
+        ]),
+        isEmpty,
+      );
+    });
+  });
 }
