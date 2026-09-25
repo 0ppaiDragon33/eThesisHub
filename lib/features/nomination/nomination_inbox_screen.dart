@@ -10,6 +10,7 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
+import 'package:ethesishub/features/nomination/change_request_inbox.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -183,6 +184,8 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
               ),
               const Gap.md(),
             ],
+            const Gap.lg(),
+            const ChangeRequestInbox(),
           ],
         ),
       ),
