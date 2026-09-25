@@ -5649,6 +5649,200 @@ test("deleting a folder moves its copy and file out and removes it, in one batch
   await assertSucceeds(batch.commit());
 });
 
+// ---------- Change of adviser / title (spec 2026-09-25) ----------
+
+function crThesis(extra = {}) {
+  return {
+    leaderUid: "cr-leader", adviserUid: "cr-old-adv",
+    panelistUids: ["cr-pan"], memberNames: [],
+    workingTitle: "Old Title", college: "CICT", program: "BSIT",
+    semester: "First", academicYear: "2026-2027",
+    status: "titleApproved", ...extra,
+  };
+}
+
+function adviserReq(extra = {}) {
+  return {
+    type: "adviser", stage: "pendingAdvisers",
+    reasons: "The adviser moved campus.", leaderUid: "cr-leader",
+    newAdviserUid: "cr-new-adv", newAdviserName: "Dr. New",
+    formerAdviserUid: "cr-old-adv", formerAdviserName: "Dr. Old",
+    signoffs: {
+      newAdviser: { status: "pending" },
+      formerAdviser: { status: "pending" },
+      coordinator: { status: "pending" },
+      dean: { status: "pending" },
+    },
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  };
+}
+
+const crDbs = new Map();
+function asCrUser(uid, email) {
+  if (!crDbs.has(uid)) {
+    crDbs.set(uid, env.authenticatedContext(
+      uid, { email, email_verified: true }).firestore());
+  }
+  return crDbs.get(uid);
+}
+
+async function seedCr(reqExtra = null, thesisExtra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/cr1"), crThesis(thesisExtra));
+    await setDoc(doc(db, "users/cr-leader"), { role: "student", active: true });
+    await setDoc(doc(db, "users/cr-new-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-old-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-coord"), { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/cr-dean"), { role: "dean", active: true });
+    if (reqExtra !== null) {
+      await setDoc(doc(db, "theses/cr1/changeRequests/adviser"),
+        adviserReq(reqExtra));
+    }
+  });
+}
+
+const crPath = "theses/cr1/changeRequests/adviser";
+
+test("CR: only the leader creates, only at titleApproved", async () => {
+  await seedCr();
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  const other = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(setDoc(doc(other, crPath), adviserReq()));
+  await assertSucceeds(setDoc(doc(leader, crPath), adviserReq()));
+});
+
+test("CR: create denied when the thesis is not titleApproved", async () => {
+  await seedCr(null, { status: "titlePendingDefence" });
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, crPath), adviserReq()));
+});
+
+test("CR: create must start every sign-off pending at the first stage",
+  async () => {
+    await seedCr();
+    const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+    await assertFails(setDoc(doc(leader, crPath),
+      adviserReq({ stage: "pendingDean" })));
+    await assertFails(setDoc(doc(leader, crPath), adviserReq({
+      signoffs: { newAdviser: { status: "accepted" },
+        formerAdviser: { status: "pending" },
+        coordinator: { status: "pending" }, dean: { status: "pending" } } })));
+  });
+
+test("CR: no second open request of the same type", async () => {
+  // seedCr() alone leaves reqExtra at its default (null), which skips
+  // seeding the request doc entirely (see seedCr's `if (reqExtra !== null)`
+  // guard) -- seedCr({}) is what actually seeds an open request at
+  // pendingAdvisers, matching every other test in this block.
+  await seedCr({});
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, crPath),
+    adviserReq({ reasons: "again" })));
+});
+
+test("CR: the new adviser accepts only their own sign-off, only at stage",
+  async () => {
+    await seedCr({});
+    const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+    const other = asCrUser("cr-pan", "cr-pan@isufst.edu.ph");
+    // Someone else may not write the newAdviser sign-off.
+    await assertFails(updateDoc(doc(other, crPath), {
+      "signoffs.newAdviser.status": "accepted" }));
+    // The new adviser accepts; the stage stays (former still pending).
+    await assertSucceeds(updateDoc(doc(newAdv, crPath), {
+      "signoffs.newAdviser.status": "accepted",
+      "signoffs.newAdviser.respondedAt": serverTimestamp() }));
+  });
+
+test("CR: both advisers accepted advances to the coordinator", async () => {
+  await seedCr({ signoffs: {
+    newAdviser: { status: "accepted" },
+    formerAdviser: { status: "pending" },
+    coordinator: { status: "pending" }, dean: { status: "pending" } } });
+  const oldAdv = asCrUser("cr-old-adv", "cr-old-adv@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(oldAdv, crPath), {
+    "signoffs.formerAdviser.status": "accepted",
+    "signoffs.formerAdviser.respondedAt": serverTimestamp(),
+    stage: "pendingCoordinator" }));
+});
+
+test("CR: an adviser advancing before both accepted is denied", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "accepted", stage: "pendingCoordinator" }));
+});
+
+test("CR: a decline returns the request", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "declined",
+    "signoffs.newAdviser.reason": "Not my field.", stage: "returned" }));
+});
+
+test("CR: the coordinator recommends only at the coordinator stage",
+  async () => {
+    await seedCr({ stage: "pendingCoordinator", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const coord = asCrUser("cr-coord", "cr-coord@isufst.edu.ph");
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+    await assertFails(updateDoc(doc(dean, crPath), {
+      "signoffs.coordinator.status": "accepted", stage: "pendingDean" }));
+    await assertSucceeds(updateDoc(doc(coord, crPath), {
+      "signoffs.coordinator.status": "accepted",
+      "signoffs.coordinator.respondedAt": serverTimestamp(),
+      stage: "pendingDean" }));
+  });
+
+test("CR: the Dean approves the request and the thesis in one batch",
+  async () => {
+    await seedCr({ stage: "pendingDean", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "accepted" }, dean: { status: "pending" } } });
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+
+    // The thesis change alone is denied.
+    await assertFails(updateDoc(doc(dean, "theses/cr1"),
+      { adviserUid: "cr-new-adv" }));
+
+    // Both together succeed.
+    const batch = writeBatch(dean);
+    batch.update(doc(dean, crPath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
+    batch.update(doc(dean, "theses/cr1"), { adviserUid: "cr-new-adv" });
+    await assertSucceeds(batch.commit());
+  });
+
+test("CR: the leader resubmits only a returned request, same type & leader",
+  async () => {
+    await seedCr({ stage: "returned", signoffs: {
+      newAdviser: { status: "declined", reason: "no" },
+      formerAdviser: { status: "pending" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+    // Resubmit resets to first stage, all pending.
+    await assertSucceeds(setDoc(doc(leader, crPath),
+      adviserReq({ newAdviserUid: "cr-new-adv", newAdviserName: "Dr. New" })));
+    // A resubmit that changes the type is refused.
+    await seedCr({ stage: "returned", signoffs: adviserReq().signoffs });
+    await assertFails(setDoc(doc(leader, crPath),
+      adviserReq({ type: "title" })));
+  });
+
+test("CR: a sign-off changes only its own role", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  // Accepting my own AND pre-setting the coordinator's is denied.
+  await assertFails(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "accepted",
+    "signoffs.coordinator.status": "accepted" }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });
