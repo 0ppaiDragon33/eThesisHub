@@ -17,6 +17,7 @@ import 'package:ethesishub/features/dashboard/all_theses_table.dart';
 import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
 import 'package:ethesishub/features/dashboard/submission_trend.dart';
+import 'package:ethesishub/providers/change_request_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -55,6 +56,7 @@ class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
     final stalledAsync = ref.watch(stalledThesesProvider);
     final defencesAsync = ref.watch(allDefencesProvider);
     final directoryAsync = ref.watch(allDirectoryProvider);
+    final changeRequestsAsync = ref.watch(coordinatorChangeRequestsProvider);
 
     return KeyedSubtree(
       key: const Key('coordinatorOverview'),
@@ -97,6 +99,13 @@ class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
             value: directoryAsync,
             format: (l) => '${l.length}',
             onTap: () => context.go('/users'),
+          ),
+          Metric(
+            label: 'Change requests',
+            value: changeRequestsAsync,
+            format: (l) => '${l.length}',
+            highlight: (l) => l.isNotEmpty,
+            onTap: () => context.go('/change-requests'),
           ),
         ]),
         SplitColumns(

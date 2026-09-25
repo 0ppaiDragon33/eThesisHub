@@ -18,6 +18,7 @@ import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
 import 'package:ethesishub/features/dashboard/advisees_screen.dart';
 import 'package:ethesishub/features/dashboard/approvals_screen.dart';
+import 'package:ethesishub/features/dashboard/change_request_queue_screen.dart';
 import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/features/dashboard/panels_screen.dart';
 import 'package:ethesishub/features/dashboard/readiness_screen.dart';
@@ -252,6 +253,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // '/recommendations' is the coordinator's alone.
               if (location == '/recommendations' &&
                   profile.role != UserRole.coordinator) {
+                return home;
+              }
+              // '/change-requests' is a coordinator and dean destination --
+              // the two queues in this file (ChangeRequestQueueScreen picks
+              // between them from the signed-in role) -- never faculty or
+              // the student whose request it is.
+              if (location == '/change-requests' &&
+                  profile.role != UserRole.coordinator &&
+                  profile.role != UserRole.dean) {
                 return home;
               }
               // '/readiness' is a coordinator and dean destination -- never
@@ -496,6 +506,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/recommendations',
         builder: (_, _) => const RecommendationsScreen(),
+      ),
+      GoRoute(
+        path: '/change-requests',
+        builder: (_, _) => const ChangeRequestQueueScreen(),
       ),
       // NOT '/titles' -- '/thesis/titles' (below) already exists for
       // submitting a candidate title set. Two routes a character apart
