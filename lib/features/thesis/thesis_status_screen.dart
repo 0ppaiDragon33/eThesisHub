@@ -261,7 +261,7 @@ class _Workspace extends ConsumerWidget {
             _NextAction(thesis: thesis, nominations: nominations,
                 onDownloadForm1: onDownloadForm1),
             _ChangeRequestActions(thesis: thesis),
-            ChangeRequestTracker(thesisId: thesis.id),
+            ChangeRequestTracker(thesisId: thesis.id, thesis: thesis),
             if (thesis.status == ThesisStatus.titleApproved &&
                 thesis.approvedTitleId != null)
               _ApprovedTitle(

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -7,6 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/forms/editable/editor_services.dart';
 import 'package:ethesishub/features/thesis/change_request_tracker.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
@@ -28,7 +33,25 @@ Map<String, dynamic> _declinedSignoff(String reason) => {
   'reason': reason,
 };
 
-Widget _wrap(FakeFirebaseFirestore db, {required String uid}) => ProviderScope(
+final _thesis = Thesis(
+  id: 't1',
+  leaderUid: 'l1',
+  memberNames: const ['Leader One'],
+  workingTitle: 'The Working Title',
+  college: 'CICS',
+  program: 'BSCS',
+  semester: '1st',
+  academicYear: '2026-2027',
+  status: ThesisStatus.titleApproved,
+  panelistUids: const [],
+  createdAt: DateTime(2026, 1, 1),
+);
+
+Widget _wrap(
+  FakeFirebaseFirestore db, {
+  required String uid,
+  PdfSharer? pdfSharer,
+}) => ProviderScope(
   overrides: [
     firestoreProvider.overrideWithValue(db),
     firebaseAuthProvider.overrideWithValue(
@@ -41,6 +64,7 @@ Widget _wrap(FakeFirebaseFirestore db, {required String uid}) => ProviderScope(
         ),
       ),
     ),
+    if (pdfSharer != null) pdfSharerProvider.overrideWithValue(pdfSharer),
   ],
   child: MaterialApp.router(
     routerConfig: GoRouter(
@@ -48,9 +72,9 @@ Widget _wrap(FakeFirebaseFirestore db, {required String uid}) => ProviderScope(
       routes: [
         GoRoute(
           path: '/tracker',
-          builder: (_, _) => const Scaffold(
+          builder: (_, _) => Scaffold(
             body: SingleChildScrollView(
-              child: ChangeRequestTracker(thesisId: 't1'),
+              child: ChangeRequestTracker(thesisId: 't1', thesis: _thesis),
             ),
           ),
         ),
@@ -86,28 +110,55 @@ void main() {
     expect(find.byKey(const Key('changeRequestTracker')), findsNothing);
   });
 
-  testWidgets('an approved request is not shown', (tester) async {
-    final db = FakeFirebaseFirestore();
-    await db.collection('theses/t1/changeRequests').doc('title').set({
-      'type': 'title',
-      'stage': 'approved',
-      'reasons': 'Better fit',
-      'leaderUid': 'l1',
-      'newTitle': 'A New Title',
-      'signoffs': {
-        'adviser': _acceptedSignoff(),
-        'coordinator': _acceptedSignoff(),
-        'dean': _acceptedSignoff(),
-      },
-      'createdAt': Timestamp.now(),
-      'updatedAt': Timestamp.now(),
-    });
+  testWidgets(
+    'an approved request shows a Download form button that shares the '
+    'filled PDF',
+    (tester) async {
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses/t1/changeRequests').doc('title').set({
+        'type': 'title',
+        'stage': 'approved',
+        'reasons': 'Better fit',
+        'leaderUid': 'l1',
+        'newTitle': 'A New Title',
+        'signoffs': {
+          'adviser': _acceptedSignoff(),
+          'coordinator': _acceptedSignoff(),
+          'dean': _acceptedSignoff(),
+        },
+        'createdAt': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
 
-    await tester.pumpWidget(_wrap(db, uid: 'l1'));
-    await tester.pumpAndSettle();
+      Uint8List? sharedBytes;
+      String? sharedFilename;
+      await tester.pumpWidget(
+        _wrap(
+          db,
+          uid: 'l1',
+          pdfSharer: (bytes, filename) async {
+            sharedBytes = bytes;
+            sharedFilename = filename;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('changeRequestTracker')), findsNothing);
-  });
+      expect(find.byKey(const Key('changeRequestTracker')), findsOneWidget);
+      final download = find.byKey(
+        const Key('downloadChangeRequestForm-title'),
+      );
+      expect(download, findsOneWidget);
+
+      await tester.ensureVisible(download);
+      await tester.tap(download);
+      await tester.pumpAndSettle();
+
+      expect(sharedBytes, isNotNull);
+      expect(sharedBytes, isNotEmpty);
+      expect(sharedFilename, 'Form4b-t1.pdf');
+    },
+  );
 
   testWidgets(
     'an open adviser request shows its stage and each sign-off state',

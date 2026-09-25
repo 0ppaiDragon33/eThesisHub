@@ -8,6 +8,9 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/change_request.dart';
+import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/features/forms/change_request_form.dart';
+import 'package:ethesishub/features/forms/editable/editor_services.dart';
 import 'package:ethesishub/providers/change_request_providers.dart';
 
 /// Shows a leader where each open change-of-adviser/title request stands:
@@ -18,9 +21,17 @@ import 'package:ethesishub/providers/change_request_providers.dart';
 /// Renders nothing at all when there is no open or returned request, the
 /// common case for most theses most of the time.
 class ChangeRequestTracker extends ConsumerWidget {
-  const ChangeRequestTracker({super.key, required this.thesisId});
+  const ChangeRequestTracker({
+    super.key,
+    required this.thesisId,
+    required this.thesis,
+  });
 
   final String thesisId;
+
+  /// Needed for an approved title request's record PDF, which prints the
+  /// thesis's current working title alongside the requested one.
+  final Thesis thesis;
 
   static String stageLabel(ChangeRequestStage stage) => switch (stage) {
     ChangeRequestStage.pendingAdvisers => 'Awaiting the new and former adviser',
@@ -66,11 +77,17 @@ class ChangeRequestTracker extends ConsumerWidget {
         ),
       ),
       data: (requests) {
-        // One card per open or returned request -- an approved request is
-        // already reflected in the thesis document itself and needs no
-        // further tracking here.
+        // One card per open, returned or approved request. An approved
+        // request's change is already reflected in the thesis document
+        // itself, but the card stays so the leader can download the filled
+        // Form 4a/4b record.
         final visible = requests
-            .where((r) => r.isOpen || r.stage == ChangeRequestStage.returned)
+            .where(
+              (r) =>
+                  r.isOpen ||
+                  r.stage == ChangeRequestStage.returned ||
+                  r.stage == ChangeRequestStage.approved,
+            )
             .toList();
         if (visible.isEmpty) return const SizedBox.shrink();
 
@@ -83,7 +100,11 @@ class ChangeRequestTracker extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (var i = 0; i < visible.length; i++) ...[
-                  _RequestCard(thesisId: thesisId, request: visible[i]),
+                  _RequestCard(
+                    thesisId: thesisId,
+                    thesis: thesis,
+                    request: visible[i],
+                  ),
                   if (i < visible.length - 1) const Gap.md(),
                 ],
               ],
@@ -95,10 +116,15 @@ class ChangeRequestTracker extends ConsumerWidget {
   }
 }
 
-class _RequestCard extends StatelessWidget {
-  const _RequestCard({required this.thesisId, required this.request});
+class _RequestCard extends ConsumerWidget {
+  const _RequestCard({
+    required this.thesisId,
+    required this.thesis,
+    required this.request,
+  });
 
   final String thesisId;
+  final Thesis thesis;
   final ChangeRequest request;
 
   /// The reason on the sign-off that returned this request, if any -- the
@@ -115,11 +141,20 @@ class _RequestCard extends StatelessWidget {
     return null;
   }
 
+  Future<void> _download(WidgetRef ref) async {
+    final bytes = await buildChangeRequestPdf(request, thesis: thesis);
+    final formId = request.type == ChangeRequestType.adviser
+        ? 'Form4a'
+        : 'Form4b';
+    await ref.read(pdfSharerProvider)(bytes, '$formId-$thesisId.pdf');
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     final returned = request.stage == ChangeRequestStage.returned;
+    final approved = request.stage == ChangeRequestStage.approved;
     final title = request.type == ChangeRequestType.adviser
         ? 'Change of adviser'
         : 'Change of title';
@@ -197,6 +232,18 @@ class _RequestCard extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.edit_outlined, size: 16),
                 label: const Text('Edit and resubmit'),
+              ),
+            ),
+          ],
+          if (approved) ...[
+            const Gap.sm(),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                key: Key('downloadChangeRequestForm-${request.type.value}'),
+                onPressed: () => _download(ref),
+                icon: const Icon(Icons.download, size: 16),
+                label: const Text('Download form'),
               ),
             ),
           ],
