@@ -12,6 +12,7 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/defence/defence_status.dart';
+import 'package:ethesishub/features/defence/redefence_notice.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -375,13 +376,15 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               // sheet, so nothing here links to '/grades'.
               if (completed) ...[
                 const Gap.md(),
-                if (defence.hasVerdict)
+                if (defence.hasVerdict) ...[
                   Text(
                     'Panel verdict: ${defence.panelVerdict!.label}',
                     key: const Key('leaderVerdict'),
                     style: Theme.of(context).textTheme.titleLarge,
-                  )
-                else
+                  ),
+                  const Gap.sm(),
+                  RedefenceNotice(defence: defence),
+                ] else
                   const Text(
                     'The panel has not recorded a verdict for this defence '
                     'yet.',
@@ -727,9 +730,23 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       key: const Key('defenceRoom'),
       child: PageShell(
         maxWidth: AppTokens.measureWide,
-        kicker: defence.type.label,
-        title: thesisTitle ?? defence.type.label,
+        kicker: defence.label,
+        title: thesisTitle ?? defence.label,
         children: [
+          if (defence.isRedefence) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('redefenceOfLink'),
+                onPressed: () =>
+                    context.push('/defence/room/${defence.redefenceOf}'),
+                icon: const Icon(Icons.history, size: 18),
+                label: Text('Re-defence of an earlier '
+                    '${defence.type.label.toLowerCase()}. Open the original'),
+              ),
+            ),
+            const Gap.sm(),
+          ],
           SplitColumns(
             secondaryFirstWhenStacked: true,
             primary: [log],

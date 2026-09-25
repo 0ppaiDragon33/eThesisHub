@@ -11,6 +11,7 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -97,7 +98,11 @@ class AdviseeRow extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
 
-    void open() => context.push('/thesis/chapters?id=${thesis.id}');
+    // At title defence there are no chapters yet; the defence is the work.
+    final atTitleDefence = thesis.status == ThesisStatus.titlePendingDefence;
+    void open() => context.push(atTitleDefence
+        ? '/defence/${thesis.id}'
+        : '/thesis/chapters?id=${thesis.id}');
 
     final awaitingText = chaptersAsync.when(
       // Never "0 awaiting" while loading.
@@ -163,13 +168,19 @@ class AdviseeRow extends ConsumerWidget {
               ),
             ],
           );
-          final button = FilledButton.tonal(
-            key: Key('openChapters-${thesis.id}'),
-            // No faculty destination owns '/thesis/chapters', so it is
-            // pushed, leaving this list as the back stop (D23).
-            onPressed: open,
-            child: const Text('Review chapters'),
-          );
+          final button = atTitleDefence
+              ? FilledButton(
+                  key: Key('openTitleDefence-${thesis.id}'),
+                  onPressed: open,
+                  child: const Text('Open title defence'),
+                )
+              : FilledButton.tonal(
+                  key: Key('openChapters-${thesis.id}'),
+                  // No faculty destination owns '/thesis/chapters', so it is
+                  // pushed, leaving this list as the back stop (D23).
+                  onPressed: open,
+                  child: const Text('Review chapters'),
+                );
           if (narrow) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

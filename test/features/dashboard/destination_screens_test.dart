@@ -265,4 +265,23 @@ void main() {
     expect(find.byKey(const Key('deanOverview')), findsNothing);
     expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
   });
+
+  testWidgets('an adviser opens an advisee\'s title defence from Advisees',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set(
+          thesis(adviserUid: 'f1', status: 'titlePendingDefence'),
+        );
+
+    await tester.pumpWidget(await wrap(
+      const AdviseesScreen(),
+      db,
+      uid: 'f1',
+      role: 'faculty',
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('openTitleDefence-t1')), findsOneWidget);
+    expect(find.text('Open title defence'), findsOneWidget);
+  });
 }
