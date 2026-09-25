@@ -3302,6 +3302,114 @@ test("M3: the panel snapshot must match the thesis at scheduling",
     await assertSucceeds(setDoc(doc(coord, "defenses/dfG"), defDoc()));
   });
 
+// ---------- Re-defence (spec 2026-09-25 §5) ----------
+
+async function seedFailed({ verdict = "fail", type = "preOral",
+                            redefenceOf = null } = {}) {
+  // Every re-defence test writes to the same derived id,
+  // "defenses/rf1_redefence" (that's the point of the id being derived --
+  // Task 2's whole one-per-Fail guarantee rides on it). Without a clean
+  // slate, a doc a prior test's assertSucceeds created survives into the
+  // next test, which Firestore then evaluates as an update -- and no
+  // update arm allows it, so a later test's own assertSucceeds fails for
+  // a reason that has nothing to do with what it is testing. Same pattern
+  // as seedM4 above.
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/dt1"), defThesis());
+    await setDoc(doc(db, "theses/dt2"), defThesis());
+    await setDoc(doc(db, "users/coord-uid"),
+      { role: "coordinator", active: true });
+    await setDoc(doc(db, "defenses/rf1"), {
+      ...defDoc({ type, status: "completed" }),
+      ...(verdict ? { panelVerdict: verdict } : {}),
+      ...(redefenceOf ? { redefenceOf } : {}),
+    });
+  });
+}
+
+function redefenceDoc(extra = {}) {
+  return defDoc({ redefenceOf: "rf1", ...extra });
+}
+
+test("Re-defence: the coordinator re-defends a failed pre-oral", async () => {
+  await seedFailed();
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+});
+
+test("Re-defence: the coordinator re-defends a failed final", async () => {
+  await seedFailed({ type: "final" });
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc({ type: "final" })));
+});
+
+test("Re-defence: only after a Fail", async () => {
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await seedFailed({ verdict: "pass" });
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+  await seedFailed({ verdict: null });
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+});
+
+test("Re-defence: a re-defence is not re-defended", async () => {
+  await seedFailed({ redefenceOf: "rf0" });
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+});
+
+test("Re-defence: only one per Fail", async () => {
+  await seedFailed();
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+  // The second write is an update, and no update arm allows it.
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc({ venue: "Another room" })));
+});
+
+test("Re-defence: same stage, same thesis, derived id", async () => {
+  await seedFailed();
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc({ type: "final" })));
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc({ thesisId: "dt2" })));
+  await assertFails(setDoc(doc(coord, "defenses/some-other-id"),
+    redefenceDoc()));
+  // Control.
+  await assertSucceeds(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+});
+
+test("Re-defence: only the coordinator, and only of a real defence",
+  async () => {
+    await seedFailed();
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    await assertFails(setDoc(doc(adv, "defenses/rf1_redefence"),
+      redefenceDoc({ createdBy: "adviser-uid" })));
+    await assertFails(setDoc(doc(coord, "defenses/nope_redefence"),
+      redefenceDoc({ redefenceOf: "nope" })));
+  });
+
+test("Re-defence: a panel changed since the Fail is refused", async () => {
+  await seedFailed();
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), "theses/dt1"),
+      defThesis({ panelistUids: ["pan-uid", "new-uid"] })));
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+  // Copied from the failed defence, as the app does: the old panel.
+  await assertFails(setDoc(doc(coord, "defenses/rf1_redefence"),
+    redefenceDoc()));
+});
+
 test("M3: the lifecycle moves forward only, and only by the coordinator",
   async () => {
     await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));

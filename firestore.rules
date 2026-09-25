@@ -1316,6 +1316,21 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/theses/$(thesisId)).data;
       }
 
+      // A re-defence (spec 2026-09-25 §5): the same stage of the same thesis
+      // again, after the panel's verdict on it was Fail. Stored at an id
+      // derived from the failed defence, so a second one is an update, which
+      // no update arm allows. `!('redefenceOf' in failed)` is the
+      // one-re-defence limit; allowing more changes only that line.
+      function validRedefence() {
+        let failed = get(/databases/$(database)/documents/defenses/$(incoming().redefenceOf)).data;
+        return incoming().redefenceOf is string
+            && defenseId == incoming().redefenceOf + '_redefence'
+            && failed.thesisId == incoming().thesisId
+            && failed.type == incoming().type
+            && failed.get('panelVerdict', null) == 'fail'
+            && !('redefenceOf' in failed);
+      }
+
       function onThisDefence() {
         let d = defence();
         return signedIn() && isActive() && (
@@ -1343,11 +1358,12 @@ service cloud.firestore {
                     && incoming().keys().hasOnly(
                          ['thesisId', 'type', 'scheduledAt', 'venue',
                           'panelUids', 'adviserUid', 'leaderUid', 'status',
-                          'createdBy', 'createdAt'])
+                          'createdBy', 'createdAt', 'redefenceOf'])
                     && incoming().type in ['preOral', 'final']
                     && incoming().status == 'scheduled'
                     && incoming().createdBy == request.auth.uid
                     && incoming().createdAt == request.time
+                    && (!('redefenceOf' in incoming()) || validRedefence())
                     // Snapshots, not claims: a forged panel would grant
                     // comment rights to someone the group never nominated.
                     && incoming().panelUids
