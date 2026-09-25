@@ -14,6 +14,35 @@ import 'package:ethesishub/providers/auth_providers.dart';
 
 import '../pdf_text.dart';
 
+/// What the editor asked of its preview: each render function it handed
+/// over, and how many times the preview was created from scratch (and so
+/// lost its zoom and place).
+class Previews {
+  final builds = <Object>{};
+  int created = 0;
+}
+
+class _StubPreview extends StatefulWidget {
+  const _StubPreview(this.previews);
+
+  final Previews previews;
+
+  @override
+  State<_StubPreview> createState() => _StubPreviewState();
+}
+
+class _StubPreviewState extends State<_StubPreview> {
+  @override
+  void initState() {
+    super.initState();
+    widget.previews.created++;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Text('preview stub', key: Key('previewStub'));
+}
+
 class Shared {
   Uint8List? bytes;
   String? filename;
@@ -43,7 +72,7 @@ Future<FakeFirebaseFirestore> seedCopy({
 
 /// Starts on '/forms' and pushes the editor, so leaving it is a real pop,
 /// the way the top-bar arrow and the Android back both leave it.
-Future<(GoRouter, Set<Key>, Shared)> pumpEditor(
+Future<(GoRouter, Previews, Shared)> pumpEditor(
   WidgetTester tester,
   FakeFirebaseFirestore db, {
   String location = '/forms/form1/copies/c1',
@@ -54,7 +83,7 @@ Future<(GoRouter, Set<Key>, Shared)> pumpEditor(
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
-  final previews = <Key>{};
+  final previews = Previews();
   final shared = Shared();
   final router = GoRouter(
     initialLocation: '/forms',
@@ -94,12 +123,9 @@ Future<(GoRouter, Set<Key>, Shared)> pumpEditor(
               ),
         ),
         // Rasterising a PDF needs the platform; record each preview instead.
-        formPreviewBuilderProvider.overrideWithValue((key, build) {
-          previews.add(key);
-          return KeyedSubtree(
-            key: key,
-            child: const Text('preview stub', key: Key('previewStub')),
-          );
+        formPreviewBuilderProvider.overrideWithValue((build) {
+          previews.builds.add(build);
+          return _StubPreview(previews);
         }),
         pdfSharerProvider.overrideWithValue((bytes, filename) async {
           shared
@@ -217,16 +243,25 @@ void main() {
 
   testWidgets('the preview is rebuilt only once typing pauses', (tester) async {
     final (_, previews, _) = await pumpEditor(tester, await seedCopy());
-    expect(previews, hasLength(1));
+    expect(previews.builds, hasLength(1));
 
     await tester.enterText(find.byKey(const Key('field-salutation')), 'D');
     await tester.pump(const Duration(milliseconds: 100));
     await tester.enterText(find.byKey(const Key('field-salutation')), 'De');
     await tester.pump(const Duration(milliseconds: 100));
-    expect(previews, hasLength(1), reason: 'still typing');
+    expect(previews.builds, hasLength(1), reason: 'still typing');
 
     await tester.pump(kPreviewDebounce + const Duration(milliseconds: 50));
-    expect(previews, hasLength(2), reason: 'one rebuild after the pause');
+    expect(
+      previews.builds,
+      hasLength(2),
+      reason: 'one rebuild after the pause',
+    );
+    expect(
+      previews.created,
+      1,
+      reason: 'the same preview re-renders, keeping its zoom and place',
+    );
   });
 
   testWidgets('Download PDF shares the form as it is on screen, unsaved '
@@ -407,4 +442,61 @@ void main() {
       expect(find.byKey(const Key('formsHome')), findsOneWidget);
     },
   );
+
+  testWidgets('on a phone, switching panes keeps each where it was', (
+    tester,
+  ) async {
+    final (_, previews, _) = await pumpEditor(
+      tester,
+      await seedCopy(),
+      size: const Size(400, 800),
+    );
+    final fieldsScroll = find.byKey(const Key('editorFieldsScroll'));
+    await tester.drag(fieldsScroll, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    double offset() => tester
+        .state<ScrollableState>(
+          // The first is the pane's own; the text fields have theirs too.
+          find
+              .descendant(of: fieldsScroll, matching: find.byType(Scrollable))
+              .first,
+        )
+        .position
+        .pixels;
+    final scrolledTo = offset();
+    expect(scrolledTo, greaterThan(0));
+
+    await tester.tap(find.text('Preview').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('previewStub')), findsOneWidget);
+
+    await tester.tap(find.text('Edit').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorFields')), findsOneWidget);
+    expect(offset(), scrolledTo, reason: 'the fields stay where they were');
+    expect(
+      previews.created,
+      1,
+      reason:
+          'the preview is never rebuilt from scratch, so it keeps '
+          'its zoom and the part of the page in view',
+    );
+  });
+
+  testWidgets('on a wide screen the header stays while the fields scroll', (
+    tester,
+  ) async {
+    await pumpEditor(tester, await seedCopy(), size: const Size(1400, 900));
+    final save = find.byKey(const Key('saveCopy'));
+    final before = tester.getTopLeft(save);
+
+    await tester.drag(
+      find.byKey(const Key('editorFieldsScroll')),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(save), before);
+    expect(find.byKey(const Key('previewStub')), findsOneWidget);
+  });
 }

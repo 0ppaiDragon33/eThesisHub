@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
 import 'package:ethesishub/core/widgets/confirm.dart';
+import 'package:ethesishub/features/forms/editable/zoomable_pages.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// True while the open form editor holds edits that are not saved. Set by
@@ -23,32 +24,14 @@ final pdfSharerProvider = Provider<PdfSharer>(
 );
 
 typedef FormPreviewBuilder =
-    Widget Function(Key key, Future<Uint8List> Function() build);
+    Widget Function(Future<Uint8List> Function() build);
 
-/// The live preview of the printed form. Rasterising a PDF needs the
-/// platform, so widget tests replace this with a stand-in.
+/// The live preview of the printed form: its pages, zoomable, re-rendered in
+/// place when [build] changes. Rasterising a PDF needs the platform, so
+/// widget tests replace this with a stand-in.
 final formPreviewBuilderProvider = Provider<FormPreviewBuilder>(
   (ref) =>
-      (key, build) => PdfPreview(
-        key: key,
-        build: (_) => build(),
-        useActions: false,
-        canChangeOrientation: false,
-        canChangePageFormat: false,
-        canDebug: false,
-        allowPrinting: false,
-        allowSharing: false,
-        onError: (context, error) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'The preview could not be drawn: $error',
-              key: const Key('previewError'),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      ),
+      (build) => ZoomablePages(build: build),
 );
 
 /// The editor route's `onExit`. It runs however the route is left: the
