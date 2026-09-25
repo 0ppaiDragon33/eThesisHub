@@ -152,9 +152,15 @@ re-defence instead (§6.4).
     Re-defence** and drop their icons. If the switch still does not fit, it
     scrolls sideways; the page never overflows.
 - **The stage is in the URL.** `/defences?stage=title|preOral|final|redefence`
-  is used by dashboards and links. A missing or unknown value falls back to
-  **Title defence**, the first stage. Changing the stage updates the query
-  (`go`, not `push`), so browser back does not step through tabs.
+  is used by dashboards and links. An unknown value falls back to **Title
+  defence**, the first stage. Changing the stage updates the query (`go`,
+  not `push`), so browser back does not step through tabs.
+- **No stage named** (the sidebar's bare `/defences`): the page opens on the
+  first stage, in thesis order, with something open (the switch's counts),
+  and on **Title defence** when none has. It chooses once, after both the
+  defence list and the title-defence list have loaded, showing a loading
+  state until then; work arriving later never moves the tab. *(Amended
+  2026-09-25 at the user's choice; was "always Title".)*
 - **List / Calendar** stays in the page actions for **Pre-oral**, **Final
   defence** and **Re-defence**, and is hidden on **Title defence** (no
   dates). `DefencesList` and `DefenceCalendar` each gain an optional

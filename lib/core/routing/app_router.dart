@@ -456,8 +456,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/defences',
         builder: (_, state) => DefencesScreen(
-          initialStage:
-              DefenceStage.fromParam(state.uri.queryParameters['stage']),
+          // No `stage` at all (the sidebar's bare '/defences') lets the
+          // page open where the reader has something open; a stage that is
+          // named but unknown still means Title.
+          initialStage: state.uri.queryParameters.containsKey('stage')
+              ? DefenceStage.fromParam(state.uri.queryParameters['stage'])
+              : null,
           initialCalendar: state.uri.queryParameters['view'] == 'calendar',
         ),
       ),

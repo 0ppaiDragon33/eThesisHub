@@ -56,4 +56,18 @@ void main() {
     expect(DefenceStage.finalDefence.labelFor(1, compact: true), 'Final (1)');
     expect(DefenceStage.title.labelFor(0, compact: true), 'Title');
   });
+
+  test('the default stage is the first with something open, else Title', () {
+    Map<DefenceStage, int> counts(List<int> n) =>
+        {for (var i = 0; i < n.length; i++) DefenceStage.values[i]: n[i]};
+    expect(firstStageWithSomethingOpen(counts([0, 0, 0, 0])),
+        DefenceStage.title);
+    expect(firstStageWithSomethingOpen(counts([2, 1, 0, 0])),
+        DefenceStage.title);
+    expect(firstStageWithSomethingOpen(counts([0, 1, 3, 0])),
+        DefenceStage.preOral);
+    expect(firstStageWithSomethingOpen(counts([0, 0, 0, 1])),
+        DefenceStage.redefence);
+    expect(firstStageWithSomethingOpen(const {}), DefenceStage.title);
+  });
 }
