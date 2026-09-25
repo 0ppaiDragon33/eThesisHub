@@ -355,6 +355,52 @@ void main() {
               .toString(),
           'DefenceStage.title');
     });
+
+    // Fix: links to Defences open the stage they mean. Both of these used
+    // to `context.go('/defences')`, landing on the Title stage -- wrong for
+    // a link that means "the scheduled defences".
+    testWidgets(
+        "the coordinator's Defence calendar command opens the Pre-oral "
+        'stage, on the calendar', (tester) async {
+      final db = FakeFirebaseFirestore();
+      final c = await containerFor(db, uid: 'c1', role: 'coordinator');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      await tester.tap(find.text('Defence calendar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+      expect(
+          c
+              .read(goRouterProvider)
+              .routerDelegate
+              .currentConfiguration
+              .uri
+              .toString(),
+          '/defences?stage=preOral&view=calendar');
+    });
+
+    testWidgets("the dean's Defences this week tile opens the Pre-oral stage",
+        (tester) async {
+      final db = FakeFirebaseFirestore();
+      final c = await containerFor(db, uid: 'd1', role: 'dean');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      await tester.tap(find.text('Defences this week'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+      expect(
+          c
+              .read(goRouterProvider)
+              .routerDelegate
+              .currentConfiguration
+              .uri
+              .toString(),
+          '/defences?stage=preOral');
+    });
   });
 
   group('adviser attending a defence', () {

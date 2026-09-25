@@ -34,7 +34,7 @@ class WeekAgenda extends StatelessWidget {
       icon: Icons.event_note_outlined,
       flush: true,
       trailing: TextButton(
-        onPressed: () => context.go('/defences'),
+        onPressed: () => context.go('/defences?stage=preOral&view=calendar'),
         child: const Text('Calendar'),
       ),
       child: defences.when(

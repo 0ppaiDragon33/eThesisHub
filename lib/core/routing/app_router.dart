@@ -458,6 +458,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => DefencesScreen(
           initialStage:
               DefenceStage.fromParam(state.uri.queryParameters['stage']),
+          initialCalendar: state.uri.queryParameters['view'] == 'calendar',
         ),
       ),
       GoRoute(path: '/advisees', builder: (_, _) => const AdviseesScreen()),

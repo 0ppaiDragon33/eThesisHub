@@ -84,7 +84,7 @@ class DeanOverview extends ConsumerWidget {
             label: 'Defences this week',
             value: defencesAsync,
             format: (l) => '${defencesThisWeek(l).length}',
-            onTap: () => context.go('/defences'),
+            onTap: () => context.go('/defences?stage=preOral'),
           ),
           Metric<List<Thesis>>(
             label: 'Active theses',

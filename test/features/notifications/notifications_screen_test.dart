@@ -44,7 +44,9 @@ Future<void> pump(
           ),
           GoRoute(
             path: '/defences',
-            builder: (_, _) => const Scaffold(body: Text('Defences list')),
+            builder: (_, state) => Scaffold(
+                body: Text('Defences list, stage='
+                    '${state.uri.queryParameters['stage']}')),
           ),
           // Present so a test can prove we do NOT land here: this is M1b's
           // title defence screen, keyed by a THESIS id.
@@ -252,7 +254,10 @@ void main() {
       await tester.tap(find.text('An older comment notification.'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Defences list'), findsOneWidget);
+      // A defenceScheduled/defenceComment item means a scheduled defence,
+      // so the fallback must land on the Pre-oral stage rather than the
+      // bare '/defences' (which opens Title).
+      expect(find.text('Defences list, stage=preOral'), findsOneWidget);
       expect(find.text('Title defence t1'), findsNothing);
     });
   });

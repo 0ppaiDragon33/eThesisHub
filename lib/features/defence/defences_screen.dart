@@ -29,12 +29,17 @@ class DefencesScreen extends ConsumerStatefulWidget {
   const DefencesScreen({
     super.key,
     this.initialStage = DefenceStage.title,
+    this.initialCalendar = false,
     this.title = 'Defences',
     this.subtitle =
         'Title defences, pre-oral and final defences, and re-defences.',
   });
 
   final DefenceStage initialStage;
+
+  /// Whether to open on the Calendar view rather than List, for a link that
+  /// means "the calendar" (`?view=calendar`).
+  final bool initialCalendar;
   final String title;
   final String subtitle;
 
@@ -44,7 +49,8 @@ class DefencesScreen extends ConsumerStatefulWidget {
 
 class _DefencesScreenState extends ConsumerState<DefencesScreen> {
   late DefenceStage _stage = widget.initialStage;
-  _DefencesView _view = _DefencesView.list;
+  late _DefencesView _view =
+      widget.initialCalendar ? _DefencesView.calendar : _DefencesView.list;
 
   @override
   void didUpdateWidget(covariant DefencesScreen oldWidget) {

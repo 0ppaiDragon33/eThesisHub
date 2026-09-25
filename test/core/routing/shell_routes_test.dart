@@ -1,4 +1,5 @@
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -200,12 +201,40 @@ void main() {
 
     c.read(goRouterProvider).go('/defences');
     await tester.pumpAndSettle();
-    // The stage switch scrolls horizontally at this width, so the last
-    // segment is not yet on screen -- scroll it into view before tapping.
-    await tester.ensureVisible(find.text('Re-defence'));
+    // At this test's 1000px width the switch now fits its short labels
+    // without scrolling (Task: the stage switch fits by its own width), so
+    // every segment -- Re-defence included -- is already hittable.
     await tester.tap(find.text('Re-defence'));
     await tester.pumpAndSettle();
     expect(locationOf(c), '/defences?stage=redefence');
+  });
+
+  testWidgets('/defences?stage=preOral&view=calendar opens the calendar',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('faculty', db, uid: 'u1');
+    // At least one defence, or the calendar collapses to its own
+    // 'noDefences' EmptyState instead of the grid -- the same shape
+    // DefencesList uses.
+    await db.collection('defenses').doc('d1').set({
+      'thesisId': 't1', 'type': 'preOral',
+      'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 15, 9)),
+      'venue': 'Room 1', 'panelUids': <String>[],
+      'adviserUid': 'u1', 'leaderUid': 'l1', 'status': 'scheduled',
+      'createdBy': 'c1',
+    });
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/defences?stage=preOral&view=calendar');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceCalendar')), findsOneWidget);
+    Set<Object?> selectedView() => tester
+        .widget<SegmentedButton<Object?>>(
+            find.byKey(const Key('defencesViewToggle')))
+        .selected;
+    expect(selectedView().single.toString(), '_DefencesView.calendar');
   });
 
   // Not '/titles' -- '/thesis/titles' already exists for submitting a
