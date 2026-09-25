@@ -58,8 +58,7 @@ final FormTemplate form4aTemplate = FormTemplate(
       label: 'Before the reasons',
       defaultText: 'for the following reasons:',
     ),
-    for (var i = 1; i <= 3; i++)
-      FormBlock(id: 'reason.$i', label: 'Reason $i', kind: BlockKind.blank),
+    reasonsBlock,
     const FormBlock(
       id: 'closing',
       label: 'Closing line',
@@ -125,11 +124,7 @@ pw.Widget _page(FormText t) {
       pw.SizedBox(height: 10),
       pw.Text(t.of('reasonsLead'), style: _bodyStyle),
       pw.SizedBox(height: 6),
-      for (var i = 1; i <= 3; i++)
-        pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 6),
-          child: blankOr(t, 'reason.$i', width: 460, style: _bodyStyle),
-        ),
+      ...reasonsParagraph(t),
       pw.SizedBox(height: 10),
       pw.Text(t.of('closing'), style: _bodyStyle),
       pw.SizedBox(height: 16),
