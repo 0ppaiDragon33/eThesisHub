@@ -23,7 +23,19 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// faculty, the merge of two) for whichever role is signed in, so the
 /// widget itself needs no branching on role at all.
 class DefencesList extends ConsumerWidget {
-  const DefencesList({super.key});
+  const DefencesList({
+    super.key,
+    this.where,
+    this.emptyTitle = 'No defences scheduled',
+    this.emptyMessage = 'A defence appears here once the Coordinator '
+        'schedules one you are part of.',
+  });
+
+  /// Which of the reader's defences to show; all of them when null. The
+  /// Defences page passes one stage's [DefenceStage.includes].
+  final bool Function(Defence)? where;
+  final String emptyTitle;
+  final String emptyMessage;
 
   /// Same shape as the picker copy in `schedule_defence_screen.dart`, kept
   /// local rather than shared: this is the only other screen that renders a
@@ -70,19 +82,19 @@ class DefencesList extends ConsumerWidget {
         message: 'Could not load your defences.',
       ),
       data: (defences) {
-        if (defences.isEmpty) {
-          return const EmptyState(
-            key: Key('noDefences'),
+        final shown = where == null ? defences : defences.where(where!).toList();
+        if (shown.isEmpty) {
+          return EmptyState(
+            key: const Key('noDefences'),
             icon: Icons.forum_outlined,
-            title: 'No defences scheduled',
-            message: 'A defence appears here once the Coordinator schedules '
-                'one you are part of.',
+            title: emptyTitle,
+            message: emptyMessage,
           );
         }
         final preOral = _sorted(
-            defences.where((d) => d.type == DefenceType.preOral).toList());
+            shown.where((d) => d.type == DefenceType.preOral).toList());
         final final_ = _sorted(
-            defences.where((d) => d.type == DefenceType.final_).toList());
+            shown.where((d) => d.type == DefenceType.final_).toList());
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -224,7 +236,7 @@ class DefenceRow extends ConsumerWidget {
         const SizedBox(height: 2),
         Text(
           [
-            d.type.label,
+            d.label,
             at == null
                 ? 'Date to be confirmed'
                 : '${Dates.weekday(at)} ${DefencesList.formatDateTime(at)}',

@@ -644,4 +644,44 @@ void main() {
     expect(find.text('Final defences'), findsOneWidget);
     expect(find.textContaining('Pre-oral'), findsNothing);
   });
+
+  testWidgets('a where filter narrows the list and its empty state',
+      (tester) async {
+    final db = await _seedUser('f1');
+    await _seedDefence(
+      db,
+      id: 'onlyPreOral',
+      adviserUid: 'f1',
+      panelUids: const [],
+      scheduledAt: DateTime(2026, 9, 1, 9),
+    );
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(
+              uid: 'f1', email: 'f1@isufst.edu.ph', isEmailVerified: true),
+        )),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DefencesList(
+              where: _isFinal,
+              emptyTitle: 'No final defences',
+              emptyMessage: 'None yet.',
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No final defences'), findsOneWidget);
+    expect(find.byKey(const Key('defenceRow-onlyPreOral')), findsNothing);
+  });
 }
+
+bool _isFinal(Defence d) => d.type == DefenceType.final_;
