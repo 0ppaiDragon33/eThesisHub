@@ -184,11 +184,6 @@ List<ShellDestination> destinationsFor({
           icon: Icons.gavel_outlined,
           route: '/approvals',
         ),
-        const ShellDestination(
-          label: 'Title defences',
-          icon: Icons.forum_outlined,
-          route: '/title-defences',
-        ),
         defences,
         const ShellDestination(
           label: 'Readiness',
@@ -206,11 +201,6 @@ List<ShellDestination> destinationsFor({
           label: 'Recommendations',
           icon: Icons.fact_check_outlined,
           route: '/recommendations',
-        ),
-        const ShellDestination(
-          label: 'Title defences',
-          icon: Icons.forum_outlined,
-          route: '/title-defences',
         ),
         defences,
         const ShellDestination(

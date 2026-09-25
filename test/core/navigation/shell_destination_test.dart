@@ -250,6 +250,15 @@ void main() {
     });
   });
 
+  test('the Dean and the Coordinator reach title defences through Defences',
+      () {
+    for (final role in [UserRole.dean, UserRole.coordinator]) {
+      final routes = destinationsFor(role: role).map((d) => d.route);
+      expect(routes, isNot(contains('/title-defences')), reason: '$role');
+      expect(routes, contains('/defences'), reason: '$role');
+    }
+  });
+
   group('archive depth', () {
     // '/archive/:thesisId' is a screen below the Archive destination, so it
     // must push rather than replace it.

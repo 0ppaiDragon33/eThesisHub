@@ -95,7 +95,6 @@ const _staticTitles = {
   '/panels': 'Panels',
   '/approvals': 'Approvals',
   '/recommendations': 'Recommendations',
-  '/title-defences': 'Title defences',
   '/readiness': 'Readiness',
   '/no-profile': 'Profile unavailable',
   '/thesis': 'My thesis',
