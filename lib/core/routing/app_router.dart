@@ -43,6 +43,8 @@ import 'package:ethesishub/features/notifications/notifications_screen.dart';
 import 'package:ethesishub/features/repository/archive_entry_screen.dart';
 import 'package:ethesishub/features/repository/archive_queue_screen.dart';
 import 'package:ethesishub/features/repository/archive_screen.dart';
+import 'package:ethesishub/data/models/change_request.dart';
+import 'package:ethesishub/features/thesis/change_request_screen.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/features/thesis/thesis_status_screen.dart';
@@ -534,6 +536,57 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             );
           }
           return SubmitTitlesScreen(thesisId: id);
+        },
+      ),
+      // '/thesis/change-adviser' and '/thesis/change-title': the student
+      // leader's request forms (Task 5). Same bare-visit guard as
+      // '/defence/schedule' below -- a missing/empty id must not crash the
+      // route builder. `state.extra`, when it is a ChangeRequest, prefills
+      // the form for the tracker's "Edit and resubmit" flow (a returned
+      // request re-opened for editing); it is not part of the URL, so a
+      // fresh visit or a stale bookmark simply has none.
+      GoRoute(
+        path: '/thesis/change-adviser',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          if (id == null || id.isEmpty) {
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.link_off,
+                title: 'No thesis given',
+                message: 'Open this from your thesis status page.',
+              ),
+            ]);
+          }
+          final prefill =
+              state.extra is ChangeRequest ? state.extra as ChangeRequest : null;
+          return ChangeRequestScreen(
+            thesisId: id,
+            type: ChangeRequestType.adviser,
+            prefill: prefill,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/thesis/change-title',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          if (id == null || id.isEmpty) {
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.link_off,
+                title: 'No thesis given',
+                message: 'Open this from your thesis status page.',
+              ),
+            ]);
+          }
+          final prefill =
+              state.extra is ChangeRequest ? state.extra as ChangeRequest : null;
+          return ChangeRequestScreen(
+            thesisId: id,
+            type: ChangeRequestType.title,
+            prefill: prefill,
+          );
         },
       ),
       // The three routes below are registered BEFORE '/defence/:thesisId'
