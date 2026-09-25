@@ -832,6 +832,15 @@ service cloud.firestore {
         function incoming() { return request.resource.data; }
         function t() { return thesisData(thesisId); }
 
+        // Post-commit view of the thesis, symmetric with the thesis-side
+        // `changeRequestAfter`: pins the dean's accept-to-`approved` write to
+        // the SAME atomic commit that also lands the thesis-field change, so
+        // a request-only "approve" (no thesis write) is denied while the
+        // real batch (both documents) still passes.
+        function thesisAfter() {
+          return getAfter(/databases/$(database)/documents/theses/$(thesisId)).data;
+        }
+
         // Every reader who has business seeing the request.
         allow get, list: if isThesisLeader(thesisId)
                          || isCoordinator() || isDean()
@@ -970,9 +979,21 @@ service cloud.firestore {
                || accepts('coordinator', 'pendingCoordinator', 'pendingDean')))
           ||
           // --- dean: half of the approval batch, or a return ---
+          // The accept-to-`approved` path additionally requires (via
+          // thesisAfter(), i.e. getAfter() on the thesis) that THIS SAME
+          // commit also lands the matching thesis-field change -- otherwise
+          // the dean could approve the request while leaving the thesis
+          // stale. The decline/return path carries no such requirement.
           (req().stage == 'pendingDean' && isDean()
            && (declines('dean')
-               || accepts('dean', 'pendingDean', 'approved')))
+               || (accepts('dean', 'pendingDean', 'approved')
+                   && (incoming().stage != 'approved' || (
+                        (req().type == 'adviser'
+                         && thesisAfter().adviserUid == req().newAdviserUid)
+                        ||
+                        (req().type == 'title'
+                         && thesisAfter().workingTitle == req().newTitle)
+                      )))))
         );
 
         allow delete: if false;

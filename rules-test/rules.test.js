@@ -5843,6 +5843,92 @@ test("CR: a sign-off changes only its own role", async () => {
     "signoffs.coordinator.status": "accepted" }));
 });
 
+// --- Fix round 1: the dean's accept-to-`approved` path must be paired with
+// the SAME commit's thesis-field write (getAfter, symmetric with the
+// thesis-side arm), and the title-type request had no test coverage. ---
+
+function titleReq(extra = {}) {
+  return {
+    type: "title", stage: "pendingAdviser",
+    reasons: "The scope changed.", leaderUid: "cr-leader",
+    newTitle: "New Title",
+    signoffs: {
+      adviser: { status: "pending" },
+      coordinator: { status: "pending" },
+      dean: { status: "pending" },
+    },
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  };
+}
+
+async function seedCrTitle(reqExtra = null, thesisExtra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/cr1"), crThesis(thesisExtra));
+    await setDoc(doc(db, "users/cr-leader"), { role: "student", active: true });
+    await setDoc(doc(db, "users/cr-new-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-old-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-coord"), { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/cr-dean"), { role: "dean", active: true });
+    if (reqExtra !== null) {
+      await setDoc(doc(db, "theses/cr1/changeRequests/title"),
+        titleReq(reqExtra));
+    }
+  });
+}
+
+const crTitlePath = "theses/cr1/changeRequests/title";
+
+test("CR adviser-type: the dean's request-only approval (no thesis write) is denied",
+  async () => {
+    await seedCr({ stage: "pendingDean", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "accepted" }, dean: { status: "pending" } } });
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+    // Same as the earlier Dean-batch test's premise, but this time approving
+    // the request WITHOUT touching the thesis at all -- must be denied, so
+    // the thesis can never be left stale behind an "approved" request.
+    await assertFails(updateDoc(doc(dean, crPath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" }));
+  });
+
+test("CR title: the full flow reaches the dean; either half of the batch alone is denied, both together succeed",
+  async () => {
+    await seedCrTitle({});
+    const adviser = asCrUser("cr-old-adv", "cr-old-adv@isufst.edu.ph");
+    await assertSucceeds(updateDoc(doc(adviser, crTitlePath), {
+      "signoffs.adviser.status": "accepted",
+      "signoffs.adviser.respondedAt": serverTimestamp(),
+      stage: "pendingCoordinator" }));
+
+    const coord = asCrUser("cr-coord", "cr-coord@isufst.edu.ph");
+    await assertSucceeds(updateDoc(doc(coord, crTitlePath), {
+      "signoffs.coordinator.status": "accepted",
+      "signoffs.coordinator.respondedAt": serverTimestamp(),
+      stage: "pendingDean" }));
+
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+
+    // The dean's request-only approval (no thesis write) is denied.
+    await assertFails(updateDoc(doc(dean, crTitlePath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" }));
+    // The thesis-only workingTitle change alone is denied.
+    await assertFails(updateDoc(doc(dean, "theses/cr1"),
+      { workingTitle: titleReq().newTitle }));
+
+    // Both together, in one batch, succeed.
+    const batch = writeBatch(dean);
+    batch.update(doc(dean, crTitlePath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
+    batch.update(doc(dean, "theses/cr1"),
+      { workingTitle: titleReq().newTitle });
+    await assertSucceeds(batch.commit());
+  });
+
 test.after(async () => {
   await env.cleanup();
 });
