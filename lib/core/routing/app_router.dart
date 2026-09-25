@@ -333,6 +333,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               final bareVisitFallbackPaths = [
                 '/thesis/nominate',
                 '/thesis/titles',
+                // '/thesis/change-adviser' and '/thesis/change-title' (Task
+                // 5) are pushed from the thesis status screen's own buttons
+                // with '?id=...' already attached, but a bare visit is still
+                // reachable -- typed directly, or a stale bookmark -- and a
+                // student leads exactly one thesis, so the same "fall back
+                // to the leader's own thesis" resolution applies as for
+                // '/thesis/titles' just above. Student-scoped like
+                // '/thesis/chapters' below, not left unconditional like
+                // '/thesis/nominate'/'/thesis/titles': those two have no
+                // reader who reaches them at all except a student (the
+                // studentOnly guard above already turns any other role away
+                // before this list is even consulted), so guarding them
+                // here would be a no-op either way, but naming the
+                // student-only condition explicitly, the same as
+                // '/thesis/chapters', keeps this list self-explanatory
+                // rather than relying on a reader to trace that guard
+                // through the redirect above.
+                if (profile.role == UserRole.student)
+                  '/thesis/change-adviser',
+                if (profile.role == UserRole.student) '/thesis/change-title',
                 // The sidebar's Chapters destination is a bare
                 // '/thesis/chapters': a destination is one fixed route and
                 // cannot carry a query parameter only the signed-in
@@ -539,12 +559,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       // '/thesis/change-adviser' and '/thesis/change-title': the student
-      // leader's request forms (Task 5). Same bare-visit guard as
-      // '/defence/schedule' below -- a missing/empty id must not crash the
-      // route builder. `state.extra`, when it is a ChangeRequest, prefills
-      // the form for the tracker's "Edit and resubmit" flow (a returned
-      // request re-opened for editing); it is not part of the URL, so a
-      // fresh visit or a stale bookmark simply has none.
+      // leader's request forms (Task 5). A bare visit (no '?id=') is caught
+      // by the bareVisitFallbackPaths redirect above, the same as
+      // '/thesis/titles', and never reaches this builder with a null id --
+      // this EmptyState branch is the last-resort for a reader that guard
+      // does not cover (a non-student who somehow reaches this URL; the
+      // studentOnly guard ordinarily turns them away first, same as for
+      // '/thesis/titles'). `state.extra`, when it is a ChangeRequest,
+      // prefills the form for the tracker's "Edit and resubmit" flow (a
+      // returned request re-opened for editing); it is not part of the URL,
+      // so a fresh visit or a stale bookmark simply has none.
       GoRoute(
         path: '/thesis/change-adviser',
         builder: (context, state) {
