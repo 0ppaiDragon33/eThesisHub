@@ -151,14 +151,13 @@ void main() {
 
     // The dean and coordinator dashboards used to stack approvals, the
     // defence queue and readiness on one scrolling page. Each is its own
-    // destination now -- and 'Defences' since became the SCHEDULED rooms,
-    // while the candidate-title queue this test wants sits under 'Title
-    // defences', which is a sidebar entry in the shell rather than a
-    // dashboard tab. Scoped to the rail: the page this lands on is headed
-    // with the same two words.
+    // destination now. Title defences are no longer a sidebar entry of
+    // their own (spec 2026-09-25 §6.7): the candidate-title queue this
+    // test wants is the Title stage of 'Defences', which is where that
+    // destination opens by default.
     await tester.tap(find.descendant(
         of: find.byKey(const Key('shellSidebar')),
-        matching: find.text('Title defences')));
+        matching: find.text('Defences')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget,
