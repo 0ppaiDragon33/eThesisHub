@@ -10,6 +10,7 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
+import 'package:ethesishub/features/defence/redefence_notice.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
@@ -618,6 +619,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           key: const Key('verdictScribe'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        const Gap.md(),
+        RedefenceNotice(defence: defence),
       ];
     }
 
@@ -733,6 +736,6 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         ? _postRelease(context, defence, uid, isAdviser)
         : _preRelease(context, defence, uid, isAdviser, isPanelist);
 
-    return _framed(children, title: defence.type.label, subtitle: 'Grades');
+    return _framed(children, title: defence.label, subtitle: 'Grades');
   }
 }

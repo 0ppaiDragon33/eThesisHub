@@ -264,7 +264,7 @@ final facultyNeedsYouProvider =
           !d.evaluationsReleased &&
           !submittedOn.contains(d.id)) {
         items.add(NeedsYouItem(
-          title: d.type.label,
+          title: d.label,
           detail: 'Score this defence against Form 5c.',
           route: '/defence/room/${d.id}/evaluate',
           chipLabel: 'Evaluate',
@@ -278,7 +278,7 @@ final facultyNeedsYouProvider =
           d.status == DefenceStatus.completed &&
           d.consolidatedAt == null) {
         items.add(NeedsYouItem(
-          title: d.type.label,
+          title: d.label,
           detail: 'The defence concluded — release your consolidation to '
               'the group.',
           // ConsolidatedDefenceScreen, where the adviser releases. NOT
@@ -303,7 +303,7 @@ final facultyNeedsYouProvider =
           at.day == now.day;
       if (d.status == DefenceStatus.inProgress || scheduledToday) {
         items.add(NeedsYouItem(
-          title: d.type.label,
+          title: d.label,
           detail: d.status == DefenceStatus.inProgress
               ? 'This defence is in progress now.'
               : 'Scheduled for today at ${d.venue}.',
@@ -424,7 +424,7 @@ final facultyNeedsYouProvider =
 /// Each row routes to exactly where the dean dashboard's own destinations
 /// already send that same thesis -- `/review` for an approval (see the
 /// `goToReview` button in `dean_dashboard.dart`) and `/defence/{id}` for a
-/// title defence (see `DefenceQueue`) -- reused verbatim so a row here is
+/// title defence (see `TitleDefenceStage`) -- reused verbatim so a row here is
 /// never a dead end.
 ///
 /// A live fan-in over two [thesesByStatusProvider] streams, following the
@@ -511,7 +511,7 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
 /// Each row routes to exactly where the coordinator dashboard's own
 /// destinations already send that same thesis -- `/review` for a
 /// recommendation (see the `goToReview` button in `coordinator_dashboard.
-/// dart`), `/defence/{id}` for a title defence (see `DefenceQueue`), and
+/// dart`), `/defence/{id}` for a title defence (see `TitleDefenceStage`), and
 /// `/defence/schedule?id={id}` for scheduling a defence (see the
 /// `schedule-{id}` button in `defence_readiness.dart`'s `_ReadinessRow`) --
 /// reused verbatim so a row here is never a dead end.

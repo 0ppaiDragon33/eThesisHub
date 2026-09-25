@@ -128,6 +128,32 @@ void main() {
       );
     });
 
+    test('a passed final re-defence reaches the Final stage', () {
+      Defence d(String id, DefenceType type, {String? redefenceOf}) => Defence(
+            id: id,
+            thesisId: 't1',
+            type: type,
+            venue: 'AVR',
+            panelUids: const ['p1'],
+            adviserUid: 'a1',
+            leaderUid: 'l1',
+            status: DefenceStatus.completed,
+            createdBy: 'c1',
+            redefenceOf: redefenceOf,
+          );
+      expect(
+        ProgressRail.stageFor(
+          status: ThesisStatus.titleApproved,
+          defences: [
+            d('f1', DefenceType.final_),
+            d('f1_redefence', DefenceType.final_, redefenceOf: 'f1'),
+          ],
+          chapters: [chapter()],
+        ),
+        RailStage.finalDefence,
+      );
+    });
+
     test('archived renders with all stages complete, not final as current', () {
       // An archived thesis should paint every stage as done, with nothing
       // marked as "here" (the current stage). The widget uses

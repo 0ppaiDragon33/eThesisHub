@@ -93,6 +93,7 @@ class Defence {
     this.panelVerdict,
     this.verdictRecordedBy,
     this.verdictRecordedAt,
+    this.redefenceOf,
   });
 
   final String id;
@@ -141,6 +142,29 @@ class Defence {
 
   final DateTime? verdictRecordedAt;
 
+  /// The failed defence this one re-does (spec 2026-09-25 §4.1). Absent on
+  /// every ordinary defence. A re-defence has the same [type] as the defence
+  /// it re-does, so every gate that asks "did the final defence pass"
+  /// counts a passed final re-defence without knowing re-defences exist.
+  final String? redefenceOf;
+
+  bool get isRedefence => redefenceOf != null;
+
+  /// "Pre-oral defence", "Final defence", "Pre-oral re-defence" or "Final
+  /// re-defence": the name of this defence, where [DefenceType.label] names
+  /// only its kind.
+  String get label => switch ((type, isRedefence)) {
+        (DefenceType.preOral, false) => 'Pre-oral defence',
+        (DefenceType.final_, false) => 'Final defence',
+        (DefenceType.preOral, true) => 'Pre-oral re-defence',
+        (DefenceType.final_, true) => 'Final re-defence',
+      };
+
+  /// Where the one re-defence of [failedId] is stored. Derived rather than
+  /// generated, so the rules can refuse a second one: a second write to the
+  /// same id is an update, and no update arm allows it.
+  static String redefenceIdFor(String failedId) => '${failedId}_redefence';
+
   bool get isReleased => consolidatedAt != null;
 
   bool get evaluationsReleased => evaluationsReleasedAt != null;
@@ -166,9 +190,27 @@ class Defence {
       panelVerdict: PassFail.fromString(map['panelVerdict'] as String?),
       verdictRecordedBy: map['verdictRecordedBy'] as String?,
       verdictRecordedAt: map['verdictRecordedAt'] as DateTime?,
+      redefenceOf: map['redefenceOf'] as String?,
     );
   }
 }
+
+/// Whether [failed] already has its re-defence among [all]. A cancelled one
+/// counts: the rules refuse a second document at the same derived id, so a
+/// cancelled re-defence still uses up the one the group is allowed.
+bool hasRedefence(Defence failed, List<Defence> all) =>
+    all.any((d) => d.redefenceOf == failed.id);
+
+/// The defences in [all] whose panel verdict was Fail and that have no
+/// re-defence yet (spec 2026-09-25 §4.3). A failed re-defence is not
+/// listed: a group gets one re-defence per stage.
+List<Defence> awaitingRedefence(List<Defence> all) => [
+      for (final d in all)
+        if (d.panelVerdict == PassFail.fail &&
+            !d.isRedefence &&
+            !hasRedefence(d, all))
+          d,
+    ];
 
 /// One remark, append-only.
 ///

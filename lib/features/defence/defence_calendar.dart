@@ -17,7 +17,10 @@ import 'package:ethesishub/providers/defence_providers.dart';
 /// Monday on or before the 1st, plus six weeks, giving a fixed 42-cell
 /// grid that never reshapes as the month's day count changes.
 class DefenceCalendar extends ConsumerStatefulWidget {
-  const DefenceCalendar({super.key});
+  const DefenceCalendar({super.key, this.where});
+
+  /// Which of the reader's defences to show; all of them when null.
+  final bool Function(Defence)? where;
 
   @override
   ConsumerState<DefenceCalendar> createState() => _DefenceCalendarState();
@@ -88,7 +91,9 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
         message: 'Could not load your defences.',
       ),
       data: (defences) {
-        if (defences.isEmpty) {
+        final shown =
+            widget.where == null ? defences : defences.where(widget.where!).toList();
+        if (shown.isEmpty) {
           return const EmptyState(
             key: Key('noDefences'),
             icon: Icons.forum_outlined,
@@ -97,7 +102,7 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
                 'one you are part of.',
           );
         }
-        return _buildCalendar(context, defences);
+        return _buildCalendar(context, shown);
       },
     );
   }

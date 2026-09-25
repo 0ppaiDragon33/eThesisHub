@@ -1,4 +1,5 @@
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -154,7 +155,7 @@ void main() {
     expect(find.byKey(const Key('recommendationsScreen')), findsOneWidget);
   });
 
-  testWidgets('/title-defences reaches the title defences screen',
+  testWidgets('/title-defences forwards to the Title defence stage',
       (tester) async {
     final db = FakeFirebaseFirestore();
     final c = await containerForRole('dean', db);
@@ -164,7 +165,76 @@ void main() {
     c.read(goRouterProvider).go('/title-defences');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget);
+    expect(locationOf(c), '/defences?stage=title');
+    expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+  });
+
+  testWidgets('the stage is read from the URL, and a bad one shows Title',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('faculty', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    Set<Object?> selected() => tester
+        .widget<SegmentedButton<Object?>>(
+            find.byKey(const Key('defenceStageSwitch')))
+        .selected;
+
+    c.read(goRouterProvider).go('/defences?stage=final');
+    await tester.pumpAndSettle();
+    expect(selected().single.toString(), 'DefenceStage.finalDefence');
+
+    for (final bad in ['FINAL', 'nonsense', '']) {
+      c.read(goRouterProvider).go('/defences?stage=$bad');
+      await tester.pumpAndSettle();
+      expect(selected().single.toString(), 'DefenceStage.title',
+          reason: bad);
+    }
+  });
+
+  testWidgets('choosing a stage puts it in the URL', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('faculty', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/defences');
+    await tester.pumpAndSettle();
+    // At this test's 1000px width the switch now fits its short labels
+    // without scrolling (Task: the stage switch fits by its own width), so
+    // every segment -- Re-defence included -- is already hittable.
+    await tester.tap(find.text('Re-defence'));
+    await tester.pumpAndSettle();
+    expect(locationOf(c), '/defences?stage=redefence');
+  });
+
+  testWidgets('/defences?stage=preOral&view=calendar opens the calendar',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('faculty', db, uid: 'u1');
+    // At least one defence, or the calendar collapses to its own
+    // 'noDefences' EmptyState instead of the grid -- the same shape
+    // DefencesList uses.
+    await db.collection('defenses').doc('d1').set({
+      'thesisId': 't1', 'type': 'preOral',
+      'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 15, 9)),
+      'venue': 'Room 1', 'panelUids': <String>[],
+      'adviserUid': 'u1', 'leaderUid': 'l1', 'status': 'scheduled',
+      'createdBy': 'c1',
+    });
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    c.read(goRouterProvider).go('/defences?stage=preOral&view=calendar');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceCalendar')), findsOneWidget);
+    Set<Object?> selectedView() => tester
+        .widget<SegmentedButton<Object?>>(
+            find.byKey(const Key('defencesViewToggle')))
+        .selected;
+    expect(selectedView().single.toString(), '_DefencesView.calendar');
   });
 
   // Not '/titles' -- '/thesis/titles' already exists for submitting a
@@ -188,7 +258,7 @@ void main() {
     c.read(goRouterProvider).go('/thesis/titles?id=t1');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('titleDefencesScreen')), findsNothing);
+    expect(find.byKey(const Key('defencesScreen')), findsNothing);
   });
 
   testWidgets('/readiness reaches the readiness screen', (tester) async {
@@ -225,7 +295,6 @@ void main() {
       '/defences': 'defencesScreen',
       '/panels': 'panelsScreen',
       '/approvals': 'approvalsScreen',
-      '/title-defences': 'titleDefencesScreen',
       '/readiness': 'readinessScreen',
     };
 
@@ -500,17 +569,11 @@ void main() {
     }
   });
 
-  testWidgets('coordinator and dean reach /title-defences and /readiness',
-      (tester) async {
+  testWidgets('coordinator and dean reach /readiness', (tester) async {
     for (final role in ['coordinator', 'dean']) {
       final db = FakeFirebaseFirestore();
       final c = await containerForRole(role, db);
       await pumpRouted(tester, c);
-
-      c.read(goRouterProvider).go('/title-defences');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget,
-          reason: '$role must reach /title-defences');
 
       c.read(goRouterProvider).go('/readiness');
       await tester.pumpAndSettle();
@@ -521,25 +584,33 @@ void main() {
     }
   });
 
-  testWidgets(
-      'student and faculty are redirected home from /title-defences and '
-      '/readiness', (tester) async {
+  testWidgets('student and faculty are redirected home from /readiness',
+      (tester) async {
     for (final role in ['student', 'faculty']) {
       final db = FakeFirebaseFirestore();
       final c = await containerForRole(role, db);
       await pumpRouted(tester, c);
-
-      c.read(goRouterProvider).go('/title-defences');
-      await tester.pumpAndSettle();
-      expect(locationOf(c), '/overview', reason: '$role must not stay');
-      expect(find.byKey(const Key('titleDefencesScreen')), findsNothing,
-          reason: '$role must be redirected off /title-defences');
 
       c.read(goRouterProvider).go('/readiness');
       await tester.pumpAndSettle();
       expect(locationOf(c), '/overview', reason: '$role must not stay');
       expect(find.byKey(const Key('readinessScreen')), findsNothing,
           reason: '$role must be redirected off /readiness');
+
+      c.dispose();
+    }
+  });
+
+  testWidgets('every role reaching /title-defences lands on the Title stage',
+      (tester) async {
+    for (final role in ['student', 'faculty', 'coordinator', 'dean']) {
+      final db = FakeFirebaseFirestore();
+      final c = await containerForRole(role, db);
+      await pumpRouted(tester, c);
+
+      c.read(goRouterProvider).go('/title-defences');
+      await tester.pumpAndSettle();
+      expect(locationOf(c), '/defences?stage=title', reason: role);
 
       c.dispose();
     }

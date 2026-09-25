@@ -22,13 +22,14 @@ import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/features/dashboard/panels_screen.dart';
 import 'package:ethesishub/features/dashboard/readiness_screen.dart';
 import 'package:ethesishub/features/dashboard/recommendations_screen.dart';
-import 'package:ethesishub/features/dashboard/title_defences_screen.dart';
 import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
 import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
+import 'package:ethesishub/features/defence/defence_stage.dart';
 import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
+import 'package:ethesishub/features/defence/schedule_redefence_screen.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/features/files/my_files_screen.dart';
@@ -251,13 +252,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.coordinator) {
                 return home;
               }
-              // '/title-defences' and '/readiness' are coordinator and dean
-              // destinations -- never faculty (who sit on individual title
-              // defence panels via '/defence/:thesisId' instead, unguarded
-              // by role here) and never the student whose own titles or
-              // readiness are what these screens track.
-              if ((location == '/title-defences' ||
-                      location == '/readiness') &&
+              // '/readiness' is a coordinator and dean destination -- never
+              // faculty (who sit on individual title defence panels via
+              // '/defence/:thesisId' instead, unguarded by role here) and
+              // never the student whose own readiness is what this screen
+              // tracks.
+              if (location == '/readiness' &&
                   profile.role != UserRole.coordinator &&
                   profile.role != UserRole.dean) {
                 return home;
@@ -453,7 +453,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // single static segments), so there is no ordering hazard here the
       // way there is for '/defence/schedule' further down.
       GoRoute(path: '/overview', builder: (_, _) => const OverviewScreen()),
-      GoRoute(path: '/defences', builder: (_, _) => const DefencesScreen()),
+      GoRoute(
+        path: '/defences',
+        builder: (_, state) => DefencesScreen(
+          initialStage:
+              DefenceStage.fromParam(state.uri.queryParameters['stage']),
+          initialCalendar: state.uri.queryParameters['view'] == 'calendar',
+        ),
+      ),
       GoRoute(path: '/advisees', builder: (_, _) => const AdviseesScreen()),
       GoRoute(path: '/panels', builder: (_, _) => const PanelsScreen()),
       GoRoute(
@@ -469,9 +476,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // meaning different things is exactly how '/faculty' came to be
       // registered twice in M1, leaving the invites screen permanently
       // unreachable (see '/invites' further down).
+      // Kept so old links and bookmarks still work: title defences are now
+      // the Title stage of the Defences page (spec 2026-09-25 §6.7).
       GoRoute(
         path: '/title-defences',
-        builder: (_, _) => const TitleDefencesScreen(),
+        redirect: (_, _) => DefenceStage.title.route,
       ),
       GoRoute(
         path: '/readiness',
@@ -537,6 +546,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/defence/schedule',
         builder: (context, state) {
+          final redefenceOf = state.uri.queryParameters['redefenceOf'];
+          if (redefenceOf != null && redefenceOf.isNotEmpty) {
+            return ScheduleRedefenceScreen(failedDefenceId: redefenceOf);
+          }
           final id = state.uri.queryParameters['id'];
           // No force-unwrap: a bare visit (typed directly, or a stale link)
           // must not crash into a blank screen with no way back -- same

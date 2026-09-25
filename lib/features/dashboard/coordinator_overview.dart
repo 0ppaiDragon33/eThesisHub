@@ -90,7 +90,7 @@ class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
             label: 'Defences this week',
             value: defencesAsync,
             format: (l) => '${defencesThisWeek(l).length}',
-            onTap: () => context.go('/defences'),
+            onTap: () => context.go('/defences?stage=preOral'),
           ),
           Metric<List<FacultyDirectoryEntry>>(
             label: 'Faculty accounts',
@@ -146,7 +146,7 @@ class _CommandRow extends StatelessWidget {
         icon: Icons.calendar_month_outlined,
         label: 'Defence calendar',
         detail: 'Every scheduled session',
-        go: () => context.go('/defences'),
+        go: () => context.go('/defences?stage=preOral&view=calendar'),
       ),
       (
         icon: Icons.local_library_outlined,

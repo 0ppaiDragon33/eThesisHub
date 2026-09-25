@@ -39,13 +39,15 @@ import 'package:ethesishub/providers/notification_providers.dart';
     case NotificationType.defenceScheduled:
       final id = n.defenceId;
       return (
-        route: id == null ? '/defences' : '/defence/room/$id',
+        route: id == null ? '/defences?stage=preOral' : '/defence/room/$id',
         mode: null,
       );
     case NotificationType.evaluationAwaits:
       final id = n.defenceId;
       return (
-        route: id == null ? '/defences' : '/defence/room/$id/evaluate',
+        route: id == null
+            ? '/defences?stage=preOral'
+            : '/defence/room/$id/evaluate',
         mode: FacultyMode.panelist,
       );
     case NotificationType.archivePublished:

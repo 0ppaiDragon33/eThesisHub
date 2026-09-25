@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/components/document.dart';
+import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
@@ -244,102 +245,201 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
       ],
     );
 
-    // A new closure identity on every build makes PdfPreview re-raster
-    // (it rebuilds when `build` changes), so it is cached and only replaced
-    // when the overrides it closes over actually change.
+    // The preview re-renders whenever it is handed a new build function, so
+    // the function is cached and only replaced when the overrides it closes
+    // over actually change.
     if (_previewBuildVersion != _previewVersion) {
       final overrides = _previewOverrides;
       _previewBuild = () => buildFormPdf(template, overrides);
       _previewBuildVersion = _previewVersion;
     }
-    final preview = SizedBox(
-      height: 760,
-      child: ref.watch(formPreviewBuilderProvider)(
-        ValueKey(_previewVersion),
-        _previewBuild!,
-      ),
-    );
+    final preview = ref.watch(formPreviewBuilderProvider)(_previewBuild!);
 
-    return PageShell(
-      maxWidth: AppTokens.measureWide,
-      kicker: template.title,
-      title: copy.name,
-      subtitle: _dirty ? 'Unsaved changes' : 'All changes saved',
-      actions: [
-        FilledButton.icon(
-          key: const Key('saveCopy'),
-          onPressed: (!_dirty || _saving || uid == null)
-              ? null
-              : () => _save(template, uid),
-          icon: const Icon(Icons.save_outlined, size: 18),
-          label: Text(_saving ? 'Saving…' : 'Save'),
+    final actions = [
+      FilledButton.icon(
+        key: const Key('saveCopy'),
+        onPressed: (!_dirty || _saving || uid == null)
+            ? null
+            : () => _save(template, uid),
+        icon: const Icon(Icons.save_outlined, size: 18),
+        label: Text(_saving ? 'Saving…' : 'Save'),
+      ),
+      OutlinedButton.icon(
+        key: const Key('downloadCopy'),
+        onPressed: () => _download(template, copy),
+        icon: const Icon(Icons.download_rounded, size: 18),
+        label: const Text('Download PDF'),
+      ),
+      TextButton(
+        key: const Key('resetAllCopy'),
+        onPressed: () => _resetAll(template),
+        child: const Text('Reset all'),
+      ),
+    ];
+    final subtitle = _dirty ? 'Unsaved changes' : 'All changes saved';
+    final error = [
+      if (_error != null) ...[
+        ErrorState(
+          key: const Key('saveError'),
+          error: _error,
+          message: 'Could not save this copy. Your edits are still here.',
         ),
-        OutlinedButton.icon(
-          key: const Key('downloadCopy'),
-          onPressed: () => _download(template, copy),
-          icon: const Icon(Icons.download_rounded, size: 18),
-          label: const Text('Download PDF'),
-        ),
-        TextButton(
-          key: const Key('resetAllCopy'),
-          onPressed: () => _resetAll(template),
-          child: const Text('Reset all'),
-        ),
+        const Gap.md(),
       ],
-      children: [
-        if (_error != null) ...[
-          ErrorState(
-            key: const Key('saveError'),
-            error: _error,
-            message: 'Could not save this copy. Your edits are still here.',
+    ];
+
+    // The fields and the preview never share a scroll: the fields scroll on
+    // their own and the preview pans and zooms on its own, so dragging the
+    // preview never moves the page and editing never moves the preview.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentWidth =
+            constraints.maxWidth.clamp(0.0, AppTokens.measureWide) -
+            2 * AppTokens.lg;
+        if (contentWidth >= kEditorSideBySideFrom) {
+          return PageShell(
+            maxWidth: AppTokens.measureWide,
+            scrollable: false,
+            kicker: template.title,
+            title: copy.name,
+            subtitle: subtitle,
+            actions: actions,
+            children: [
+              ...error,
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        key: const Key('editorFieldsScroll'),
+                        child: fields,
+                      ),
+                    ),
+                    const SizedBox(width: AppTokens.lg),
+                    Expanded(child: preview),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
+        // A phone shows one pane at a time. Both stay alive, so switching
+        // keeps each where the reader left it: the fields' scroll, and the
+        // preview's zoom and the part of the page in view.
+        final header = [
+          PageHeader(
+            kicker: template.title,
+            title: copy.name,
+            subtitle: subtitle,
+            actions: actions,
           ),
           const Gap.md(),
-        ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth >= kEditorSideBySideFrom) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ...error,
+        ];
+        final paneSwitch = _PaneSwitch(
+          pane: _pane,
+          onChanged: (pane) => setState(() => _pane = pane),
+        );
+        return PageShell(
+          maxWidth: AppTokens.measureWide,
+          scrollable: false,
+          children: [
+            Expanded(
+              child: IndexedStack(
+                index: _pane.index,
+                sizing: StackFit.expand,
                 children: [
-                  Expanded(child: fields),
-                  const SizedBox(width: AppTokens.lg),
-                  Expanded(child: preview),
+                  // The header scrolls away with the fields, leaving room
+                  // to type above the keyboard; the switch stays pinned so
+                  // the preview is one tap away from any field.
+                  CustomScrollView(
+                    key: const Key('editorFieldsScroll'),
+                    slivers: [
+                      SliverList.list(children: header),
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _PinnedSwitch(paneSwitch),
+                      ),
+                      SliverToBoxAdapter(child: fields),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ...header,
+                      SizedBox(height: _PinnedSwitch.height, child: paneSwitch),
+                      Expanded(child: preview),
+                    ],
+                  ),
                 ],
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SegmentedButton<_Pane>(
-                  key: const Key('editorPaneSwitch'),
-                  segments: const [
-                    ButtonSegment(
-                      value: _Pane.edit,
-                      label: Text('Edit'),
-                      icon: Icon(Icons.edit_outlined),
-                    ),
-                    ButtonSegment(
-                      value: _Pane.preview,
-                      label: Text('Preview'),
-                      icon: Icon(Icons.visibility_outlined),
-                    ),
-                  ],
-                  selected: {_pane},
-                  onSelectionChanged: (s) => setState(() => _pane = s.first),
-                ),
-                const Gap.md(),
-                if (_pane == _Pane.edit) fields else preview,
-              ],
-            );
-          },
-        ),
-      ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-/// One block of the form's text: its label, its field, and a button that
-/// puts back the form's own wording.
+/// The phone's Edit / Preview switch.
+class _PaneSwitch extends StatelessWidget {
+  const _PaneSwitch({required this.pane, required this.onChanged});
+
+  final _Pane pane;
+  final ValueChanged<_Pane> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SegmentedButton<_Pane>(
+        key: const Key('editorPaneSwitch'),
+        segments: const [
+          ButtonSegment(
+            value: _Pane.edit,
+            label: Text('Edit'),
+            icon: Icon(Icons.edit_outlined),
+          ),
+          ButtonSegment(
+            value: _Pane.preview,
+            label: Text('Preview'),
+            icon: Icon(Icons.visibility_outlined),
+          ),
+        ],
+        selected: {pane},
+        onSelectionChanged: (s) => onChanged(s.first),
+      ),
+    );
+  }
+}
+
+/// Keeps the pane switch at the top of the fields once the header has
+/// scrolled away, on the page's own background so fields pass under it.
+class _PinnedSwitch extends SliverPersistentHeaderDelegate {
+  const _PinnedSwitch(this.child);
+
+  final Widget child;
+
+  /// The switch and the gap below it.
+  static const double height = 56;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) =>
+      ColoredBox(color: Palette.of(context).canvas, child: child);
+
+  @override
+  bool shouldRebuild(covariant _PinnedSwitch oldDelegate) =>
+      oldDelegate.child != child;
+}
+
 class _BlockField extends StatelessWidget {
   const _BlockField({
     required this.block,

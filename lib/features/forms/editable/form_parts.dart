@@ -135,3 +135,29 @@ List<pw.Widget> letterApproval(FormText t, {String college = ''}) => [
     college.isEmpty ? t.of('dean.role') : 'Dean, $college',
   ),
 ];
+
+/// The reasons a change-of-adviser or change-of-title letter gives: one
+/// paragraph the student writes, not three numbered reasons.
+const FormBlock reasonsBlock = FormBlock(
+  id: 'reasons',
+  label: 'Reasons',
+  kind: BlockKind.blank,
+  multiline: true,
+);
+
+/// [reasonsBlock] on the page. Blank, it prints the three ruled lines the
+/// paper form leaves for it; written, it prints the paragraph, wrapped to
+/// the same width.
+List<pw.Widget> reasonsParagraph(FormText t) => [
+  if (t.isBlank('reasons'))
+    for (var i = 0; i < 3; i++)
+      pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 6),
+        child: ruledLine(width: 460),
+      )
+  else
+    pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 6),
+      child: blankOr(t, 'reasons', width: 460, style: _body),
+    ),
+];

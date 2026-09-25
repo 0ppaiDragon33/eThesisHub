@@ -37,7 +37,7 @@ const Map<String, List<String>> templateIdsSnapshot = {
     'rdCode', 'formTitle', 'date', 'dateLabel', 'addressee', 'addressCollege',
     'addressUniversity', 'addressCity', 'salutation', 'request',
     'nominatedAdviser', 'toWord', 'nominatedLabel', 'formerAdviser',
-    'formerLabel', 'reasonsLead', 'reason.1', 'reason.2', 'reason.3',
+    'formerLabel', 'reasonsLead', 'reasons',
     'closing', 'valediction', 'student', 'student.role', 'conformeHeading',
     'nominated', 'nominated.role', 'former', 'former.role',
     'recommendingHeading', 'coordinator', 'coordinator.role',
@@ -46,7 +46,7 @@ const Map<String, List<String>> templateIdsSnapshot = {
   'form4b': [
     'rdCode', 'formTitle', 'date', 'dateLabel', 'addressee', 'addressCollege',
     'addressUniversity', 'addressCity', 'salutation', 'request', 'oldTitle',
-    'toWord', 'newTitle', 'reasonsLead', 'reason.1', 'reason.2', 'reason.3',
+    'toWord', 'newTitle', 'reasonsLead', 'reasons',
     'closing', 'valediction', 'student', 'student.role', 'notedHeading',
     'adviser', 'adviser.role', 'recommendingHeading', 'coordinator',
     'coordinator.role', 'approvedHeading', 'dean', 'dean.role',

@@ -560,7 +560,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
       child: PageShell(
         maxWidth: AppTokens.measureWide,
         kicker: 'Research Form 5c',
-        title: defence.type.label,
+        title: defence.label,
         subtitle: 'Score each criterion, then give your own rating.',
         children: [
           SplitColumns(

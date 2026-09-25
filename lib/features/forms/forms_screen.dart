@@ -300,7 +300,7 @@ class _Form5cCardState extends State<_Form5cCard> {
         const Gap.sm(),
         OutlinedButton(
           key: const Key('form5cOpenDefences'),
-          onPressed: () => context.go('/defences'),
+          onPressed: () => context.go('/defences?stage=preOral'),
           child: const Text('Open Defences'),
         ),
       ],

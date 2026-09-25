@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -275,5 +276,35 @@ void main() {
     expect(find.byType(AppBar), findsOneWidget);
     // The form itself is unaffected -- only the thesis stream gates it.
     expect(find.byKey(const Key('defenceVenue')), findsOneWidget);
+  });
+
+  testWidgets(
+      'a group that already failed this kind of defence is pointed to the '
+      're-defence instead', (tester) async {
+    final db = await seed();
+    await db.collection('defenses').doc('f1').set({
+      'thesisId': 't1',
+      'type': 'preOral',
+      'scheduledAt': Timestamp.fromDate(DateTime(2026, 9, 1, 9)),
+      'venue': 'AVR',
+      'panelUids': <String>['p2', 'p1'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'completed',
+      'createdBy': 'c1',
+      'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
+      'panelVerdict': 'fail',
+    });
+
+    await tester.pumpWidget(_wrap(db, uid: 'c1'));
+    await tester.pumpAndSettle();
+
+    // preOral is the default selection.
+    expect(find.byKey(const Key('scheduleRedefenceInstead')), findsOneWidget);
+
+    await tester.tap(find.text('Final defence'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scheduleRedefenceInstead')), findsNothing);
   });
 }

@@ -282,12 +282,11 @@ void main() {
   });
 
   group('dean and coordinator', () {
-    testWidgets('the dean gets four destinations that each swap the body',
+    testWidgets('the dean gets three destinations that each swap the body',
         (tester) async {
-      // Title defences and Defences are separate jobs: approving a
-      // candidate title set is not attending a scheduled defence. Stacked
-      // together, the usually-empty title queue sat above the rooms that
-      // had content.
+      // Title defences now live inside Defences, as its Title stage (spec
+      // 2026-09-25 §6.7) -- there is no separate sidebar entry for them any
+      // more, so this only checks Approvals, Defences and Readiness.
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'd1', role: 'dean');
       addTearDown(c.dispose);
@@ -300,13 +299,9 @@ void main() {
       await tapDestination(tester, 'Approvals');
       expect(find.byKey(const Key('approvalsScreen')), findsOneWidget);
 
-      await tapDestination(tester, 'Title defences');
-      expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget);
-      expect(find.byKey(const Key('approvalsScreen')), findsNothing);
-
       await tapDestination(tester, 'Defences');
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
-      expect(find.byKey(const Key('titleDefencesScreen')), findsNothing);
+      expect(find.byKey(const Key('approvalsScreen')), findsNothing);
 
       await tapDestination(tester, 'Readiness');
       expect(find.byKey(const Key('readinessScreen')), findsOneWidget);
@@ -339,21 +334,72 @@ void main() {
       expect(find.byKey(const Key('readinessScreen')), findsNothing);
     });
 
-    testWidgets('the coordinator reaches Titles and Defences separately',
+    testWidgets('the coordinator reaches title defences through Defences',
         (tester) async {
-      // Two destinations a word apart, each with its own screen. Collapsing
-      // them put an empty title queue above the rooms that had content.
+      // Title defences are the Title stage of the one Defences destination
+      // now (spec 2026-09-25 §6.7), not a screen of their own -- Defences
+      // opens on that stage by default.
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'c1', role: 'coordinator');
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      await tapDestination(tester, 'Title defences');
-      expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget);
-
       await tapDestination(tester, 'Defences');
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
-      expect(find.byKey(const Key('titleDefencesScreen')), findsNothing);
+      expect(
+          tester
+              .widget<SegmentedButton<Object?>>(
+                  find.byKey(const Key('defenceStageSwitch')))
+              .selected
+              .single
+              .toString(),
+          'DefenceStage.title');
+    });
+
+    // Fix: links to Defences open the stage they mean. Both of these used
+    // to `context.go('/defences')`, landing on the Title stage -- wrong for
+    // a link that means "the scheduled defences".
+    testWidgets(
+        "the coordinator's Defence calendar command opens the Pre-oral "
+        'stage, on the calendar', (tester) async {
+      final db = FakeFirebaseFirestore();
+      final c = await containerFor(db, uid: 'c1', role: 'coordinator');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      await tester.tap(find.text('Defence calendar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+      expect(
+          c
+              .read(goRouterProvider)
+              .routerDelegate
+              .currentConfiguration
+              .uri
+              .toString(),
+          '/defences?stage=preOral&view=calendar');
+    });
+
+    testWidgets("the dean's Defences this week tile opens the Pre-oral stage",
+        (tester) async {
+      final db = FakeFirebaseFirestore();
+      final c = await containerFor(db, uid: 'd1', role: 'dean');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      await tester.tap(find.text('Defences this week'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
+      expect(
+          c
+              .read(goRouterProvider)
+              .routerDelegate
+              .currentConfiguration
+              .uri
+              .toString(),
+          '/defences?stage=preOral');
     });
   });
 
@@ -388,8 +434,12 @@ void main() {
       expect(find.byKey(const Key('adviseesScreen')), findsOneWidget);
 
       // Defences is its own destination in both modes now, rather than a
-      // section stacked under the mode's own list.
-      await tapDestination(tester, 'Defences');
+      // section stacked under the mode's own list. This defence is a
+      // pre-oral one, and Defences now defaults to the Title stage (spec
+      // 2026-09-25 §6.1), so go straight to the Pre-oral stage where it
+      // actually lives.
+      c.read(goRouterProvider).go('/defences?stage=preOral');
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
@@ -455,7 +505,11 @@ void main() {
       await tapDestination(tester, 'Panels');
       expect(find.byKey(const Key('panelsScreen')), findsOneWidget);
 
-      await tapDestination(tester, 'Defences');
+      // This defence is a final one, and Defences now defaults to the
+      // Title stage (spec 2026-09-25 §6.1), so go straight to the Final
+      // stage where it actually lives.
+      c.read(goRouterProvider).go('/defences?stage=final');
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);
       expect(find.byKey(const Key('panelsScreen')), findsNothing);
@@ -494,7 +548,11 @@ void main() {
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      await tapDestination(tester, 'Defences');
+      // This defence is a pre-oral one, and Defences now defaults to the
+      // Title stage (spec 2026-09-25 §6.1), so go straight to the Pre-oral
+      // stage where it actually lives.
+      c.read(goRouterProvider).go('/defences?stage=preOral');
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
       expect(find.byKey(const Key('goToDefence-d1')), findsOneWidget);

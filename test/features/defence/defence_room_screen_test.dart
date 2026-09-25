@@ -700,4 +700,43 @@ void main() {
 
     expect(find.byKey(const Key('leaderVerdictPending')), findsOneWidget);
   });
+
+  testWidgets('a re-defence names itself and links back to the original',
+      (tester) async {
+    final db = await seed(status: 'completed', verdict: 'fail');
+    await db.collection('defenses').doc('d1_redefence').set({
+      'thesisId': 't1',
+      'type': 'preOral',
+      'scheduledAt':
+          Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
+      'venue': 'Room 301',
+      'panelUids': <String>['p1', 'p2'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'scheduled',
+      'createdBy': 'c1',
+      'redefenceOf': 'd1',
+    });
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(
+              uid: 'a1', email: 'a1@isufst.edu.ph', isEmailVerified: true),
+        )),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Defence room')),
+          body: DefenceRoomScreen(defenceId: 'd1_redefence'),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pre-oral re-defence'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const Key('redefenceOfLink')), findsOneWidget);
+  });
 }

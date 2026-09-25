@@ -141,7 +141,8 @@ class PanelRegister extends ConsumerWidget {
                     thesis: t,
                     action: t.status == ThesisStatus.titleApproved
                         ? TextButton(
-                            onPressed: () => context.go('/defences'),
+                            onPressed: () =>
+                                context.go('/defences?stage=preOral'),
                             child: const Text('View defences'),
                           )
                         : const SizedBox.shrink(),

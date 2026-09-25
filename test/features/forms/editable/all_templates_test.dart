@@ -75,6 +75,23 @@ void main() {
     expect(actual, templateIdsSnapshot);
   });
 
+  // The lines under "for the following reasons:" are one paragraph the
+  // student writes, not three numbered reasons.
+  for (final formId in ['form4a', 'form4b']) {
+    test('$formId takes its reasons as one paragraph', () async {
+      final template = formTemplates[formId]!;
+      expect(template.block('reasons')?.multiline, isTrue);
+      expect(template.blocks.where((b) => b.id.startsWith('reason.')), isEmpty);
+
+      final text = extractPdfText(
+        await buildFormPdf(template, const {
+          'reasons': 'Our adviser moved to another campus this semester.',
+        }),
+      );
+      expect(text, contains('Our adviser moved'));
+    });
+  }
+
   for (final template in formTemplates.values) {
     group(template.formId, () {
       test('every block id is unique', () {

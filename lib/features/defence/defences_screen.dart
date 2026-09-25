@@ -1,65 +1,84 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/defence_calendar.dart';
+import 'package:ethesishub/features/defence/defence_stage.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
+import 'package:ethesishub/features/defence/redefence_stage.dart';
+import 'package:ethesishub/features/defence/title_defence_stage.dart';
 
 enum _DefencesView { list, calendar }
 
-/// The Defences destination, at '/defences': a [PageShell] wrapping
-/// [DefencesList].
+/// The Defences destination, at '/defences?stage=…' (spec 2026-09-25 §6.1).
 ///
-/// The heading used to be tailored per role, because each of the four
-/// dashboards hosted this body itself and passed its own wording in. Those
-/// dashboards are gone and '/defences' is one route reached by one
-/// sidebar entry, so it carries one heading. [DefencesList] itself is
-/// already per-reader — it shows the defences you are actually party to —
-/// which is where the difference between a student's view and a
-/// panelist's actually lives.
+/// A stage switch, styled like the List / Calendar toggle, reads **Title
+/// defence | Pre-oral | Final defence | Re-defence**. In the app the stage is
+/// part of the URL, so a dashboard or a notification can link straight to
+/// one. The router hands it in as [initialStage], and switching stages goes
+/// to the new URL. Standing alone (in a test), switching is local state.
 ///
-/// [title] and [subtitle] stay overridable for a caller that embeds this
-/// list under a different heading.
-///
-/// Carries a List/Calendar toggle. Its state is local to this widget and
-/// deliberately NOT persisted -- a stored preference is not warranted for
-/// something changed by a single tap, and both presentations read the same
-/// [DefencesList]/[DefenceCalendar] widgets, which both watch
-/// `myDefencesProvider` directly, so the two can never show different data
-/// for the same account.
-class DefencesScreen extends StatefulWidget {
+/// List / Calendar applies to the three stages that have dates. It is not
+/// persisted: a stored preference is not warranted for something changed by
+/// a single tap.
+class DefencesScreen extends ConsumerStatefulWidget {
   const DefencesScreen({
     super.key,
-    this.title = 'Scheduled defences',
-    this.subtitle = 'Pre-oral and final defences, and the rooms they run '
-        'in.',
+    this.initialStage = DefenceStage.title,
+    this.initialCalendar = false,
+    this.title = 'Defences',
+    this.subtitle =
+        'Title defences, pre-oral and final defences, and re-defences.',
   });
 
+  final DefenceStage initialStage;
+
+  /// Whether to open on the Calendar view rather than List, for a link that
+  /// means "the calendar" (`?view=calendar`).
+  final bool initialCalendar;
   final String title;
   final String subtitle;
 
   @override
-  State<DefencesScreen> createState() => _DefencesScreenState();
+  ConsumerState<DefencesScreen> createState() => _DefencesScreenState();
 }
 
-class _DefencesScreenState extends State<DefencesScreen> {
-  _DefencesView _view = _DefencesView.list;
+class _DefencesScreenState extends ConsumerState<DefencesScreen> {
+  late DefenceStage _stage = widget.initialStage;
+  late _DefencesView _view =
+      widget.initialCalendar ? _DefencesView.calendar : _DefencesView.list;
+
+  @override
+  void didUpdateWidget(covariant DefencesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialStage != widget.initialStage) {
+      _stage = widget.initialStage;
+    }
+  }
+
+  void _selectStage(DefenceStage stage) {
+    setState(() => _stage = stage);
+    // `go`, not `push`: changing tabs is not a step back should undo.
+    GoRouter.maybeOf(context)?.go(stage.route);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final counts = ref.watch(defenceStageCountsProvider);
+    final calendar = _view == _DefencesView.calendar;
+
     return PageShell(
       key: const Key('defencesScreen'),
       maxWidth: AppTokens.measureWide,
       title: widget.title,
       subtitle: widget.subtitle,
       actions: [
-        SegmentedButton<_DefencesView>(
-            // Keyed on the control itself, not its segments --
-            // `ButtonSegment` carries no `key` parameter on the pinned
-            // Flutter version. `faculty_mode_switch.dart`'s
-            // `facultyModeSegmented` solves the same wall the same way, and
-            // its tests tap by the segment's label text rather than a key,
-            // which is the pattern this follows too.
+        // Title defences have no date, so they have no calendar.
+        if (_stage != DefenceStage.title)
+          SegmentedButton<_DefencesView>(
             key: const Key('defencesViewToggle'),
             segments: const [
               ButtonSegment(
@@ -79,11 +98,65 @@ class _DefencesScreenState extends State<DefencesScreen> {
           ),
       ],
       children: [
-        switch (_view) {
-          _DefencesView.list => const DefencesList(),
-          _DefencesView.calendar => const DefenceCalendar(),
+        // The switch's own available width decides short vs. full labels --
+        // NOT the window's Breakpoint. Between about 720 and 1050px the
+        // window is medium, but this switch (sharing the page with a title
+        // and the List/Calendar toggle) has nowhere near enough room for
+        // four full labels with icons and counts, and the horizontal scroll
+        // below is a last resort a mouse cannot drag, not a fix.
+        LayoutBuilder(builder: (context, constraints) {
+          final short = constraints.maxWidth < 760;
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<DefenceStage>(
+                key: const Key('defenceStageSwitch'),
+                segments: [
+                  for (final s in DefenceStage.values)
+                    ButtonSegment(
+                      value: s,
+                      label:
+                          Text(s.labelFor(counts[s] ?? 0, compact: short)),
+                      icon: short ? null : Icon(s.icon),
+                    ),
+                ],
+                selected: {_stage},
+                onSelectionChanged: (selection) =>
+                    _selectStage(selection.first),
+              ),
+            ),
+          );
+        }),
+        const Gap.lg(),
+        switch (_stage) {
+          DefenceStage.title => const TitleDefenceStage(),
+          DefenceStage.redefence => RedefenceStage(calendar: calendar),
+          DefenceStage.preOral => calendar
+              ? const DefenceCalendar(
+                  key: ValueKey('preOralCalendar'), where: _preOral)
+              : const DefencesList(
+                  key: ValueKey('preOralList'),
+                  where: _preOral,
+                  emptyTitle: 'No pre-oral defences',
+                  emptyMessage: 'A pre-oral defence appears here once the '
+                      'Coordinator schedules one you are part of.',
+                ),
+          DefenceStage.finalDefence => calendar
+              ? const DefenceCalendar(
+                  key: ValueKey('finalCalendar'), where: _final)
+              : const DefencesList(
+                  key: ValueKey('finalList'),
+                  where: _final,
+                  emptyTitle: 'No final defences',
+                  emptyMessage: 'A final defence appears here once the '
+                      'Coordinator schedules one you are part of.',
+                ),
         },
       ],
     );
   }
 }
+
+bool _preOral(Defence d) => DefenceStage.preOral.includes(d);
+bool _final(Defence d) => DefenceStage.finalDefence.includes(d);

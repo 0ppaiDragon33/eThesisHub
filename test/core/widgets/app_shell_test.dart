@@ -598,11 +598,13 @@ void main() {
   });
 
   group('short-rail account footer', () {
-    // Coordinator: ten destinations (Archive, Forms, My files, and the
+    // Coordinator: nine destinations (Archive, Forms, My files, and the
     // Activity log), the worst case for how much vertical space the rail's
-    // own content claims before the footer gets a turn.
+    // own content claims before the footer gets a turn. Title defences no
+    // longer has an entry of its own -- it is the Title stage of Defences
+    // now (spec 2026-09-25 §6.7).
     final coordinatorDestinations = destinationsFor(role: UserRole.coordinator);
-    assert(coordinatorDestinations.length == 10); // guards the "worst case" claim
+    assert(coordinatorDestinations.length == 9); // guards the "worst case" claim
 
     for (final height in [320.0, 420.0, 600.0, 1000.0]) {
       testWidgets('rail height=$height overflows nothing', (tester) async {

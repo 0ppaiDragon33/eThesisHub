@@ -119,7 +119,7 @@ class FacultyOverview extends ConsumerWidget {
       label: 'Defences this week',
       value: defencesThisWeekAsync,
       format: (n) => '$n',
-      onTap: () => context.go('/defences'),
+      onTap: () => context.go('/defences?stage=preOral'),
     );
 
     final Widget modeSection;

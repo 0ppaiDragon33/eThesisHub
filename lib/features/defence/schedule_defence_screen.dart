@@ -13,6 +13,8 @@ import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/defence/defence_date_picker.dart';
+import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/features/documents/defence_readiness.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -69,34 +71,9 @@ class _ScheduleDefenceScreenState
   }
 
   Future<void> _pickDateTime() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _scheduledAt,
-      firstDate: DateTime(DateTime.now().year - 1),
-      lastDate: DateTime(DateTime.now().year + 2),
-    );
-    // Guard every setState after an await with mounted: the dialog can
-    // outlive the screen if the coordinator navigates away mid-pick.
-    if (date == null || !mounted) return;
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_scheduledAt),
-    );
-    if (time == null || !mounted) return;
-
-    setState(() {
-      _scheduledAt =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    });
-  }
-
-  String _formatDateTime(DateTime dt) {
-    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final minute = dt.minute.toString().padLeft(2, '0');
-    final period = dt.hour < 12 ? 'AM' : 'PM';
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
-        '${dt.day.toString().padLeft(2, '0')} $hour:$minute $period';
+    final picked = await pickDefenceDateTime(context, _scheduledAt);
+    if (picked == null || !mounted) return;
+    setState(() => _scheduledAt = picked);
   }
 
   Future<void> _schedule({
@@ -256,7 +233,7 @@ class _ScheduleDefenceScreenState
                         prefixIcon: Icon(Icons.schedule_rounded),
                         suffixIcon: Icon(Icons.edit_calendar_outlined),
                       ),
-                      child: Text(_formatDateTime(_scheduledAt)),
+                      child: Text(DefencesList.formatDateTime(_scheduledAt)),
                     ),
                   ),
                 ),
@@ -275,6 +252,40 @@ class _ScheduleDefenceScreenState
             ),
           ),
           const Gap.md(),
+          // A plain defence of a kind this group already failed is almost
+          // always meant to be the re-defence (spec 2026-09-25 §6.4). The
+          // rules cannot refuse it, so the screen points the way instead.
+          ...() {
+            final failed = awaitingRedefence(
+                    ref.watch(myDefencesProvider).valueOrNull ?? const [])
+                .where((d) => d.thesisId == thesis.id && d.type == _type)
+                .firstOrNull;
+            if (failed == null) return const <Widget>[];
+            final at = failed.scheduledAt;
+            return [
+              Panel(
+                key: const Key('scheduleRedefenceInstead'),
+                icon: Icons.replay_outlined,
+                title: 'This group failed its ${failed.type.label.toLowerCase()}',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(at == null
+                        ? 'Schedule a re-defence instead.'
+                        : 'Held ${DefencesList.formatDateTime(at)}. '
+                            'Schedule a re-defence instead.'),
+                    const Gap.sm(),
+                    FilledButton.tonal(
+                      onPressed: () => context.push(
+                          '/defence/schedule?redefenceOf=${failed.id}'),
+                      child: const Text('Schedule re-defence'),
+                    ),
+                  ],
+                ),
+              ),
+              const Gap.md(),
+            ];
+          }(),
           // Its own loading/error branch: chapters still connecting must
           // not read as "0 approved, not ready".
           Panel(

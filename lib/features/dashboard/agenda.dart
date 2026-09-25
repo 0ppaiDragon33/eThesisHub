@@ -34,7 +34,7 @@ class WeekAgenda extends StatelessWidget {
       icon: Icons.event_note_outlined,
       flush: true,
       trailing: TextButton(
-        onPressed: () => context.go('/defences'),
+        onPressed: () => context.go('/defences?stage=preOral&view=calendar'),
         child: const Text('Calendar'),
       ),
       child: defences.when(
@@ -115,7 +115,7 @@ class _AgendaRow extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title ?? defence.type.label,
+                    title ?? defence.label,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: text.bodyMedium
@@ -123,7 +123,7 @@ class _AgendaRow extends ConsumerWidget {
                   ),
                   Text(
                     [
-                      if (title != null) defence.type.label,
+                      if (title != null) defence.label,
                       if (defence.venue.isNotEmpty) defence.venue,
                       defenceStatusLabel(defence.status),
                     ].join(', '),

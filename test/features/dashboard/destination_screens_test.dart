@@ -14,7 +14,6 @@ import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/features/dashboard/panels_screen.dart';
 import 'package:ethesishub/features/dashboard/readiness_screen.dart';
 import 'package:ethesishub/features/dashboard/recommendations_screen.dart';
-import 'package:ethesishub/features/dashboard/title_defences_screen.dart';
 import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
@@ -108,7 +107,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
-    expect(find.text('Scheduled defences'), findsOneWidget);
+    expect(find.text('Defences'), findsOneWidget);
   });
 
   testWidgets('advisees screen renders the adviser roster standalone',
@@ -191,25 +190,6 @@ void main() {
     expect(find.text('A Working Title'), findsOneWidget);
   });
 
-  testWidgets('title defences screen renders the defence queue standalone',
-      (tester) async {
-    final db = FakeFirebaseFirestore();
-    await db.collection('theses').doc('t1').set(
-          thesis(status: 'titlePendingDefence'),
-        );
-
-    await tester.pumpWidget(await wrap(
-      const TitleDefencesScreen(),
-      db,
-      uid: 'd1',
-      role: 'dean',
-    ));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('titleDefencesScreen')), findsOneWidget);
-    expect(find.text('Title defences'), findsOneWidget);
-  });
-
   testWidgets('readiness screen renders the readiness list standalone',
       (tester) async {
     final db = FakeFirebaseFirestore();
@@ -284,5 +264,24 @@ void main() {
     expect(find.byKey(const Key('facultyOverview')), findsNothing);
     expect(find.byKey(const Key('deanOverview')), findsNothing);
     expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
+  });
+
+  testWidgets('an adviser opens an advisee\'s title defence from Advisees',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set(
+          thesis(adviserUid: 'f1', status: 'titlePendingDefence'),
+        );
+
+    await tester.pumpWidget(await wrap(
+      const AdviseesScreen(),
+      db,
+      uid: 'f1',
+      role: 'faculty',
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('openTitleDefence-t1')), findsOneWidget);
+    expect(find.text('Open title defence'), findsOneWidget);
   });
 }
