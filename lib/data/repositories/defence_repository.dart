@@ -73,6 +73,52 @@ class DefenceRepository {
     return ref.id;
   }
 
+  /// Schedules the one re-defence of [failed] (spec 2026-09-25 §4.2).
+  ///
+  /// Written at [Defence.redefenceIdFor] with `set`, so the rules can refuse
+  /// a second one. The thesis, kind, panel, adviser and leader are copied
+  /// from [failed]. The create rule still checks the panel, adviser and
+  /// leader against the thesis as it is now, so a panel changed since the
+  /// Fail is refused rather than silently mixed.
+  Future<String> scheduleRedefence({
+    required Defence failed,
+    required DateTime scheduledAt,
+    required String venue,
+    required String createdBy,
+  }) async {
+    if (venue.trim().isEmpty) {
+      throw ArgumentError('Give the re-defence a venue.');
+    }
+    if (failed.panelVerdict != PassFail.fail) {
+      throw ArgumentError('Only a defence the panel failed can be re-defended.');
+    }
+    if (failed.isRedefence) {
+      throw ArgumentError('A re-defence cannot itself be re-defended.');
+    }
+    final ref = _defence(Defence.redefenceIdFor(failed.id));
+    // The rules refuse this too; checked here as well because
+    // fake_cloud_firestore enforces no rules, and `set` on an existing
+    // document would otherwise quietly overwrite it in every Dart test.
+    if ((await ref.get()).exists) {
+      throw StateError('This defence already has a re-defence.');
+    }
+    await ref.set({
+      'thesisId': failed.thesisId,
+      'type': failed.type.value,
+      'scheduledAt': Timestamp.fromDate(scheduledAt),
+      'venue': venue.trim(),
+      'panelUids': failed.panelUids,
+      'adviserUid': failed.adviserUid,
+      'leaderUid': failed.leaderUid,
+      'status': DefenceStatus.scheduled.value,
+      'createdBy': createdBy,
+      // Pinned to request.time by the rule; see schedule() above.
+      'createdAt': FieldValue.serverTimestamp(),
+      'redefenceOf': failed.id,
+    });
+    return ref.id;
+  }
+
   Stream<Defence?> watchDefence(String defenceId) {
     return _defence(defenceId).snapshots().map(
         (s) => s.exists ? _toDefence(s.id, s.data()!) : null);

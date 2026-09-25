@@ -286,4 +286,90 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  group('scheduleRedefence', () {
+    Future<Defence> failed(DefenceRepository repo, FakeFirebaseFirestore db,
+        {String verdict = 'fail', String? redefenceOf}) async {
+      final id = await scheduleOne(repo, type: DefenceType.final_);
+      await db.collection('defenses').doc(id).update({
+        'status': 'completed',
+        'panelVerdict': verdict,
+        if (redefenceOf != null) 'redefenceOf': redefenceOf,
+      });
+      return (await repo.watchDefence(id).first)!;
+    }
+
+    test('writes the re-defence at the derived id, copying the failed one',
+        () async {
+      final db = await seed();
+      final repo = DefenceRepository(db);
+      final f = await failed(repo, db);
+
+      final id = await repo.scheduleRedefence(
+        failed: f,
+        scheduledAt: DateTime(2026, 10, 5, 9),
+        venue: ' CICT AVR ',
+        createdBy: 'c1',
+      );
+
+      expect(id, Defence.redefenceIdFor(f.id));
+      final again = (await repo.watchDefence(id).first)!;
+      expect(again.redefenceOf, f.id);
+      expect(again.isRedefence, isTrue);
+      expect(again.type, DefenceType.final_);
+      expect(again.thesisId, 't1');
+      expect(again.panelUids, ['p1', 'p2', 'p3']);
+      expect(again.adviserUid, 'a1');
+      expect(again.leaderUid, 'l1');
+      expect(again.status, DefenceStatus.scheduled);
+      expect(again.venue, 'CICT AVR');
+      expect(again.panelVerdict, isNull);
+    });
+
+    test('refuses a defence that did not fail', () async {
+      final db = await seed();
+      final repo = DefenceRepository(db);
+      final passed = await failed(repo, db, verdict: 'pass');
+      await expectLater(
+        repo.scheduleRedefence(failed: passed, scheduledAt: DateTime(2026, 10, 5),
+            venue: 'AVR', createdBy: 'c1'),
+        throwsArgumentError,
+      );
+    });
+
+    test('refuses to re-defend a re-defence', () async {
+      final db = await seed();
+      final repo = DefenceRepository(db);
+      final second = await failed(repo, db, redefenceOf: 'earlier');
+      await expectLater(
+        repo.scheduleRedefence(failed: second, scheduledAt: DateTime(2026, 10, 5),
+            venue: 'AVR', createdBy: 'c1'),
+        throwsArgumentError,
+      );
+    });
+
+    test('refuses a second re-defence of the same Fail', () async {
+      final db = await seed();
+      final repo = DefenceRepository(db);
+      final f = await failed(repo, db);
+      await repo.scheduleRedefence(failed: f, scheduledAt: DateTime(2026, 10, 5),
+          venue: 'AVR', createdBy: 'c1');
+      await expectLater(
+        repo.scheduleRedefence(failed: f, scheduledAt: DateTime(2026, 10, 6),
+            venue: 'AVR', createdBy: 'c1'),
+        throwsStateError,
+      );
+    });
+
+    test('refuses a blank venue', () async {
+      final db = await seed();
+      final repo = DefenceRepository(db);
+      final f = await failed(repo, db);
+      await expectLater(
+        repo.scheduleRedefence(failed: f, scheduledAt: DateTime(2026, 10, 5),
+            venue: '  ', createdBy: 'c1'),
+        throwsArgumentError,
+      );
+    });
+  });
 }
