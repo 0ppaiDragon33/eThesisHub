@@ -18,6 +18,7 @@ import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
 import 'package:ethesishub/features/dashboard/advisees_screen.dart';
 import 'package:ethesishub/features/dashboard/approvals_screen.dart';
+import 'package:ethesishub/features/dashboard/change_request_queue_screen.dart';
 import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/features/dashboard/panels_screen.dart';
 import 'package:ethesishub/features/dashboard/readiness_screen.dart';
@@ -43,6 +44,8 @@ import 'package:ethesishub/features/notifications/notifications_screen.dart';
 import 'package:ethesishub/features/repository/archive_entry_screen.dart';
 import 'package:ethesishub/features/repository/archive_queue_screen.dart';
 import 'package:ethesishub/features/repository/archive_screen.dart';
+import 'package:ethesishub/data/models/change_request.dart';
+import 'package:ethesishub/features/thesis/change_request_screen.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/features/thesis/thesis_status_screen.dart';
@@ -252,6 +255,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.coordinator) {
                 return home;
               }
+              // '/change-requests' is a coordinator and dean destination --
+              // the two queues in this file (ChangeRequestQueueScreen picks
+              // between them from the signed-in role) -- never faculty or
+              // the student whose request it is.
+              if (location == '/change-requests' &&
+                  profile.role != UserRole.coordinator &&
+                  profile.role != UserRole.dean) {
+                return home;
+              }
               // '/readiness' is a coordinator and dean destination -- never
               // faculty (who sit on individual title defence panels via
               // '/defence/:thesisId' instead, unguarded by role here) and
@@ -331,6 +343,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               final bareVisitFallbackPaths = [
                 '/thesis/nominate',
                 '/thesis/titles',
+                // '/thesis/change-adviser' and '/thesis/change-title' (Task
+                // 5) are pushed from the thesis status screen's own buttons
+                // with '?id=...' already attached, but a bare visit is still
+                // reachable -- typed directly, or a stale bookmark -- and a
+                // student leads exactly one thesis, so the same "fall back
+                // to the leader's own thesis" resolution applies as for
+                // '/thesis/titles' just above. Student-scoped like
+                // '/thesis/chapters' below, not left unconditional like
+                // '/thesis/nominate'/'/thesis/titles': those two have no
+                // reader who reaches them at all except a student (the
+                // studentOnly guard above already turns any other role away
+                // before this list is even consulted), so guarding them
+                // here would be a no-op either way, but naming the
+                // student-only condition explicitly, the same as
+                // '/thesis/chapters', keeps this list self-explanatory
+                // rather than relying on a reader to trace that guard
+                // through the redirect above.
+                if (profile.role == UserRole.student)
+                  '/thesis/change-adviser',
+                if (profile.role == UserRole.student) '/thesis/change-title',
                 // The sidebar's Chapters destination is a bare
                 // '/thesis/chapters': a destination is one fixed route and
                 // cannot carry a query parameter only the signed-in
@@ -456,8 +488,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/defences',
         builder: (_, state) => DefencesScreen(
-          initialStage:
-              DefenceStage.fromParam(state.uri.queryParameters['stage']),
+          // No `stage` at all (the sidebar's bare '/defences') lets the
+          // page open where the reader has something open; a stage that is
+          // named but unknown still means Title.
+          initialStage: state.uri.queryParameters.containsKey('stage')
+              ? DefenceStage.fromParam(state.uri.queryParameters['stage'])
+              : null,
           initialCalendar: state.uri.queryParameters['view'] == 'calendar',
         ),
       ),
@@ -470,6 +506,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/recommendations',
         builder: (_, _) => const RecommendationsScreen(),
+      ),
+      GoRoute(
+        path: '/change-requests',
+        builder: (_, _) => const ChangeRequestQueueScreen(),
       ),
       // NOT '/titles' -- '/thesis/titles' (below) already exists for
       // submitting a candidate title set. Two routes a character apart
@@ -530,6 +570,61 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             );
           }
           return SubmitTitlesScreen(thesisId: id);
+        },
+      ),
+      // '/thesis/change-adviser' and '/thesis/change-title': the student
+      // leader's request forms (Task 5). A bare visit (no '?id=') is caught
+      // by the bareVisitFallbackPaths redirect above, the same as
+      // '/thesis/titles', and never reaches this builder with a null id --
+      // this EmptyState branch is the last-resort for a reader that guard
+      // does not cover (a non-student who somehow reaches this URL; the
+      // studentOnly guard ordinarily turns them away first, same as for
+      // '/thesis/titles'). `state.extra`, when it is a ChangeRequest,
+      // prefills the form for the tracker's "Edit and resubmit" flow (a
+      // returned request re-opened for editing); it is not part of the URL,
+      // so a fresh visit or a stale bookmark simply has none.
+      GoRoute(
+        path: '/thesis/change-adviser',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          if (id == null || id.isEmpty) {
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.link_off,
+                title: 'No thesis given',
+                message: 'Open this from your thesis status page.',
+              ),
+            ]);
+          }
+          final prefill =
+              state.extra is ChangeRequest ? state.extra as ChangeRequest : null;
+          return ChangeRequestScreen(
+            thesisId: id,
+            type: ChangeRequestType.adviser,
+            prefill: prefill,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/thesis/change-title',
+        builder: (context, state) {
+          final id = state.uri.queryParameters['id'];
+          if (id == null || id.isEmpty) {
+            return const PageShell(children: [
+              EmptyState(
+                icon: Icons.link_off,
+                title: 'No thesis given',
+                message: 'Open this from your thesis status page.',
+              ),
+            ]);
+          }
+          final prefill =
+              state.extra is ChangeRequest ? state.extra as ChangeRequest : null;
+          return ChangeRequestScreen(
+            thesisId: id,
+            type: ChangeRequestType.title,
+            prefill: prefill,
+          );
         },
       ),
       // The three routes below are registered BEFORE '/defence/:thesisId'

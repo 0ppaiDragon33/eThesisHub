@@ -48,7 +48,8 @@ Future<FakeFirebaseFirestore> _seedUser(String uid, {String role = 'faculty'}) a
 Widget _wrap(
   FakeFirebaseFirestore db, {
   required String uid,
-  DefenceStage stage = DefenceStage.preOral,
+  // Null is the sidebar's bare /defences: the page picks the stage itself.
+  DefenceStage? stage = DefenceStage.preOral,
 }) =>
     ProviderScope(
       overrides: [
@@ -347,5 +348,70 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: label);
     }
+  });
+
+  group('opened without a stage (the sidebar)', () {
+    Set<DefenceStage> selected(WidgetTester tester) => tester
+        .widget<SegmentedButton<DefenceStage>>(
+            find.byKey(const Key('defenceStageSwitch')))
+        .selected;
+
+    testWidgets('lands on the first stage with something open',
+        (tester) async {
+      final db = await _seedUser('a1');
+      await _seedDefence(db, id: 'open', adviserUid: 'a1',
+          scheduledAt: DateTime(2026, 9, 1, 9));
+      await tester.pumpWidget(_wrap(db, uid: 'a1', stage: null));
+      await tester.pumpAndSettle();
+      expect(selected(tester), {DefenceStage.preOral});
+      expect(find.byKey(const Key('defenceRow-open')), findsOneWidget);
+    });
+
+    testWidgets('skips stages with nothing open', (tester) async {
+      final db = await _seedUser('a1');
+      await _seedDefence(db, id: 'fin', adviserUid: 'a1', type: 'final',
+          scheduledAt: DateTime(2026, 9, 1, 9));
+      await tester.pumpWidget(_wrap(db, uid: 'a1', stage: null));
+      await tester.pumpAndSettle();
+      expect(selected(tester), {DefenceStage.finalDefence});
+    });
+
+    testWidgets('lands on Title when nothing is open anywhere',
+        (tester) async {
+      final db = await _seedUser('a1');
+      await _seedDefence(db, id: 'done', adviserUid: 'a1',
+          status: 'completed', scheduledAt: DateTime(2026, 9, 1, 9));
+      await tester.pumpWidget(_wrap(db, uid: 'a1', stage: null));
+      await tester.pumpAndSettle();
+      expect(selected(tester), {DefenceStage.title});
+    });
+
+    testWidgets('chooses once: new work elsewhere does not move the reader',
+        (tester) async {
+      final db = await _seedUser('a1');
+      await _seedDefence(db, id: 'fin', adviserUid: 'a1', type: 'final',
+          scheduledAt: DateTime(2026, 9, 1, 9));
+      await tester.pumpWidget(_wrap(db, uid: 'a1', stage: null));
+      await tester.pumpAndSettle();
+      expect(selected(tester), {DefenceStage.finalDefence});
+
+      // A pre-oral appears: an earlier stage now has something open, but
+      // the page the reader is looking at must not jump under them.
+      await _seedDefence(db, id: 'pre', adviserUid: 'a1',
+          scheduledAt: DateTime(2026, 9, 2, 9));
+      await tester.pumpAndSettle();
+      expect(selected(tester), {DefenceStage.finalDefence});
+    });
+
+    testWidgets('a named stage still wins over the automatic choice',
+        (tester) async {
+      final db = await _seedUser('a1');
+      await _seedDefence(db, id: 'open', adviserUid: 'a1',
+          scheduledAt: DateTime(2026, 9, 1, 9));
+      await tester.pumpWidget(
+          _wrap(db, uid: 'a1', stage: DefenceStage.redefence));
+      await tester.pumpAndSettle();
+      expect(selected(tester), {DefenceStage.redefence});
+    });
   });
 }

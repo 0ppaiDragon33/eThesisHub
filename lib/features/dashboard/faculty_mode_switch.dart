@@ -63,8 +63,7 @@ class FacultyModeSwitch extends ConsumerWidget {
       }
     }
 
-    final narrow =
-        MediaQuery.sizeOf(context).width < AppShell.railBreakpoint;
+    final narrow = MediaQuery.sizeOf(context).width < AppShell.railBreakpoint;
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -80,31 +79,71 @@ class FacultyModeSwitch extends ConsumerWidget {
                     turns: Tween<double>(begin: 0.75, end: 1).animate(a),
                     child: ScaleTransition(scale: a, child: child),
                   ),
-                  child: Icon(
-                    mode == FacultyMode.adviser
-                        ? Icons.school_outlined
-                        : Icons.forum_outlined,
+                  // A letter disc — A for Adviser, P for Panelist — rather
+                  // than an icon: the school/forum glyphs did not read as a
+                  // MODE, only as a picture, so a member could not tell
+                  // which role the narrow bar had them in. The letter is
+                  // unambiguous, and it reads as a status chip beside the
+                  // notification bell. The wide bar keeps its labelled
+                  // segmented button, so this is the compact bar only.
+                  child: _ModeDisc(
                     key: ValueKey(mode),
+                    letter: mode == FacultyMode.adviser ? 'A' : 'P',
                   ),
                 ),
                 tooltip: mode == FacultyMode.adviser
                     ? 'Adviser mode — tap to switch to Panelist'
                     : 'Panelist mode — tap to switch to Adviser',
-                onPressed: () => select(mode == FacultyMode.adviser
-                    ? FacultyMode.panelist
-                    : FacultyMode.adviser),
+                onPressed: () => select(
+                  mode == FacultyMode.adviser
+                      ? FacultyMode.panelist
+                      : FacultyMode.adviser,
+                ),
               )
             : SegmentedButton<FacultyMode>(
                 key: const Key('facultyModeSegmented'),
                 segments: const [
                   ButtonSegment(
-                      value: FacultyMode.adviser, label: Text('Adviser')),
+                    value: FacultyMode.adviser,
+                    label: Text('Adviser'),
+                  ),
                   ButtonSegment(
-                      value: FacultyMode.panelist, label: Text('Panelist')),
+                    value: FacultyMode.panelist,
+                    label: Text('Panelist'),
+                  ),
                 ],
                 selected: {mode},
                 onSelectionChanged: (selection) => select(selection.first),
               ),
+      ),
+    );
+  }
+}
+
+/// A small filled disc carrying a single letter — the compact bar's mode
+/// indicator. Sized to sit inside an [IconButton] and to match the app
+/// bar's other trailing controls.
+class _ModeDisc extends StatelessWidget {
+  const _ModeDisc({super.key, required this.letter});
+
+  final String letter;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: scheme.onPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
       ),
     );
   }

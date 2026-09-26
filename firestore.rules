@@ -371,6 +371,23 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/theses/$(thesisId)/candidateTitles/$(titleId));
     }
 
+    function changeRequestAt(thesisId, crId) {
+      return get(/databases/$(database)/documents/theses/$(thesisId)/changeRequests/$(crId)).data;
+    }
+
+    // Post-commit view of the same request, used only to pin the dean's
+    // thesis-field write to the SAME atomic batch that also lands the
+    // request's dean sign-off. `get()` (above) reads pre-commit state, so it
+    // reads identically whether the sibling changeRequests write is present
+    // in this commit or not -- it cannot by itself tell a standalone thesis
+    // write apart from the batched one. `getAfter()` reads the state the
+    // sibling document will have once every write in this commit lands, so
+    // it is only 'approved' when this commit's OWN changeRequests write
+    // carries it there.
+    function changeRequestAfter(thesisId, crId) {
+      return getAfter(/databases/$(database)/documents/theses/$(thesisId)/changeRequests/$(crId)).data;
+    }
+
     match /theses/{thesisId} {
       // Finding (h): a nominee who has been asked for their Conforme needs
       // the thesis title in their inbox, and `respondToNomination` reads the
@@ -772,7 +789,232 @@ service cloud.firestore {
                     && request.resource.data.titleDecidedBy == request.auth.uid
                     && request.resource.data.titleDecidedAt == request.time;
 
+      // The other half of the Dean's change-request approval batch (spec
+      // 2026-09-25 §7). The dean may set the new adviser or the new title on
+      // a titleApproved thesis, but ONLY while a matching request sits at
+      // `pendingDean` naming this exact value — so the change cannot be made
+      // except by approving a request that ran the whole chain.
+      allow update: if verified()
+                    && isDean()
+                    && resource.data.status == 'titleApproved'
+                    && (
+                      (onlyChanged(['adviserUid'])
+                       && changeRequestAt(thesisId, 'adviser').stage
+                          == 'pendingDean'
+                       && changeRequestAt(thesisId, 'adviser').newAdviserUid
+                          == request.resource.data.adviserUid
+                       // Pins this write to the same commit as the request's
+                       // dean sign-off -- see changeRequestAfter().
+                       && changeRequestAfter(thesisId, 'adviser').stage
+                          == 'approved'
+                       && changeRequestAfter(thesisId, 'adviser')
+                            .signoffs.dean.status == 'accepted')
+                      ||
+                      (onlyChanged(['workingTitle'])
+                       && changeRequestAt(thesisId, 'title').stage
+                          == 'pendingDean'
+                       && changeRequestAt(thesisId, 'title').newTitle
+                          == request.resource.data.workingTitle
+                       && changeRequestAfter(thesisId, 'title').stage
+                          == 'approved'
+                       && changeRequestAfter(thesisId, 'title')
+                            .signoffs.dean.status == 'accepted')
+                    );
+
       allow delete: if false;
+
+      // Change of adviser / title (spec 2026-09-25). One document per kind,
+      // id == the type, so a thesis holds at most one of each. The leader
+      // creates it; the named advisers, then the coordinator, then the dean
+      // sign off; the dean's approval batch also changes the thesis.
+      match /changeRequests/{crId} {
+        function req() { return resource.data; }
+        function incoming() { return request.resource.data; }
+        function t() { return thesisData(thesisId); }
+
+        // Post-commit view of the thesis, symmetric with the thesis-side
+        // `changeRequestAfter`: pins the dean's accept-to-`approved` write to
+        // the SAME atomic commit that also lands the thesis-field change, so
+        // a request-only "approve" (no thesis write) is denied while the
+        // real batch (both documents) still passes.
+        function thesisAfter() {
+          return getAfter(/databases/$(database)/documents/theses/$(thesisId)).data;
+        }
+
+        // Every reader who has business seeing the request. The
+        // `awaitingUids` arm authorises the faculty inbox's collection-group
+        // `arrayContains` query (spec 2026-09-25 fix round 2, Fix 1): in a
+        // collection-group list the {thesisId} wildcard is unbound, so
+        // `t().adviserUid` can't be evaluated to filter that query the way
+        // the nominations collection-group rule leans on a document-id
+        // wildcard -- awaitingUids is denormalized onto the request itself
+        // for exactly that reason. It is READ authorization only; who may
+        // WRITE a sign-off is still gated below by exact uid / role, never
+        // by this field.
+        allow get, list: if isThesisLeader(thesisId)
+                         || isCoordinator() || isDean()
+                         || (signedIn() && isActive() && (
+                              request.auth.uid == req().get('newAdviserUid', '') ||
+                              request.auth.uid == req().get('formerAdviserUid', '') ||
+                              request.auth.uid == t().adviserUid ||
+                              request.auth.uid in t().panelistUids ||
+                              request.auth.uid in req().get('awaitingUids', [])));
+
+        // The leader writes a fresh first-pending request: the first create
+        // (no document — the create rule), or a reset of a returned/approved
+        // one (an update). Both are the same shape, so both arms share it.
+        function isFreshRequest() {
+          let d = incoming();
+          return crId in ['adviser', 'title']
+                 && d.type == crId
+                 && d.leaderUid == request.auth.uid
+                 && d.reasons is string && d.reasons.size() > 0
+                 && d.reasons.size() < 4000
+                 // awaitingUids is denormalized read-authorization only (see
+                 // the get/list rule above); kept to a plain list of strings
+                 // here rather than pinned to a specific shape.
+                 && d.get('awaitingUids', []) is list
+                 && (
+                      (crId == 'adviser'
+                       && d.stage == 'pendingAdvisers'
+                       && d.newAdviserUid is string
+                       && d.formerAdviserUid == t().adviserUid
+                       && d.signoffs.newAdviser.status == 'pending'
+                       && d.signoffs.formerAdviser.status == 'pending'
+                       && d.signoffs.coordinator.status == 'pending'
+                       && d.signoffs.dean.status == 'pending')
+                      ||
+                      (crId == 'title'
+                       && d.stage == 'pendingAdviser'
+                       && d.newTitle is string && d.newTitle.size() > 0
+                       && d.signoffs.adviser.status == 'pending'
+                       && d.signoffs.coordinator.status == 'pending'
+                       && d.signoffs.dean.status == 'pending')
+                    );
+        }
+
+        allow create: if verified()
+                      && isThesisLeader(thesisId)
+                      && t().status == 'titleApproved'
+                      && isFreshRequest();
+
+        // A leader's reset (returned or approved -> fresh). An open request
+        // may never be overwritten, which is the one-open-request guarantee.
+        allow update: if verified()
+                      && isThesisLeader(thesisId)
+                      && t().status == 'titleApproved'
+                      && req().stage in ['returned', 'approved']
+                      && req().type == crId
+                      && isFreshRequest();
+
+        // A sign-off writes exactly one role's entry, at the stage that
+        // awaits it, and either accepts (advancing when the step completes)
+        // or declines (returning the request). The uid allowed to write a
+        // role is checked inline in the `allow update` arms below
+        // (`request.auth.uid == req().newAdviserUid`, `== t().adviserUid`,
+        // `isCoordinator()`, `isDean()`).
+
+        // Every role OTHER than `role` must be untouched, so a signer cannot
+        // pre-set a later approver's sign-off in the same write -- and, per
+        // Fix 3, cannot scribble that role's `reason` or `respondedAt`
+        // either. Rules cannot iterate the map, so each role is named. A
+        // role `r` is "kept" when it is not `role` and its incoming sub-map
+        // equals its stored sub-map in full, not merely `.status`; `role`
+        // itself is exempt because the caller is changing it. Fail-closed:
+        // a role missing from either side compares unequal and denies.
+        function keptUnless(r, role) {
+          return r == role
+                 || incoming().signoffs.get(r, {})
+                    == req().signoffs.get(r, {});
+        }
+        function onlyOwnSignoff(role) {
+          return req().type == 'adviser'
+              ? (keptUnless('newAdviser', role)
+                 && keptUnless('formerAdviser', role)
+                 && keptUnless('coordinator', role)
+                 && keptUnless('dean', role))
+              : (keptUnless('adviser', role)
+                 && keptUnless('coordinator', role)
+                 && keptUnless('dean', role));
+        }
+
+        // Accept: the role's status becomes accepted; the stage either holds
+        // (an adviser accept while the co-adviser is still pending) or moves
+        // to `to`. Only that role's signoff and the stage may change.
+        function accepts(role, holdStage, to) {
+          return onlyChanged(['signoffs', 'stage', 'updatedAt', 'awaitingUids'])
+                 && incoming().signoffs[role].status == 'accepted'
+                 && req().signoffs[role].status == 'pending'
+                 && onlyOwnSignoff(role)
+                 && (incoming().stage == holdStage || incoming().stage == to);
+        }
+
+        // A decline sets the role declined with a reason and returns the
+        // request; nothing else of substance changes.
+        function declines(role) {
+          return onlyChanged(['signoffs', 'stage', 'updatedAt', 'awaitingUids'])
+                 && incoming().signoffs[role].status == 'declined'
+                 && req().signoffs[role].status == 'pending'
+                 && onlyOwnSignoff(role)
+                 && incoming().stage == 'returned'
+                 && (incoming().signoffs[role].reason == null
+                     || incoming().signoffs[role].reason.size() < 2000);
+        }
+
+        // The adviser-request advance to coordinator is legal only when BOTH
+        // advisers are accepted in the incoming document.
+        function bothAdvisersAccepted() {
+          return incoming().signoffs.newAdviser.status == 'accepted'
+                 && incoming().signoffs.formerAdviser.status == 'accepted';
+        }
+
+        allow update: if verified() && (
+          // --- adviser request: the two advisers, in parallel ---
+          (req().type == 'adviser' && req().stage == 'pendingAdvisers'
+           && request.auth.uid == req().newAdviserUid
+           && (declines('newAdviser')
+               || (accepts('newAdviser', 'pendingAdvisers', 'pendingCoordinator')
+                   && (incoming().stage == 'pendingAdvisers'
+                       || bothAdvisersAccepted()))))
+          ||
+          (req().type == 'adviser' && req().stage == 'pendingAdvisers'
+           && request.auth.uid == req().formerAdviserUid
+           && (declines('formerAdviser')
+               || (accepts('formerAdviser', 'pendingAdvisers', 'pendingCoordinator')
+                   && (incoming().stage == 'pendingAdvisers'
+                       || bothAdvisersAccepted()))))
+          ||
+          // --- title request: the current adviser notes it ---
+          (req().type == 'title' && req().stage == 'pendingAdviser'
+           && request.auth.uid == t().adviserUid
+           && (declines('adviser')
+               || accepts('adviser', 'pendingAdviser', 'pendingCoordinator')))
+          ||
+          // --- coordinator ---
+          (req().stage == 'pendingCoordinator' && isCoordinator()
+           && (declines('coordinator')
+               || accepts('coordinator', 'pendingCoordinator', 'pendingDean')))
+          ||
+          // --- dean: half of the approval batch, or a return ---
+          // The accept-to-`approved` path additionally requires (via
+          // thesisAfter(), i.e. getAfter() on the thesis) that THIS SAME
+          // commit also lands the matching thesis-field change -- otherwise
+          // the dean could approve the request while leaving the thesis
+          // stale. The decline/return path carries no such requirement.
+          (req().stage == 'pendingDean' && isDean()
+           && (declines('dean')
+               || (accepts('dean', 'pendingDean', 'approved')
+                   && (incoming().stage != 'approved' || (
+                        (req().type == 'adviser'
+                         && thesisAfter().adviserUid == req().newAdviserUid)
+                        ||
+                        (req().type == 'title'
+                         && thesisAfter().workingTitle == req().newTitle)
+                      )))))
+        );
+
+        allow delete: if false;
+      }
 
       match /nominations/{nomineeUid} {
         // The leader writes every entry, including the ex officio ones. Three
@@ -1702,6 +1944,22 @@ service cloud.firestore {
     match /{path=**}/nominations/{nomineeUid} {
       allow read: if verified()
                   && resource.data.nomineeUid == request.auth.uid;
+    }
+
+    // The faculty inbox also queries change requests across all theses, by
+    // their denormalized `awaitingUids` (spec 2026-09-25 fix round 2, Fix
+    // 1). Same reasoning as the nominations collection-group rule just
+    // above: the nested per-thesis rule at
+    // `theses/{thesisId}/changeRequests/{crId}` reads `t()` (a `get()` on
+    // `theses/{thesisId}`), and in a collection-group LIST the {thesisId}
+    // wildcard is unbound -- that `get()` errors rather than filtering, so
+    // the nested rule cannot authorise this query at all. awaitingUids is
+    // denormalized onto the request precisely so a single resource-level
+    // check, with no path wildcard, can. Read authorization only: who may
+    // WRITE a sign-off is still gated by the nested rule's per-role arms.
+    match /{path=**}/changeRequests/{crId} {
+      allow read: if verified()
+                  && request.auth.uid in resource.data.get('awaitingUids', []);
     }
 
     match /facultyDirectory/{uid} {

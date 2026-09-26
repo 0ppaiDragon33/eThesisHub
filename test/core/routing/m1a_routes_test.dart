@@ -370,4 +370,62 @@ void main() {
     expect(find.text('Nominate adviser and panel'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // Task 5's change-of-adviser/title request routes. Same fallback as
+  // '/thesis/nominate' and '/thesis/titles' above -- a bare visit (no
+  // '?id=') resolves to the leader's own thesis rather than the
+  // route builder's "No thesis given" refusal, because a student leads
+  // exactly one thesis and the request buttons on the thesis status screen
+  // always attach '?id=' themselves; only a bookmark or a typed URL ever
+  // arrives here bare.
+  testWidgets(
+      'a bare visit to /thesis/change-adviser falls back to the leader\'s '
+      'own thesis', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerFor('student', 'u1', db: db);
+    addTearDown(c.dispose);
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'u1', 'status': 'titleApproved',
+      'panelistUids': <String>[], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'eThesisHub',
+      'college': 'CICT', 'program': 'BSIT', 'semester': 'First',
+      'academicYear': '2026-2027',
+    });
+
+    await pumpApp(tester, c);
+
+    c.read(goRouterProvider).go('/thesis/change-adviser');
+    await tester.pumpAndSettle();
+
+    // No crash, no "No thesis given" refusal -- resolved straight to the
+    // leader's own thesis's request screen.
+    expect(find.byKey(const Key('changeRequestScreen')), findsOneWidget);
+    expect(find.text('No thesis given'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'a bare visit to /thesis/change-title falls back to the leader\'s '
+      'own thesis', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerFor('student', 'u1', db: db);
+    addTearDown(c.dispose);
+    await db.collection('theses').doc('t1').set({
+      'leaderUid': 'u1', 'status': 'titleApproved',
+      'panelistUids': <String>[], 'adviserUid': 'a1',
+      'memberNames': <String>[], 'workingTitle': 'eThesisHub',
+      'college': 'CICT', 'program': 'BSIT', 'semester': 'First',
+      'academicYear': '2026-2027',
+    });
+
+    await pumpApp(tester, c);
+
+    c.read(goRouterProvider).go('/thesis/change-title');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('changeRequestScreen')), findsOneWidget);
+    expect(find.byKey(const Key('newTitleField')), findsOneWidget);
+    expect(find.text('No thesis given'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
