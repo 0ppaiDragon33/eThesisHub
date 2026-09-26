@@ -124,6 +124,8 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                 '[permission-denied].'
             : 'Could not save the highlight. Please try again.');
       }
+    } catch (_) {
+      if (mounted) _say('Could not save the highlight. Please try again.');
     }
   }
 
@@ -152,7 +154,8 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
           defenceId: widget.defenceId, annotationId: a.id, uid: uid);
     } on StateError catch (e) {
       if (mounted) _say(e.message);
-    } on FirebaseException catch (_) {
+    } catch (_) {
+      // A FirebaseException or anything else: the same message.
       if (mounted) _say('Could not remove the highlight. Please try again.');
     }
   }

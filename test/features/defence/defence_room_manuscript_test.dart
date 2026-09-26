@@ -8,10 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/defence_annotation.dart';
+import 'package:ethesishub/data/repositories/defence_repository.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
 import 'package:ethesishub/features/defence/manuscript/defence_manuscript_screen.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 
 class FakeRasterizer implements ManuscriptRasterizer {
   FakeRasterizer(this.image);
@@ -102,6 +106,7 @@ Future<void> pumpScreen(
   String uid,
   Widget screen, {
   Size size = const Size(1400, 900),
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -118,6 +123,7 @@ Future<void> pumpScreen(
       )),
       chapterFileLoaderProvider.overrideWithValue((path) async => Uint8List(4)),
       manuscriptRasterizerProvider.overrideWithValue(FakeRasterizer(image)),
+      ...overrides,
     ],
     child: MaterialApp(home: Scaffold(body: screen)),
   ));
@@ -131,6 +137,33 @@ Future<void> settle(WidgetTester tester) async {
 }
 
 const room = DefenceRoomScreen(defenceId: 'd1');
+
+/// A repository whose highlight writes fail with an error of no known type.
+class _BrokenRepository extends DefenceRepository {
+  _BrokenRepository(super.db);
+
+  @override
+  Future<void> addAnnotation({
+    required String defenceId,
+    required String authorUid,
+    required String authorName,
+    required String authorPosition,
+    required ChapterId chapter,
+    required int version,
+    required int page,
+    required NormRect rect,
+    required String body,
+  }) async =>
+      throw Exception('boom');
+
+  @override
+  Future<void> deleteAnnotation({
+    required String defenceId,
+    required String annotationId,
+    required String uid,
+  }) async =>
+      throw Exception('boom');
+}
 
 void main() {
   testWidgets('a wide room puts the manuscript beside the side column',
@@ -254,6 +287,47 @@ void main() {
     await settle(tester);
     expect((await db.doc('defenses/d1/annotations/h0').get()).exists, isFalse);
     expect((await db.doc('defenses/d1/annotations/h1').get()).exists, isTrue);
+  });
+
+  testWidgets('an unexpected failure saving a highlight is said, not lost',
+      (tester) async {
+    final db = await seed();
+    await pumpScreen(tester, db, 'p1', room, overrides: [
+      defenceRepositoryProvider.overrideWithValue(_BrokenRepository(db)),
+    ]);
+    await tester.tap(find.byKey(const Key('highlightTool')));
+    await tester.pump();
+    final surface = find.byKey(const Key('drawSurface-chapterI-0'));
+    await tester.dragFrom(
+        tester.getTopLeft(surface) + const Offset(40, 60),
+        const Offset(220, 30));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('highlightBody')), 'Cite.');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveHighlight')));
+    await settle(tester);
+    expect(find.text('Could not save the highlight. Please try again.'),
+        findsOneWidget);
+  });
+
+  testWidgets('an unexpected failure removing a highlight is said, not lost',
+      (tester) async {
+    final db = await seed(highlights: [
+      {'authorUid': 'p1'},
+    ]);
+    await pumpScreen(tester, db, 'p1', room, overrides: [
+      defenceRepositoryProvider.overrideWithValue(_BrokenRepository(db)),
+    ]);
+    await tester.ensureVisible(find.byKey(const Key('tabHighlights')));
+    await tester.tap(find.byKey(const Key('tabHighlights')));
+    await settle(tester);
+    await tester.ensureVisible(find.byKey(const Key('deleteHighlight-h0')));
+    await tester.tap(find.byKey(const Key('deleteHighlight-h0')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('confirmDeleteHighlight')));
+    await settle(tester);
+    expect(find.text('Could not remove the highlight. Please try again.'),
+        findsOneWidget);
   });
 
   testWidgets('typing in the room box shows up for others, and clears',
