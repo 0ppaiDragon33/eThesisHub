@@ -6049,6 +6049,200 @@ test("CR: a sign-off may NOT rewrite another role's reason or " +
   }));
 });
 
+// ---------- Manuscript highlights and typing (spec 2026-09-26) ----------
+
+function highlight(uid, extra = {}) {
+  return {
+    authorUid: uid, authorName: "Dr. Panel", authorPosition: "Panel Member",
+    chapter: "chapterII", version: 2, page: 3,
+    rect: { x: 0.1, y: 0.2, w: 0.5, h: 0.05 },
+    body: "Cite the 2024 data here.", createdAt: serverTimestamp(), ...extra,
+  };
+}
+
+function marker(extra = {}) {
+  return {
+    name: "Dr. Panel", position: "Panel Member", target: "room",
+    updatedAt: serverTimestamp(), ...extra,
+  };
+}
+
+test("highlights: added only while the defence is in progress", async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+  await assertFails(setDoc(doc(pan, "defenses/df1/annotations/h1"),
+    highlight("pan-uid")));
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "inProgress" }));
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/h1"),
+    highlight("pan-uid")));
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "completed" }));
+  await assertFails(setDoc(doc(pan, "defenses/df1/annotations/h2"),
+    highlight("pan-uid")));
+});
+
+test("highlights: the adviser, panel, coordinator and dean may add; the group and outsiders may not",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    for (const uid of ["pan-uid", "adviser-uid", "coord-uid", "dean-uid"]) {
+      await assertSucceeds(setDoc(
+        doc(asDefUser(uid, `${uid}@isufst.edu.ph`),
+          `defenses/df1/annotations/by-${uid}`),
+        highlight(uid)));
+    }
+    await assertFails(setDoc(
+      doc(asDefUser("leader-uid", "leader@isufst.edu.ph"),
+        "defenses/df1/annotations/by-leader"),
+      highlight("leader-uid")));
+    await assertFails(setDoc(
+      doc(asDefUser("outsider-uid", "out@isufst.edu.ph"),
+        "defenses/df1/annotations/by-outsider"),
+      highlight("outsider-uid")));
+  });
+
+test("highlights: filed in your own name, with a valid box and comment",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const bad = [
+      highlight("adviser-uid"),
+      highlight("pan-uid", { rect: { x: 0.6, y: 0.2, w: 0.5, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.95, w: 0.5, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.2, w: 0, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: -0.1, y: 0.2, w: 0.5, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.2, w: 0.5, h: 0.1, z: 1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.2, w: 0.5 } }),
+      highlight("pan-uid", { chapter: "chapterVI" }),
+      highlight("pan-uid", { page: -1 }),
+      highlight("pan-uid", { page: 1.5 }),
+      highlight("pan-uid", { version: 0 }),
+      highlight("pan-uid", { body: "" }),
+      highlight("pan-uid", { body: "x".repeat(2001) }),
+      highlight("pan-uid", { createdAt: Timestamp.now() }),
+      highlight("pan-uid", { colour: "red" }),
+    ];
+    for (let i = 0; i < bad.length; i++) {
+      await assertFails(
+        setDoc(doc(pan, `defenses/df1/annotations/bad${i}`), bad[i]));
+    }
+    // Control: the longest comment allowed.
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/ok1"),
+      highlight("pan-uid", { body: "x".repeat(2000) })));
+  });
+
+test("highlights: a box drawn to the page edge saves", async () => {
+  // 0.1 + 0.9 is 1.0000000000000002 in floating point; a box dragged to the
+  // right edge must not be denied for it.
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/edge"),
+    highlight("pan-uid", { rect: { x: 0.1, y: 0.7, w: 0.9, h: 0.3 } })));
+});
+
+test("highlights: the group reads them only after the adviser releases",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedM3Defence(db, { status: "completed" });
+      await setDoc(doc(db, "defenses/df1/annotations/h1"),
+        { ...highlight("pan-uid"), createdAt: Timestamp.now() });
+    });
+    const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+
+    await assertFails(getDoc(doc(leader, "defenses/df1/annotations/h1")));
+    await assertSucceeds(getDoc(doc(adv, "defenses/df1/annotations/h1")));
+    await assertSucceeds(getDocs(collection(pan, "defenses/df1/annotations")));
+
+    await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(leader, "defenses/df1/annotations/h1")));
+    await assertSucceeds(
+      getDocs(collection(leader, "defenses/df1/annotations")));
+  });
+
+test("highlights: delete your own only while in progress, and never edit",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/h1"),
+      highlight("pan-uid")));
+    await assertFails(deleteDoc(doc(adv, "defenses/df1/annotations/h1")));
+    await assertFails(updateDoc(doc(pan, "defenses/df1/annotations/h1"),
+      { body: "Changed my mind." }));
+    await assertSucceeds(deleteDoc(doc(pan, "defenses/df1/annotations/h1")));
+
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/h2"),
+      highlight("pan-uid")));
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    await assertFails(deleteDoc(doc(pan, "defenses/df1/annotations/h2")));
+  });
+
+test("typing: your own marker only, and never read by the group", async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+  const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  const dean = asDefUser("dean-uid", "dean@isufst.edu.ph");
+
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker()));
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ target: "manuscript" })));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/adviser-uid"),
+    marker()));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ target: "elsewhere" })));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ extra: 1 })));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ updatedAt: Timestamp.now() })));
+
+  await assertFails(getDoc(doc(leader, "defenses/df1/composing/pan-uid")));
+  await assertFails(setDoc(doc(leader, "defenses/df1/composing/leader-uid"),
+    marker()));
+  await assertSucceeds(getDoc(doc(adv, "defenses/df1/composing/pan-uid")));
+  await assertSucceeds(getDocs(collection(dean, "defenses/df1/composing")));
+
+  await assertFails(deleteDoc(doc(adv, "defenses/df1/composing/pan-uid")));
+  await assertSucceeds(deleteDoc(doc(pan, "defenses/df1/composing/pan-uid")));
+});
+
+test("typing: markers only while in progress, but your own may always be cleared",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedM3Defence(db, { status: "completed" });
+      await setDoc(doc(db, "defenses/df1/composing/pan-uid"),
+        { ...marker(), updatedAt: Timestamp.now() });
+    });
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+      marker()));
+    await assertSucceeds(deleteDoc(doc(pan, "defenses/df1/composing/pan-uid")));
+  });
+
 test.after(async () => {
   await env.cleanup();
 });

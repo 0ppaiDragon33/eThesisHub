@@ -1766,6 +1766,108 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ---- Manuscript highlights (spec 2026-09-26 §8.1) ----
+      //
+      // A box on one page of an approved chapter, with a comment. Read like
+      // the room comments: the panel throughout, the group once the adviser
+      // has released. Written only while the defence is open.
+      match /annotations/{annotationId} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        function mayComment() {
+          let d = parent();
+          return signedIn() && isActive() && (
+            d.adviserUid == request.auth.uid ||
+            request.auth.uid in d.panelUids
+          );
+        }
+        function validRect(r) {
+          return r is map
+              && r.keys().hasAll(['x', 'y', 'w', 'h'])
+              && r.keys().hasOnly(['x', 'y', 'w', 'h'])
+              && r.x is number && r.y is number
+              && r.w is number && r.h is number
+              && r.x >= 0 && r.y >= 0 && r.w > 0 && r.h > 0
+              // A hair of slack: 0.1 + 0.9 is not exactly 1.0 in floating
+              // point, and a box drawn to the page's edge must not be denied.
+              && r.x + r.w <= 1.001 && r.y + r.h <= 1.001;
+        }
+
+        allow get, list: if mayComment() || isCoordinator() || isDean()
+                         || (signedIn()
+                             && 'consolidatedAt' in parent()
+                             && parent().leaderUid == request.auth.uid);
+
+        allow create: if verified()
+                      && (mayComment() || isCoordinator() || isDean())
+                      && parent().status == 'inProgress'
+                      && request.resource.data.keys().hasAll(
+                           ['authorUid', 'authorName', 'authorPosition',
+                            'chapter', 'version', 'page', 'rect', 'body',
+                            'createdAt'])
+                      && request.resource.data.keys().hasOnly(
+                           ['authorUid', 'authorName', 'authorPosition',
+                            'chapter', 'version', 'page', 'rect', 'body',
+                            'createdAt'])
+                      && request.resource.data.authorUid == request.auth.uid
+                      && request.resource.data.chapter in
+                           ['chapterI', 'chapterII', 'chapterIII',
+                            'chapterIV', 'chapterV']
+                      && request.resource.data.version is int
+                      && request.resource.data.version >= 1
+                      && request.resource.data.page is int
+                      && request.resource.data.page >= 0
+                      && validRect(request.resource.data.rect)
+                      && request.resource.data.body is string
+                      && request.resource.data.body.size() > 0
+                      && request.resource.data.body.size() <= 2000
+                      && request.resource.data.createdAt == request.time;
+
+        // Your own, and only while the defence is open: once it closes the
+        // set of highlights is the record.
+        allow delete: if verified()
+                      && resource.data.authorUid == request.auth.uid
+                      && parent().status == 'inProgress';
+
+        // No edits: delete and redraw.
+        allow update: if false;
+      }
+
+      // ---- "Is typing" markers for the room (spec 2026-09-26 §4.2) ----
+      //
+      // The title defence's titleComposing, for a defence. Never the group:
+      // an indicator would tell them remarks are being written about them.
+      match /composing/{uid} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        function mayComment() {
+          let d = parent();
+          return signedIn() && isActive() && (
+            d.adviserUid == request.auth.uid ||
+            request.auth.uid in d.panelUids
+          );
+        }
+
+        allow get, list: if mayComment() || isCoordinator() || isDean();
+
+        allow create, update: if verified()
+                              && (mayComment() || isCoordinator() || isDean())
+                              && uid == request.auth.uid
+                              && parent().status == 'inProgress'
+                              && request.resource.data.keys().hasOnly(
+                                   ['name', 'position', 'target', 'updatedAt'])
+                              && request.resource.data.target
+                                 in ['room', 'manuscript']
+                              && request.resource.data.updatedAt
+                                 == request.time;
+
+        // Your own, whenever: a marker left by a closed laptop must still be
+        // clearable after the defence ends.
+        allow delete: if signedIn() && uid == request.auth.uid;
+      }
+
       // ---- M4: Form 5c evaluations ----
       //
       // One document per panelist, keyed by their uid so nobody files two.
