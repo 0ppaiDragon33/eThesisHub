@@ -127,8 +127,10 @@ it stays in the list, marked "On an earlier version of Chapter II".
   itself off after each box, so a drag scrolls the pages again. Cancel
   discards the box.
 - **Showing:** each box is drawn in its author's colour with a numbered tag;
-  numbers follow the order highlights were made, so a number keeps meaning
-  the same box; the **Highlights** tab lists them in page order (number,
+  numbers follow the order highlights were made (one still awaiting its
+  server time counts as the newest), so adding a highlight never changes
+  another's number, while removing one renumbers the highlights made after
+  it; the **Highlights** tab lists them in page order (number,
   author, position, page, comment). Tapping one jumps the manuscript to its
   box and pulses it (a jump rather than an animated scroll: the page list is
   built lazily and cannot animate to a page it has not laid out yet).

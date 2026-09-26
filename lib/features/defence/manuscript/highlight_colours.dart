@@ -41,7 +41,8 @@ Map<String, Color> highlightColours({
 }
 
 /// Each highlight's number: its place in creation order, so "see 3" still
-/// means the same box after others are added.
+/// means the same box after others are added. Removing a highlight
+/// renumbers the ones made after it.
 Map<String, int> highlightNumbers(List<DefenceAnnotation> oldestFirst) => {
       for (var i = 0; i < oldestFirst.length; i++) oldestFirst[i].id: i + 1,
     };

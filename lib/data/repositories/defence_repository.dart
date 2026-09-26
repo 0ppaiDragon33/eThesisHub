@@ -412,7 +412,9 @@ class DefenceRepository {
       _defence(defenceId).collection('annotations');
 
   /// Oldest first, so a highlight's number (its place in this list) does not
-  /// change as others arrive.
+  /// change as others arrive. One whose server time has not come back yet
+  /// (the author's own, just written) is the newest, so it sorts last rather
+  /// than briefly taking an earlier number.
   Stream<List<DefenceAnnotation>> watchAnnotations(String defenceId) {
     return _annotations(defenceId).snapshots().map((s) {
       final list = <DefenceAnnotation>[];
@@ -426,7 +428,9 @@ class DefenceRepository {
       list.sort((a, b) {
         final at = a.createdAt;
         final bt = b.createdAt;
-        if (at == null || bt == null) return a.id.compareTo(b.id);
+        if (at == null && bt == null) return a.id.compareTo(b.id);
+        if (at == null) return 1;
+        if (bt == null) return -1;
         final byTime = at.compareTo(bt);
         return byTime != 0 ? byTime : a.id.compareTo(b.id);
       });

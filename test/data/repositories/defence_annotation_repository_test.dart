@@ -92,6 +92,26 @@ void main() {
     expect(list.map((a) => a.body), ['first', 'second']);
   });
 
+  test('a highlight still awaiting its server time sorts last', () async {
+    final db = await seed();
+    final col = db.collection('defenses/d1/annotations');
+    Map<String, dynamic> doc(String body, [DateTime? at]) => {
+          'authorUid': 'p1', 'chapter': 'chapterI', 'version': 1, 'page': 0,
+          'rect': {'x': 0, 'y': 0, 'w': 0.5, 'h': 0.5}, 'body': body,
+          if (at != null) 'createdAt': Timestamp.fromDate(at),
+        };
+    // Ids chosen so that ordering pending ones by id alone would put them
+    // first.
+    await col.doc('z').set(doc('second', DateTime(2026, 9, 26, 9, 2)));
+    await col.doc('y').set(doc('first', DateTime(2026, 9, 26, 9, 1)));
+    await col.doc('a').set(doc('pending a'));
+    await col.doc('b').set(doc('pending b'));
+
+    final list = await DefenceRepository(db).watchAnnotations('d1').first;
+    expect(list.map((a) => a.body),
+        ['first', 'second', 'pending a', 'pending b']);
+  });
+
   test('deletes your own highlight only, and only while in progress',
       () async {
     final db = await seed();
