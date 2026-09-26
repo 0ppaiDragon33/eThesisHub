@@ -1341,9 +1341,9 @@ service cloud.firestore {
       }
 
       match /documents/{chapterId} {
-        // The dean reads STATUS here and nothing below it: §3.1 gives them
-        // college-wide progress visibility, not chapter review. The split
-        // falls on the collection boundary, so no field filtering is needed.
+        // The dean reads status here and the files below it (spec
+        // 2026-09-26), but not the adviser's feedback: that is between the
+        // adviser and the group.
         allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
                          || isOnPanel() || isCoordinator() || isDean();
 
@@ -1390,9 +1390,10 @@ service cloud.firestore {
         allow delete: if false;
 
         match /versions/{versionNo} {
-          // No dean: they see that a chapter is approved, never its files.
+          // The dean reads chapter files like the coordinator: they sit on
+          // defences and read the manuscript there (spec 2026-09-26 §8.1).
           allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
-                           || isOnPanel() || isCoordinator();
+                           || isOnPanel() || isCoordinator() || isDean();
 
           // Written in the SAME batch as the parent's version bump, and a
           // batch is evaluated against the state BEFORE it -- so the parent

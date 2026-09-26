@@ -2854,8 +2854,11 @@ test("M2: an outsider may NOT read a chapter, its versions or its feedback",
       getDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f1")));
   });
 
-test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
+test("M2: the dean reads chapter status and versions but NOT its feedback",
   async () => {
+    // Spec 2026-09-26: the Dean sits on defences and reads the manuscript,
+    // so chapter files are open to them like the Coordinator. The adviser's
+    // feedback stays between the adviser and the group.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -2868,8 +2871,10 @@ test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
     });
     const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
-    await assertFails(
+    await assertSucceeds(
       getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+    await assertSucceeds(
+      getDocs(collection(dean, "theses/m2/documents/chapterI/versions")));
     await assertFails(
       getDoc(doc(dean, "theses/m2/documents/chapterI/feedback/f1")));
     // Control: the adviser reads the feedback the dean was denied.
@@ -3170,9 +3175,8 @@ test("M3: a panelist reads the chapters they are about to hear defended",
       { status: "approved", updatedAt: serverTimestamp() }));
   });
 
-test("M3: the dean still reads chapter STATUS but not its versions",
+test("M3: the dean reads a chapter's versions, as the panel does",
   async () => {
-    // Widening for the panel must not widen for the dean -- M2-8.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -3180,8 +3184,11 @@ test("M3: the dean still reads chapter STATUS but not its versions",
     });
     const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
-    await assertFails(
+    await assertSucceeds(
       getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+    // Reading is not writing.
+    await assertFails(updateDoc(
+      doc(dean, "theses/m2/documents/chapterI/versions/1"), { sizeBytes: 1 }));
   });
 
 // ---------- M3: defence scheduling ----------
