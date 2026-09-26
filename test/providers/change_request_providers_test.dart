@@ -155,7 +155,10 @@ void main() {
 
   group('mySignoffRequestsProvider', () {
     test('returns a request awaiting the signed-in new adviser, not one '
-        'awaiting someone else', () async {
+        'awaiting someone else -- filtered server-side by awaitingUids '
+        '(Fix 1: an unfiltered collection-group scan is denied in '
+        'production, so the query must do the filtering, not the client)',
+        () async {
       final db = FakeFirebaseFirestore();
       await db.doc('theses/t1/changeRequests/adviser').set({
         'type': 'adviser',
@@ -172,14 +175,18 @@ void main() {
           'coordinator',
           'dean',
         ]),
+        'awaitingUids': ['me', 'other1'],
       });
       await db.doc('theses/t2/changeRequests/adviser').set({
         'type': 'adviser',
         'stage': 'pendingAdvisers',
         'reasons': 'Because',
         'leaderUid': 'l2',
-        'newAdviserUid': 'someone-else',
-        'newAdviserName': 'Dr. Else',
+        // 'me' is the new adviser here too, but has already answered and
+        // dropped out of awaitingUids -- the field, not the uid match on
+        // newAdviserUid, is what must gate this row out.
+        'newAdviserUid': 'me',
+        'newAdviserName': 'Dr. Me',
         'formerAdviserUid': 'other2',
         'formerAdviserName': 'Dr. Other2',
         'signoffs': signoffMap([
@@ -188,6 +195,24 @@ void main() {
           'coordinator',
           'dean',
         ]),
+        'awaitingUids': ['other2'],
+      });
+      await db.doc('theses/t3/changeRequests/adviser').set({
+        'type': 'adviser',
+        'stage': 'pendingAdvisers',
+        'reasons': 'Because',
+        'leaderUid': 'l3',
+        'newAdviserUid': 'someone-else',
+        'newAdviserName': 'Dr. Else',
+        'formerAdviserUid': 'other3',
+        'formerAdviserName': 'Dr. Other3',
+        'signoffs': signoffMap([
+          'newAdviser',
+          'formerAdviser',
+          'coordinator',
+          'dean',
+        ]),
+        'awaitingUids': ['someone-else', 'other3'],
       });
 
       final c = await containerFor(db, 'me');

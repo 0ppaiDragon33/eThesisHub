@@ -5929,6 +5929,67 @@ test("CR title: the full flow reaches the dean; either half of the batch alone i
     await assertSucceeds(batch.commit());
   });
 
+// --- Fix round 2, Fix 1: the faculty inbox's real collection-group query,
+// filtered by the denormalized `awaitingUids` field, must be ALLOWED, while
+// an unfiltered scan across every thesis's requests must stay DENIED --
+// modeled on the nominations collection-group tests above ("(c)").
+
+test("CR awaitingUids: allow -- a faculty member's arrayContains query for " +
+    "their own uid returns the request awaiting them", async () => {
+  await seedCr({ signoffs: adviserReq().signoffs,
+    awaitingUids: ["cr-new-adv", "cr-old-adv"] });
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  const snap = await assertSucceeds(
+    getDocs(query(collectionGroup(newAdv, "changeRequests"),
+      where("awaitingUids", "array-contains", "cr-new-adv")))
+  );
+  assert.equal(snap.docs.length, 1);
+  assert.equal(snap.docs[0].id, "adviser");
+});
+
+test("CR awaitingUids: deny -- an UNFILTERED collection-group scan of " +
+    "every change request fails", async () => {
+  await seedCr({ signoffs: adviserReq().signoffs,
+    awaitingUids: ["cr-new-adv", "cr-old-adv"] });
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(getDocs(collectionGroup(newAdv, "changeRequests")));
+});
+
+test("CR awaitingUids: deny -- a faculty member not awaited on a request " +
+    "may not read it, even by get()", async () => {
+  await seedCr({ signoffs: adviserReq().signoffs,
+    awaitingUids: ["cr-new-adv", "cr-old-adv"] });
+  // A faculty member with no seat on this thesis at all (not the leader,
+  // not a panelist, not the coordinator/dean, and not in awaitingUids) --
+  // proves the field, not mere verified-faculty status, is what the arm
+  // authorises on. (cr-pan is deliberately NOT used here: it IS a panelist
+  // on this thesis and is legitimately authorized by the nested rule's own
+  // panelist arm, which would make this a false negative.)
+  const outsider = asCrUser("cr-outsider", "cr-outsider@isufst.edu.ph");
+  await assertFails(getDoc(doc(outsider, crPath)));
+  await assertFails(
+    getDocs(query(collectionGroup(outsider, "changeRequests"),
+      where("awaitingUids", "array-contains", "cr-new-adv")))
+  );
+});
+
+// --- Fix round 2, Fix 3: keptUnless compares the whole other-role sub-map,
+// not just `.status` -- a signer must not be able to scribble another
+// role's `reason` or `respondedAt` in the same write. ---
+
+test("CR: a sign-off may NOT rewrite another role's reason or " +
+    "respondedAt, even leaving that role's status untouched", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "accepted",
+    "signoffs.newAdviser.respondedAt": serverTimestamp(),
+    // formerAdviser's status is unchanged (still "pending"), but its
+    // reason is scribbled -- keptUnless must still catch this.
+    "signoffs.formerAdviser.reason": "planted",
+  }));
+});
+
 test.after(async () => {
   await env.cleanup();
 });

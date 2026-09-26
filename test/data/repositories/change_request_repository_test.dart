@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,6 +50,8 @@ void main() {
       expect(list.single.newAdviserUid, 'a2');
       expect(list.single.formerAdviserUid, 'a1');
       expect(list.single.signoffs['newAdviser']!.status, SignoffStatus.pending);
+      // Both the new and former adviser are awaited (Fix 1).
+      expect(list.single.awaitingUids, unorderedEquals(['a2', 'a1']));
     },
   );
 
@@ -66,6 +67,12 @@ void main() {
     expect(r.type, ChangeRequestType.title);
     expect(r.stage, ChangeRequestStage.pendingAdviser);
     expect(r.newTitle, 'A Better Title');
+    // The current adviser is awaited (Fix 1).
+    expect(r.awaitingUids, ['a1']);
+    // The pre-change title is captured for the eventual record PDF (Fix 2),
+    // since the Dean's batch will overwrite thesis.workingTitle by the time
+    // the request reaches approved.
+    expect(r.oldTitle, 'Old Title');
   });
 
   test(
@@ -88,6 +95,9 @@ void main() {
       );
       var r = (await repo.watchForThesis('t1').first).single;
       expect(r.stage, ChangeRequestStage.pendingAdvisers);
+      // The new adviser has answered and drops out of awaitingUids; the
+      // former adviser is still awaited (Fix 1).
+      expect(r.awaitingUids, ['a1']);
 
       await repo.respond(
         thesisId: 't1',
@@ -97,6 +107,7 @@ void main() {
       );
       r = (await repo.watchForThesis('t1').first).single;
       expect(r.stage, ChangeRequestStage.pendingCoordinator);
+      expect(r.awaitingUids, isEmpty);
     },
   );
 
@@ -119,6 +130,7 @@ void main() {
     expect(r.stage, ChangeRequestStage.returned);
     expect(r.signoffs['adviser']!.status, SignoffStatus.declined);
     expect(r.signoffs['adviser']!.reason, 'Too broad.');
+    expect(r.awaitingUids, isEmpty);
   });
 
   test(

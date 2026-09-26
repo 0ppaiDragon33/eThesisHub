@@ -33,10 +33,13 @@ final changeRequestsForThesisProvider =
 });
 
 /// Requests awaiting a role the signed-in faculty member holds. A collection-
-/// group read over open requests, kept to the ones this uid must sign. The
-/// awaited signer of an open request is: the new/former adviser at
-/// pendingAdvisers, the thesis's adviser at pendingAdviser, and — surfaced to
-/// coordinators/deans through their own providers below, not here.
+/// group query filtered server-side by `awaitingUids arrayContains uid` --
+/// the denormalized set of faculty currently awaited on each request (spec
+/// 2026-09-25 fix round 2, Fix 1). An UNFILTERED collection-group `list`
+/// would be denied wholesale by the per-document read rule (Firestore rules
+/// are not a filter: any document the rule would reject on a `list` sinks
+/// the whole query), so this can no longer scan every open request and
+/// filter client-side the way the (now removed) `stage whereIn` query did.
 final mySignoffRequestsProvider = StreamProvider<
     List<({String thesisId, ChangeRequest request, String role})>>((ref) {
   final uid = ref.watch(signedInUidProvider);
@@ -44,32 +47,25 @@ final mySignoffRequestsProvider = StreamProvider<
   final db = ref.watch(firestoreProvider);
   return db
       .collectionGroup('changeRequests')
-      .where('stage', whereIn: [
-        ChangeRequestStage.pendingAdvisers.value,
-        ChangeRequestStage.pendingAdviser.value,
-      ])
+      .where('awaitingUids', arrayContains: uid)
       .snapshots()
       .map((s) {
     final out = <({String thesisId, ChangeRequest request, String role})>[];
     for (final d in s.docs) {
       final thesisId = d.reference.parent.parent!.id;
       final r = ChangeRequest.fromMap(d.id, d.data());
+      // awaitingUids already scopes the query to exactly this uid's open
+      // requests, so the role is just which named seat matches it.
       String? role;
-      if (r.stage == ChangeRequestStage.pendingAdvisers) {
-        if (r.newAdviserUid == uid &&
-            r.signoffs['newAdviser']?.status == SignoffStatus.pending) {
+      if (r.type == ChangeRequestType.adviser &&
+          r.stage == ChangeRequestStage.pendingAdvisers) {
+        if (r.newAdviserUid == uid) {
           role = 'newAdviser';
-        } else if (r.formerAdviserUid == uid &&
-            r.signoffs['formerAdviser']?.status == SignoffStatus.pending) {
+        } else if (r.formerAdviserUid == uid) {
           role = 'formerAdviser';
         }
-      } else if (r.stage == ChangeRequestStage.pendingAdviser &&
-          r.signoffs['adviser']?.status == SignoffStatus.pending) {
-        // The title request's signer is the thesis's current adviser. The
-        // rules authorise on the thesis's adviserUid; the client cannot read
-        // it from the request alone, so a pendingAdviser request is shown to
-        // whoever the app knows advises it. The screen resolves the adviser
-        // from the thesis before offering the action.
+      } else if (r.type == ChangeRequestType.title &&
+          r.stage == ChangeRequestStage.pendingAdviser) {
         role = 'adviser';
       }
       if (role != null) {

@@ -129,6 +129,8 @@ class ChangeRequest {
     this.formerAdviserUid,
     this.formerAdviserName,
     this.newTitle,
+    this.oldTitle,
+    this.awaitingUids = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -146,6 +148,19 @@ class ChangeRequest {
   final String? formerAdviserUid;
   final String? formerAdviserName;
   final String? newTitle;
+
+  /// The thesis's working title at the moment a title-change request was
+  /// submitted -- captured then because by the time the request reaches
+  /// `approved`, the Dean's batch has already overwritten the thesis's
+  /// `workingTitle` with [newTitle]. Null for an adviser request.
+  final String? oldTitle;
+
+  /// The faculty uids whose sign-off is CURRENTLY awaited on this request.
+  /// Denormalized so the faculty inbox can query with `arrayContains` rather
+  /// than an unfiltered collection-group scan a per-document read rule would
+  /// reject wholesale (spec 2026-09-25 fix round 2, Fix 1). Read-authorization
+  /// only -- write authorization still comes from the per-role update arms.
+  final List<String> awaitingUids;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -175,6 +190,9 @@ class ChangeRequest {
       formerAdviserUid: map['formerAdviserUid'] as String?,
       formerAdviserName: map['formerAdviserName'] as String?,
       newTitle: map['newTitle'] as String?,
+      oldTitle: map['oldTitle'] as String?,
+      awaitingUids: (map['awaitingUids'] as List?)?.cast<String>() ??
+          const [],
       createdAt: map['createdAt'] as DateTime?,
       updatedAt: map['updatedAt'] as DateTime?,
     );
@@ -191,6 +209,8 @@ class ChangeRequest {
     if (formerAdviserUid != null) 'formerAdviserUid': formerAdviserUid,
     if (formerAdviserName != null) 'formerAdviserName': formerAdviserName,
     if (newTitle != null) 'newTitle': newTitle,
+    if (oldTitle != null) 'oldTitle': oldTitle,
+    'awaitingUids': awaitingUids,
     'createdAt': createdAt,
     'updatedAt': updatedAt,
   };

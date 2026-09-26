@@ -69,6 +69,7 @@ void main() {
           'coordinator',
           'dean',
         ]),
+        'awaitingUids': ['new1', 'former1'],
       });
 
       await tester.pumpWidget(_wrap(db, uid: 'new1'));
@@ -90,6 +91,9 @@ void main() {
       // Only one of the two advisers has accepted so far -- the stage
       // stays at pendingAdvisers until both have.
       expect(saved.data()!['stage'], 'pendingAdvisers');
+      // The accepting adviser drops out of awaitingUids; the former
+      // adviser is still awaited (Fix 1).
+      expect(saved.data()!['awaitingUids'], ['former1']);
     });
 
     testWidgets('a decline requires a reason and returns the request', (
@@ -112,6 +116,7 @@ void main() {
           'coordinator',
           'dean',
         ]),
+        'awaitingUids': ['new1', 'former1'],
       });
 
       await tester.pumpWidget(_wrap(db, uid: 'new1'));
@@ -149,19 +154,18 @@ void main() {
         saved.data()!['signoffs']['newAdviser']['reason'],
         'Not a good fit',
       );
+      expect(saved.data()!['awaitingUids'], isEmpty);
     });
   });
 
   group('title-type (pendingAdviser) requests', () {
-    testWidgets('shown only to the faculty who actually advises that thesis', (
+    testWidgets('shown only to the faculty currently awaited', (
       tester,
     ) async {
       final db = FakeFirebaseFirestore();
-      // t1 is advised by 'me'; t2 is advised by someone else. Both have an
-      // open pendingAdviser (title) request awaiting 'adviser'. Since the
-      // collection-group query can't read adviserUid, both rows come back
-      // from mySignoffRequestsProvider -- the widget must filter t2 out
-      // via myAdviseesProvider.
+      // t1 awaits 'me'; t2 awaits someone else. mySignoffRequestsProvider
+      // now filters server-side by awaitingUids (Fix 1), so t2's row never
+      // comes back for 'me' -- no client-side cross-filter needed.
       await seedThesis(db, 't1', adviserUid: 'me', title: 'My Advisee');
       await seedThesis(
         db,
@@ -176,6 +180,7 @@ void main() {
         'leaderUid': 'l1',
         'newTitle': 'A New Working Title',
         'signoffs': signoffMap(['adviser', 'coordinator', 'dean']),
+        'awaitingUids': ['me'],
       });
       await db.doc('theses/t2/changeRequests/title').set({
         'type': 'title',
@@ -184,6 +189,7 @@ void main() {
         'leaderUid': 'l2',
         'newTitle': 'Another New Title',
         'signoffs': signoffMap(['adviser', 'coordinator', 'dean']),
+        'awaitingUids': ['someone-else'],
       });
 
       await tester.pumpWidget(_wrap(db, uid: 'me'));
@@ -209,6 +215,7 @@ void main() {
         'leaderUid': 'l1',
         'newTitle': 'A New Working Title',
         'signoffs': signoffMap(['adviser', 'coordinator', 'dean']),
+        'awaitingUids': ['me'],
       });
 
       await tester.pumpWidget(_wrap(db, uid: 'me'));
@@ -220,6 +227,7 @@ void main() {
       final saved = await db.doc('theses/t1/changeRequests/title').get();
       expect(saved.data()!['signoffs']['adviser']['status'], 'accepted');
       expect(saved.data()!['stage'], 'pendingCoordinator');
+      expect(saved.data()!['awaitingUids'], isEmpty);
     });
   });
 

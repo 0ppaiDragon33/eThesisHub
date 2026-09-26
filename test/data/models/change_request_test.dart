@@ -92,4 +92,33 @@ void main() {
     expect(r.isOpen, isFalse);
     expect(r.newTitle, 'A Better Title');
   });
+
+  test('awaitingUids and oldTitle default safely and round-trip', () {
+    final withoutThem = ChangeRequest.fromMap('title', {
+      'type': 'title',
+      'stage': 'pendingAdviser',
+      'reasons': 'x',
+      'leaderUid': 'l1',
+      'newTitle': 'A Better Title',
+      'signoffs': const {},
+    });
+    expect(withoutThem.awaitingUids, isEmpty);
+    expect(withoutThem.oldTitle, isNull);
+    expect(withoutThem.toMap()['awaitingUids'], <String>[]);
+
+    final withThem = ChangeRequest.fromMap('title', {
+      'type': 'title',
+      'stage': 'pendingAdviser',
+      'reasons': 'x',
+      'leaderUid': 'l1',
+      'newTitle': 'A Better Title',
+      'oldTitle': 'The Old One',
+      'awaitingUids': ['a1'],
+      'signoffs': const {},
+    });
+    expect(withThem.awaitingUids, ['a1']);
+    expect(withThem.oldTitle, 'The Old One');
+    expect(withThem.toMap()['awaitingUids'], ['a1']);
+    expect(withThem.toMap()['oldTitle'], 'The Old One');
+  });
 }

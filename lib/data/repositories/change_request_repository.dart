@@ -69,6 +69,7 @@ class ChangeRequestRepository {
       'formerAdviserUid': thesis.adviserUid,
       'formerAdviserName': formerAdviserName,
       'signoffs': _freshSignoffs(signoffRolesFor(ChangeRequestType.adviser)),
+      'awaitingUids': [newAdviser.uid, thesis.adviserUid],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
@@ -87,7 +88,9 @@ class ChangeRequestRepository {
       'reasons': reasons.trim(),
       'leaderUid': thesis.leaderUid,
       'newTitle': newTitle.trim(),
+      'oldTitle': thesis.workingTitle,
       'signoffs': _freshSignoffs(signoffRolesFor(ChangeRequestType.title)),
+      'awaitingUids': [thesis.adviserUid],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
@@ -133,16 +136,30 @@ class ChangeRequestRepository {
       };
 
       if (!accept) {
+        // A decline returns the request to the student; nobody is awaited.
         update['stage'] = ChangeRequestStage.returned.value;
+        update['awaitingUids'] = <String>[];
       } else if (type == ChangeRequestType.adviser &&
           req.stage == ChangeRequestStage.pendingAdvisers) {
         // Advance only when this accept makes BOTH advisers accepted.
         final other = role == 'newAdviser' ? 'formerAdviser' : 'newAdviser';
         if (req.signoffs[other]?.status == SignoffStatus.accepted) {
           update['stage'] = ChangeRequestStage.pendingCoordinator.value;
+          update['awaitingUids'] = <String>[];
+        } else {
+          // The step holds -- this signer has answered, so drop them from
+          // the awaited set; the other adviser stays awaited.
+          final answeredUid = role == 'newAdviser'
+              ? req.newAdviserUid
+              : req.formerAdviserUid;
+          update['awaitingUids'] = FieldValue.arrayRemove([answeredUid]);
         }
       } else {
+        // The single-signer step completes and the stage advances (the
+        // title request's adviser, the coordinator). Nobody is awaited
+        // until the next stage denormalizes its own signer, if any.
         update['stage'] = nextStage(req.stage)!.value;
+        update['awaitingUids'] = <String>[];
       }
       tx.update(ref, update);
       return null;

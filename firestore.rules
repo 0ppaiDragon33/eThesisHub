@@ -841,14 +841,24 @@ service cloud.firestore {
           return getAfter(/databases/$(database)/documents/theses/$(thesisId)).data;
         }
 
-        // Every reader who has business seeing the request.
+        // Every reader who has business seeing the request. The
+        // `awaitingUids` arm authorises the faculty inbox's collection-group
+        // `arrayContains` query (spec 2026-09-25 fix round 2, Fix 1): in a
+        // collection-group list the {thesisId} wildcard is unbound, so
+        // `t().adviserUid` can't be evaluated to filter that query the way
+        // the nominations collection-group rule leans on a document-id
+        // wildcard -- awaitingUids is denormalized onto the request itself
+        // for exactly that reason. It is READ authorization only; who may
+        // WRITE a sign-off is still gated below by exact uid / role, never
+        // by this field.
         allow get, list: if isThesisLeader(thesisId)
                          || isCoordinator() || isDean()
                          || (signedIn() && isActive() && (
                               request.auth.uid == req().get('newAdviserUid', '') ||
                               request.auth.uid == req().get('formerAdviserUid', '') ||
                               request.auth.uid == t().adviserUid ||
-                              request.auth.uid in t().panelistUids));
+                              request.auth.uid in t().panelistUids ||
+                              request.auth.uid in req().get('awaitingUids', [])));
 
         // The leader writes a fresh first-pending request: the first create
         // (no document — the create rule), or a reset of a returned/approved
@@ -860,6 +870,10 @@ service cloud.firestore {
                  && d.leaderUid == request.auth.uid
                  && d.reasons is string && d.reasons.size() > 0
                  && d.reasons.size() < 4000
+                 // awaitingUids is denormalized read-authorization only (see
+                 // the get/list rule above); kept to a plain list of strings
+                 // here rather than pinned to a specific shape.
+                 && d.get('awaitingUids', []) is list
                  && (
                       (crId == 'adviser'
                        && d.stage == 'pendingAdvisers'
@@ -901,14 +915,17 @@ service cloud.firestore {
         // `isCoordinator()`, `isDean()`).
 
         // Every role OTHER than `role` must be untouched, so a signer cannot
-        // pre-set a later approver's sign-off in the same write. Rules cannot
-        // iterate the map, so each role is named. A role `r` is "kept" when
-        // it is not `role` and its incoming status equals its stored status;
-        // `role` itself is exempt because the caller is changing it.
+        // pre-set a later approver's sign-off in the same write -- and, per
+        // Fix 3, cannot scribble that role's `reason` or `respondedAt`
+        // either. Rules cannot iterate the map, so each role is named. A
+        // role `r` is "kept" when it is not `role` and its incoming sub-map
+        // equals its stored sub-map in full, not merely `.status`; `role`
+        // itself is exempt because the caller is changing it. Fail-closed:
+        // a role missing from either side compares unequal and denies.
         function keptUnless(r, role) {
           return r == role
-                 || incoming().signoffs[r].get('status', '')
-                    == req().signoffs[r].get('status', '');
+                 || incoming().signoffs.get(r, {})
+                    == req().signoffs.get(r, {});
         }
         function onlyOwnSignoff(role) {
           return req().type == 'adviser'
@@ -925,7 +942,7 @@ service cloud.firestore {
         // (an adviser accept while the co-adviser is still pending) or moves
         // to `to`. Only that role's signoff and the stage may change.
         function accepts(role, holdStage, to) {
-          return onlyChanged(['signoffs', 'stage', 'updatedAt'])
+          return onlyChanged(['signoffs', 'stage', 'updatedAt', 'awaitingUids'])
                  && incoming().signoffs[role].status == 'accepted'
                  && req().signoffs[role].status == 'pending'
                  && onlyOwnSignoff(role)
@@ -935,7 +952,7 @@ service cloud.firestore {
         // A decline sets the role declined with a reason and returns the
         // request; nothing else of substance changes.
         function declines(role) {
-          return onlyChanged(['signoffs', 'stage', 'updatedAt'])
+          return onlyChanged(['signoffs', 'stage', 'updatedAt', 'awaitingUids'])
                  && incoming().signoffs[role].status == 'declined'
                  && req().signoffs[role].status == 'pending'
                  && onlyOwnSignoff(role)
@@ -1927,6 +1944,22 @@ service cloud.firestore {
     match /{path=**}/nominations/{nomineeUid} {
       allow read: if verified()
                   && resource.data.nomineeUid == request.auth.uid;
+    }
+
+    // The faculty inbox also queries change requests across all theses, by
+    // their denormalized `awaitingUids` (spec 2026-09-25 fix round 2, Fix
+    // 1). Same reasoning as the nominations collection-group rule just
+    // above: the nested per-thesis rule at
+    // `theses/{thesisId}/changeRequests/{crId}` reads `t()` (a `get()` on
+    // `theses/{thesisId}`), and in a collection-group LIST the {thesisId}
+    // wildcard is unbound -- that `get()` errors rather than filtering, so
+    // the nested rule cannot authorise this query at all. awaitingUids is
+    // denormalized onto the request precisely so a single resource-level
+    // check, with no path wildcard, can. Read authorization only: who may
+    // WRITE a sign-off is still gated by the nested rule's per-role arms.
+    match /{path=**}/changeRequests/{crId} {
+      allow read: if verified()
+                  && request.auth.uid in resource.data.get('awaitingUids', []);
     }
 
     match /facultyDirectory/{uid} {

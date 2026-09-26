@@ -16,13 +16,9 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// title request addressed to a role they hold, mounted as a section on
 /// [NominationInboxScreen] below the nomination inbox.
 ///
-/// `mySignoffRequestsProvider` surfaces every open `pendingAdvisers`
-/// (adviser-type) row already correctly targeted by uid, but a
-/// `pendingAdviser` (title-type) row to *every* faculty member — the
-/// collection-group query behind it cannot read the thesis's `adviserUid` to
-/// filter by it. This widget closes that gap by keeping a title-type row
-/// only when [myAdviseesProvider] says the signed-in reader actually advises
-/// that thesis.
+/// `mySignoffRequestsProvider` already scopes its query to the signed-in
+/// uid's own `awaitingUids` entries server-side, so every row here is
+/// correctly targeted -- no client-side cross-filter needed.
 ///
 /// `respond` throws `StateError` when the request has moved on since this
 /// widget last read it (a stale tab, or a co-signer's answer already
@@ -102,7 +98,6 @@ class _ChangeRequestInboxState extends ConsumerState<ChangeRequestInbox> {
   @override
   Widget build(BuildContext context) {
     final requestsAsync = ref.watch(mySignoffRequestsProvider);
-    final adviseesAsync = ref.watch(myAdviseesProvider);
 
     return KeyedSubtree(
       key: const Key('changeRequestInbox'),
@@ -120,93 +115,68 @@ class _ChangeRequestInboxState extends ConsumerState<ChangeRequestInbox> {
             message: 'Could not load your change requests.',
           ),
         ),
-        data: (items) => adviseesAsync.when(
-          loading: () => const Panel(
-            title: 'Change requests',
-            icon: Icons.rule_folder_outlined,
-            child: LoadingState(label: 'Loading change requests…'),
+        data: (visible) => Panel(
+          title: 'Change requests',
+          icon: Icons.rule_folder_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (visible.isEmpty)
+                const EmptyState(
+                  icon: Icons.rule_folder_outlined,
+                  title: 'No change requests waiting',
+                  message:
+                      'When a group asks you to sign off on a '
+                      'change of adviser or title, the request appears '
+                      'here.',
+                ),
+              if (_error != null) ...[
+                ErrorState(
+                  key: const Key('changeRequestError'),
+                  message: _error!,
+                ),
+                const Gap.md(),
+              ],
+              for (var i = 0; i < visible.length; i++) ...[
+                _RequestCard(
+                  thesisId: visible[i].thesisId,
+                  request: visible[i].request,
+                  role: visible[i].role,
+                  declining:
+                      _decliningKey ==
+                      _key(visible[i].thesisId, visible[i].role),
+                  busy: _busy.contains(
+                    _key(visible[i].thesisId, visible[i].role),
+                  ),
+                  reason: _reason,
+                  onAccept: () => _respond(
+                    visible[i].thesisId,
+                    visible[i].request.type,
+                    visible[i].role,
+                    true,
+                  ),
+                  onStartDecline: () => setState(() {
+                    _decliningKey = _key(
+                      visible[i].thesisId,
+                      visible[i].role,
+                    );
+                    _error = null;
+                  }),
+                  onCancelDecline: () => setState(() {
+                    _decliningKey = null;
+                    _reason.clear();
+                  }),
+                  onConfirmDecline: () => _respond(
+                    visible[i].thesisId,
+                    visible[i].request.type,
+                    visible[i].role,
+                    false,
+                  ),
+                ),
+                if (i < visible.length - 1) const Gap.md(),
+              ],
+            ],
           ),
-          error: (e, _) => Panel(
-            title: 'Change requests',
-            icon: Icons.rule_folder_outlined,
-            child: ErrorState(
-              error: e,
-              message: 'Could not load your change requests.',
-            ),
-          ),
-          data: (advisees) {
-            final adviseeIds = advisees.map((t) => t.id).toSet();
-            final visible = [
-              for (final item in items)
-                if (item.role != 'adviser' ||
-                    adviseeIds.contains(item.thesisId))
-                  item,
-            ];
-
-            return Panel(
-              title: 'Change requests',
-              icon: Icons.rule_folder_outlined,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (visible.isEmpty)
-                    const EmptyState(
-                      icon: Icons.rule_folder_outlined,
-                      title: 'No change requests waiting',
-                      message:
-                          'When a group asks you to sign off on a '
-                          'change of adviser or title, the request appears '
-                          'here.',
-                    ),
-                  if (_error != null) ...[
-                    ErrorState(
-                      key: const Key('changeRequestError'),
-                      message: _error!,
-                    ),
-                    const Gap.md(),
-                  ],
-                  for (var i = 0; i < visible.length; i++) ...[
-                    _RequestCard(
-                      thesisId: visible[i].thesisId,
-                      request: visible[i].request,
-                      role: visible[i].role,
-                      declining:
-                          _decliningKey ==
-                          _key(visible[i].thesisId, visible[i].role),
-                      busy: _busy.contains(
-                        _key(visible[i].thesisId, visible[i].role),
-                      ),
-                      reason: _reason,
-                      onAccept: () => _respond(
-                        visible[i].thesisId,
-                        visible[i].request.type,
-                        visible[i].role,
-                        true,
-                      ),
-                      onStartDecline: () => setState(() {
-                        _decliningKey = _key(
-                          visible[i].thesisId,
-                          visible[i].role,
-                        );
-                        _error = null;
-                      }),
-                      onCancelDecline: () => setState(() {
-                        _decliningKey = null;
-                        _reason.clear();
-                      }),
-                      onConfirmDecline: () => _respond(
-                        visible[i].thesisId,
-                        visible[i].request.type,
-                        visible[i].role,
-                        false,
-                      ),
-                    ),
-                    if (i < visible.length - 1) const Gap.md(),
-                  ],
-                ],
-              ),
-            );
-          },
         ),
       ),
     );
