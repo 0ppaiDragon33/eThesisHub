@@ -55,6 +55,10 @@ dependencies:
   # declared directly only so `lib/` may import it without tripping
   # depend_on_referenced_packages. No version moves — see pubspec.lock.
   url_launcher: 6.3.2
+  # Downloads a chapter's bytes from its signed URL for the defence
+  # manuscript. Already resolved at 1.6.0 through supabase; declared so lib/
+  # may import it. No version moves.
+  http: 1.6.0
   fl_chart: ^1.2.0
   # 5.2.7 is the newest Crashlytics that resolves against the pinned
   # firebase_core 4.13.0; 5.4.0 pulls core to 4.15.0 and breaks firebase_auth.
