@@ -126,9 +126,12 @@ class _ApprovedTitle extends ConsumerWidget {
     final candidates = ref
         .watch(candidateTitlesProvider(thesis.id))
         .valueOrNull;
-    String? text;
+    // An approved change-of-title (Form 4b) set this directly; prefer it.
+    String? text = thesis.approvedTitleText?.isNotEmpty == true
+        ? thesis.approvedTitleText
+        : null;
     for (final c in candidates ?? const []) {
-      if (c.id == approvedId) text = c.titleText;
+      if (c.id == approvedId) text ??= c.titleText;
     }
     return Text(
       text == null ? 'Your title has been approved.' : 'Title approved: $text',

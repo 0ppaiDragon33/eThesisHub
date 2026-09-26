@@ -127,6 +127,11 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   /// than a row with the older one. Used by BOTH the label and [_publish],
   /// so the two can never name different titles.
   String? _approvedTitle(List<CandidateTitle>? candidates) {
+    // An approved change-of-title (Form 4b) set this directly; it wins over
+    // the originally approved candidate, so the archive publishes the
+    // changed title, not the stale one.
+    final changed = widget.thesis.approvedTitleText;
+    if (changed != null && changed.isNotEmpty) return changed;
     final approvedId = widget.thesis.approvedTitleId;
     if (candidates == null || approvedId == null) return null;
     for (final c in candidates) {

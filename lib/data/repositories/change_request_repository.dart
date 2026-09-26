@@ -199,7 +199,11 @@ class ChangeRequestRepository {
       thesisRef,
       type == ChangeRequestType.adviser
           ? {'adviserUid': req.newAdviserUid}
-          : {'workingTitle': req.newTitle},
+          // Both fields: workingTitle drives the list views, approvedTitleText
+          // drives the approved-title resolvers (archive, evaluation sheet,
+          // the student's approved-title card) — so a change of title reaches
+          // the official record, not only the lists.
+          : {'workingTitle': req.newTitle, 'approvedTitleText': req.newTitle},
     );
     await batch.commit();
   }

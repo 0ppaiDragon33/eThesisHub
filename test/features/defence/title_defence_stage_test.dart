@@ -131,4 +131,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Title approved: Mangrove Carbon Stocks'), findsOneWidget);
   });
+
+  testWidgets('after an approved change of title, the student sees the new '
+      'title, not the originally approved candidate', (tester) async {
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      ...thesis(leaderUid: 's1', status: 'titleApproved', approvedTitleId: 'c1'),
+      'approvedTitleText': 'Seagrass Carbon Stocks',
+    });
+    await db.doc('theses/t1/candidateTitles/c1').set({
+      'titleText': 'Mangrove Carbon Stocks',
+      'position': 0,
+      'round': 1,
+      'submittedAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
+    });
+    await tester.pumpWidget(await wrap(db, 's1', 'student'));
+    await tester.pumpAndSettle();
+    expect(find.text('Title approved: Seagrass Carbon Stocks'), findsOneWidget);
+    expect(find.text('Title approved: Mangrove Carbon Stocks'), findsNothing);
+  });
 }

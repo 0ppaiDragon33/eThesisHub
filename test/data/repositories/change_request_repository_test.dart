@@ -187,7 +187,12 @@ void main() {
       );
     }
     await repo.approveAsDean(thesisId: 't1', type: ChangeRequestType.title);
-    expect((await theThesis(db)).workingTitle, 'A Better Title');
+    final after = await theThesis(db);
+    expect(after.workingTitle, 'A Better Title');
+    // The approved-title resolvers (archive, evaluation sheet, the student's
+    // approved-title card) read approvedTitleText, so the change must reach
+    // it too — not only workingTitle.
+    expect(after.approvedTitleText, 'A Better Title');
   });
 
   test('responding at the wrong stage is refused', () async {

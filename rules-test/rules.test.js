@@ -5915,17 +5915,30 @@ test("CR title: the full flow reaches the dean; either half of the batch alone i
     await assertFails(updateDoc(doc(dean, crTitlePath), {
       "signoffs.dean.status": "accepted",
       "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" }));
-    // The thesis-only workingTitle change alone is denied.
+    // The thesis-only change alone is denied.
     await assertFails(updateDoc(doc(dean, "theses/cr1"),
-      { workingTitle: titleReq().newTitle }));
+      { workingTitle: titleReq().newTitle,
+        approvedTitleText: titleReq().newTitle }));
 
-    // Both together, in one batch, succeed.
+    // A batch that changes workingTitle but NOT approvedTitleText is denied:
+    // the approved-title resolvers read approvedTitleText, so a change that
+    // skipped it would leave the archive showing the stale title.
+    const halfBatch = writeBatch(dean);
+    halfBatch.update(doc(dean, crTitlePath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
+    halfBatch.update(doc(dean, "theses/cr1"),
+      { workingTitle: titleReq().newTitle });
+    await assertFails(halfBatch.commit());
+
+    // Both together, in one batch, succeed — workingTitle AND approvedTitleText.
     const batch = writeBatch(dean);
     batch.update(doc(dean, crTitlePath), {
       "signoffs.dean.status": "accepted",
       "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
     batch.update(doc(dean, "theses/cr1"),
-      { workingTitle: titleReq().newTitle });
+      { workingTitle: titleReq().newTitle,
+        approvedTitleText: titleReq().newTitle });
     await assertSucceeds(batch.commit());
   });
 

@@ -810,11 +810,16 @@ service cloud.firestore {
                        && changeRequestAfter(thesisId, 'adviser')
                             .signoffs.dean.status == 'accepted')
                       ||
-                      (onlyChanged(['workingTitle'])
+                      (onlyChanged(['workingTitle', 'approvedTitleText'])
                        && changeRequestAt(thesisId, 'title').stage
                           == 'pendingDean'
                        && changeRequestAt(thesisId, 'title').newTitle
                           == request.resource.data.workingTitle
+                       // The approved-title text must be set to the same new
+                       // title, so the archive and the evaluation sheet show
+                       // the change, not the stale approved candidate.
+                       && changeRequestAt(thesisId, 'title').newTitle
+                          == request.resource.data.approvedTitleText
                        && changeRequestAfter(thesisId, 'title').stage
                           == 'approved'
                        && changeRequestAfter(thesisId, 'title')
