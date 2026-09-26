@@ -197,6 +197,44 @@ void main() {
     expect((await db.doc('defenses/d1/composing/p1').get()).exists, isFalse);
   });
 
+  testWidgets(
+      'at medium width a steep drag draws a highlight, not a page scroll',
+      (tester) async {
+    final db = await seed();
+    await pumpScreen(tester, db, 'p1', room, size: const Size(900, 1000));
+
+    await tester.ensureVisible(find.byKey(const Key('highlightTool')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('highlightTool')));
+    await tester.pump();
+    final surface = find.byKey(const Key('drawSurface-chapterI-0'));
+    await tester.ensureVisible(surface);
+    await settle(tester);
+
+    // A finger moving mostly downwards, in small steps: the page's own
+    // vertical scroll would win this gesture if the drawing did not claim it.
+    final gesture =
+        await tester.startGesture(tester.getTopLeft(surface) + const Offset(40, 40));
+    for (var i = 0; i < 20; i++) {
+      await gesture.moveBy(const Offset(4, 10));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await settle(tester);
+
+    expect(find.byKey(const Key('highlightBody')), findsOneWidget,
+        reason: 'the comment dialog opens for the box just drawn');
+    await tester.enterText(
+        find.byKey(const Key('highlightBody')), 'Steep box.');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveHighlight')));
+    await settle(tester);
+
+    final saved = (await db.collection('defenses/d1/annotations').get()).docs;
+    expect(saved, hasLength(1));
+    expect(saved.single.data()['body'], 'Steep box.');
+  });
+
   testWidgets('you delete your own highlight after confirming',
       (tester) async {
     final db = await seed(highlights: [

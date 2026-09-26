@@ -649,36 +649,48 @@ class _PageTileState extends ConsumerState<_PageTile> {
     );
 
     if (widget.drawing) {
-      page = GestureDetector(
-        key: Key('drawSurface-$chapterId-${widget.index}'),
-        behavior: HitTestBehavior.opaque,
-        dragStartBehavior: DragStartBehavior.down,
-        onPanStart: (d) => setState(() {
-          _start = d.localPosition;
-          _end = d.localPosition;
-        }),
-        onPanUpdate: (d) => setState(() => _end = d.localPosition),
-        onPanEnd: (_) {
-          final start = _start;
-          final end = _end;
-          setState(() {
+      void clear() => setState(() {
             _start = null;
             _end = null;
           });
-          if (start == null || end == null) return;
-          final rect = NormRect.fromDrag(start, end, pageSize);
-          if (!rect.isBigEnough) return;
-          widget.onDrawn(DrawnHighlight(
-            chapter: widget.part.chapter,
-            version: widget.part.version!.version,
-            page: widget.index,
-            rect: rect,
-          ));
+      // The page list stops scrolling while the tool is on, but the pane can
+      // sit inside another scrollable (the room at medium width scrolls as a
+      // whole page). A plain pan recogniser loses a steep drag to that
+      // scroll's vertical recogniser, which needs less slop, so this one
+      // claims the pointer the moment it lands on the page.
+      page = RawGestureDetector(
+        key: Key('drawSurface-$chapterId-${widget.index}'),
+        behavior: HitTestBehavior.opaque,
+        gestures: {
+          _EagerPanGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<_EagerPanGestureRecognizer>(
+            _EagerPanGestureRecognizer.new,
+            (r) {
+              r
+                ..dragStartBehavior = DragStartBehavior.down
+                ..onStart = ((d) => setState(() {
+                      _start = d.localPosition;
+                      _end = d.localPosition;
+                    }))
+                ..onUpdate = ((d) => setState(() => _end = d.localPosition))
+                ..onCancel = clear
+                ..onEnd = (_) {
+                  final start = _start;
+                  final end = _end;
+                  clear();
+                  if (start == null || end == null) return;
+                  final rect = NormRect.fromDrag(start, end, pageSize);
+                  if (!rect.isBigEnough) return;
+                  widget.onDrawn(DrawnHighlight(
+                    chapter: widget.part.chapter,
+                    version: widget.part.version!.version,
+                    page: widget.index,
+                    rect: rect,
+                  ));
+                };
+            },
+          ),
         },
-        onPanCancel: () => setState(() {
-          _start = null;
-          _end = null;
-        }),
         child: page,
       );
     }
@@ -687,5 +699,15 @@ class _PageTileState extends ConsumerState<_PageTile> {
       padding: const EdgeInsets.only(bottom: ManuscriptView.pageGap),
       child: SizedBox(width: widget.width, height: height, child: page),
     );
+  }
+}
+
+/// A pan that wins the gesture arena as soon as the finger lands, so no
+/// ancestor scrollable can take a drawing drag away, whatever its angle.
+class _EagerPanGestureRecognizer extends PanGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }
