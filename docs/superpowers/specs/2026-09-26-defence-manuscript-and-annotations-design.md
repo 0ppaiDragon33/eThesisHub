@@ -109,6 +109,13 @@ it stays in the list, marked "On an earlier version of Chapter II".
     "Chapter II was uploaded as a Word file and can't be shown here." with
     an **Open file** button (the existing signed-URL download).
   - Missing → "Chapter II has not been uploaded."
+  - Reopened after the defence (no longer approved) but carrying this
+    defence's highlights on a version whose record exists and is a PDF →
+    that version's pages (the highest such version), under a short note:
+    "Chapter II has been reopened for revision. Showing the version the
+    panel marked." Highlights on that version are drawn, not listed as on
+    an earlier version. Without such highlights it keeps the "not approved
+    yet" placeholder.
 - **Loading:** each chapter's PDF is downloaded once (signed URL → bytes)
   and its pages are drawn **lazily**, a page at a time as it scrolls into
   view, and released when far off-screen, so a long manuscript does not hold

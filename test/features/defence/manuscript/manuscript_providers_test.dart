@@ -60,7 +60,7 @@ void main() {
         {'type': 'chapterII', 'currentVersion': 1, 'status': 'revise'});
 
     final c = container(db);
-    const key = (thesisId: 't1', type: DefenceType.preOral);
+    const key = (defenceId: 'd1', thesisId: 't1', type: DefenceType.preOral);
     c.listen(manuscriptPartsProvider(key), (_, _) {});
     List<ManuscriptPart>? parts;
     for (var i = 0; i < 20 && parts == null; i++) {
@@ -74,6 +74,64 @@ void main() {
       ManuscriptPartKind.missing,
     ]);
     expect(parts.first.version!.storagePath, 'theses/t1/chapterI/v2.pdf');
+  });
+
+  test('a chapter reopened after the defence shows the version it marked',
+      () async {
+    final db = FakeFirebaseFirestore();
+    await db.collection('defenses').doc('d1').set({
+      'thesisId': 't1',
+      'type': 'preOral',
+      'panelUids': ['p1'],
+      'adviserUid': 'a1',
+      'leaderUid': 'l1',
+      'status': 'completed',
+    });
+    final docs = db.collection('theses/t1/documents');
+    // Reopened by the adviser: same version, status back to revise.
+    await docs.doc('chapterII').set(
+        {'type': 'chapterII', 'currentVersion': 2, 'status': 'revise'});
+    for (final n in [1, 2]) {
+      await docs.doc('chapterII').collection('versions').doc('$n').set({
+        'version': n,
+        'storagePath': 'theses/t1/chapterII/v$n.pdf',
+        'fileUrl': '',
+        'uploadedBy': 'l1',
+        'uploadedAt': Timestamp.now(),
+        'mimeType': 'application/pdf',
+        'sizeBytes': 4,
+      });
+    }
+    await docs.doc('chapterIII').set(
+        {'type': 'chapterIII', 'currentVersion': 1, 'status': 'revise'});
+    await db.collection('defenses/d1/annotations').doc('h1').set({
+      'authorUid': 'p1',
+      'authorName': 'Dr. Panel',
+      'authorPosition': 'Panel Member',
+      'chapter': 'chapterII',
+      'version': 2,
+      'page': 0,
+      'rect': {'x': 0.1, 'y': 0.1, 'w': 0.5, 'h': 0.05},
+      'body': 'Cite it.',
+      'createdAt': Timestamp.now(),
+    });
+
+    final c = container(db);
+    const key = (defenceId: 'd1', thesisId: 't1', type: DefenceType.preOral);
+    c.listen(manuscriptPartsProvider(key), (_, _) {});
+    List<ManuscriptPart>? parts;
+    for (var i = 0; i < 20 && parts == null; i++) {
+      await Future<void>.delayed(Duration.zero);
+      parts = c.read(manuscriptPartsProvider(key)).valueOrNull;
+    }
+
+    expect(parts!.map((p) => p.kind), [
+      ManuscriptPartKind.missing,
+      ManuscriptPartKind.pdf,
+      ManuscriptPartKind.notApproved, // reopened, but nothing marked on it
+    ]);
+    expect(parts[1].reopened, isTrue);
+    expect(parts[1].version!.storagePath, 'theses/t1/chapterII/v2.pdf');
   });
 
   test('a chapter PDF is downloaded once and measured', () async {

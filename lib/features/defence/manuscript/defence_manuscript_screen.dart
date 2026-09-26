@@ -87,6 +87,7 @@ class _DefenceManuscriptScreenState
     final parts = ref
         .watch(
           manuscriptPartsProvider((
+            defenceId: defence.id,
             thesisId: defence.thesisId,
             type: defence.type,
           )),

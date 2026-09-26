@@ -69,7 +69,9 @@ class HighlightsList extends StatelessWidget {
                     width: 12,
                     height: 12,
                     decoration: BoxDecoration(
-                        color: a.colour, shape: BoxShape.circle),
+                      color: a.colour,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Text(a.name, style: text.labelMedium),
@@ -113,8 +115,9 @@ class HighlightsList extends StatelessWidget {
                     Text(
                       'On an earlier version of Chapter $numeral',
                       key: Key('highlightStale-${a.id}'),
-                      style: text.bodySmall
-                          ?.copyWith(fontStyle: FontStyle.italic),
+                      style: text.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                 ],
               ),
@@ -154,15 +157,24 @@ class HighlightsTab extends ConsumerWidget {
     final annotationsAsync = ref.watch(defenceAnnotationsProvider(defence.id));
     final composing =
         ref.watch(defenceComposingProvider(defence.id)).valueOrNull ??
-            const <DefenceComposing>[];
+        const <DefenceComposing>[];
     final parts = ref
-        .watch(manuscriptPartsProvider(
-            (thesisId: defence.thesisId, type: defence.type)))
+        .watch(
+          manuscriptPartsProvider((
+            defenceId: defence.id,
+            thesisId: defence.thesisId,
+            type: defence.type,
+          )),
+        )
         .valueOrNull;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppTokens.md, AppTokens.sm, AppTokens.md, AppTokens.md),
+        AppTokens.md,
+        AppTokens.sm,
+        AppTokens.md,
+        AppTokens.md,
+      ),
       child: annotationsAsync.when(
         loading: () => const LoadingState(label: 'Loading highlights…'),
         error: (e, _) =>
@@ -255,7 +267,8 @@ class _HighlightComposerState extends State<_HighlightComposer> {
           maxLines: 6,
           maxLength: kAnnotationMaxLength,
           decoration: const InputDecoration(
-              hintText: 'What should the group look at here?'),
+            hintText: 'What should the group look at here?',
+          ),
         ),
       ),
       actions: [
@@ -266,7 +279,9 @@ class _HighlightComposerState extends State<_HighlightComposer> {
         ),
         FilledButton(
           key: const Key('saveHighlight'),
-          onPressed: text.isEmpty ? null : () => Navigator.of(context).pop(text),
+          onPressed: text.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(text),
           child: const Text('Save highlight'),
         ),
       ],

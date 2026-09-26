@@ -62,7 +62,11 @@ class DefenceManuscriptPane extends ConsumerWidget {
     final p = Palette.of(context);
     final text = Theme.of(context).textTheme;
     final partsAsync = ref.watch(
-      manuscriptPartsProvider((thesisId: defence.thesisId, type: defence.type)),
+      manuscriptPartsProvider((
+        defenceId: defence.id,
+        thesisId: defence.thesisId,
+        type: defence.type,
+      )),
     );
     final annotations =
         ref.watch(defenceAnnotationsProvider(defence.id)).valueOrNull ??

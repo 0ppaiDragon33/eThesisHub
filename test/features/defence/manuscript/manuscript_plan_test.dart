@@ -71,6 +71,70 @@ void main() {
     expect(parts[2].version, isNotNull);
   });
 
+  group('a chapter reopened after the defence', () {
+    test('with highlights shows the highest marked PDF version, flagged',
+        () {
+      final parts = planManuscript(
+        type: DefenceType.preOral,
+        chapters: [
+          chapter(ChapterId.chapterI, ChapterStatus.approved),
+          chapter(ChapterId.chapterII, ChapterStatus.revise, current: 3),
+        ],
+        approvedVersions: {ChapterId.chapterI: version(1)},
+        markedVersions: {
+          ChapterId.chapterII: [
+            version(2, path: 'theses/t1/chapterII/v2.pdf'),
+            version(3, path: 'theses/t1/chapterII/v3.pdf'),
+            version(4,
+                mime: 'application/msword', path: 'theses/t1/chapterII/v4.doc'),
+          ],
+        },
+      );
+      expect(parts[1].kind, ManuscriptPartKind.pdf);
+      expect(parts[1].reopened, isTrue);
+      expect(parts[1].version!.version, 3);
+      expect(parts.first.reopened, isFalse);
+      expect(isOnCurrentVersion(note(ChapterId.chapterII, 3), parts), isTrue);
+      expect(isOnCurrentVersion(note(ChapterId.chapterII, 2), parts), isFalse);
+    });
+
+    test('without highlights is still not approved', () {
+      final parts = planManuscript(
+        type: DefenceType.preOral,
+        chapters: [
+          chapter(ChapterId.chapterII, ChapterStatus.revise),
+        ],
+        approvedVersions: const {},
+        markedVersions: {
+          // Highlighted only on a Word version: nothing to draw.
+          ChapterId.chapterII: [
+            version(1, mime: 'application/msword', path: 'x.doc'),
+          ],
+        },
+      );
+      expect(parts[1].kind, ManuscriptPartKind.notApproved);
+      expect(parts[1].reopened, isFalse);
+      expect(parts[1].version, isNull);
+    });
+
+    test('an approved chapter keeps its approved version', () {
+      final parts = planManuscript(
+        type: DefenceType.preOral,
+        chapters: [
+          chapter(ChapterId.chapterI, ChapterStatus.approved, current: 3),
+        ],
+        approvedVersions: {ChapterId.chapterI: version(3)},
+        markedVersions: {
+          ChapterId.chapterI: [version(2)],
+        },
+      );
+      expect(parts.first.kind, ManuscriptPartKind.pdf);
+      expect(parts.first.version!.version, 3);
+      expect(parts.first.reopened, isFalse);
+      expect(isOnCurrentVersion(note(ChapterId.chapterI, 2), parts), isFalse);
+    });
+  });
+
   test('a PDF is recognised by its type or, failing that, its name', () {
     expect(isPdfVersion(version(1)), isTrue);
     expect(isPdfVersion(version(1, mime: 'application/octet-stream')),

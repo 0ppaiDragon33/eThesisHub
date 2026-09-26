@@ -271,6 +271,46 @@ void main() {
     expect(find.byKey(const Key('manuscriptPane')), findsNothing);
   });
 
+  testWidgets('a chapter reopened after release still shows what was marked',
+      (tester) async {
+    final db = await seed(
+        status: 'completed',
+        released: true,
+        highlights: [
+          {'authorUid': 'p1', 'chapter': 'chapterII', 'version': 1},
+        ]);
+    // Chapter II was approved for the defence, then reopened: its status is
+    // back to revise, on the same version.
+    await db
+        .collection('theses/t1/documents/chapterII/versions')
+        .doc('1')
+        .set({
+      'version': 1,
+      'storagePath': 'theses/t1/chapterII/a.pdf',
+      'fileUrl': '',
+      'uploadedBy': 'l1',
+      'mimeType': 'application/pdf',
+      'sizeBytes': 4,
+    });
+    await pumpScreen(
+        tester, db, 'l1', const DefenceManuscriptScreen(defenceId: 'd1'));
+
+    expect(find.byKey(const Key('highlightStale-h0')), findsNothing);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('chapterReopened-chapterII')), 300,
+        scrollable: find.descendant(
+            of: find.byKey(const Key('manuscriptPages')),
+            matching: find.byType(Scrollable)));
+    await settle(tester);
+    expect(
+        find.text('Chapter II has been reopened for revision. Showing the '
+            'version the panel marked.'),
+        findsOneWidget);
+    expect(find.text('Chapter II is not approved yet.'), findsNothing);
+    expect(find.byKey(const Key('pageTile-chapterII-1-0')), findsOneWidget);
+    expect(find.byKey(const Key('highlightBox-h0')), findsOneWidget);
+  });
+
   testWidgets('after release the leader reads pages and highlights only',
       (tester) async {
     await pumpScreen(

@@ -119,6 +119,38 @@ void main() {
     expect(opened?.storagePath, 'x.docx');
   });
 
+  testWidgets('a reopened chapter shows its marked pages under a note',
+      (tester) async {
+    await pumpView(
+      tester,
+      ManuscriptView(
+        parts: [
+          ManuscriptPart(
+            chapter: ChapterId.chapterII,
+            kind: ManuscriptPartKind.pdf,
+            version: v(2, path: 'theses/t1/chapterII/a.pdf'),
+            reopened: true,
+          ),
+        ],
+      ),
+      image: await page(tester),
+    );
+    expect(find.byKey(const Key('chapterReopened-chapterII')), findsOneWidget);
+    expect(
+        find.text('Chapter II has been reopened for revision. Showing the '
+            'version the panel marked.'),
+        findsOneWidget);
+    expect(find.byKey(const Key('pageTile-chapterII-2-0')), findsOneWidget);
+    expect(find.byKey(const Key('chapterNotApproved-chapterII')),
+        findsNothing);
+  });
+
+  testWidgets('an approved chapter has no reopened note', (tester) async {
+    await pumpView(tester, ManuscriptView(parts: [pdfPart]),
+        image: await page(tester));
+    expect(find.byKey(const Key('chapterReopened-chapterI')), findsNothing);
+  });
+
   testWidgets('a missing chapter says so', (tester) async {
     await pumpView(
       tester,

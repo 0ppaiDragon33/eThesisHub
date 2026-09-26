@@ -75,6 +75,7 @@ class ManuscriptView extends ConsumerStatefulWidget {
   final ManuscriptController? controller;
 
   static const double headerExtent = 44;
+  static const double reopenedExtent = 56;
   static const double noteExtent = 168;
   static const double loadingExtent = 240;
   static const double pageGap = 12;
@@ -91,6 +92,11 @@ sealed class _Item {
 
 class _Header extends _Item {
   const _Header(super.part);
+}
+
+/// Above a reopened chapter's pages: why an unapproved chapter shows them.
+class _Reopened extends _Item {
+  const _Reopened(super.part);
 }
 
 class _Page extends _Item {
@@ -146,6 +152,7 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
     final items = <_Item>[];
     for (final part in widget.parts) {
       items.add(_Header(part));
+      if (part.reopened) items.add(_Reopened(part));
       switch (part.kind) {
         case ManuscriptPartKind.pdf:
           ref.watch(chapterPdfProvider(part.version!.storagePath)).when(
@@ -170,6 +177,7 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
 
   double _extentOf(_Item item, double width) => switch (item) {
         _Header() => ManuscriptView.headerExtent,
+        _Reopened() => ManuscriptView.reopenedExtent,
         _Page(:final pdf, :final index) => width *
                 pdf.pageSizes[index].height /
                 pdf.pageSizes[index].width +
@@ -342,6 +350,26 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.6),
+            ),
+          ),
+        );
+      case _Reopened():
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Container(
+            key: Key('chapterReopened-$id'),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4A5059),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Chapter $numeral has been reopened for revision. Showing the '
+              'version the panel marked.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFFE3E8ED), fontSize: 12),
             ),
           ),
         );

@@ -8,34 +8,57 @@ import 'package:printing/printing.dart';
 
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/defence_annotation.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_plan.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 
-typedef ManuscriptKey = ({String thesisId, DefenceType type});
+typedef ManuscriptKey = ({String defenceId, String thesisId, DefenceType type});
 
 /// The defence manuscript's chapters, each with what it shows. Loading until
 /// every approved chapter's versions have arrived, so a chapter is never
 /// shown as missing when it is merely still loading.
+///
+/// Also reads this defence's highlights: a chapter reopened for revision
+/// after the defence still shows the version the panel marked (see
+/// [planManuscript]), and that needs to know which versions they are on.
 final manuscriptPartsProvider = Provider.autoDispose
     .family<AsyncValue<List<ManuscriptPart>>, ManuscriptKey>((ref, key) {
   final chaptersAsync = ref.watch(chaptersProvider(key.thesisId));
+  final annotationsAsync = ref.watch(defenceAnnotationsProvider(key.defenceId));
   if (chaptersAsync.hasError) {
     return AsyncValue.error(
         chaptersAsync.error!, chaptersAsync.stackTrace ?? StackTrace.current);
   }
   final chapters = chaptersAsync.valueOrNull;
   if (chapters == null) return const AsyncValue.loading();
+  // Unreadable highlights mark nothing: the chapters still show as they are.
+  final annotations = annotationsAsync.hasError
+      ? const <DefenceAnnotation>[]
+      : annotationsAsync.valueOrNull;
+  if (annotations == null) return const AsyncValue.loading();
 
   final wanted = manuscriptChapters(key.type);
   final approved = [
     for (final c in chapters)
       if (wanted.contains(c.id) && c.status == ChapterStatus.approved) c,
   ];
+  final markedNumbers = <ChapterId, Set<int>>{};
+  for (final a in annotations) {
+    (markedNumbers[a.chapter] ??= <int>{}).add(a.version);
+  }
+  final reopened = [
+    for (final c in chapters)
+      if (wanted.contains(c.id) &&
+          c.status != ChapterStatus.approved &&
+          markedNumbers.containsKey(c.id))
+        c,
+  ];
   // Watch every one before deciding, so they load side by side.
   final versionsAsync = {
-    for (final c in approved)
+    for (final c in [...approved, ...reopened])
       c.id: ref.watch(
           chapterVersionsProvider((thesisId: key.thesisId, chapter: c.id))),
   };
@@ -55,10 +78,25 @@ final manuscriptPartsProvider = Provider.autoDispose
       }
     }
   }
+
+  final markedVersions = <ChapterId, List<ChapterVersion>>{};
+  for (final c in reopened) {
+    final v = versionsAsync[c.id]!;
+    // Unreadable: the chapter keeps its not-approved placeholder.
+    if (v.hasError) continue;
+    final list = v.valueOrNull;
+    if (list == null) return const AsyncValue.loading();
+    markedVersions[c.id] = [
+      for (final version in list)
+        if (markedNumbers[c.id]!.contains(version.version)) version,
+    ];
+  }
+
   return AsyncValue.data(planManuscript(
     type: key.type,
     chapters: chapters,
     approvedVersions: approvedVersions,
+    markedVersions: markedVersions,
   ));
 });
 
