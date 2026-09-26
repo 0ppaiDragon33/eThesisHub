@@ -5968,6 +5968,45 @@ test("CR awaitingUids: deny -- an UNFILTERED collection-group scan of " +
   await assertFails(getDocs(collectionGroup(newAdv, "changeRequests")));
 });
 
+// The Coordinator's and the Dean's queues are the app's real queries: a
+// collection-group read filtered by stage. A collection-group query is
+// authorized ONLY by the `{path=**}` rule, never by the nested per-thesis
+// one, so both roles need their own arm there.
+test("CR queues: the coordinator's stage query across every thesis is allowed",
+  async () => {
+    await seedCr({ stage: "pendingCoordinator", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const coord = asCrUser("cr-coord", "cr-coord@isufst.edu.ph");
+    const snap = await assertSucceeds(getDocs(query(
+      collectionGroup(coord, "changeRequests"),
+      where("stage", "==", "pendingCoordinator"))));
+    assert.equal(snap.docs.length, 1);
+  });
+
+test("CR queues: the dean's stage query across every thesis is allowed",
+  async () => {
+    await seedCr({ stage: "pendingDean", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "accepted" }, dean: { status: "pending" } } });
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+    const snap = await assertSucceeds(getDocs(query(
+      collectionGroup(dean, "changeRequests"),
+      where("stage", "==", "pendingDean"))));
+    assert.equal(snap.docs.length, 1);
+  });
+
+test("CR queues: a faculty member may not run the coordinator's stage query",
+  async () => {
+    await seedCr({ stage: "pendingCoordinator", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const faculty = asCrUser("cr-pan", "cr-pan@isufst.edu.ph");
+    await assertFails(getDocs(query(
+      collectionGroup(faculty, "changeRequests"),
+      where("stage", "==", "pendingCoordinator"))));
+  });
+
 test("CR awaitingUids: deny -- a faculty member not awaited on a request " +
     "may not read it, even by get()", async () => {
   await seedCr({ signoffs: adviserReq().signoffs,

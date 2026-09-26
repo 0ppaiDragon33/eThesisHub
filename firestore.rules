@@ -1962,9 +1962,19 @@ service cloud.firestore {
     // denormalized onto the request precisely so a single resource-level
     // check, with no path wildcard, can. Read authorization only: who may
     // WRITE a sign-off is still gated by the nested rule's per-role arms.
+    // Collection-group reads of change requests. A collection-group query
+    // is authorized ONLY by this rule, never by the nested
+    // `theses/{thesisId}/changeRequests` one, so every role that queries
+    // across theses needs its own arm here:
+    // - a faculty member, for the requests awaiting their sign-off (the
+    //   inbox filters on awaitingUids, which this arm checks);
+    // - the Coordinator and the Dean, whose queues read every thesis's
+    //   requests by stage, as their nested-rule arm already allows per
+    //   thesis.
     match /{path=**}/changeRequests/{crId} {
-      allow read: if verified()
-                  && request.auth.uid in resource.data.get('awaitingUids', []);
+      allow read: if verified() && (
+                    request.auth.uid in resource.data.get('awaitingUids', [])
+                    || isCoordinator() || isDean());
     }
 
     match /facultyDirectory/{uid} {
