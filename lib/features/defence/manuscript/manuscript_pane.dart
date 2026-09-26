@@ -36,6 +36,12 @@ Future<void> openChapterFile(
     }
   } on StorageFailure catch (e) {
     messenger?.showSnackBar(SnackBar(content: Text(e.message)));
+  } catch (_) {
+    // The launcher throws (a PlatformException) rather than answering false
+    // when, for one, no app on the device can open the file.
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Could not open that file.')),
+    );
   }
 }
 
