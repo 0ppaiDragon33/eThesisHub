@@ -51,7 +51,10 @@ Future<void> markAllNotificationsRead(dynamic ref) async {
   final uid = ref.read(signedInUidProvider);
   if (uid == null) return;
   final items = await ref.read(notificationsProvider.future);
-  final unreadIds = <String>[for (final i in items) if (!i.read) i.id];
+  final unreadIds = <String>[
+    for (final i in items)
+      if (!i.read) i.id,
+  ];
   if (unreadIds.isEmpty) return;
   await ref.read(notificationRepositoryProvider).markAllRead(uid, unreadIds);
 }
@@ -72,16 +75,34 @@ Future<void> markAllNotificationsRead(dynamic ref) async {
 /// visible wherever it actually lives -- but a silent swallow with zero
 /// trace makes a rules misconfiguration or malformed document
 /// undiagnosable, so the error still reaches debug output.
+///
+/// ONE ACCOUNT ONLY. [uid] is the account the calling detector was built
+/// for (each detector watches [signedInUidProvider], so it is torn down and
+/// rebuilt — with every listener it opened — whenever the account changes).
+/// Two guards keep one account's events out of another account's feed,
+/// which happened when someone signed out and into a different account in
+/// the same app session:
+/// - Only a SETTLED value is acted on. A provider rebuilding after an
+///   account change passes through loading and error states that still
+///   carry the PREVIOUS account's value (`valueOrNull` returns it), and
+///   writing that under the new uid is exactly the leak.
+/// - Only while [uid] is still the signed-in account, in case an emission
+///   lands between the account changing and this detector being rebuilt.
 void _detect<T>(
   Ref ref,
+  String uid,
   ProviderListenable<AsyncValue<T>> source,
-  Future<void> Function(T value, NotificationRepository repo, String uid) onValue,
+  Future<void> Function(T value, NotificationRepository repo, String uid)
+  onValue,
 ) {
   ref.listen<AsyncValue<T>>(source, (previous, next) {
-    final uid = ref.read(signedInUidProvider);
-    final value = next.valueOrNull;
-    if (uid == null || value == null) return;
-    onValue(value, ref.read(notificationRepositoryProvider), uid).catchError((e) {
+    if (next is! AsyncData<T> || next.isLoading) return;
+    if (ref.read(signedInUidProvider) != uid) return;
+    final value = next.value;
+    if (value == null) return;
+    onValue(value, ref.read(notificationRepositoryProvider), uid).catchError((
+      e,
+    ) {
       debugPrint('notification detector failed: $e');
     });
   }, fireImmediately: true);
@@ -91,8 +112,12 @@ void _detect<T>(
 /// and the M1b title-round verdict — every thesis-status-driven event a
 /// nominee or a group leader needs to know about.
 final nominationLifecycleDetectorProvider = Provider<void>((ref) {
+  // Built per account: see _detect. Nothing is detected while signed out.
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return;
   _detect<List<({String thesisId, Nomination nomination})>>(
     ref,
+    uid,
     myPendingNominationsProvider,
     (pending, repo, uid) async {
       for (final p in pending) {
@@ -112,7 +137,7 @@ final nominationLifecycleDetectorProvider = Provider<void>((ref) {
     },
   );
 
-  _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
+  _detect<Thesis?>(ref, uid, myThesisProvider, (thesis, repo, uid) async {
     if (thesis == null) return;
 
     if (thesis.coordinatorRecommendedAt != null) {
@@ -149,7 +174,9 @@ final nominationLifecycleDetectorProvider = Provider<void>((ref) {
 
     if (thesis.titleDecidedAt != null) {
       final approved = thesis.status == ThesisStatus.titleApproved;
-      final type = approved ? NotificationType.titleApproved : NotificationType.titleRejected;
+      final type = approved
+          ? NotificationType.titleApproved
+          : NotificationType.titleRejected;
       await repo.upsertIfAbsent(
         uid,
         AppNotification(
@@ -176,9 +203,12 @@ final nominationLifecycleDetectorProvider = Provider<void>((ref) {
 /// per-chapter feedback subscriptions are opened once the thesis id is
 /// known, not fixed at provider-build time.
 final chapterFeedbackDetectorProvider = Provider<void>((ref) {
+  // Built per account: see _detect. Nothing is detected while signed out.
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return;
   final registeredThesisIds = <String>{};
 
-  _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
+  _detect<Thesis?>(ref, uid, myThesisProvider, (thesis, repo, uid) async {
     if (thesis == null) return;
     if (!registeredThesisIds.add(thesis.id)) return;
 
@@ -192,6 +222,7 @@ final chapterFeedbackDetectorProvider = Provider<void>((ref) {
     for (final chapter in ChapterId.values) {
       _detect<List<ChapterFeedback>>(
         ref,
+        uid,
         chapterFeedbackProvider((thesisId: thesis.id, chapter: chapter)),
         (entries, repo, uid) async {
           for (final f in entries) {
@@ -259,15 +290,23 @@ String _scheduledMessage(Defence defence, String uid) {
 /// -- it awaits `currentUserProvider.future` itself before choosing a
 /// query -- so by the time this callback runs, the role is already known.
 final defenceDetectorProvider = Provider<void>((ref) {
+  // Built per account: see _detect. Nothing is detected while signed out.
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return;
   final registeredCommentDefenceIds = <String>{};
 
-  _detect<List<Defence>>(ref, myDefencesProvider, (defences, repo, uid) async {
+  _detect<List<Defence>>(ref, uid, myDefencesProvider, (
+    defences,
+    repo,
+    uid,
+  ) async {
     final role = ref.read(currentUserProvider).valueOrNull?.role;
     if (role != UserRole.student && role != UserRole.faculty) return;
 
     for (final defence in defences) {
       if (defence.scheduledAt != null) {
-        final key = '${defence.id}_${defence.scheduledAt!.millisecondsSinceEpoch}_${defence.venue}';
+        final key =
+            '${defence.id}_${defence.scheduledAt!.millisecondsSinceEpoch}_${defence.venue}';
         await repo.upsertIfAbsent(
           uid,
           AppNotification(
@@ -302,6 +341,7 @@ final defenceDetectorProvider = Provider<void>((ref) {
           registeredCommentDefenceIds.add(defence.id)) {
         _detect<List<DefenceComment>>(
           ref,
+          uid,
           defenceCommentsProvider(defence.id),
           (comments, repo, uid) async {
             for (final c in comments) {
@@ -339,7 +379,14 @@ final defenceDetectorProvider = Provider<void>((ref) {
 /// this detector, and why reading it here (after `myDefencesProvider` has
 /// already awaited `currentUserProvider.future` internally) is safe.
 final evaluationAwaitsDetectorProvider = Provider<void>((ref) {
-  _detect<List<Defence>>(ref, myDefencesProvider, (defences, repo, uid) async {
+  // Built per account: see _detect. Nothing is detected while signed out.
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return;
+  _detect<List<Defence>>(ref, uid, myDefencesProvider, (
+    defences,
+    repo,
+    uid,
+  ) async {
     final role = ref.read(currentUserProvider).valueOrNull?.role;
     if (role != UserRole.faculty) return;
 
@@ -377,7 +424,10 @@ final evaluationAwaitsDetectorProvider = Provider<void>((ref) {
 /// dashboards the moment it happens. The group leader has no such standing
 /// view, which is why they are the one this detector covers.
 final archivePublishedDetectorProvider = Provider<void>((ref) {
-  _detect<Thesis?>(ref, myThesisProvider, (thesis, repo, uid) async {
+  // Built per account: see _detect. Nothing is detected while signed out.
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return;
+  _detect<Thesis?>(ref, uid, myThesisProvider, (thesis, repo, uid) async {
     if (thesis == null) return;
     final entry = await ref.read(archiveEntryProvider(thesis.id).future);
     if (entry == null) return;
