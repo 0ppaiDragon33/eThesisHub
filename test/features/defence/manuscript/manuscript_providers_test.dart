@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -7,6 +8,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
@@ -132,6 +134,33 @@ void main() {
     ]);
     expect(parts[1].reopened, isTrue);
     expect(parts[1].version!.storagePath, 'theses/t1/chapterII/v2.pdf');
+  });
+
+  group('downloading a chapter', () {
+    test('gives up on a download that hangs', () async {
+      final hung = Completer<http.Response>();
+      await expectLater(
+        downloadChapterBytes(() => hung.future,
+            timeout: const Duration(milliseconds: 10)),
+        throwsA(isA<StorageFailure>()
+            .having((f) => f.code, 'code', 'storage-download')
+            .having((f) => f.message, 'message',
+                'Could not download this chapter. Check the connection and '
+                'try again.')),
+      );
+    });
+
+    test('returns the bytes, and refuses a server error', () async {
+      expect(
+          await downloadChapterBytes(
+              () async => http.Response.bytes([1, 2, 3], 200)),
+          [1, 2, 3]);
+      await expectLater(
+        downloadChapterBytes(() async => http.Response('no', 403)),
+        throwsA(isA<StorageFailure>()
+            .having((f) => f.message, 'message', contains('403'))),
+      );
+    });
   });
 
   test('a chapter PDF is downloaded once and measured', () async {

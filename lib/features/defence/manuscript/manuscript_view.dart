@@ -77,6 +77,9 @@ class ManuscriptView extends ConsumerStatefulWidget {
   static const double headerExtent = 44;
   static const double reopenedExtent = 56;
   static const double noteExtent = 168;
+
+  /// Taller: it carries the reason and a Try again button.
+  static const double failedExtent = 208;
   static const double loadingExtent = 240;
   static const double pageGap = 12;
   static const zoomSteps = [1.0, 1.5, 2.0, 3.0];
@@ -183,6 +186,7 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
                 pdf.pageSizes[index].width +
             ManuscriptView.pageGap,
         _Note(kind: _NoteKind.loading) => ManuscriptView.loadingExtent,
+        _Note(kind: _NoteKind.failed) => ManuscriptView.failedExtent,
         _Note() => ManuscriptView.noteExtent,
       };
 
@@ -412,14 +416,25 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
                 "file and can't be shown here.",
             _NoteKind.missing => 'Chapter $numeral has not been uploaded.',
           },
-          action: kind == _NoteKind.notPdf && widget.onOpenFile != null
-              ? OutlinedButton.icon(
-                  key: Key('openChapterFile-$id'),
-                  onPressed: () => widget.onOpenFile!(part.version!),
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('Open file'),
-                )
-              : null,
+          action: switch (kind) {
+            _NoteKind.notPdf when widget.onOpenFile != null =>
+              OutlinedButton.icon(
+                key: Key('openChapterFile-$id'),
+                onPressed: () => widget.onOpenFile!(part.version!),
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text('Open file'),
+              ),
+            // A fresh download: the provider is keyed by the path, so
+            // invalidating it fetches the file again.
+            _NoteKind.failed => OutlinedButton.icon(
+                key: Key('retryChapter-$id'),
+                onPressed: () => ref
+                    .invalidate(chapterPdfProvider(part.version!.storagePath)),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Try again'),
+              ),
+            _ => null,
+          },
         );
     }
   }

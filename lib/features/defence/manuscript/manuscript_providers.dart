@@ -108,26 +108,39 @@ final chapterFileLoaderProvider = Provider<ChapterFileLoader>((ref) {
   final storage = ref.watch(storageServiceProvider);
   return (path) async {
     final url = await storage.signedUrl(path);
-    http.Response res;
-    try {
-      res = await http.get(Uri.parse(url));
-    } catch (_) {
-      throw const StorageFailure(
-        'Could not download this chapter. Check the connection and open the '
-        'room again.',
-        code: 'storage-download',
-      );
-    }
-    if (res.statusCode != 200) {
-      throw StorageFailure(
-        'Could not download this chapter. The server answered '
-        '${res.statusCode}.',
-        code: 'storage-download',
-      );
-    }
-    return res.bodyBytes;
+    return downloadChapterBytes(() => http.get(Uri.parse(url)));
   };
 });
+
+/// How long a chapter download may take before the reader is offered
+/// Try again instead of a spinner that never ends.
+const kChapterDownloadTimeout = Duration(seconds: 60);
+
+/// Runs [request] and returns the body, or a [StorageFailure] the manuscript
+/// can show: no connection, no answer within [timeout], or an error status.
+Future<Uint8List> downloadChapterBytes(
+  Future<http.Response> Function() request, {
+  Duration timeout = kChapterDownloadTimeout,
+}) async {
+  http.Response res;
+  try {
+    res = await request().timeout(timeout);
+  } catch (_) {
+    // Also a TimeoutException: to the reader, both are a failed download.
+    throw const StorageFailure(
+      'Could not download this chapter. Check the connection and try again.',
+      code: 'storage-download',
+    );
+  }
+  if (res.statusCode != 200) {
+    throw StorageFailure(
+      'Could not download this chapter. The server answered '
+      '${res.statusCode}.',
+      code: 'storage-download',
+    );
+  }
+  return res.bodyBytes;
+}
 
 /// Draws PDF pages. An interface so widget tests can draw without `printing`.
 abstract interface class ManuscriptRasterizer {

@@ -184,6 +184,33 @@ void main() {
     expect(find.text('Chapter II is not approved yet.'), findsOneWidget);
   });
 
+  testWidgets('a chapter that failed to load can be tried again',
+      (tester) async {
+    var fail = true;
+    await pumpView(
+      tester,
+      ManuscriptView(parts: [pdfPart]),
+      image: await page(tester),
+      loader: (path) async {
+        if (fail) {
+          throw const StorageFailure('Could not download this chapter.',
+              code: 'storage-download');
+        }
+        return Uint8List(4);
+      },
+    );
+    expect(find.byKey(const Key('chapterFailed-chapterI')), findsOneWidget);
+    expect(find.byKey(const Key('pageTile-chapterI-2-0')), findsNothing);
+
+    fail = false;
+    await tester.tap(find.byKey(const Key('retryChapter-chapterI')));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.byKey(const Key('chapterFailed-chapterI')), findsNothing);
+    expect(find.byKey(const Key('pageTile-chapterI-2-0')), findsOneWidget);
+  });
+
   testWidgets('draws a box only on its own page and version', (tester) async {
     await pumpView(
       tester,
