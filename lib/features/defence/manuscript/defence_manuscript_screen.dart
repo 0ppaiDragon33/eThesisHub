@@ -67,6 +67,12 @@ class _DefenceManuscriptScreenState
       ]);
     }
 
+    // Until auth has said who this is, the gate below cannot be decided, and
+    // nothing may be read on the guess that it is not the leader.
+    if (uid == null) {
+      return _framed(const [LoadingState(label: 'Loading defence…')]);
+    }
+
     // Decided from the defence alone, before any highlight is read: the
     // rules refuse the group until release, and nothing here may try.
     if (uid == defence.leaderUid && !defence.isReleased) {

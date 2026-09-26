@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence_annotation.dart';
 import 'package:ethesishub/data/repositories/defence_repository.dart';
@@ -381,6 +382,21 @@ void main() {
     expect(find.text('Available once your adviser releases the comments.'),
         findsOneWidget);
     expect(find.byKey(const Key('manuscriptPane')), findsNothing);
+  });
+
+  testWidgets('while the signed-in user is unknown, nothing is read',
+      (tester) async {
+    await pumpScreen(tester, await seed(status: 'completed'), 'l1',
+        const DefenceManuscriptScreen(defenceId: 'd1'),
+        // Auth still resolving: no uid yet.
+        overrides: [signedInUidProvider.overrideWithValue(null)]);
+    expect(find.byType(LoadingState), findsOneWidget);
+    expect(find.byKey(const Key('manuscriptPane')), findsNothing);
+    final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('defenceManuscript'))));
+    expect(container.exists(defenceAnnotationsProvider('d1')), isFalse,
+        reason: 'the leader gate cannot be decided yet, so no highlight '
+            'may be asked for');
   });
 
   testWidgets('a chapter reopened after release still shows what was marked',
