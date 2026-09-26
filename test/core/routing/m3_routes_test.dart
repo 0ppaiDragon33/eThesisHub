@@ -111,6 +111,17 @@ void main() {
     expect(find.text('Pre-oral defence'), findsOneWidget);
   });
 
+  testWidgets('the manuscript view is reachable', (tester) async {
+    final c = await setUpFixture(tester, role: 'faculty', uid: 'a1');
+
+    c.read(goRouterProvider).go('/defence/room/df1/manuscript');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('defenceManuscript')), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
+        'Manuscript');
+  });
+
   // The collision guard. '/defence/schedule' and '/defence/:thesisId' share
   // the same segment count (two), so a naive reordering would let
   // ':thesisId' swallow 'schedule' as if it were a literal thesis id -- the
