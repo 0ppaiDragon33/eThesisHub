@@ -113,8 +113,9 @@ it stays in the list, marked "On an earlier version of Chapter II".
   and its pages are drawn **lazily**, a page at a time as it scrolls into
   view, and released when far off-screen, so a long manuscript does not hold
   every page image in a phone's memory.
-- **Zoom:** pinch, drag, and zoom buttons, reusing `ZoomablePages`'
-  behaviour (zoom and position survive new highlights arriving).
+- **Zoom:** buttons, 100 / 150 / 200 / 300 %, scrolling sideways when the
+  pages are wider than the view. No pinch: the page list is built lazily for
+  memory's sake, and pinch-zoom needs the whole document built at once.
 - **Page labels:** "Ch. II · p. 3" (chapter-relative) on each page and in
   the highlight list.
 
@@ -122,12 +123,15 @@ it stays in the list, marked "On an earlier version of Chapter II".
 
 - **Adding** (only while the defence is in progress, for the adviser,
   panel, Coordinator and Dean): turn on the **Highlight** tool, drag a box
-  over the page (on a phone: press-and-drag), then a small sheet asks for
-  the comment. Cancel discards the box.
+  over the page, then a small dialog asks for the comment. The tool turns
+  itself off after each box, so a drag scrolls the pages again. Cancel
+  discards the box.
 - **Showing:** each box is drawn in its author's colour with a numbered tag;
-  the **Highlights** tab lists them in page order (number, author, position,
-  page, comment). Tapping one scrolls the manuscript to its box and pulses
-  it.
+  numbers follow the order highlights were made, so a number keeps meaning
+  the same box; the **Highlights** tab lists them in page order (number,
+  author, position, page, comment). Tapping one jumps the manuscript to its
+  box and pulses it (a jump rather than an animated scroll: the page list is
+  built lazily and cannot animate to a page it has not laid out yet).
 - **Colours:** a fixed palette of 8 clearly distinct, colour-blind-safe
   colours, assigned per defence in roster order — the adviser, then
   `panelUids` in order, then anyone else who has highlighted (Coordinator,
@@ -151,8 +155,10 @@ it stays in the list, marked "On an earlier version of Chapter II".
   comments** (the existing log and composer, plus the typing line) |
   **Highlights (n)** (legend, list, and the typing line when someone is
   writing a highlight comment).
-- **Phone:** session controls at the top, the manuscript filling the
-  screen, and the tabbed panel as a bottom sheet that can be dragged up.
+- **Phone:** the manuscript fills the screen; a sheet dragged up from the
+  bottom holds the tabbed panel, then the session controls, then the
+  records. Medium widths (tablets) keep the stacked room with the
+  manuscript as a tall panel below it.
 - The room's existing behaviour is otherwise unchanged.
 
 ### 7.2 Group view (read-only, after release)

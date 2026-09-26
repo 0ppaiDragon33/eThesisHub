@@ -282,6 +282,14 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
               : const Icon(Icons.upload_rounded, size: 18),
           label: Text(_busy ? 'Uploading…' : 'Upload new version'),
         ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'Upload chapters as PDF. From Word: File → Save As → PDF.',
+            key: const Key('chapterPdfHint'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
         if (disabled && disabledReason != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
