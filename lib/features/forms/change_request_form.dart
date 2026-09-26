@@ -25,8 +25,13 @@ Future<Uint8List> buildChangeRequestPdf(
         'former': formerAdviser,
       });
     case ChangeRequestType.title:
+      // By the time this request is `approved` the Dean's batch has already
+      // overwritten thesis.workingTitle with the new title, so the original
+      // title comes from the request's own oldTitle -- captured at submit
+      // time -- with the live thesis field only as a fallback for requests
+      // predating that field.
       return buildFormPdf(form4bTemplate, {
-        'oldTitle': thesis.workingTitle,
+        'oldTitle': request.oldTitle ?? thesis.workingTitle,
         'newTitle': request.newTitle!,
         'reasons': request.reasons,
       });

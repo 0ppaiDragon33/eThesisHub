@@ -72,4 +72,33 @@ void main() {
       contains('Scope narrowed after the title defence panel feedback'),
     );
   });
+
+  test(
+    'an approved title request prints its captured oldTitle, NOT the '
+    "thesis's current workingTitle -- by approval time the Dean's batch "
+    'has already overwritten it with the new title (Fix 2)',
+    () async {
+      final request = ChangeRequest(
+        type: ChangeRequestType.title,
+        stage: ChangeRequestStage.approved,
+        reasons: 'Scope narrowed after the title defence panel feedback',
+        leaderUid: 'leader-1',
+        signoffs: const {},
+        newTitle: 'A Framework for Zylotropic Inference Systems',
+        oldTitle: 'The Original Zorquinelle Study',
+      );
+      // The thesis document, as it would actually look post-approval: the
+      // Dean's batch already landed the new title here.
+      final thesis = _thesis(
+        workingTitle: 'A Framework for Zylotropic Inference Systems',
+      );
+
+      final text = extractPdfText(
+        await buildChangeRequestPdf(request, thesis: thesis),
+      );
+
+      expect(text, contains('Zorquinelle'));
+      expect(text, contains('Zylotropic'));
+    },
+  );
 }
