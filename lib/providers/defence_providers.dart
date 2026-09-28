@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/defence_annotation.dart';
+import 'package:ethesishub/data/models/defence_composing.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/defence_repository.dart';
@@ -54,6 +56,22 @@ final defenceCommentsProvider =
     StreamProvider.family<List<DefenceComment>, String>((ref, defenceId) {
   ref.watch(signedInUidProvider);
   return ref.watch(defenceRepositoryProvider).watchComments(defenceId);
+});
+
+/// The manuscript highlights of one defence, oldest first.
+final defenceAnnotationsProvider =
+    StreamProvider.family<List<DefenceAnnotation>, String>((ref, defenceId) {
+  // Rebuilt on a change of user: see [signedInUidProvider].
+  ref.watch(signedInUidProvider);
+  return ref.watch(defenceRepositoryProvider).watchAnnotations(defenceId);
+});
+
+/// Who is typing in one defence room. Denied to the group by the rules, so
+/// only the panel side of the room watches it.
+final defenceComposingProvider =
+    StreamProvider.family<List<DefenceComposing>, String>((ref, defenceId) {
+  ref.watch(signedInUidProvider);
+  return ref.watch(defenceRepositoryProvider).watchComposing(defenceId);
 });
 
 /// The defences the signed-in user belongs to.

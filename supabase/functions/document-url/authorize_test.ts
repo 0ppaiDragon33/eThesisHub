@@ -105,15 +105,15 @@ Deno.test("a deactivated account may read nothing, whatever its role", () => {
   }
 });
 
-// --- the dean's chapter exclusion ------------------------------------------
+// --- the dean and chapter files --------------------------------------------
 
-Deno.test("the dean may read the manuscript but NOT a chapter version", () => {
-  // firestore.rules excludes the dean from documents/{c}/versions/{n}: a dean
-  // sees that a chapter is approved, never its files. If this function were
-  // more permissive, that rule would be decorative.
+Deno.test("the dean may read the manuscript and a chapter version", () => {
+  // Spec 2026-09-26: the dean reads the defence manuscript, which is made of
+  // chapter files. firestore.rules lets them read the version records too,
+  // so this must agree or the room shows a chapter it cannot open.
   const dean = caller({ role: "dean" });
   assertEquals(mayReadDocument(dean, thesis, "manuscript"), true);
-  assertEquals(mayReadDocument(dean, thesis, "chapterI"), false);
+  assertEquals(mayReadDocument(dean, thesis, "chapterI"), true);
 });
 
 Deno.test("the exclusion does not leak to anyone else", () => {

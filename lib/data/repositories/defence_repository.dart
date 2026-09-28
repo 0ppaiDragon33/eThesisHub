@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/defence_annotation.dart';
+import 'package:ethesishub/data/models/defence_composing.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 
@@ -403,6 +406,147 @@ class DefenceRepository {
       // request.time, so it must be the server's clock, not the client's.
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  CollectionReference<Map<String, dynamic>> _annotations(String defenceId) =>
+      _defence(defenceId).collection('annotations');
+
+  /// Oldest first, so a highlight's number (its place in this list) does not
+  /// change as others arrive. One whose server time has not come back yet
+  /// (the author's own, just written) is the newest, so it sorts last rather
+  /// than briefly taking an earlier number.
+  Stream<List<DefenceAnnotation>> watchAnnotations(String defenceId) {
+    return _annotations(defenceId).snapshots().map((s) {
+      final list = <DefenceAnnotation>[];
+      for (final d in s.docs) {
+        final a = DefenceAnnotation.fromMap(d.id, {
+          ...d.data(),
+          'createdAt': (d.data()['createdAt'] as Timestamp?)?.toDate(),
+        });
+        if (a != null) list.add(a);
+      }
+      list.sort((a, b) {
+        final at = a.createdAt;
+        final bt = b.createdAt;
+        if (at == null && bt == null) return a.id.compareTo(b.id);
+        if (at == null) return 1;
+        if (bt == null) return -1;
+        final byTime = at.compareTo(bt);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
+      return list;
+    });
+  }
+
+  /// A highlight on the manuscript. Every check here is also a rule; they
+  /// are repeated because fake_cloud_firestore enforces none of them, and a
+  /// refusal here can say why.
+  Future<void> addAnnotation({
+    required String defenceId,
+    required String authorUid,
+    required String authorName,
+    required String authorPosition,
+    required ChapterId chapter,
+    required int version,
+    required int page,
+    required NormRect rect,
+    required String body,
+  }) async {
+    final text = body.trim();
+    if (text.isEmpty) throw ArgumentError('Write a comment for this highlight.');
+    if (text.length > kAnnotationMaxLength) {
+      throw ArgumentError(
+          'Keep the comment under $kAnnotationMaxLength characters.');
+    }
+    if (!rect.isValid || !rect.isBigEnough) {
+      throw ArgumentError('Draw a box over the passage first.');
+    }
+    if (page < 0 || version < 1) {
+      throw ArgumentError('That page is not part of the manuscript.');
+    }
+
+    final snap = await _defence(defenceId).get();
+    if (!snap.exists) throw StateError('That defence no longer exists.');
+    final status = DefenceStatus.fromString(snap.data()!['status'] as String?);
+    if (!status.acceptsComments) {
+      throw StateError(
+          'Highlights can only be added while the defence is under way.');
+    }
+
+    await _annotations(defenceId).add({
+      'authorUid': authorUid,
+      'authorName': authorName,
+      'authorPosition': authorPosition,
+      'chapter': chapter.value,
+      'version': version,
+      'page': page,
+      'rect': rect.toMap(),
+      'body': text,
+      // The rule pins createdAt to request.time; see schedule().
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Removes the caller's own highlight while the defence is open. A
+  /// highlight already gone is not an error: two taps must not throw.
+  Future<void> deleteAnnotation({
+    required String defenceId,
+    required String annotationId,
+    required String uid,
+  }) async {
+    final snap = await _defence(defenceId).get();
+    if (!snap.exists) throw StateError('That defence no longer exists.');
+    final status = DefenceStatus.fromString(snap.data()!['status'] as String?);
+    if (status != DefenceStatus.inProgress) {
+      throw StateError(
+          'Highlights can only be removed while the defence is under way.');
+    }
+    final ref = _annotations(defenceId).doc(annotationId);
+    final existing = await ref.get();
+    if (!existing.exists) return;
+    if (existing.data()!['authorUid'] != uid) {
+      throw StateError('You can only remove your own highlights.');
+    }
+    await ref.delete();
+  }
+
+  CollectionReference<Map<String, dynamic>> _composing(String defenceId) =>
+      _defence(defenceId).collection('composing');
+
+  /// Live "is typing" markers, stale ones included; readers expire them.
+  Stream<List<DefenceComposing>> watchComposing(String defenceId) {
+    return _composing(defenceId).snapshots().map((s) => s.docs
+        .map((d) => DefenceComposing.fromMap(d.id, {
+              ...d.data(),
+              'updatedAt': (d.data()['updatedAt'] as Timestamp?)?.toDate(),
+            }))
+        .toList());
+  }
+
+  /// Written when someone starts typing and about every 5 seconds after,
+  /// never per keystroke: the Spark plan's daily write quota would not
+  /// survive it. Keyed by uid, so one person makes one marker.
+  Future<void> markComposing({
+    required String defenceId,
+    required String uid,
+    required String name,
+    required String position,
+    required ComposingTarget target,
+  }) {
+    return _composing(defenceId).doc(uid).set({
+      'name': name,
+      'position': position,
+      'target': target.value,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// On send, blur or leaving. A double clear is normal and must not throw.
+  Future<void> clearComposing({
+    required String defenceId,
+    required String uid,
+  }) {
+    return _composing(defenceId).doc(uid).delete();
   }
 
   /// The adviser's release, which is what opens the log to the group.

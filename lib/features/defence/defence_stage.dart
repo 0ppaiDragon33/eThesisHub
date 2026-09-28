@@ -76,3 +76,30 @@ final defenceStageCountsProvider = Provider<Map<DefenceStage, int>>((ref) {
         openOn(DefenceStage.redefence) + awaitingRedefence(defences).length,
   };
 });
+
+/// The first stage, in the order a thesis meets them, with something open;
+/// Title when none has (spec 2026-09-25 §6.1, as amended).
+DefenceStage firstStageWithSomethingOpen(Map<DefenceStage, int> counts) {
+  for (final s in DefenceStage.values) {
+    if ((counts[s] ?? 0) > 0) return s;
+  }
+  return DefenceStage.title;
+}
+
+/// The stage a bare '/defences' (the sidebar) opens on: wherever the reader
+/// has something open, rather than always Title — a group past its title
+/// defence would otherwise land on an empty tab every time.
+///
+/// Loading until both lists behind the counts have arrived, so the choice is
+/// made on real numbers and the page does not jump from Title to another
+/// stage a moment later. A list that failed to load counts as empty, so the
+/// page still opens; that stage shows its own error.
+final defaultDefenceStageProvider = Provider<AsyncValue<DefenceStage>>((ref) {
+  bool settled(AsyncValue<Object?> a) => a.hasValue || a.hasError;
+  if (!settled(ref.watch(myDefencesProvider)) ||
+      !settled(ref.watch(myTitleDefencesProvider))) {
+    return const AsyncLoading();
+  }
+  return AsyncData(
+      firstStageWithSomethingOpen(ref.watch(defenceStageCountsProvider)));
+});

@@ -150,6 +150,10 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   /// typed at creation, the approved one is what the panel and the dean
   /// actually signed off, and only the latter belongs on a signed record.
   String? _approvedTitle(Thesis thesis, List<CandidateTitle> candidates) {
+    // An approved change-of-title (Form 4b) set this directly; it wins over
+    // the originally approved candidate.
+    final changed = thesis.approvedTitleText;
+    if (changed != null && changed.isNotEmpty) return changed;
     final approvedId = thesis.approvedTitleId;
     if (approvedId == null) return null;
     for (final c in candidates) {

@@ -49,7 +49,7 @@ void main() {
         'conformeStatus': 'pending',
       });
 
-      container.read(nominationLifecycleDetectorProvider);
+      container.listen(nominationLifecycleDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       // Let the detector's own listen callback (which awaits a Firestore
       // write) finish before asserting.
@@ -80,7 +80,7 @@ void main() {
         'coordinatorRecommendedBy': 'coord1',
       });
 
-      container.read(nominationLifecycleDetectorProvider);
+      container.listen(nominationLifecycleDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -115,7 +115,7 @@ void main() {
         'deanApprovedBy': 'dean1',
       });
 
-      container.read(nominationLifecycleDetectorProvider);
+      container.listen(nominationLifecycleDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -162,7 +162,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 3, 1)),
       });
 
-      container.read(chapterFeedbackDetectorProvider);
+      container.listen(chapterFeedbackDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -203,7 +203,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 3, 1)),
       });
 
-      container.read(chapterFeedbackDetectorProvider);
+      container.listen(chapterFeedbackDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -229,7 +229,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
       });
 
-      container.read(chapterFeedbackDetectorProvider);
+      container.listen(chapterFeedbackDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -291,7 +291,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
       });
 
-      container.read(defenceDetectorProvider);
+      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -321,7 +321,7 @@ void main() {
         'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 15)),
       });
 
-      container.read(defenceDetectorProvider);
+      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -352,7 +352,7 @@ void main() {
         'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
       });
 
-      container.read(defenceDetectorProvider);
+      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -398,7 +398,7 @@ void main() {
         'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 9)),
       });
 
-      container.read(defenceDetectorProvider);
+      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -443,7 +443,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
       });
 
-      container.read(defenceDetectorProvider);
+      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -473,7 +473,7 @@ void main() {
         'createdBy': 'coord1',
       });
 
-      container.read(evaluationAwaitsDetectorProvider);
+      container.listen(evaluationAwaitsDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -514,7 +514,7 @@ void main() {
         'submittedAt': Timestamp.fromDate(DateTime(2026, 5, 2)),
       });
 
-      container.read(evaluationAwaitsDetectorProvider);
+      container.listen(evaluationAwaitsDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -558,7 +558,7 @@ void main() {
         'archivedAt': Timestamp.fromDate(DateTime(2026, 9, 1)),
       });
 
-      container.read(archivePublishedDetectorProvider);
+      container.listen(archivePublishedDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);

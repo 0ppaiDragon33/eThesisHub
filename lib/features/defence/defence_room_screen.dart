@@ -10,12 +10,20 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/defence_annotation.dart';
+import 'package:ethesishub/data/models/defence_composing.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/defence/defence_status.dart';
+import 'package:ethesishub/features/defence/manuscript/defence_typing.dart';
+import 'package:ethesishub/features/defence/manuscript/highlights_panel.dart';
+import 'package:ethesishub/features/defence/manuscript/manuscript_pane.dart';
+import 'package:ethesishub/features/defence/manuscript/manuscript_view.dart';
 import 'package:ethesishub/features/defence/redefence_notice.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
+
+enum _RoomTab { room, highlights }
 
 /// The live comment log every participant watches during the presentation.
 ///
@@ -40,15 +48,116 @@ class DefenceRoomScreen extends ConsumerStatefulWidget {
 
 class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
   final _bodyController = TextEditingController();
+  final _commentFocus = FocusNode();
+  final _manuscript = ManuscriptController();
+  DefenceTyping? _typing;
+  _RoomTab _tab = _RoomTab.room;
   bool _posting = false;
   bool _statusBusy = false;
   String? _commentError;
   String? _statusError;
 
   @override
+  void initState() {
+    super.initState();
+    _bodyController.addListener(_onCommentChanged);
+    _commentFocus.addListener(_onCommentChanged);
+  }
+
+  /// The room comment box's half of the typing indicator: a marker while it
+  /// has focus and text, none otherwise.
+  void _onCommentChanged() {
+    _typing?.typing(ComposingTarget.room,
+        active: _commentFocus.hasFocus &&
+            _bodyController.text.trim().isNotEmpty);
+  }
+
+  @override
   void dispose() {
+    _typing?.dispose();
+    _bodyController.removeListener(_onCommentChanged);
+    _commentFocus.removeListener(_onCommentChanged);
     _bodyController.dispose();
+    _commentFocus.dispose();
+    _manuscript.dispose();
     super.dispose();
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _composeHighlight(
+    DrawnHighlight drawn, {
+    required String uid,
+    required String authorName,
+    required String authorPosition,
+  }) async {
+    final body = await showHighlightComposer(
+      context,
+      onTyping: (on) =>
+          _typing?.typing(ComposingTarget.manuscript, active: on),
+    );
+    _typing?.typing(ComposingTarget.manuscript, active: false);
+    if (body == null || !mounted) return;
+    try {
+      await ref.read(defenceRepositoryProvider).addAnnotation(
+            defenceId: widget.defenceId,
+            authorUid: uid,
+            authorName: authorName,
+            authorPosition: authorPosition,
+            chapter: drawn.chapter,
+            version: drawn.version,
+            page: drawn.page,
+            rect: drawn.rect,
+            body: body,
+          );
+    } on ArgumentError catch (e) {
+      if (mounted) _say(e.message.toString());
+    } on StateError catch (e) {
+      if (mounted) _say(e.message);
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        _say(e.code == 'permission-denied'
+            ? 'You do not have permission to highlight here '
+                '[permission-denied].'
+            : 'Could not save the highlight. Please try again.');
+      }
+    } catch (_) {
+      if (mounted) _say('Could not save the highlight. Please try again.');
+    }
+  }
+
+  Future<void> _deleteHighlight(DefenceAnnotation a, String uid) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this highlight?'),
+        content: Text('"${a.body}"'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const Key('confirmDeleteHighlight'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    try {
+      await ref.read(defenceRepositoryProvider).deleteAnnotation(
+          defenceId: widget.defenceId, annotationId: a.id, uid: uid);
+    } on StateError catch (e) {
+      if (mounted) _say(e.message);
+    } catch (_) {
+      // A FirebaseException or anything else: the same message.
+      if (mounted) _say('Could not remove the highlight. Please try again.');
+    }
   }
 
   /// `'Adviser'` if the signed-in uid matches this defence's adviser,
@@ -245,6 +354,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             body: body,
           );
       if (mounted) _bodyController.clear();
+      _typing?.stop();
     } on ArgumentError catch (e) {
       if (mounted) setState(() => _commentError = e.message.toString());
     } on StateError catch (e) {
@@ -392,15 +502,28 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                   ),
               ],
               const Gap.lg(),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
-                  key: const Key('goToConsolidated'),
-                  onPressed: () => context
-                      .go('/defence/room/${widget.defenceId}/consolidated'),
-                  icon: const Icon(Icons.summarize_outlined, size: 18),
-                  label: const Text('View consolidated comments'),
-                ),
+              Wrap(
+                spacing: AppTokens.sm,
+                runSpacing: AppTokens.sm,
+                children: [
+                  FilledButton.icon(
+                    key: const Key('goToConsolidated'),
+                    onPressed: () => context
+                        .go('/defence/room/${widget.defenceId}/consolidated'),
+                    icon: const Icon(Icons.summarize_outlined, size: 18),
+                    label: const Text('View consolidated comments'),
+                  ),
+                  // The panel's highlights reach the group with the
+                  // comments, on the adviser's release (spec §7.2).
+                  if (defence.isReleased)
+                    OutlinedButton.icon(
+                      key: const Key('goToManuscript'),
+                      onPressed: () => context
+                          .go('/defence/room/${widget.defenceId}/manuscript'),
+                      icon: const Icon(Icons.menu_book_outlined, size: 18),
+                      label: const Text('View manuscript'),
+                    ),
+                ],
               ),
             ],
           ),
@@ -463,27 +586,32 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
         ? ref.watch(myEvaluationProvider(widget.defenceId)).valueOrNull
         : null;
     final isAdviser = uid != null && uid == defence.adviserUid;
+    final showManuscript = defence.status != DefenceStatus.cancelled;
+    final canHighlight = defence.status == DefenceStatus.inProgress &&
+        uid != null &&
+        authorPosition != null;
+    if (canComment && uid != null && authorPosition != null) {
+      _typing ??= DefenceTyping(
+        repo: ref.read(defenceRepositoryProvider),
+        defenceId: widget.defenceId,
+        uid: uid,
+        name: me?.fullName ?? '',
+        position: authorPosition,
+      );
+    }
+    final highlightCount =
+        ref.watch(defenceAnnotationsProvider(widget.defenceId)).valueOrNull
+                ?.length ??
+            0;
+    final composing =
+        ref.watch(defenceComposingProvider(widget.defenceId)).valueOrNull ??
+            const <DefenceComposing>[];
 
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     final at = defence.scheduledAt;
 
-    final log = Panel(
-      title: 'Session log',
-      subtitle: defence.status == DefenceStatus.inProgress
-          ? 'Live. Remarks appear as they are posted'
-          : 'Remarks made during the defence',
-      icon: Icons.forum_outlined,
-      flush: true,
-      trailing: defence.status == DefenceStatus.inProgress
-          ? const ToneBadge(
-              label: 'Live',
-              tone: Tone.endorsed,
-              icon: Icons.sensors_rounded,
-              dense: true,
-            )
-          : null,
-      child: Column(
+    final roomLog = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (comments.isEmpty)
@@ -522,6 +650,15 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               ),
             ),
           Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppTokens.md, AppTokens.sm, AppTokens.md, 0),
+            child: TypingLine(
+              markers: composing,
+              target: ComposingTarget.room,
+              myUid: uid,
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.all(AppTokens.md),
             child: canComment
                 ? Column(
@@ -541,6 +678,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                             child: TextField(
                               key: const Key('commentBody'),
                               controller: _bodyController,
+                              focusNode: _commentFocus,
                               decoration: const InputDecoration(
                                 hintText: 'Add a remark to the log',
                               ),
@@ -584,7 +722,81 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                   ),
           ),
         ],
+    );
+
+    final live = defence.status == DefenceStatus.inProgress
+        ? const ToneBadge(
+            label: 'Live',
+            tone: Tone.endorsed,
+            icon: Icons.sensors_rounded,
+            dense: true,
+          )
+        : null;
+    final onHighlights = showManuscript && _tab == _RoomTab.highlights;
+    final tabsPanel = Panel(
+      title: onHighlights ? 'Highlights' : 'Session log',
+      subtitle: onHighlights
+          ? 'Boxes drawn on the manuscript, in page order'
+          : defence.status == DefenceStatus.inProgress
+              ? 'Live. Remarks appear as they are posted'
+              : 'Remarks made during the defence',
+      icon: onHighlights ? Icons.highlight_alt : Icons.forum_outlined,
+      flush: true,
+      trailing: live,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showManuscript)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppTokens.md, AppTokens.sm, AppTokens.md, AppTokens.sm),
+              child: SegmentedButton<_RoomTab>(
+                showSelectedIcon: false,
+                segments: [
+                  const ButtonSegment(
+                    value: _RoomTab.room,
+                    label: Text('Room comments', key: Key('tabRoom')),
+                  ),
+                  ButtonSegment(
+                    value: _RoomTab.highlights,
+                    label: Text('Highlights ($highlightCount)',
+                        key: const Key('tabHighlights')),
+                  ),
+                ],
+                selected: {_tab},
+                onSelectionChanged: (s) => setState(() => _tab = s.first),
+              ),
+            ),
+          if (onHighlights)
+            HighlightsTab(
+              defence: defence,
+              myUid: uid,
+              onSelect: _manuscript.reveal,
+              onDelete: uid == null ? null : (a) => _deleteHighlight(a, uid),
+            )
+          else
+            roomLog,
+        ],
       ),
+    );
+
+    final pane = DefenceManuscriptPane(
+      defence: defence,
+      controller: _manuscript,
+      canHighlight: canHighlight,
+      highlightClosedReason: defence.status == DefenceStatus.scheduled
+          ? 'Highlighting opens when the defence starts.'
+          : null,
+      // Spelled out rather than `canHighlight ? …`: the null checks here are
+      // what promote `uid` and `authorPosition` inside the closure.
+      onHighlightDrawn: defence.status == DefenceStatus.inProgress &&
+              uid != null &&
+              authorPosition != null
+          ? (d) => _composeHighlight(d,
+              uid: uid,
+              authorName: me?.fullName ?? '',
+              authorPosition: authorPosition)
+          : null,
     );
 
     final session = Panel(
@@ -726,34 +938,160 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       ),
     );
 
-    return KeyedSubtree(
-      key: const Key('defenceRoom'),
-      child: PageShell(
-        maxWidth: AppTokens.measureWide,
-        kicker: defence.label,
-        title: thesisTitle ?? defence.label,
-        children: [
-          if (defence.isRedefence) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('redefenceOfLink'),
-                onPressed: () =>
-                    context.push('/defence/room/${defence.redefenceOf}'),
-                icon: const Icon(Icons.history, size: 18),
-                label: Text('Re-defence of an earlier '
-                    '${defence.type.label.toLowerCase()}. Open the original'),
-              ),
-            ),
-            const Gap.sm(),
-          ],
-          SplitColumns(
-            secondaryFirstWhenStacked: true,
-            primary: [log],
-            secondary: [session, after],
+    final redefenceLink = [
+      if (defence.isRedefence) ...[
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('redefenceOfLink'),
+            onPressed: () =>
+                context.push('/defence/room/${defence.redefenceOf}'),
+            icon: const Icon(Icons.history, size: 18),
+            label: Text('Re-defence of an earlier '
+                '${defence.type.label.toLowerCase()}. Open the original'),
           ),
-        ],
-      ),
+        ),
+        const Gap.sm(),
+      ],
+    ];
+
+    final stacked = SplitColumns(
+      secondaryFirstWhenStacked: true,
+      primary: [tabsPanel],
+      secondary: [session, after],
     );
+
+    if (!showManuscript) {
+      return KeyedSubtree(
+        key: const Key('defenceRoom'),
+        child: PageShell(
+          maxWidth: AppTokens.measureWide,
+          kicker: defence.label,
+          title: thesisTitle ?? defence.label,
+          children: [...redefenceLink, stacked],
+        ),
+      );
+    }
+
+    switch (Breakpoint.of(context)) {
+      case Breakpoint.expanded:
+        // Spec §7.1 Option A: the manuscript left, the room on the right.
+        return KeyedSubtree(
+          key: const Key('defenceRoom'),
+          child: PageShell(
+            scrollable: false,
+            maxWidth: AppTokens.measureWide,
+            kicker: defence.label,
+            title: thesisTitle ?? defence.label,
+            children: [
+              ...redefenceLink,
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: pane),
+                    const SizedBox(width: AppTokens.lg),
+                    SizedBox(
+                      width: 420,
+                      child: ListView(
+                        key: const Key('roomSideColumn'),
+                        children: [
+                          session,
+                          const Gap.lg(),
+                          tabsPanel,
+                          const Gap.lg(),
+                          after,
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      case Breakpoint.compact:
+        // A phone: the pages fill the screen, the room slides up over them.
+        return KeyedSubtree(
+          key: const Key('defenceRoom'),
+          child: PageShell(
+            scrollable: false,
+            kicker: defence.label,
+            title: thesisTitle ?? defence.label,
+            children: [
+              ...redefenceLink,
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, box) => Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: box.maxHeight * 0.12,
+                        child: pane,
+                      ),
+                      DraggableScrollableSheet(
+                        key: const Key('roomSheet'),
+                        initialChildSize: 0.35,
+                        minChildSize: 0.12,
+                        maxChildSize: 0.95,
+                        builder: (context, scroll) => Material(
+                          color: p.canvas,
+                          elevation: 8,
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16)),
+                          child: ListView(
+                            controller: scroll,
+                            padding: const EdgeInsets.all(AppTokens.sm),
+                            children: [
+                              Center(
+                                child: Container(
+                                  width: 36,
+                                  height: 4,
+                                  margin: const EdgeInsets.only(
+                                      bottom: AppTokens.sm),
+                                  decoration: BoxDecoration(
+                                    color: p.rule,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              tabsPanel,
+                              const Gap.md(),
+                              session,
+                              const Gap.md(),
+                              after,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      case Breakpoint.medium:
+        return KeyedSubtree(
+          key: const Key('defenceRoom'),
+          child: PageShell(
+            maxWidth: AppTokens.measureWide,
+            kicker: defence.label,
+            title: thesisTitle ?? defence.label,
+            children: [
+              ...redefenceLink,
+              stacked,
+              const Gap.lg(),
+              SizedBox(
+                height: (MediaQuery.sizeOf(context).height * 0.8)
+                    .clamp(480.0, 1100.0),
+                child: pane,
+              ),
+            ],
+          ),
+        );
+    }
   }
 }

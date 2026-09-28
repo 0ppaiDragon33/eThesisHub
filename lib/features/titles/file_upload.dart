@@ -60,9 +60,11 @@ const kJustificationMaxBytes = 10 * 1024 * 1024;
 const kPresentationTypes = {'pptx', 'ppt', 'pdf'};
 const kPresentationMaxBytes = 25 * 1024 * 1024;
 
-/// A chapter carries figures and tables, so the cap is above M1b's 10 MB
-/// justification limit and below the bucket's 50 MB ceiling.
-const kChapterTypes = {'pdf', 'doc', 'docx'};
+/// PDF only (spec 2026-09-26): the defence room draws each approved chapter
+/// as pages, and a Word file cannot be drawn in the app. A chapter carries
+/// figures and tables, so the size cap is above M1b's 10 MB justification
+/// limit and below the bucket's 50 MB ceiling.
+const kChapterTypes = {'pdf'};
 const kChapterMaxBytes = 15 * 1024 * 1024;
 
 /// What My files accepts: documents, slides and photos (spec §6.3).

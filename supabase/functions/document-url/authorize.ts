@@ -64,10 +64,6 @@ export function thesisIdForPath(path: string): string | null {
 /// document's audience is the thesis's audience, and two different answers to
 /// "who is on this thesis" is how a file becomes readable by someone the
 /// record says it is not for.
-///
-/// The dean is included here where the chapter-version rule excludes them.
-/// That is not an oversight — see `mayReadDocument`, which applies the
-/// narrower rule for chapter files.
 export function mayReadThesis(
   caller: CallerFacts,
   thesis: ThesisFacts,
@@ -84,14 +80,9 @@ export function mayReadThesis(
 
 /// Whether [caller] may read the file at [documentId] on [thesis].
 ///
-/// `firestore.rules` draws one distinction the thesis-level check does not:
-/// on `documents/{chapterId}/versions/{n}` the dean is excluded, because a
-/// dean sees that a chapter is approved and never its files. The manuscript
-/// is not a chapter version and carries no such exclusion.
-///
-/// Keeping that distinction here matters: if this function were more
-/// permissive than the rules, a dean who cannot read a version's metadata
-/// could still fetch the file it points at, and the rule would be decorative.
+/// A document's audience is the thesis's audience. The dean used to be
+/// excluded from chapter files; since spec 2026-09-26 they read them like the
+/// coordinator, matching the `versions` rule in firestore.rules.
 ///
 /// [isArchived] is the repository case. Once a thesis is published to the
 /// `archive` collection its manuscript is browsable by any active reader —
@@ -109,7 +100,6 @@ export function mayReadDocument(
 ): boolean {
   if (isArchived && documentId === "manuscript" && caller.active) return true;
   if (!mayReadThesis(caller, thesis)) return false;
-  if (documentId !== "manuscript" && caller.role === "dean") return false;
   return true;
 }
 

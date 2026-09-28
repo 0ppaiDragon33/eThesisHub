@@ -24,6 +24,7 @@ class Thesis {
     this.titlesSubmittedAt,
     this.titleRound = 0,
     this.approvedTitleId,
+    this.approvedTitleText,
     this.titleDecidedAt,
     this.titleDecidedBy,
     this.titleRejectionRemark,
@@ -59,6 +60,15 @@ class Thesis {
   final int titleRound;
 
   final String? approvedTitleId;
+
+  /// The approved title's text when it was set OUTSIDE the candidate-title
+  /// flow — i.e. by an approved change-of-title (Form 4b). Null on every
+  /// thesis whose title came the ordinary way (its approved title is
+  /// [approvedTitleId]'s candidate). The approved-title resolvers (archive,
+  /// evaluation sheet, the student's approved-title card) prefer this when
+  /// present, so a change of title reaches the official record — not only
+  /// the [workingTitle] shown in list views.
+  final String? approvedTitleText;
   final DateTime? titleDecidedAt;
   final String? titleDecidedBy;
   final String? titleRejectionRemark;
@@ -109,6 +119,7 @@ class Thesis {
       titlesSubmittedAt: map['titlesSubmittedAt'] as DateTime?,
       titleRound: (map['titleRound'] as num?)?.toInt() ?? 0,
       approvedTitleId: map['approvedTitleId'] as String?,
+      approvedTitleText: map['approvedTitleText'] as String?,
       titleDecidedAt: map['titleDecidedAt'] as DateTime?,
       titleDecidedBy: map['titleDecidedBy'] as String?,
       titleRejectionRemark: map['titleRejectionRemark'] as String?,

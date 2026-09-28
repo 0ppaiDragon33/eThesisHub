@@ -211,4 +211,55 @@ void main() {
 
     expect(find.byKey(const Key('uploadVersion')), findsOneWidget);
   });
+
+  testWidgets('chapters are PDF only: a Word file is refused with a reason',
+      (tester) async {
+    final db = await seed();
+    final storage = _FakeStorage();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        firestoreProvider.overrideWithValue(db),
+        storageServiceProvider.overrideWithValue(storage),
+        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(
+              uid: 'l1', email: 'l@isufst.edu.ph', isEmailVerified: true),
+        )),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: ChapterDetailScreen(
+            thesisId: 't1',
+            chapter: ChapterId.chapterI,
+            pickDocument: ({required Set<String> allowed}) async {
+              expect(allowed, {'pdf'});
+              return PickedDocument(
+                name: 'chapter1.docx',
+                bytes: Uint8List.fromList([0x50, 0x4B, 3, 4]),
+                extension: 'docx',
+                contentType: 'application/vnd.openxmlformats-'
+                    'officedocument.wordprocessingml.document',
+              );
+            },
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('uploadVersion')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose a PDF file.'), findsOneWidget);
+    expect(
+        (await db.collection('theses/t1/documents').get()).docs, isEmpty);
+  });
+
+  testWidgets('the upload area says to save as PDF', (tester) async {
+    final db = await seed();
+    await tester.pumpWidget(_wrap(db, _FakeStorage()));
+    await tester.pumpAndSettle();
+    expect(find.text('Upload chapters as PDF. From Word: File → Save As → PDF.'),
+        findsOneWidget);
+  });
 }

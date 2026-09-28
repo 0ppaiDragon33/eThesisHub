@@ -18,6 +18,7 @@ import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
 import 'package:ethesishub/features/dashboard/submission_trend.dart';
 import 'package:ethesishub/features/notifications/notifications_screen.dart';
+import 'package:ethesishub/providers/change_request_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -45,6 +46,7 @@ class DeanOverview extends ConsumerWidget {
     // faculty fan-in.
     final defencesAsync = ref.watch(allDefencesProvider);
     final allThesesAsync = ref.watch(allThesesProvider);
+    final changeRequestsAsync = ref.watch(deanChangeRequestsProvider);
 
     return KeyedSubtree(
       key: const Key('deanOverview'),
@@ -90,6 +92,13 @@ class DeanOverview extends ConsumerWidget {
             label: 'Active theses',
             value: allThesesAsync,
             format: (l) => '${activeThesisCount(l)}',
+          ),
+          Metric(
+            label: 'Change requests',
+            value: changeRequestsAsync,
+            format: (l) => '${l.length}',
+            highlight: (l) => l.isNotEmpty,
+            onTap: () => context.go('/change-requests'),
           ),
         ]),
         SplitColumns(

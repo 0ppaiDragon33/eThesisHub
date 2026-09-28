@@ -58,9 +58,9 @@ String shellTitleFor(
   // router registers it first: 'schedule' would otherwise read as a thesis
   // id.
   if (location.startsWith('/defence/room/')) {
-    return location.endsWith('/consolidated')
-        ? 'Consolidated comments'
-        : 'Defence room';
+    if (location.endsWith('/consolidated')) return 'Consolidated comments';
+    if (location.endsWith('/manuscript')) return 'Manuscript';
+    return 'Defence room';
   }
   if (location != '/defence/schedule' && location.startsWith('/defence/')) {
     return 'Title defence';

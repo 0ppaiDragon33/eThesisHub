@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/defence_calendar.dart';
 import 'package:ethesishub/features/defence/defence_stage.dart';
@@ -21,20 +22,26 @@ enum _DefencesView { list, calendar }
 /// one. The router hands it in as [initialStage], and switching stages goes
 /// to the new URL. Standing alone (in a test), switching is local state.
 ///
+/// With no stage named — the sidebar's bare '/defences' — the page opens on
+/// the first stage where the reader has something open
+/// ([defaultDefenceStageProvider]), choosing once, so work arriving later
+/// never moves the tab under them.
+///
 /// List / Calendar applies to the three stages that have dates. It is not
 /// persisted: a stored preference is not warranted for something changed by
 /// a single tap.
 class DefencesScreen extends ConsumerStatefulWidget {
   const DefencesScreen({
     super.key,
-    this.initialStage = DefenceStage.title,
+    this.initialStage,
     this.initialCalendar = false,
     this.title = 'Defences',
     this.subtitle =
         'Title defences, pre-oral and final defences, and re-defences.',
   });
 
-  final DefenceStage initialStage;
+  /// The stage the link named; null lets the page choose.
+  final DefenceStage? initialStage;
 
   /// Whether to open on the Calendar view rather than List, for a link that
   /// means "the calendar" (`?view=calendar`).
@@ -47,7 +54,9 @@ class DefencesScreen extends ConsumerStatefulWidget {
 }
 
 class _DefencesScreenState extends ConsumerState<DefencesScreen> {
-  late DefenceStage _stage = widget.initialStage;
+  /// Null until chosen: named by the link, picked by the reader, or settled
+  /// once by [defaultDefenceStageProvider].
+  late DefenceStage? _stage = widget.initialStage;
   late _DefencesView _view =
       widget.initialCalendar ? _DefencesView.calendar : _DefencesView.list;
 
@@ -67,6 +76,23 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // No stage named: take the automatic one the moment it is known, and
+    // keep it (assigned once, not re-read), so later work never moves the
+    // tab the reader is looking at.
+    if (_stage == null) {
+      final pick = ref.watch(defaultDefenceStageProvider).valueOrNull;
+      if (pick == null) {
+        return PageShell(
+          key: const Key('defencesScreen'),
+          maxWidth: AppTokens.measureWide,
+          title: widget.title,
+          subtitle: widget.subtitle,
+          children: const [LoadingState(label: 'Loading your defences…')],
+        );
+      }
+      _stage = pick;
+    }
+    final stage = _stage!;
     final counts = ref.watch(defenceStageCountsProvider);
     final calendar = _view == _DefencesView.calendar;
 
@@ -77,7 +103,7 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
       subtitle: widget.subtitle,
       actions: [
         // Title defences have no date, so they have no calendar.
-        if (_stage != DefenceStage.title)
+        if (stage != DefenceStage.title)
           SegmentedButton<_DefencesView>(
             key: const Key('defencesViewToggle'),
             segments: const [
@@ -121,7 +147,7 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
                       icon: short ? null : Icon(s.icon),
                     ),
                 ],
-                selected: {_stage},
+                selected: {stage},
                 onSelectionChanged: (selection) =>
                     _selectStage(selection.first),
               ),
@@ -129,7 +155,7 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
           );
         }),
         const Gap.lg(),
-        switch (_stage) {
+        switch (stage) {
           DefenceStage.title => const TitleDefenceStage(),
           DefenceStage.redefence => RedefenceStage(calendar: calendar),
           DefenceStage.preOral => calendar

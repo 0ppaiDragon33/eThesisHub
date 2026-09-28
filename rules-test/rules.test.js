@@ -2854,8 +2854,11 @@ test("M2: an outsider may NOT read a chapter, its versions or its feedback",
       getDoc(doc(adv, "theses/m2/documents/chapterI/feedback/f1")));
   });
 
-test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
+test("M2: the dean reads chapter status and versions but NOT its feedback",
   async () => {
+    // Spec 2026-09-26: the Dean sits on defences and reads the manuscript,
+    // so chapter files are open to them like the Coordinator. The adviser's
+    // feedback stays between the adviser and the group.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -2868,8 +2871,10 @@ test("M2: the dean reads chapter STATUS but NOT its versions or feedback",
     });
     const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
-    await assertFails(
+    await assertSucceeds(
       getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+    await assertSucceeds(
+      getDocs(collection(dean, "theses/m2/documents/chapterI/versions")));
     await assertFails(
       getDoc(doc(dean, "theses/m2/documents/chapterI/feedback/f1")));
     // Control: the adviser reads the feedback the dean was denied.
@@ -3170,9 +3175,8 @@ test("M3: a panelist reads the chapters they are about to hear defended",
       { status: "approved", updatedAt: serverTimestamp() }));
   });
 
-test("M3: the dean still reads chapter STATUS but not its versions",
+test("M3: the dean reads a chapter's versions, as the panel does",
   async () => {
-    // Widening for the panel must not widen for the dean -- M2-8.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -3180,8 +3184,11 @@ test("M3: the dean still reads chapter STATUS but not its versions",
     });
     const dean = asDocUser("dean-uid", "dean@isufst.edu.ph");
     await assertSucceeds(getDoc(doc(dean, "theses/m2/documents/chapterI")));
-    await assertFails(
+    await assertSucceeds(
       getDoc(doc(dean, "theses/m2/documents/chapterI/versions/1")));
+    // Reading is not writing.
+    await assertFails(updateDoc(
+      doc(dean, "theses/m2/documents/chapterI/versions/1"), { sizeBytes: 1 }));
   });
 
 // ---------- M3: defence scheduling ----------
@@ -5648,6 +5655,593 @@ test("deleting a folder moves its copy and file out and removes it, in one batch
   batch.delete(doc(owner, "users/mf-owner/folders/fo-b"));
   await assertSucceeds(batch.commit());
 });
+
+// ---------- Change of adviser / title (spec 2026-09-25) ----------
+
+function crThesis(extra = {}) {
+  return {
+    leaderUid: "cr-leader", adviserUid: "cr-old-adv",
+    panelistUids: ["cr-pan"], memberNames: [],
+    workingTitle: "Old Title", college: "CICT", program: "BSIT",
+    semester: "First", academicYear: "2026-2027",
+    status: "titleApproved", ...extra,
+  };
+}
+
+function adviserReq(extra = {}) {
+  return {
+    type: "adviser", stage: "pendingAdvisers",
+    reasons: "The adviser moved campus.", leaderUid: "cr-leader",
+    newAdviserUid: "cr-new-adv", newAdviserName: "Dr. New",
+    formerAdviserUid: "cr-old-adv", formerAdviserName: "Dr. Old",
+    signoffs: {
+      newAdviser: { status: "pending" },
+      formerAdviser: { status: "pending" },
+      coordinator: { status: "pending" },
+      dean: { status: "pending" },
+    },
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  };
+}
+
+const crDbs = new Map();
+function asCrUser(uid, email) {
+  if (!crDbs.has(uid)) {
+    crDbs.set(uid, env.authenticatedContext(
+      uid, { email, email_verified: true }).firestore());
+  }
+  return crDbs.get(uid);
+}
+
+async function seedCr(reqExtra = null, thesisExtra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/cr1"), crThesis(thesisExtra));
+    await setDoc(doc(db, "users/cr-leader"), { role: "student", active: true });
+    await setDoc(doc(db, "users/cr-new-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-old-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-coord"), { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/cr-dean"), { role: "dean", active: true });
+    if (reqExtra !== null) {
+      await setDoc(doc(db, "theses/cr1/changeRequests/adviser"),
+        adviserReq(reqExtra));
+    }
+  });
+}
+
+const crPath = "theses/cr1/changeRequests/adviser";
+
+test("CR: only the leader creates, only at titleApproved", async () => {
+  await seedCr();
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  const other = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(setDoc(doc(other, crPath), adviserReq()));
+  await assertSucceeds(setDoc(doc(leader, crPath), adviserReq()));
+});
+
+test("CR: create denied when the thesis is not titleApproved", async () => {
+  await seedCr(null, { status: "titlePendingDefence" });
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, crPath), adviserReq()));
+});
+
+test("CR: create must start every sign-off pending at the first stage",
+  async () => {
+    await seedCr();
+    const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+    await assertFails(setDoc(doc(leader, crPath),
+      adviserReq({ stage: "pendingDean" })));
+    await assertFails(setDoc(doc(leader, crPath), adviserReq({
+      signoffs: { newAdviser: { status: "accepted" },
+        formerAdviser: { status: "pending" },
+        coordinator: { status: "pending" }, dean: { status: "pending" } } })));
+  });
+
+test("CR: no second open request of the same type", async () => {
+  // seedCr() alone leaves reqExtra at its default (null), which skips
+  // seeding the request doc entirely (see seedCr's `if (reqExtra !== null)`
+  // guard) -- seedCr({}) is what actually seeds an open request at
+  // pendingAdvisers, matching every other test in this block.
+  await seedCr({});
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, crPath),
+    adviserReq({ reasons: "again" })));
+});
+
+test("CR: the new adviser accepts only their own sign-off, only at stage",
+  async () => {
+    await seedCr({});
+    const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+    const other = asCrUser("cr-pan", "cr-pan@isufst.edu.ph");
+    // Someone else may not write the newAdviser sign-off.
+    await assertFails(updateDoc(doc(other, crPath), {
+      "signoffs.newAdviser.status": "accepted" }));
+    // The new adviser accepts; the stage stays (former still pending).
+    await assertSucceeds(updateDoc(doc(newAdv, crPath), {
+      "signoffs.newAdviser.status": "accepted",
+      "signoffs.newAdviser.respondedAt": serverTimestamp() }));
+  });
+
+test("CR: both advisers accepted advances to the coordinator", async () => {
+  await seedCr({ signoffs: {
+    newAdviser: { status: "accepted" },
+    formerAdviser: { status: "pending" },
+    coordinator: { status: "pending" }, dean: { status: "pending" } } });
+  const oldAdv = asCrUser("cr-old-adv", "cr-old-adv@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(oldAdv, crPath), {
+    "signoffs.formerAdviser.status": "accepted",
+    "signoffs.formerAdviser.respondedAt": serverTimestamp(),
+    stage: "pendingCoordinator" }));
+});
+
+test("CR: an adviser advancing before both accepted is denied", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "accepted", stage: "pendingCoordinator" }));
+});
+
+test("CR: a decline returns the request", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "declined",
+    "signoffs.newAdviser.reason": "Not my field.", stage: "returned" }));
+});
+
+test("CR: the coordinator recommends only at the coordinator stage",
+  async () => {
+    await seedCr({ stage: "pendingCoordinator", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const coord = asCrUser("cr-coord", "cr-coord@isufst.edu.ph");
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+    await assertFails(updateDoc(doc(dean, crPath), {
+      "signoffs.coordinator.status": "accepted", stage: "pendingDean" }));
+    await assertSucceeds(updateDoc(doc(coord, crPath), {
+      "signoffs.coordinator.status": "accepted",
+      "signoffs.coordinator.respondedAt": serverTimestamp(),
+      stage: "pendingDean" }));
+  });
+
+test("CR: the Dean approves the request and the thesis in one batch",
+  async () => {
+    await seedCr({ stage: "pendingDean", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "accepted" }, dean: { status: "pending" } } });
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+
+    // The thesis change alone is denied.
+    await assertFails(updateDoc(doc(dean, "theses/cr1"),
+      { adviserUid: "cr-new-adv" }));
+
+    // Both together succeed.
+    const batch = writeBatch(dean);
+    batch.update(doc(dean, crPath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
+    batch.update(doc(dean, "theses/cr1"), { adviserUid: "cr-new-adv" });
+    await assertSucceeds(batch.commit());
+  });
+
+test("CR: the leader resubmits only a returned request, same type & leader",
+  async () => {
+    await seedCr({ stage: "returned", signoffs: {
+      newAdviser: { status: "declined", reason: "no" },
+      formerAdviser: { status: "pending" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+    // Resubmit resets to first stage, all pending.
+    await assertSucceeds(setDoc(doc(leader, crPath),
+      adviserReq({ newAdviserUid: "cr-new-adv", newAdviserName: "Dr. New" })));
+    // A resubmit that changes the type is refused.
+    await seedCr({ stage: "returned", signoffs: adviserReq().signoffs });
+    await assertFails(setDoc(doc(leader, crPath),
+      adviserReq({ type: "title" })));
+  });
+
+test("CR: a sign-off changes only its own role", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  // Accepting my own AND pre-setting the coordinator's is denied.
+  await assertFails(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "accepted",
+    "signoffs.coordinator.status": "accepted" }));
+});
+
+// --- Fix round 1: the dean's accept-to-`approved` path must be paired with
+// the SAME commit's thesis-field write (getAfter, symmetric with the
+// thesis-side arm), and the title-type request had no test coverage. ---
+
+function titleReq(extra = {}) {
+  return {
+    type: "title", stage: "pendingAdviser",
+    reasons: "The scope changed.", leaderUid: "cr-leader",
+    newTitle: "New Title",
+    signoffs: {
+      adviser: { status: "pending" },
+      coordinator: { status: "pending" },
+      dean: { status: "pending" },
+    },
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  };
+}
+
+async function seedCrTitle(reqExtra = null, thesisExtra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "theses/cr1"), crThesis(thesisExtra));
+    await setDoc(doc(db, "users/cr-leader"), { role: "student", active: true });
+    await setDoc(doc(db, "users/cr-new-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-old-adv"), { role: "faculty", active: true });
+    await setDoc(doc(db, "users/cr-coord"), { role: "coordinator", active: true });
+    await setDoc(doc(db, "users/cr-dean"), { role: "dean", active: true });
+    if (reqExtra !== null) {
+      await setDoc(doc(db, "theses/cr1/changeRequests/title"),
+        titleReq(reqExtra));
+    }
+  });
+}
+
+const crTitlePath = "theses/cr1/changeRequests/title";
+
+test("CR adviser-type: the dean's request-only approval (no thesis write) is denied",
+  async () => {
+    await seedCr({ stage: "pendingDean", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "accepted" }, dean: { status: "pending" } } });
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+    // Same as the earlier Dean-batch test's premise, but this time approving
+    // the request WITHOUT touching the thesis at all -- must be denied, so
+    // the thesis can never be left stale behind an "approved" request.
+    await assertFails(updateDoc(doc(dean, crPath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" }));
+  });
+
+test("CR title: the full flow reaches the dean; either half of the batch alone is denied, both together succeed",
+  async () => {
+    await seedCrTitle({});
+    const adviser = asCrUser("cr-old-adv", "cr-old-adv@isufst.edu.ph");
+    await assertSucceeds(updateDoc(doc(adviser, crTitlePath), {
+      "signoffs.adviser.status": "accepted",
+      "signoffs.adviser.respondedAt": serverTimestamp(),
+      stage: "pendingCoordinator" }));
+
+    const coord = asCrUser("cr-coord", "cr-coord@isufst.edu.ph");
+    await assertSucceeds(updateDoc(doc(coord, crTitlePath), {
+      "signoffs.coordinator.status": "accepted",
+      "signoffs.coordinator.respondedAt": serverTimestamp(),
+      stage: "pendingDean" }));
+
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+
+    // The dean's request-only approval (no thesis write) is denied.
+    await assertFails(updateDoc(doc(dean, crTitlePath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" }));
+    // The thesis-only change alone is denied.
+    await assertFails(updateDoc(doc(dean, "theses/cr1"),
+      { workingTitle: titleReq().newTitle,
+        approvedTitleText: titleReq().newTitle }));
+
+    // A batch that changes workingTitle but NOT approvedTitleText is denied:
+    // the approved-title resolvers read approvedTitleText, so a change that
+    // skipped it would leave the archive showing the stale title.
+    const halfBatch = writeBatch(dean);
+    halfBatch.update(doc(dean, crTitlePath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
+    halfBatch.update(doc(dean, "theses/cr1"),
+      { workingTitle: titleReq().newTitle });
+    await assertFails(halfBatch.commit());
+
+    // Both together, in one batch, succeed — workingTitle AND approvedTitleText.
+    const batch = writeBatch(dean);
+    batch.update(doc(dean, crTitlePath), {
+      "signoffs.dean.status": "accepted",
+      "signoffs.dean.respondedAt": serverTimestamp(), stage: "approved" });
+    batch.update(doc(dean, "theses/cr1"),
+      { workingTitle: titleReq().newTitle,
+        approvedTitleText: titleReq().newTitle });
+    await assertSucceeds(batch.commit());
+  });
+
+// --- Fix round 2, Fix 1: the faculty inbox's real collection-group query,
+// filtered by the denormalized `awaitingUids` field, must be ALLOWED, while
+// an unfiltered scan across every thesis's requests must stay DENIED --
+// modeled on the nominations collection-group tests above ("(c)").
+
+test("CR awaitingUids: allow -- a faculty member's arrayContains query for " +
+    "their own uid returns the request awaiting them", async () => {
+  await seedCr({ signoffs: adviserReq().signoffs,
+    awaitingUids: ["cr-new-adv", "cr-old-adv"] });
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  const snap = await assertSucceeds(
+    getDocs(query(collectionGroup(newAdv, "changeRequests"),
+      where("awaitingUids", "array-contains", "cr-new-adv")))
+  );
+  assert.equal(snap.docs.length, 1);
+  assert.equal(snap.docs[0].id, "adviser");
+});
+
+test("CR awaitingUids: deny -- an UNFILTERED collection-group scan of " +
+    "every change request fails", async () => {
+  await seedCr({ signoffs: adviserReq().signoffs,
+    awaitingUids: ["cr-new-adv", "cr-old-adv"] });
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(getDocs(collectionGroup(newAdv, "changeRequests")));
+});
+
+// The Coordinator's and the Dean's queues are the app's real queries: a
+// collection-group read filtered by stage. A collection-group query is
+// authorized ONLY by the `{path=**}` rule, never by the nested per-thesis
+// one, so both roles need their own arm there.
+test("CR queues: the coordinator's stage query across every thesis is allowed",
+  async () => {
+    await seedCr({ stage: "pendingCoordinator", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const coord = asCrUser("cr-coord", "cr-coord@isufst.edu.ph");
+    const snap = await assertSucceeds(getDocs(query(
+      collectionGroup(coord, "changeRequests"),
+      where("stage", "==", "pendingCoordinator"))));
+    assert.equal(snap.docs.length, 1);
+  });
+
+test("CR queues: the dean's stage query across every thesis is allowed",
+  async () => {
+    await seedCr({ stage: "pendingDean", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "accepted" }, dean: { status: "pending" } } });
+    const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
+    const snap = await assertSucceeds(getDocs(query(
+      collectionGroup(dean, "changeRequests"),
+      where("stage", "==", "pendingDean"))));
+    assert.equal(snap.docs.length, 1);
+  });
+
+test("CR queues: a faculty member may not run the coordinator's stage query",
+  async () => {
+    await seedCr({ stage: "pendingCoordinator", signoffs: {
+      newAdviser: { status: "accepted" }, formerAdviser: { status: "accepted" },
+      coordinator: { status: "pending" }, dean: { status: "pending" } } });
+    const faculty = asCrUser("cr-pan", "cr-pan@isufst.edu.ph");
+    await assertFails(getDocs(query(
+      collectionGroup(faculty, "changeRequests"),
+      where("stage", "==", "pendingCoordinator"))));
+  });
+
+test("CR awaitingUids: deny -- a faculty member not awaited on a request " +
+    "may not read it, even by get()", async () => {
+  await seedCr({ signoffs: adviserReq().signoffs,
+    awaitingUids: ["cr-new-adv", "cr-old-adv"] });
+  // A faculty member with no seat on this thesis at all (not the leader,
+  // not a panelist, not the coordinator/dean, and not in awaitingUids) --
+  // proves the field, not mere verified-faculty status, is what the arm
+  // authorises on. (cr-pan is deliberately NOT used here: it IS a panelist
+  // on this thesis and is legitimately authorized by the nested rule's own
+  // panelist arm, which would make this a false negative.)
+  const outsider = asCrUser("cr-outsider", "cr-outsider@isufst.edu.ph");
+  await assertFails(getDoc(doc(outsider, crPath)));
+  await assertFails(
+    getDocs(query(collectionGroup(outsider, "changeRequests"),
+      where("awaitingUids", "array-contains", "cr-new-adv")))
+  );
+});
+
+// --- Fix round 2, Fix 3: keptUnless compares the whole other-role sub-map,
+// not just `.status` -- a signer must not be able to scribble another
+// role's `reason` or `respondedAt` in the same write. ---
+
+test("CR: a sign-off may NOT rewrite another role's reason or " +
+    "respondedAt, even leaving that role's status untouched", async () => {
+  await seedCr({});
+  const newAdv = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  await assertFails(updateDoc(doc(newAdv, crPath), {
+    "signoffs.newAdviser.status": "accepted",
+    "signoffs.newAdviser.respondedAt": serverTimestamp(),
+    // formerAdviser's status is unchanged (still "pending"), but its
+    // reason is scribbled -- keptUnless must still catch this.
+    "signoffs.formerAdviser.reason": "planted",
+  }));
+});
+
+// ---------- Manuscript highlights and typing (spec 2026-09-26) ----------
+
+function highlight(uid, extra = {}) {
+  return {
+    authorUid: uid, authorName: "Dr. Panel", authorPosition: "Panel Member",
+    chapter: "chapterII", version: 2, page: 3,
+    rect: { x: 0.1, y: 0.2, w: 0.5, h: 0.05 },
+    body: "Cite the 2024 data here.", createdAt: serverTimestamp(), ...extra,
+  };
+}
+
+function marker(extra = {}) {
+  return {
+    name: "Dr. Panel", position: "Panel Member", target: "room",
+    updatedAt: serverTimestamp(), ...extra,
+  };
+}
+
+test("highlights: added only while the defence is in progress", async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled((ctx) => seedM3Defence(ctx.firestore()));
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+  await assertFails(setDoc(doc(pan, "defenses/df1/annotations/h1"),
+    highlight("pan-uid")));
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "inProgress" }));
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/h1"),
+    highlight("pan-uid")));
+  await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+    { status: "completed" }));
+  await assertFails(setDoc(doc(pan, "defenses/df1/annotations/h2"),
+    highlight("pan-uid")));
+});
+
+test("highlights: the adviser, panel, coordinator and dean may add; the group and outsiders may not",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    for (const uid of ["pan-uid", "adviser-uid", "coord-uid", "dean-uid"]) {
+      await assertSucceeds(setDoc(
+        doc(asDefUser(uid, `${uid}@isufst.edu.ph`),
+          `defenses/df1/annotations/by-${uid}`),
+        highlight(uid)));
+    }
+    await assertFails(setDoc(
+      doc(asDefUser("leader-uid", "leader@isufst.edu.ph"),
+        "defenses/df1/annotations/by-leader"),
+      highlight("leader-uid")));
+    await assertFails(setDoc(
+      doc(asDefUser("outsider-uid", "out@isufst.edu.ph"),
+        "defenses/df1/annotations/by-outsider"),
+      highlight("outsider-uid")));
+  });
+
+test("highlights: filed in your own name, with a valid box and comment",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const bad = [
+      highlight("adviser-uid"),
+      highlight("pan-uid", { rect: { x: 0.6, y: 0.2, w: 0.5, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.95, w: 0.5, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.2, w: 0, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: -0.1, y: 0.2, w: 0.5, h: 0.1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.2, w: 0.5, h: 0.1, z: 1 } }),
+      highlight("pan-uid", { rect: { x: 0.1, y: 0.2, w: 0.5 } }),
+      highlight("pan-uid", { chapter: "chapterVI" }),
+      highlight("pan-uid", { page: -1 }),
+      highlight("pan-uid", { page: 1.5 }),
+      highlight("pan-uid", { version: 0 }),
+      highlight("pan-uid", { body: "" }),
+      highlight("pan-uid", { body: "x".repeat(2001) }),
+      highlight("pan-uid", { createdAt: Timestamp.now() }),
+      highlight("pan-uid", { colour: "red" }),
+    ];
+    for (let i = 0; i < bad.length; i++) {
+      await assertFails(
+        setDoc(doc(pan, `defenses/df1/annotations/bad${i}`), bad[i]));
+    }
+    // Control: the longest comment allowed.
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/ok1"),
+      highlight("pan-uid", { body: "x".repeat(2000) })));
+  });
+
+test("highlights: a box drawn to the page edge saves", async () => {
+  // 0.1 + 0.9 is 1.0000000000000002 in floating point; a box dragged to the
+  // right edge must not be denied for it.
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/edge"),
+    highlight("pan-uid", { rect: { x: 0.1, y: 0.7, w: 0.9, h: 0.3 } })));
+});
+
+test("highlights: the group reads them only after the adviser releases",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedM3Defence(db, { status: "completed" });
+      await setDoc(doc(db, "defenses/df1/annotations/h1"),
+        { ...highlight("pan-uid"), createdAt: Timestamp.now() });
+    });
+    const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+
+    await assertFails(getDoc(doc(leader, "defenses/df1/annotations/h1")));
+    await assertSucceeds(getDoc(doc(adv, "defenses/df1/annotations/h1")));
+    await assertSucceeds(getDocs(collection(pan, "defenses/df1/annotations")));
+
+    await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
+      { consolidatedAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(leader, "defenses/df1/annotations/h1")));
+    await assertSucceeds(
+      getDocs(collection(leader, "defenses/df1/annotations")));
+  });
+
+test("highlights: delete your own only while in progress, and never edit",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled((ctx) =>
+      seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/h1"),
+      highlight("pan-uid")));
+    await assertFails(deleteDoc(doc(adv, "defenses/df1/annotations/h1")));
+    await assertFails(updateDoc(doc(pan, "defenses/df1/annotations/h1"),
+      { body: "Changed my mind." }));
+    await assertSucceeds(deleteDoc(doc(pan, "defenses/df1/annotations/h1")));
+
+    await assertSucceeds(setDoc(doc(pan, "defenses/df1/annotations/h2"),
+      highlight("pan-uid")));
+    await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
+      { status: "completed" }));
+    await assertFails(deleteDoc(doc(pan, "defenses/df1/annotations/h2")));
+  });
+
+test("typing: your own marker only, and never read by the group", async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled((ctx) =>
+    seedM3Defence(ctx.firestore(), { status: "inProgress" }));
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
+  const adv = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+  const dean = asDefUser("dean-uid", "dean@isufst.edu.ph");
+
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker()));
+  await assertSucceeds(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ target: "manuscript" })));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/adviser-uid"),
+    marker()));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ target: "elsewhere" })));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ extra: 1 })));
+  await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+    marker({ updatedAt: Timestamp.now() })));
+
+  await assertFails(getDoc(doc(leader, "defenses/df1/composing/pan-uid")));
+  await assertFails(setDoc(doc(leader, "defenses/df1/composing/leader-uid"),
+    marker()));
+  await assertSucceeds(getDoc(doc(adv, "defenses/df1/composing/pan-uid")));
+  await assertSucceeds(getDocs(collection(dean, "defenses/df1/composing")));
+
+  await assertFails(deleteDoc(doc(adv, "defenses/df1/composing/pan-uid")));
+  await assertSucceeds(deleteDoc(doc(pan, "defenses/df1/composing/pan-uid")));
+});
+
+test("typing: markers only while in progress, but your own may always be cleared",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await seedM3Defence(db, { status: "completed" });
+      await setDoc(doc(db, "defenses/df1/composing/pan-uid"),
+        { ...marker(), updatedAt: Timestamp.now() });
+    });
+    const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    await assertFails(setDoc(doc(pan, "defenses/df1/composing/pan-uid"),
+      marker()));
+    await assertSucceeds(deleteDoc(doc(pan, "defenses/df1/composing/pan-uid")));
+  });
 
 test.after(async () => {
   await env.cleanup();
