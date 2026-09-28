@@ -99,10 +99,20 @@ void main() {
       image: await page(tester),
     );
 
-    expect(find.byKey(const Key('chapterHeader-chapterI')), findsOneWidget);
     expect(find.byKey(const Key('drawSurface-chapterI-0')), findsNothing,
         reason: 'no drawing surface unless the tool is on');
-    expect(find.text('Ch. I · p. 1'), findsOneWidget);
+
+    // One paper, not stacked files: no divider of our own before a chapter,
+    // so the first page opens the list, and the paper's own printed page
+    // numbers are the only ones. The corner keeps just the chapter.
+    expect(find.byKey(const Key('chapterHeader-chapterI')), findsNothing);
+    expect(
+        tester
+            .getTopLeft(find.byKey(const Key('pageTile-chapterI-2-0')))
+            .dy,
+        tester.getTopLeft(find.byKey(const Key('manuscriptPages'))).dy);
+    expect(find.text('Ch. I'), findsWidgets);
+    expect(find.textContaining('· p.'), findsNothing);
 
     await tester.scrollUntilVisible(
         find.byKey(const Key('chapterNotPdf-chapterIII')), 300,

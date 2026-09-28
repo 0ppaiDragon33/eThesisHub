@@ -100,8 +100,11 @@ it stays in the list, marked "On an earlier version of Chapter II".
 ## 5. The merged manuscript
 
 - **Chapters shown:** pre-oral (and pre-oral re-defence) → Chapters I–III;
-  final (and final re-defence) → I–V, in order, each introduced by a
-  chapter divider ("Chapter II — Review of Related Literature").
+  final (and final re-defence) → I–V, in order, read as **one paper**: each
+  chapter's pages run straight on from the last, with no divider of the
+  app's own between them. The paper's own chapter opening pages, headings
+  and printed page numbers carry its structure. (A chapter shown as a
+  placeholder, or a reopened chapter's note, still names the chapter.)
 - **For each chapter:**
   - `approved` and its current version is a PDF → its pages.
   - Not approved → one placeholder page: "Chapter II is not approved yet."
@@ -123,8 +126,11 @@ it stays in the list, marked "On an earlier version of Chapter II".
 - **Zoom:** buttons, 100 / 150 / 200 / 300 %, scrolling sideways when the
   pages are wider than the view. No pinch: the page list is built lazily for
   memory's sake, and pinch-zoom needs the whole document built at once.
-- **Page labels:** "Ch. II · p. 3" (chapter-relative) on each page and in
-  the highlight list.
+- **Page labels:** each page carries only a small "Ch. II" tag, so the panel
+  can say which chapter; no page number of the app's own, since the paper
+  prints its own and a second count would clash. The highlight list still
+  locates a highlight as "Ch. II p. 3" (the page within that chapter's
+  file), and tapping it jumps there.
 
 ## 6. Highlights
 

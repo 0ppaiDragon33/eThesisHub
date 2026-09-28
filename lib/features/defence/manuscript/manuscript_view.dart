@@ -39,9 +39,12 @@ class ManuscriptController extends ChangeNotifier {
   }
 }
 
-/// The defence manuscript: each chapter's pages one after another, drawn a
-/// page at a time as they scroll into view and released when far away, so a
-/// long thesis is never held in a phone's memory whole.
+/// The defence manuscript: the chapters read as one paper, each chapter's
+/// pages running straight on from the last with nothing of ours between
+/// them, so the paper's own chapter openings and printed page numbers carry
+/// its structure. Pages are drawn one at a time as they scroll into view and
+/// released when far away, so a long thesis is never held in a phone's
+/// memory whole.
 class ManuscriptView extends ConsumerStatefulWidget {
   const ManuscriptView({
     super.key,
@@ -74,7 +77,6 @@ class ManuscriptView extends ConsumerStatefulWidget {
   final void Function(ChapterVersion)? onOpenFile;
   final ManuscriptController? controller;
 
-  static const double headerExtent = 44;
   static const double reopenedExtent = 56;
   static const double noteExtent = 168;
 
@@ -91,10 +93,6 @@ class ManuscriptView extends ConsumerStatefulWidget {
 sealed class _Item {
   const _Item(this.part);
   final ManuscriptPart part;
-}
-
-class _Header extends _Item {
-  const _Header(super.part);
 }
 
 /// Above a reopened chapter's pages: why an unapproved chapter shows them.
@@ -154,7 +152,6 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
   List<_Item> _buildItems() {
     final items = <_Item>[];
     for (final part in widget.parts) {
-      items.add(_Header(part));
       if (part.reopened) items.add(_Reopened(part));
       switch (part.kind) {
         case ManuscriptPartKind.pdf:
@@ -179,7 +176,6 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
   }
 
   double _extentOf(_Item item, double width) => switch (item) {
-        _Header() => ManuscriptView.headerExtent,
         _Reopened() => ManuscriptView.reopenedExtent,
         _Page(:final pdf, :final index) => width *
                 pdf.pageSizes[index].height /
@@ -341,22 +337,6 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
     final numeral = chapterNumeral(part.chapter);
     final id = part.chapter.name;
     switch (item) {
-      case _Header():
-        return Align(
-          alignment: Alignment.bottomLeft,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              part.chapter.label.toUpperCase(),
-              key: Key('chapterHeader-$id'),
-              style: const TextStyle(
-                  color: Color(0xFFB8C4CF),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.6),
-            ),
-          ),
-        );
       case _Reopened():
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -627,19 +607,20 @@ class _PageTileState extends ConsumerState<_PageTile> {
               ),
             ),
           ),
+        // Which chapter this page is in, so the panel can say so. No page
+        // number: the paper prints its own, and a second count would clash.
         Positioned(
           right: 6,
           bottom: 6,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
+              color: Colors.black.withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               child: Text(
-                'Ch. ${chapterNumeral(widget.part.chapter)} · '
-                'p. ${widget.index + 1}',
+                'Ch. ${chapterNumeral(widget.part.chapter)}',
                 style: const TextStyle(color: Colors.white, fontSize: 10),
               ),
             ),
