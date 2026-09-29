@@ -17,8 +17,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/progress_rail.dart';
 import 'package:ethesishub/features/documents/manuscript_upload.dart';
-import 'package:ethesishub/features/forms/form1_data.dart';
-import 'package:ethesishub/features/forms/form1_pdf.dart';
+import 'package:ethesishub/features/forms/form_viewer.dart';
 import 'package:ethesishub/features/thesis/change_request_tracker.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -83,24 +82,14 @@ class ThesisStatusScreen extends ConsumerWidget {
     // left both names resting entirely on that fallback. Resolving the two
     // uids against the live directory here is one read each, only on the
     // download path, and `facultyDirectory` is readable by any verified user.
-    final directory = ref.read(facultyDirectoryRepositoryProvider);
-    final directoryNames = <String, String>{};
-    for (final uid in <String?>{
-      thesis.coordinatorRecommendedBy,
-      thesis.deanApprovedBy,
-    }) {
-      if (uid == null) continue;
-      final entry = await directory.fetch(uid);
-      if (entry != null) directoryNames[uid] = entry.fullName;
-    }
-
-    final data = Form1Data.assemble(
+    // The signatory names are resolved against the live directory inside
+    // buildForm1For, shared with the signers' "View Form 1".
+    final bytes = await buildForm1For(
       thesis: thesis,
       nominations: nominations,
-      leaderName: leader?.fullName ?? '',
-      directoryNames: directoryNames,
+      directory: ref.read(facultyDirectoryRepositoryProvider),
+      leaderName: leader?.fullName,
     );
-    final bytes = await buildForm1Pdf(data);
     await Printing.sharePdf(bytes: bytes, filename: 'Form1-${thesis.id}.pdf');
   }
 

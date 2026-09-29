@@ -9,6 +9,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/change_request.dart';
+import 'package:ethesishub/features/forms/change_request_form.dart';
 import 'package:ethesishub/providers/change_request_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -263,7 +264,16 @@ class _QueueRow extends ConsumerWidget {
           Text(fromTo, style: text.bodyMedium),
           const Gap.sm(),
           Text('Reasons: ${request.reasons}', style: text.bodySmall),
-          const Gap.md(),
+          // The form being signed off, readable before deciding.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ViewChangeRequestFormButton(
+              key: Key('viewChangeRequestForm-$thesisId-${request.type.value}'),
+              thesisId: thesisId,
+              request: request,
+            ),
+          ),
+          const Gap.sm(),
           if (returning) ...[
             FormRow(
               label: 'Reason for returning',

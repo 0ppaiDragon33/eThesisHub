@@ -1,17 +1,25 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+
 import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/forms/editable/form_pdf.dart';
 import 'package:ethesishub/features/forms/form4a_pdf.dart';
 import 'package:ethesishub/features/forms/form4b_pdf.dart';
+import 'package:ethesishub/features/forms/form_viewer.dart';
 
-/// The filled Form 4a / 4b record for an approved change request: the
-/// nominated/former adviser or the old/new title, plus the reasons, printed
-/// onto the same template the editor uses (spec 2026-09-25 Task 8).
+/// The filled Form 4a / 4b for a change request: the nominated/former
+/// adviser or the old/new title, plus the reasons, printed onto the same
+/// template the editor uses (spec 2026-09-25 Task 8). Shown to signers while
+/// they decide and downloadable once approved.
+///
+/// [thesis] is optional: the old title is captured on the request at submit,
+/// so a signer who may not read the thesis (a proposed new adviser) can
+/// still open the form. It is only a fallback for older requests.
 Future<Uint8List> buildChangeRequestPdf(
   ChangeRequest request, {
-  required Thesis thesis,
+  Thesis? thesis,
 }) {
   switch (request.type) {
     case ChangeRequestType.adviser:
@@ -31,9 +39,35 @@ Future<Uint8List> buildChangeRequestPdf(
       // time -- with the live thesis field only as a fallback for requests
       // predating that field.
       return buildFormPdf(form4bTemplate, {
-        'oldTitle': request.oldTitle ?? thesis.workingTitle,
+        'oldTitle': request.oldTitle ?? thesis?.workingTitle ?? '',
         'newTitle': request.newTitle!,
         'reasons': request.reasons,
       });
+  }
+}
+
+/// "View Form 4a" / "View Form 4b" for a change request, on each card where
+/// a signer accepts, declines, recommends, returns or approves it.
+class ViewChangeRequestFormButton extends StatelessWidget {
+  const ViewChangeRequestFormButton({
+    super.key,
+    required this.thesisId,
+    required this.request,
+  });
+
+  final String thesisId;
+  final ChangeRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final adviser = request.type == ChangeRequestType.adviser;
+    return ViewFormButton(
+      label: adviser ? 'View Form 4a' : 'View Form 4b',
+      title: adviser
+          ? 'Form 4a · Change of Undergraduate Thesis Adviser'
+          : 'Form 4b · Change of Undergraduate Thesis Title',
+      filename: '${adviser ? 'Form4a' : 'Form4b'}-$thesisId.pdf',
+      buildPdf: () => buildChangeRequestPdf(request),
+    );
   }
 }

@@ -12,6 +12,7 @@ import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/forms/form_viewer.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -246,17 +247,26 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
           Text('Members: ${t.memberNames.join(', ')}', style: text.bodySmall),
         ],
         const Gap.md(),
-        FilledButton.icon(
-          key: widget.actionKey,
-          onPressed: widget.busy ? null : widget.onAct,
-          icon: widget.busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.verified_outlined, size: 18),
-          label: Text(widget.label),
+        Wrap(
+          spacing: AppTokens.sm,
+          runSpacing: AppTokens.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilledButton.icon(
+              key: widget.actionKey,
+              onPressed: widget.busy ? null : widget.onAct,
+              icon: widget.busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.verified_outlined, size: 18),
+              label: Text(widget.label),
+            ),
+            // The form being signed off, readable before deciding.
+            ViewForm1Button(key: Key('viewForm1-${t.id}'), thesisId: t.id),
+          ],
         ),
       ],
     );

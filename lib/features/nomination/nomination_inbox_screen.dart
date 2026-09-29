@@ -10,6 +10,7 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
+import 'package:ethesishub/features/forms/form_viewer.dart';
 import 'package:ethesishub/features/nomination/change_request_inbox.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -245,7 +246,14 @@ class _RequestCard extends StatelessWidget {
           ),
           const Gap.sm(),
           _ThesisTitle(thesisId: thesisId),
-          const Gap.md(),
+          // The form this answer signs, readable before accepting or
+          // declining.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ViewForm1Button(
+                key: Key('viewForm1-$thesisId'), thesisId: thesisId),
+          ),
+          const Gap.sm(),
           if (declining) ...[
             FormRow(
               label: 'Reason for declining',
