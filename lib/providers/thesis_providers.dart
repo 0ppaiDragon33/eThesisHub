@@ -36,6 +36,25 @@ final myThesisProvider = StreamProvider<Thesis?>((ref) {
   return ref.watch(thesisRepositoryProvider).watchThesisForLeader(uid);
 });
 
+/// Keeps the signed-in leader's own name on their thesis (`leaderName`).
+///
+/// Form 1 names the leader, and nominees may read the thesis but not the
+/// leader's profile. Watched by the leader's thesis page, so a thesis
+/// created before the field existed gets it the next time they open it.
+/// Written only when missing or out of date; a refused write costs nothing
+/// but a blank name on a form, so it is not reported.
+final leaderNameBackfillProvider = Provider<void>((ref) {
+  final thesis = ref.watch(myThesisProvider).valueOrNull;
+  final me = ref.watch(currentUserProvider).valueOrNull;
+  if (thesis == null || me == null) return;
+  if (thesis.leaderUid != me.uid || me.fullName.isEmpty) return;
+  if (thesis.leaderName == me.fullName) return;
+  ref
+      .read(thesisRepositoryProvider)
+      .setLeaderName(thesis.id, me.fullName)
+      .catchError((Object _) {});
+});
+
 /// One thesis by id.
 ///
 /// For screens that were handed an id — the nominate screen gets one from

@@ -31,6 +31,22 @@ void main() {
     expect(thesis.panelistUids, isEmpty);
     expect(thesis.adviserUid, isNull);
     expect(thesis.memberNames, ['Bagsain, Karlo June']);
+    expect(thesis.leaderName, isNull, reason: 'none given, none stored');
+  });
+
+  test("createThesis stores the leader's name for Form 1", () async {
+    final id = await repo.createThesis(
+      leaderUid: 'leader-1',
+      leaderName: 'Karlo June Bagsain',
+      workingTitle: 'eThesisHub',
+      memberNames: const [],
+      college: 'CICT',
+      program: 'BSIT',
+      semester: 'First',
+      academicYear: '2026-2027',
+    );
+    final thesis = await repo.watchThesis(id).first;
+    expect(thesis!.leaderName, 'Karlo June Bagsain');
   });
 
   test('watchThesisForLeader finds the leader thesis', () async {

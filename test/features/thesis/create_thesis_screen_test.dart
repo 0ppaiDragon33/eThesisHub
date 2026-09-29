@@ -59,6 +59,7 @@ class PermissionDeniedThesisRepository extends ThesisRepository {
     required String program,
     required String semester,
     required String academicYear,
+    String? leaderName,
   }) {
     throw FirebaseException(
       plugin: 'cloud_firestore',
@@ -81,6 +82,7 @@ class FailingThesisRepository extends ThesisRepository {
     required String program,
     required String semester,
     required String academicYear,
+    String? leaderName,
   }) {
     throw Exception('boom');
   }
@@ -103,6 +105,7 @@ class SlowThesisRepository extends ThesisRepository {
     required String program,
     required String semester,
     required String academicYear,
+    String? leaderName,
   }) async {
     callCount++;
     await Future.delayed(const Duration(milliseconds: 50));

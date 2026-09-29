@@ -808,6 +808,56 @@ test("a student may create their own thesis as draft", async () => {
   );
 });
 
+// ---- leaderName: the leader's own name on the thesis, for Form 1 ----
+// Nominees read the thesis but not the leader's profile, and Form 1 names
+// the leader. The name may only ever be the leader's own profile name.
+
+async function seedLeaderProfile(uid, fullName) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}`), {
+      ...studentProfile(`${uid}@isufst.edu.ph`), fullName });
+  });
+}
+
+function asLeader(uid) {
+  return env.authenticatedContext(uid,
+    { email: `${uid}@isufst.edu.ph`, email_verified: true }).firestore();
+}
+
+const draftFor = (uid, extra = {}) => ({
+  leaderUid: uid, status: "draft", panelistUids: [], adviserUid: null,
+  memberNames: [], workingTitle: "T", college: "CICT", program: "BSIT",
+  semester: "First", academicYear: "2026-2027", ...extra,
+});
+
+test("leaderName: a new thesis may carry the leader's own name, and no other",
+  async () => {
+    await seedLeaderProfile("ln1-uid", "Karlo June Bagsain");
+    const leader = asLeader("ln1-uid");
+    await assertFails(setDoc(doc(leader, "theses/ln-a"),
+      draftFor("ln1-uid", { leaderName: "Someone Else" })));
+    await assertSucceeds(setDoc(doc(leader, "theses/ln-b"),
+      draftFor("ln1-uid", { leaderName: "Karlo June Bagsain" })));
+  });
+
+test("leaderName: the leader may fill it in later, only as their own name",
+  async () => {
+    await seedLeaderProfile("ln2-uid", "Karlo June Bagsain");
+    await seedThesis("ln-c", "ln2-uid", "titleApproved");
+    const leader = asLeader("ln2-uid");
+    await assertFails(updateDoc(doc(leader, "theses/ln-c"),
+      { leaderName: "Someone Else" }));
+    // Not bundled with anything else.
+    await assertFails(updateDoc(doc(leader, "theses/ln-c"),
+      { leaderName: "Karlo June Bagsain", workingTitle: "Renamed" }));
+    await assertSucceeds(updateDoc(doc(leader, "theses/ln-c"),
+      { leaderName: "Karlo June Bagsain" }));
+    // Nobody else may set it.
+    await seedLeaderProfile("ln3-uid", "Karlo June Bagsain");
+    await assertFails(updateDoc(doc(asLeader("ln3-uid"), "theses/ln-c"),
+      { leaderName: "Karlo June Bagsain" }));
+  });
+
 test("a student may NOT create a thesis owned by someone else", async () => {
   await assertFails(
     setDoc(doc(student, "theses/t-other"), {

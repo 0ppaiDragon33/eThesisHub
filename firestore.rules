@@ -100,6 +100,14 @@ service cloud.firestore {
              .hasOnly(fields);
     }
 
+    // The caller's own name as their profile records it. A thesis's
+    // `leaderName` may only ever be this, so nobody can put another name on
+    // the Form 1 a nominee reads.
+    function myProfileName() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.get('fullName', '');
+    }
+
     match /users/{uid} {
       allow get: if signedIn() &&
                  (request.auth.uid == uid || isCoordinator() || isDean());
@@ -441,8 +449,11 @@ service cloud.firestore {
                           'college', 'program', 'semester', 'academicYear',
                           'status', 'adviserUid', 'panelistUids',
                           'coordinatorRecommendedAt', 'coordinatorRecommendedBy',
-                          'deanApprovedAt', 'deanApprovedBy', 'createdAt'])
+                          'deanApprovedAt', 'deanApprovedBy', 'createdAt',
+                          'leaderName'])
                     && request.resource.data.leaderUid == request.auth.uid
+                    && (!('leaderName' in request.resource.data)
+                        || request.resource.data.leaderName == myProfileName())
                     && request.resource.data.status == 'draft'
                     && request.resource.data.adviserUid == null
                     && request.resource.data.panelistUids.size() == 0
@@ -452,6 +463,16 @@ service cloud.firestore {
                     && request.resource.data.get('coordinatorRecommendedBy', null) == null
                     && request.resource.data.get('deanApprovedAt', null) == null
                     && request.resource.data.get('deanApprovedBy', null) == null;
+
+      // The leader fills in (or refreshes) their own name on the thesis, at
+      // any stage, and nothing else in the same write. Theses created before
+      // `leaderName` existed get it the next time the leader opens the app;
+      // nominees need it because they may read the thesis but not the
+      // leader's profile.
+      allow update: if verified()
+                    && resource.data.leaderUid == request.auth.uid
+                    && onlyChanged(['leaderName'])
+                    && request.resource.data.leaderName == myProfileName();
 
       // The leader edits group details and may submit the nomination, but
       // may never touch the approval fields. Beyond the plan's original

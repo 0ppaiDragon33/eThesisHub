@@ -74,10 +74,14 @@ class ThesisRepository {
     required String program,
     required String semester,
     required String academicYear,
+    String? leaderName,
   }) async {
     final doc = _theses.doc();
     await doc.set({
       'leaderUid': leaderUid,
+      // Must equal the leader's own profile name; the rules check it.
+      if (leaderName != null && leaderName.isNotEmpty)
+        'leaderName': leaderName,
       'workingTitle': workingTitle.trim(),
       'memberNames': memberNames,
       'college': college,
@@ -95,6 +99,13 @@ class ThesisRepository {
     });
     return doc.id;
   }
+
+  /// Records the leader's own name on their thesis, for a thesis created
+  /// before `leaderName` existed or after the leader's name changed. The
+  /// rules accept only the caller's own profile name, and only from the
+  /// leader.
+  Future<void> setLeaderName(String thesisId, String name) =>
+      _thesis(thesisId).update({'leaderName': name});
 
   Stream<Thesis?> watchThesis(String thesisId) {
     return _theses.doc(thesisId).snapshots().map(

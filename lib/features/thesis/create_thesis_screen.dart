@@ -75,6 +75,7 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
     try {
       await ref.read(thesisRepositoryProvider).createThesis(
             leaderUid: uid,
+            leaderName: ref.read(currentUserProvider).valueOrNull?.fullName,
             workingTitle: title,
             memberNames: _members
                 .map((c) => c.text.trim())

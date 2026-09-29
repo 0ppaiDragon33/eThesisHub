@@ -107,6 +107,8 @@ class ThesisStatusScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final thesisAsync = ref.watch(myThesisProvider);
+    // Puts the leader's name on a thesis that lacks it, for Form 1.
+    ref.watch(leaderNameBackfillProvider);
 
     return KeyedSubtree(
       key: const Key('thesisStatusScreen'),
