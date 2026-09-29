@@ -53,7 +53,7 @@ final mySignoffRequestsProvider = StreamProvider<
     final out = <({String thesisId, ChangeRequest request, String role})>[];
     for (final d in s.docs) {
       final thesisId = d.reference.parent.parent!.id;
-      final r = ChangeRequest.fromMap(d.id, d.data());
+      final r = changeRequestFromFirestore(d.id, d.data());
       // awaitingUids already scopes the query to exactly this uid's open
       // requests, so the role is just which named seat matches it.
       String? role;
@@ -96,7 +96,7 @@ Stream<List<({String thesisId, ChangeRequest request})>> _requestsAtStage(
             for (final d in s.docs)
               (
                 thesisId: d.reference.parent.parent!.id,
-                request: ChangeRequest.fromMap(d.id, d.data()),
+                request: changeRequestFromFirestore(d.id, d.data()),
               ),
           ]);
 }

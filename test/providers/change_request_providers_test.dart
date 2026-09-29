@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/repositories/change_request_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/change_request_providers.dart';
 
@@ -220,6 +222,69 @@ void main() {
 
       expect(result.map((r) => r.thesisId), ['t1']);
       expect(result.single.role, 'newAdviser');
+    });
+
+    test('reads a request as the app writes it, server timestamps and all',
+        () async {
+      // Submitted through the real repository, so createdAt / updatedAt are
+      // Firestore Timestamps, as they are in production -- not the bare maps
+      // the test above seeds, which never carry a timestamp at all.
+      final db = FakeFirebaseFirestore();
+      await ChangeRequestRepository(db).submitTitleChange(
+        thesis: thesis(),
+        newTitle: 'A Better Title',
+        reasons: 'The scope narrowed.',
+      );
+
+      final c = await containerFor(db, 'a1');
+      final result = await settle(c);
+
+      expect(result.single.role, 'adviser');
+      expect(result.single.request.newTitle, 'A Better Title');
+      expect(result.single.request.createdAt, isA<DateTime>());
+    });
+  });
+
+  group('coordinator and dean queues', () {
+    test('read a request carrying timestamps, including a sign-off time',
+        () async {
+      final db = FakeFirebaseFirestore();
+      final at = Timestamp.fromDate(DateTime(2026, 9, 28, 9));
+      await db.doc('theses/t1/changeRequests/title').set({
+        'type': 'title',
+        'stage': 'pendingCoordinator',
+        'reasons': 'The scope narrowed.',
+        'leaderUid': 'l1',
+        'newTitle': 'A Better Title',
+        'oldTitle': 'A Working Title',
+        'signoffs': {
+          'adviser': {'status': 'accepted', 'respondedAt': at, 'reason': null},
+          'coordinator': {
+            'status': 'pending',
+            'respondedAt': null,
+            'reason': null,
+          },
+          'dean': {'status': 'pending', 'respondedAt': null, 'reason': null},
+        },
+        'awaitingUids': <String>[],
+        'createdAt': at,
+        'updatedAt': at,
+      });
+
+      final c = await containerFor(db, 'c1');
+      final sub = c.listen(coordinatorChangeRequestsProvider, (_, _) {});
+      addTearDown(sub.close);
+      AsyncValue<List<({String thesisId, ChangeRequest request})>> v =
+          const AsyncLoading();
+      for (var i = 0; i < 100 && v.isLoading; i++) {
+        await pumpEventQueue();
+        v = c.read(coordinatorChangeRequestsProvider);
+      }
+
+      expect(v.hasError, isFalse, reason: '${v.error}');
+      final r = v.value!.single.request;
+      expect(r.updatedAt, DateTime(2026, 9, 28, 9));
+      expect(r.signoffs['adviser']!.respondedAt, DateTime(2026, 9, 28, 9));
     });
   });
 }

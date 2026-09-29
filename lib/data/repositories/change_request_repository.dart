@@ -5,6 +5,33 @@ import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 
+/// A change request as Firestore stores it, with its server timestamps
+/// (`createdAt`, `updatedAt`, each sign-off's `respondedAt`) turned into the
+/// `DateTime`s [ChangeRequest.fromMap] expects.
+///
+/// Every read of a change-request document goes through this, the
+/// collection-group queries in `change_request_providers.dart` included.
+/// Handing [ChangeRequest.fromMap] the raw data throws on the first real
+/// Timestamp and errors the whole stream: the adviser's inbox and the
+/// Coordinator and Dean queues showed "Could not load" in production that
+/// way, while tests seeding timestamp-free maps passed.
+ChangeRequest changeRequestFromFirestore(String id, Map<String, dynamic> raw) {
+  Map<String, dynamic> withDates(Map<String, dynamic> m) => {
+    ...m,
+    'createdAt': (m['createdAt'] as Timestamp?)?.toDate(),
+    'updatedAt': (m['updatedAt'] as Timestamp?)?.toDate(),
+    'signoffs': {
+      for (final e in ((m['signoffs'] as Map?) ?? const {}).entries)
+        e.key: {
+          ...(e.value as Map).cast<String, dynamic>(),
+          'respondedAt': ((e.value as Map)['respondedAt'] as Timestamp?)
+              ?.toDate(),
+        },
+    },
+  };
+  return ChangeRequest.fromMap(id, withDates(raw));
+}
+
 /// Reads and writes the change-of-adviser / change-of-title requests under a
 /// thesis (spec 2026-09-25). The stage machine and the Dean's apply-the-
 /// change step live here; the security rules mirror every transition.
@@ -21,26 +48,11 @@ class ChangeRequestRepository {
     ChangeRequestType type,
   ) => _requests(thesisId).doc(type.id);
 
-  ChangeRequest _toRequest(String id, Map<String, dynamic> raw) {
-    Map<String, dynamic> withDates(Map<String, dynamic> m) => {
-      ...m,
-      'createdAt': (m['createdAt'] as Timestamp?)?.toDate(),
-      'updatedAt': (m['updatedAt'] as Timestamp?)?.toDate(),
-      'signoffs': {
-        for (final e in ((m['signoffs'] as Map?) ?? const {}).entries)
-          e.key: {
-            ...(e.value as Map).cast<String, dynamic>(),
-            'respondedAt': ((e.value as Map)['respondedAt'] as Timestamp?)
-                ?.toDate(),
-          },
-      },
-    };
-    return ChangeRequest.fromMap(id, withDates(raw));
-  }
-
   Stream<List<ChangeRequest>> watchForThesis(String thesisId) =>
       _requests(thesisId).snapshots().map(
-        (s) => s.docs.map((d) => _toRequest(d.id, d.data())).toList(),
+        (s) => s.docs
+            .map((d) => changeRequestFromFirestore(d.id, d.data()))
+            .toList(),
       );
 
   Map<String, dynamic> _freshSignoffs(List<String> roles) => {
@@ -111,7 +123,7 @@ class ChangeRequestRepository {
     final failure = await _db.runTransaction<Object?>((tx) async {
       final snap = await tx.get(ref);
       if (!snap.exists) return StateError('This request no longer exists.');
-      final req = _toRequest(snap.id, snap.data()!);
+      final req = changeRequestFromFirestore(snap.id, snap.data()!);
 
       final expected = switch (role) {
         'newAdviser' || 'formerAdviser' => ChangeRequestStage.pendingAdvisers,
@@ -178,7 +190,7 @@ class ChangeRequestRepository {
 
     final reqSnap = await reqRef.get();
     if (!reqSnap.exists) throw StateError('This request no longer exists.');
-    final req = _toRequest(reqSnap.id, reqSnap.data()!);
+    final req = changeRequestFromFirestore(reqSnap.id, reqSnap.data()!);
     if (req.stage != ChangeRequestStage.pendingDean) {
       throw StateError('This request is not awaiting the Dean.');
     }
