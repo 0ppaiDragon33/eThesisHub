@@ -293,6 +293,43 @@ void main() {
     );
   });
 
+  testWidgets('after an approved change of title the card names the new title',
+      (tester) async {
+    // Form 4b sets approvedTitleText. The card used to read only the
+    // candidate the panel chose, so the group kept seeing the old title.
+    final db = await seeded('titleApproved', extraFields: {
+      'titleDecidedAt': Timestamp.fromDate(DateTime.utc(2026, 5, 1)),
+      'titleDecidedBy': 'dean-1',
+      'approvedTitleId': 'ct-winner',
+      'approvedTitleText': 'The title after the change',
+      'titleRound': 1,
+    });
+    await db
+        .collection('theses')
+        .doc('t1')
+        .collection('candidateTitles')
+        .doc('ct-winner')
+        .set({
+      'titleText': 'The one the panel chose',
+      'justificationPath': 'p', 'justificationUrl': 'u', 'round': 1,
+    });
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    final banner = find.byKey(const Key('approvedTitle'));
+    expect(
+      find.descendant(
+          of: banner, matching: find.text('The title after the change')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+          of: banner, matching: find.text('The one the panel chose')),
+      findsNothing,
+    );
+  });
+
   testWidgets('a thesis still at defence names no approved title',
       (tester) async {
     // The control for the test above, same screen, one status apart: nothing

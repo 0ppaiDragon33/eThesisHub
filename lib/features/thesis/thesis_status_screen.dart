@@ -267,6 +267,7 @@ class _Workspace extends ConsumerWidget {
               _ApprovedTitle(
                 thesisId: thesis.id,
                 approvedTitleId: thesis.approvedTitleId!,
+                changedTitle: thesis.approvedTitleText,
               ),
             if (thesis.titleDecidedAt != null)
               Panel(
@@ -819,30 +820,41 @@ class _History extends StatelessWidget {
 
 /// Names the title the Dean approved.
 ///
-/// Resolved through `candidateTitlesProvider` rather than stored on the
-/// thesis: `candidateTitles` are immutable once submitted, so the text the
-/// student reads here is exactly the text the panel judged.
+/// An approved change of title (Form 4b) wins: [changedTitle] is the
+/// thesis's `approvedTitleText`, as the evaluation, archive and title-defence
+/// resolvers already read it. Otherwise the title is resolved through
+/// `candidateTitlesProvider` rather than stored on the thesis:
+/// `candidateTitles` are immutable once submitted, so the text the student
+/// reads here is exactly the text the panel judged.
 class _ApprovedTitle extends ConsumerWidget {
-  const _ApprovedTitle({required this.thesisId, required this.approvedTitleId});
+  const _ApprovedTitle({
+    required this.thesisId,
+    required this.approvedTitleId,
+    this.changedTitle,
+  });
 
   final String thesisId;
   final String approvedTitleId;
+  final String? changedTitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final changed =
+        changedTitle?.isNotEmpty == true ? changedTitle : null;
     final candidatesAsync = ref.watch(candidateTitlesProvider(thesisId));
     final candidates = candidatesAsync.valueOrNull;
 
     // Loading and "the document is gone" are kept apart, the same way every
     // other branch on this screen is: telling a student their approved title
     // no longer exists while it is still loading is the M1a bug.
-    if (candidatesAsync.isLoading) {
+    if (changed == null && candidatesAsync.isLoading) {
       return const LoadingState(label: 'Loading your approved title…');
     }
-    final approved = candidates
-        ?.where((c) => c.id == approvedTitleId)
-        .map((c) => c.titleText)
-        .firstOrNull;
+    final approved = changed ??
+        candidates
+            ?.where((c) => c.id == approvedTitleId)
+            .map((c) => c.titleText)
+            .firstOrNull;
 
     final c = Tone.endorsed.color(context);
     return Panel(
