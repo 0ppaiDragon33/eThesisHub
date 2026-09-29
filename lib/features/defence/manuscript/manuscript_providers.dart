@@ -151,8 +151,17 @@ abstract interface class ManuscriptRasterizer {
   Future<ui.Image> renderPage(Uint8List pdf, int index);
 }
 
+/// `Printing.raster`'s shape, so a test can stand in for it.
+typedef RasterSource = Stream<PdfRaster> Function(
+  Uint8List document, {
+  List<int>? pages,
+  double dpi,
+});
+
 class PrintingManuscriptRasterizer implements ManuscriptRasterizer {
-  const PrintingManuscriptRasterizer();
+  const PrintingManuscriptRasterizer({this.raster = Printing.raster});
+
+  final RasterSource raster;
 
   /// Tiny: this pass only learns how many pages there are and their shape.
   static const double probeDpi = 12;
@@ -161,10 +170,17 @@ class PrintingManuscriptRasterizer implements ManuscriptRasterizer {
   /// time, so a long chapter is never held in memory whole.
   static const double pageDpi = 150;
 
+  // Every call gets its own copy of the bytes. On the web `printing` gives
+  // them to pdf.js, which moves the buffer into its worker and leaves the
+  // caller's copy empty; the same chapter bytes are measured once and then
+  // drawn page by page, so without a copy every page after the first call
+  // failed as an empty PDF.
+
   @override
   Future<List<Size>> pageSizes(Uint8List pdf) async {
     final sizes = <Size>[];
-    await for (final page in Printing.raster(pdf, dpi: probeDpi)) {
+    await for (final page
+        in raster(Uint8List.fromList(pdf), dpi: probeDpi)) {
       sizes.add(Size(page.width.toDouble(), page.height.toDouble()));
     }
     return sizes;
@@ -172,8 +188,9 @@ class PrintingManuscriptRasterizer implements ManuscriptRasterizer {
 
   @override
   Future<ui.Image> renderPage(Uint8List pdf, int index) async {
-    final page =
-        await Printing.raster(pdf, pages: [index], dpi: pageDpi).first;
+    final page = await raster(Uint8List.fromList(pdf),
+            pages: [index], dpi: pageDpi)
+        .first;
     return page.toImage();
   }
 }

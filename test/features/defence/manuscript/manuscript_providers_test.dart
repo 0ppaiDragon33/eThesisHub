@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:printing/printing.dart';
 
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
@@ -187,5 +188,29 @@ void main() {
     c.listen(chapterPdfProvider('p.pdf'), (_, _) {});
     await expectLater(c.read(chapterPdfProvider('p.pdf').future),
         throwsA(isA<StorageFailure>()));
+  });
+
+  test('every raster call gets its own copy of the chapter bytes', () async {
+    // On the web, `printing` hands the bytes to pdf.js, which takes the
+    // buffer for its worker and leaves the caller's copy empty. The chapter
+    // is measured once and then drawn page by page from the same bytes, so
+    // passing them on unchanged left every page "could not be drawn".
+    // This source empties what it is given, as pdf.js does.
+    Stream<PdfRaster> takesTheBuffer(Uint8List pdf,
+        {List<int>? pages, double dpi = 72}) async* {
+      if (pdf.isEmpty || pdf.first != 0x25) {
+        throw StateError('The PDF file is empty');
+      }
+      pdf.fillRange(0, pdf.length, 0);
+      for (final _ in pages ?? [0, 1]) {
+        yield PdfRaster(2, 3, Uint8List(2 * 3 * 4));
+      }
+    }
+
+    final rasterizer = PrintingManuscriptRasterizer(raster: takesTheBuffer);
+    final chapter = Uint8List.fromList([0x25, 0x50, 0x44, 0x46]); // %PDF
+    expect(await rasterizer.pageSizes(chapter), hasLength(2));
+    expect(await rasterizer.pageSizes(chapter), hasLength(2));
+    expect(chapter.first, 0x25, reason: "the caller's bytes stay whole");
   });
 }

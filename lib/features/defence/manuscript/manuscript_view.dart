@@ -528,6 +528,10 @@ class _PageTileState extends ConsumerState<_PageTile> {
       }
       setState(() => _image = image);
     } catch (e) {
+      // The page shows only "could not be drawn"; the cause goes to the log,
+      // the one place it can be read when a device fails where tests pass.
+      debugPrint('manuscript: page ${widget.index} of '
+          '${widget.part.chapter.name} could not be drawn: $e');
       if (mounted) setState(() => _error = e);
     }
   }
