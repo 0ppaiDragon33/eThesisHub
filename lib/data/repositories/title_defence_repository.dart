@@ -252,9 +252,16 @@ class TitleDefenceRepository {
       throw ArgumentError('That candidate title is not on this thesis.');
     }
 
+    // The approved candidate becomes the thesis's name. The group's draft
+    // title is often not the candidate the panel chose, and every list, the
+    // defence room and the forms read `workingTitle`. The rules accept only
+    // this candidate's own text here.
+    final approvedText = candidate.data()!['titleText'] as String? ?? '';
+
     await _thesis(thesisId).update({
       'status': ThesisStatus.titleApproved.value,
       'approvedTitleId': candidateTitleId,
+      if (approvedText.isNotEmpty) 'workingTitle': approvedText,
       'titleDecidedBy': deanUid,
       'titleDecidedAt': FieldValue.serverTimestamp(),
     });

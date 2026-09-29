@@ -2690,6 +2690,44 @@ test("M1b attack: the Dean may NOT approve a candidate from another thesis", asy
   }));
 });
 
+test("M1b: the Dean's approval renames the thesis to the approved candidate, and only to it", async () => {
+  // The approved candidate becomes the thesis's name, as an approved change
+  // of title does. It must be that candidate's own text: the decision cannot
+  // be used to give the thesis any other name.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    workingTitle: "A name nobody defended",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleApproved", approvedTitleId: "ct1",
+    workingTitle: "Candidate one",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
+test("M1b attack: a rejection may NOT rename the thesis", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await seedDefence(db);
+    await setDoc(doc(db, "users/dean-uid"), {
+      ...studentProfile("dean@isufst.edu.ph"), role: "dean" });
+  });
+  const dean = asDefenceUser("dean-uid", "dean@isufst.edu.ph");
+  await assertFails(updateDoc(doc(dean, "theses/td1"), {
+    status: "titleRejected", titleRejectionRemark: "Too broad.",
+    workingTitle: "Candidate one",
+    titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
+  }));
+});
+
 test("M1b attack: a coordinator may NOT record the Dean's decision", async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();

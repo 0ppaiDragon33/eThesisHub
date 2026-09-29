@@ -34,6 +34,18 @@ void main() {
     expect(t['titleDecidedAt'], isNotNull);
   });
 
+  test('approving renames the thesis to the approved candidate', () async {
+    // The draft title the group started with ('T') is not necessarily the
+    // candidate the panel chose; the chosen one is the thesis's name from
+    // here on, everywhere the app shows it.
+    final db = await pending();
+    await TitleDefenceRepository(db)
+        .approveTitle(thesisId: 't1', candidateTitleId: 'ct1', deanUid: 'd1');
+
+    final t = (await db.collection('theses').doc('t1').get()).data()!;
+    expect(t['workingTitle'], 'Candidate one');
+  });
+
   test('approving a candidate that is not on this thesis is refused',
       () async {
     final repo = TitleDefenceRepository(await pending());

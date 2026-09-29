@@ -772,13 +772,22 @@ service cloud.firestore {
                     && (
                       (request.resource.data.status == 'titleApproved'
                        && onlyChanged(['status', 'approvedTitleId',
+                                       'workingTitle',
                                        'titleDecidedAt', 'titleDecidedBy'])
                        // The rules cannot iterate the candidate collection, so
                        // the approved candidate is checked for existence on
                        // this thesis but its `round` is not verified — see the
                        // limitation in the report.
                        && candidateTitleExists(thesisId,
-                            request.resource.data.approvedTitleId))
+                            request.resource.data.approvedTitleId)
+                       // The thesis takes the approved candidate's name, and
+                       // only that name: the decision cannot be used to
+                       // rename the thesis to anything else. Left unchanged
+                       // is also accepted, for an app built before this.
+                       && (request.resource.data.workingTitle
+                             == resource.data.workingTitle
+                           || request.resource.data.workingTitle
+                             == get(/databases/$(database)/documents/theses/$(thesisId)/candidateTitles/$(request.resource.data.approvedTitleId)).data.titleText))
                       ||
                       (request.resource.data.status == 'titleRejected'
                        && onlyChanged(['status', 'titleRejectionRemark',
