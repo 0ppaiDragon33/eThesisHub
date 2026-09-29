@@ -4,6 +4,7 @@ import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/repositories/thesis_repository.dart';
 
 /// A change request as Firestore stores it, with its server timestamps
 /// (`createdAt`, `updatedAt`, each sign-off's `respondedAt`) turned into the
@@ -195,7 +196,7 @@ class ChangeRequestRepository {
       throw StateError('This request is not awaiting the Dean.');
     }
     final thesisSnap = await thesisRef.get();
-    final thesis = Thesis.fromMap(thesisSnap.id, thesisSnap.data()!);
+    final thesis = thesisFromFirestore(thesisSnap.id, thesisSnap.data()!);
     if (thesis.status != ThesisStatus.titleApproved) {
       throw StateError('This thesis can no longer take this change.');
     }

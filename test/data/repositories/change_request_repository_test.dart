@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -193,6 +194,45 @@ void main() {
     // approved-title card) read approvedTitleText, so the change must reach
     // it too — not only workingTitle.
     expect(after.approvedTitleText, 'A Better Title');
+  });
+
+  test('the Dean approval works on a thesis carrying real timestamps',
+      () async {
+    // A real thesis has Firestore Timestamps (createdAt, deanApprovedAt…);
+    // the seed above has none, which is how a raw Thesis.fromMap in
+    // approveAsDean went unnoticed while every production approval failed.
+    final db = await seed();
+    final repo = ChangeRequestRepository(db);
+    await repo.submitTitleChange(
+      thesis: await theThesis(db),
+      newTitle: 'A Better Title',
+      reasons: 'x',
+    );
+    for (final role in ['adviser', 'coordinator']) {
+      await repo.respond(
+        thesisId: 't1',
+        type: ChangeRequestType.title,
+        role: role,
+        accept: true,
+      );
+    }
+    final at = Timestamp.fromDate(DateTime(2026, 8, 1));
+    await db.doc('theses/t1').update({
+      'createdAt': at,
+      'coordinatorRecommendedAt': at,
+      'deanApprovedAt': at,
+      'titleDecidedAt': at,
+    });
+
+    await repo.approveAsDean(thesisId: 't1', type: ChangeRequestType.title);
+
+    final after = (await db.doc('theses/t1').get()).data()!;
+    expect(after['workingTitle'], 'A Better Title');
+    expect(after['approvedTitleText'], 'A Better Title');
+    expect(
+      (await db.doc('theses/t1/changeRequests/title').get()).data()!['stage'],
+      'approved',
+    );
   });
 
   test('responding at the wrong stage is refused', () async {

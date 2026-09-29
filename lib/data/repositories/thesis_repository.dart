@@ -5,6 +5,34 @@ import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 
+DateTime? _firestoreDate(Object? v) =>
+    v is Timestamp ? v.toDate() : (v is DateTime ? v : null);
+
+/// A thesis as Firestore stores it, with its Timestamps turned into the
+/// `DateTime`s [Thesis.fromMap] expects.
+///
+/// Every read of a thesis document goes through this, including the one in
+/// `ChangeRequestRepository.approveAsDean`. [Thesis.fromMap] on the raw data
+/// throws on the first real Timestamp (every thesis has `createdAt`), which
+/// made every production Dean approval of a change request fail before it
+/// wrote anything, while tests seeding timestamp-free theses passed.
+Thesis thesisFromFirestore(String id, Map<String, dynamic> data) {
+  final raw = Map<String, dynamic>.from(data);
+  raw['createdAt'] = _firestoreDate(raw['createdAt']) ?? DateTime.now().toUtc();
+  raw['coordinatorRecommendedAt'] =
+      _firestoreDate(raw['coordinatorRecommendedAt']);
+  raw['deanApprovedAt'] = _firestoreDate(raw['deanApprovedAt']);
+  raw['nominationsSubmittedAt'] = _firestoreDate(raw['nominationsSubmittedAt']);
+  raw['titlesSubmittedAt'] = _firestoreDate(raw['titlesSubmittedAt']);
+  raw['titleDecidedAt'] = _firestoreDate(raw['titleDecidedAt']);
+  raw['manuscriptUploadedAt'] = _firestoreDate(raw['manuscriptUploadedAt']);
+  // titleRound (num) and presentationPath/presentationUrl/titleDecidedBy/
+  // titleRejectionRemark/approvedTitleId (String) need no conversion —
+  // Thesis.fromMap reads them with plain num/String casts, and Firestore
+  // never wraps a number or string in a Timestamp.
+  return Thesis.fromMap(id, raw);
+}
+
 /// Thrown when a nominee answers a request whose thesis has been reopened to
 /// `draft` for re-nomination. The request they hold is stale and a fresh one
 /// is on its way, so this is NOT the "already completed" case — the inbox
@@ -27,24 +55,10 @@ class ThesisRepository {
   DocumentReference<Map<String, dynamic>> _thesis(String thesisId) =>
       _theses.doc(thesisId);
 
-  static DateTime? _date(Object? v) =>
-      v is Timestamp ? v.toDate() : (v is DateTime ? v : null);
+  static DateTime? _date(Object? v) => _firestoreDate(v);
 
-  Thesis _toThesis(String id, Map<String, dynamic> data) {
-    final raw = Map<String, dynamic>.from(data);
-    raw['createdAt'] = _date(raw['createdAt']) ?? DateTime.now().toUtc();
-    raw['coordinatorRecommendedAt'] = _date(raw['coordinatorRecommendedAt']);
-    raw['deanApprovedAt'] = _date(raw['deanApprovedAt']);
-    raw['nominationsSubmittedAt'] = _date(raw['nominationsSubmittedAt']);
-    raw['titlesSubmittedAt'] = _date(raw['titlesSubmittedAt']);
-    raw['titleDecidedAt'] = _date(raw['titleDecidedAt']);
-    raw['manuscriptUploadedAt'] = _date(raw['manuscriptUploadedAt']);
-    // titleRound (num) and presentationPath/presentationUrl/titleDecidedBy/
-    // titleRejectionRemark/approvedTitleId (String) need no conversion —
-    // Thesis.fromMap reads them with plain num/String casts, and Firestore
-    // never wraps a number or string in a Timestamp.
-    return Thesis.fromMap(id, raw);
-  }
+  Thesis _toThesis(String id, Map<String, dynamic> data) =>
+      thesisFromFirestore(id, data);
 
   Nomination _toNomination(String uid, Map<String, dynamic> data) {
     final raw = Map<String, dynamic>.from(data);
