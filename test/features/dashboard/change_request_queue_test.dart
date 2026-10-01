@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/features/dashboard/change_request_queue.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Map<String, dynamic> signoffMap(List<String> roles) => {
   for (final r in roles)
@@ -92,6 +93,7 @@ void main() {
         await tester.tap(
           find.byKey(const Key('recommendChangeRequest-t1-adviser')),
         );
+        await confirmIfAsked(tester);
         await tester.pumpAndSettle();
 
         final saved = await db.doc('theses/t1/changeRequests/adviser').get();
@@ -132,6 +134,7 @@ void main() {
 
       // Confirming with an empty reason must not touch the document.
       await tester.tap(find.byKey(const Key('returnChangeRequest-t1-adviser')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       var saved = await db.doc('theses/t1/changeRequests/adviser').get();
@@ -142,6 +145,7 @@ void main() {
         'Missing documentation',
       );
       await tester.tap(find.byKey(const Key('returnChangeRequest-t1-adviser')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       saved = await db.doc('theses/t1/changeRequests/adviser').get();
@@ -188,6 +192,7 @@ void main() {
       await tester.tap(
         find.byKey(const Key('approveChangeRequest-t1-adviser')),
       );
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final savedRequest = await db
@@ -227,6 +232,7 @@ void main() {
         'Title too broad',
       );
       await tester.tap(find.byKey(const Key('returnChangeRequest-t1-title')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final saved = await db.doc('theses/t1/changeRequests/title').get();

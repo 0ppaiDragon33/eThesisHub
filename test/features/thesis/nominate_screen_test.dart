@@ -13,6 +13,7 @@ import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Rejects every submission with `permission-denied`, as the real security
 /// rules would when a nominee's `users/{uid}` designation disagrees with
@@ -295,6 +296,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('submitNomination')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
@@ -410,6 +412,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('submitNomination')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
@@ -486,6 +489,7 @@ void main() {
     // review-queue tests.
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('submitNomination')));
+      await confirmIfAsked(tester);
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
@@ -681,6 +685,7 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('submitNomination')));
+      await confirmIfAsked(tester);
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
@@ -776,6 +781,7 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('submitNomination')));
+      await confirmIfAsked(tester);
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();

@@ -7,6 +7,7 @@ import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
@@ -96,6 +97,16 @@ class _ScheduleDefenceScreenState
       }
       return;
     }
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Schedule this defence?',
+      message: 'The group, the adviser and the panel are notified of the '
+          'date and venue.',
+      confirmLabel: 'Schedule',
+      confirmKey: const Key('confirmSchedule'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy = true;

@@ -6,6 +6,7 @@ import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/change_request.dart';
@@ -88,7 +89,19 @@ class _ChangeRequestQueueState extends ConsumerState<ChangeRequestQueue> {
     }
   }
 
-  Future<void> _advance(String thesisId, ChangeRequestType type) {
+  Future<void> _advance(String thesisId, ChangeRequestType type) async {
+    final confirmed = await confirmAction(
+      context,
+      title: widget.asDean
+          ? 'Approve this change?'
+          : 'Recommend this change to the Dean?',
+      message: widget.asDean
+          ? 'The change takes effect on the thesis once you approve it.'
+          : 'The request moves on to the Dean for approval.',
+      confirmLabel: widget.asDean ? 'Approve' : 'Recommend',
+      confirmKey: const Key('confirmAdvance'),
+    );
+    if (!confirmed || !mounted) return;
     final repo = ref.read(changeRequestRepositoryProvider);
     return _act(
       thesisId,
@@ -104,11 +117,20 @@ class _ChangeRequestQueueState extends ConsumerState<ChangeRequestQueue> {
     );
   }
 
-  Future<void> _return(String thesisId, ChangeRequestType type) {
+  Future<void> _return(String thesisId, ChangeRequestType type) async {
     if (_reason.text.trim().isEmpty) {
       setState(() => _error = 'Please give a reason for returning.');
-      return Future.value();
+      return;
     }
+    final confirmed = await confirmAction(
+      context,
+      title: 'Return this request?',
+      message: 'The group will see your reason. The request will not go '
+          'ahead.',
+      confirmLabel: 'Return',
+      confirmKey: const Key('confirmReturnRequest'),
+    );
+    if (!confirmed || !mounted) return;
     final repo = ref.read(changeRequestRepositoryProvider);
     return _act(
       thesisId,

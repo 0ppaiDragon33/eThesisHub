@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/change_request.dart';
@@ -105,6 +106,19 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
         return;
       }
     }
+
+    final isTitle = widget.type == ChangeRequestType.title;
+    final confirmed = await confirmAction(
+      context,
+      title: isTitle
+          ? 'Request a change of title?'
+          : 'Request a change of adviser?',
+      message: 'The request goes to the people who must accept it, then to '
+          'the Coordinator and the Dean.',
+      confirmLabel: 'Submit request',
+      confirmKey: const Key('confirmSubmitChangeRequest'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy = true;

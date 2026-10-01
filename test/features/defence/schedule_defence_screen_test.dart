@@ -13,6 +13,7 @@ import 'package:ethesishub/features/defence/schedule_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Seeds a thesis `t1` with leader `l1`, adviser `a1`, and two panelists
 /// `p1`, `p2` (deliberately in an order that would sort differently, so a
@@ -134,6 +135,7 @@ void main() {
         find.byKey(const Key('defenceVenue')), 'Room 301');
     await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final saved = await db.collection('defenses').get();
@@ -164,6 +166,7 @@ void main() {
         find.byKey(const Key('defenceVenue')), 'Room 301');
     await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final saved = await db.collection('defenses').get();
@@ -194,6 +197,7 @@ void main() {
 
     await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Give the defence a venue'), findsOneWidget);
@@ -211,6 +215,7 @@ void main() {
         find.byKey(const Key('defenceVenue')), 'Room 301');
     await tester.ensureVisible(find.byKey(const Key('scheduleDefence')));
     await tester.tap(find.byKey(const Key('scheduleDefence')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     // Not "permission-denied": the create rule would deny '' against a

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/features/documents/chapter_detail_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Seeds a thesis with adviser `a1` and leader `l1`, Chapter I already at
 /// version 1, and a `users/a1` faculty profile so the adviser's posted
@@ -164,6 +165,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('markApproved')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     await tester.pumpWidget(_wrap(db, uid: 'l1'));

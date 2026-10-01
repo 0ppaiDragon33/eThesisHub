@@ -6,6 +6,7 @@ import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/nomination.dart';
@@ -62,6 +63,17 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
       setState(() => _error = 'Please give a reason for declining.');
       return;
     }
+
+    final confirmed = await confirmAction(
+      context,
+      title: accept ? 'Accept this nomination?' : 'Decline this nomination?',
+      message: accept
+          ? 'The group and the Coordinator will see that you accepted.'
+          : 'The group will see your reason and nominate someone else.',
+      confirmLabel: accept ? 'Accept' : 'Decline',
+      confirmKey: const Key('confirmRespond'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy.add(thesisId);

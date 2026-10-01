@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
@@ -245,6 +246,17 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       }
       panelists.add(entry);
     }
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Submit this nomination?',
+      message: '${adviser.fullName} is asked to be your adviser, and '
+          '${panelists.length} faculty to sit on your panel. Each of them '
+          'must accept.',
+      confirmLabel: 'Submit',
+      confirmKey: const Key('confirmSubmitNomination'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy = true;

@@ -8,6 +8,7 @@ import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/candidate_title.dart';
@@ -106,6 +107,18 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   Future<void> _submit(String uid, String name, PassFail rating,
       {required bool officeHolder}) async {
     if (_submitting) return;
+
+    final pass = rating == PassFail.pass;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Submit a ${pass ? 'Pass' : 'Fail'} rating?',
+      message: 'Your total is ${totalOf(_scores)} of 100, rated '
+          '${pass ? 'Pass' : 'Fail'}. You can still edit your sheet until '
+          'the adviser releases the evaluations.',
+      confirmLabel: 'Submit ${pass ? 'Pass' : 'Fail'}',
+      confirmKey: const Key('confirmSubmitEvaluation'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _submitting = true;

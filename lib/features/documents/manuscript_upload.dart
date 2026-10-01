@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
@@ -115,6 +116,16 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
       }
       return;
     }
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Submit this manuscript?',
+      message: '"${file.name}" becomes the manuscript the panel reads for '
+          'this defence.',
+      confirmLabel: 'Submit',
+      confirmKey: const Key('confirmSubmitManuscript'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy = true;

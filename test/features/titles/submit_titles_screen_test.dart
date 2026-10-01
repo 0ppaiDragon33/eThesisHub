@@ -12,6 +12,7 @@ import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/features/titles/submit_titles_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Records every path it is asked to store, so a test can assert nothing
 /// was uploaded (the refusal case) or count what landed (the success case)
@@ -124,6 +125,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('submitTitles')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
@@ -147,6 +149,7 @@ void main() {
       await tester.enterText(find.byKey(Key('titleText$i')), 'Candidate $i');
     }
     await tester.tap(find.byKey(const Key('submitTitles')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
@@ -217,6 +220,7 @@ void main() {
     // real event loop a turn to let it land.
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('submitTitles')));
+      await confirmIfAsked(tester);
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
@@ -330,6 +334,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('submitTitles')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final error = tester.widget<ErrorState>(find.byKey(const Key('error')));

@@ -12,6 +12,7 @@ import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// [withPreviousRound] seeds a SUPERSEDED candidate from the round before,
 /// which is the only way the screen's round filter can be tested at all.
@@ -285,6 +286,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('approve-ct2')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final t = (await db.collection('theses').doc('t1').get()).data()!;
@@ -302,6 +304,7 @@ void main() {
     await tester.tap(find.byKey(const Key('rejectSet')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmReject')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final t = (await db.collection('theses').doc('t1').get()).data()!;

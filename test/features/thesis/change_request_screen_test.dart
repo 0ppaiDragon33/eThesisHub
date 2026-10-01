@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/features/thesis/change_request_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Seeds a thesis `t1` led by `l1`, currently advised by [adviserUid], plus a
 /// small faculty directory: `a1` (the usual current adviser), `a2` (an
@@ -183,6 +184,7 @@ void main() {
 
       await tester.ensureVisible(find.byKey(const Key('submitChangeRequest')));
       await tester.tap(find.byKey(const Key('submitChangeRequest')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Give a reason'), findsOneWidget);
@@ -225,6 +227,7 @@ void main() {
           find.byKey(const Key('submitChangeRequest')),
         );
         await tester.tap(find.byKey(const Key('submitChangeRequest')));
+        await confirmIfAsked(tester);
         await tester.pumpAndSettle();
 
         expect(
@@ -280,6 +283,7 @@ void main() {
           find.byKey(const Key('submitChangeRequest')),
         );
         await tester.tap(find.byKey(const Key('submitChangeRequest')));
+        await confirmIfAsked(tester);
         await tester.pumpAndSettle();
 
         expect(
@@ -313,6 +317,7 @@ void main() {
       );
       await tester.ensureVisible(find.byKey(const Key('submitChangeRequest')));
       await tester.tap(find.byKey(const Key('submitChangeRequest')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final saved = await db
@@ -354,6 +359,7 @@ void main() {
       );
       await tester.ensureVisible(find.byKey(const Key('submitChangeRequest')));
       await tester.tap(find.byKey(const Key('submitChangeRequest')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Give the new title'), findsOneWidget);
@@ -376,6 +382,7 @@ void main() {
       );
       await tester.ensureVisible(find.byKey(const Key('submitChangeRequest')));
       await tester.tap(find.byKey(const Key('submitChangeRequest')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Give a reason'), findsOneWidget);
@@ -404,6 +411,7 @@ void main() {
       );
       await tester.ensureVisible(find.byKey(const Key('submitChangeRequest')));
       await tester.tap(find.byKey(const Key('submitChangeRequest')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final saved = await db

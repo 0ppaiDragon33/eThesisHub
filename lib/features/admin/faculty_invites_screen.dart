@@ -7,6 +7,7 @@ import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_invite.dart';
@@ -134,6 +135,15 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
   }
 
   Future<void> _retract(FacultyInvite invite) async {
+    final confirmed = await confirmAction(
+      context,
+      title: 'Retract this invite?',
+      message: '${invite.email} will no longer be able to join with this '
+          'invite.',
+      confirmLabel: 'Retract',
+      confirmKey: const Key('confirmRetractInvite'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _error = null;
       _notice = null;

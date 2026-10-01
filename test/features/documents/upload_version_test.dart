@@ -14,6 +14,7 @@ import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Fails only the write [addVersion] makes, while every read (chapters,
 /// versions, feedback streams) still goes through the real repository so
@@ -129,6 +130,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('uploadVersion')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(storage.uploads, 1);
@@ -146,6 +148,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('uploadVersion')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('storage-unreachable'), findsOneWidget);
@@ -161,6 +164,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('uploadVersion')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(storage.uploads, 1);
@@ -183,6 +187,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('uploadVersion')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('You do not have permission'), findsOneWidget);
@@ -248,6 +253,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('uploadVersion')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('Choose a PDF file.'), findsOneWidget);

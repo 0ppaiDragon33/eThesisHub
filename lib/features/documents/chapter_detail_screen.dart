@@ -7,6 +7,7 @@ import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/comment_with_time.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -87,6 +88,15 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     }
 
     if (!mounted) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Submit this file?',
+      message: '"${file.name}" goes to your adviser for review as the '
+          "chapter's newest version.",
+      confirmLabel: 'Submit',
+      confirmKey: const Key('confirmUploadVersion'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -203,6 +213,20 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     required ChapterStatus status,
   }) async {
     if (_statusBusy) return;
+    final approve = status == ChapterStatus.approved;
+    final confirmed = await confirmAction(
+      context,
+      title: approve
+          ? 'Approve this chapter?'
+          : 'Send this chapter back for revision?',
+      message: approve
+          ? 'The chapter is locked as approved and the group cannot upload '
+              'new versions of it.'
+          : 'The group is asked to revise it and upload a new version.',
+      confirmLabel: approve ? 'Approve' : 'Send back',
+      confirmKey: const Key('confirmChapterStatus'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _statusBusy = true;
       _statusError = null;

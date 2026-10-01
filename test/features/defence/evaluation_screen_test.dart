@@ -9,6 +9,7 @@ import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Future<FakeFirebaseFirestore> seed({
   String status = 'completed',
@@ -302,6 +303,7 @@ void main() {
     await tester.tap(find.text('Pass'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('submitEvaluation')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final stored = await db
@@ -398,6 +400,39 @@ void main() {
         isNotNull);
   });
 
+  // Submitting asks first; Cancel stores nothing (2026-10-01).
+  testWidgets('submit asks to confirm, and Cancel submits nothing',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed();
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+
+    for (final c in evaluationCriteria) {
+      for (var i = 0; i < c.weight; i++) {
+        await tester.tap(find.byKey(Key('plus_${c.key}')));
+        await tester.pump();
+      }
+    }
+    await tester.tap(find.text('Pass'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submitEvaluation')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Submit a Pass rating?'), findsOneWidget);
+    expect(find.textContaining('Your total is 100 of 100'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    final stored = await db
+        .collection('defenses')
+        .doc('d1')
+        .collection('evaluations')
+        .doc('p1')
+        .get();
+    expect(stored.exists, isFalse);
+  });
+
   // The Coordinator and the Dean grade too, alongside the panel.
   testWidgets('the coordinator and the dean can score and submit',
       (tester) async {
@@ -424,6 +459,7 @@ void main() {
       await tester.tap(find.text('Pass'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('submitEvaluation')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final stored = await db

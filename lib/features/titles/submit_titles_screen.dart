@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -118,6 +119,16 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
       setState(() => _error = 'Attach your presentation.');
       return;
     }
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Submit these titles?',
+      message: 'Your ${titleTexts.length} candidate titles go to the panel '
+          'for the title defence.',
+      confirmLabel: 'Submit',
+      confirmKey: const Key('confirmSubmitTitles'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy = true;

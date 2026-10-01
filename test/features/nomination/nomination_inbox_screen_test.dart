@@ -8,6 +8,7 @@ import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Future<FakeFirebaseFirestore> seeded() async {
   final db = FakeFirebaseFirestore();
@@ -64,6 +65,7 @@ void main() {
 
     expect(find.textContaining('eThesisHub'), findsOneWidget);
     await tester.tap(find.byKey(const Key('accept-t1')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final nom = await db
@@ -80,6 +82,7 @@ void main() {
     await tester.tap(find.byKey(const Key('decline-t1')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmDecline')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     // Falsifiability: this must fail if the reason requirement is deleted —
@@ -172,6 +175,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('accept-t1')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
@@ -205,6 +209,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('accept-t1')));
+    await confirmIfAsked(tester);
     // One pump only — deliberately not settled, so the async response is
     // still in flight and busy state, if wired, must already be visible.
     await tester.pump();

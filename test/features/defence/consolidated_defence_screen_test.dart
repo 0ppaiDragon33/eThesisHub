@@ -11,6 +11,7 @@ import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 /// Seeds a thesis `t1`, a defence `d1` on it with adviser `a1` (Dr. Zamora),
 /// panel `[p1, p2]`, leader `l1`, coordinator `c1`, and `users/{uid}`
@@ -236,6 +237,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('releaseComments')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final saved = await db.collection('defenses').doc('d1').get();

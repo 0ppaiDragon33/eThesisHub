@@ -6,6 +6,7 @@ import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/comment_with_time.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -47,6 +48,16 @@ class _ConsolidatedDefenceScreenState
 
   Future<void> _release() async {
     if (_releasing) return;
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Release the comments to the group?',
+      message: "The group will see the panel's consolidated comments and "
+          'highlights. This cannot be taken back.',
+      confirmLabel: 'Release',
+      confirmKey: const Key('confirmReleaseComments'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _releasing = true;

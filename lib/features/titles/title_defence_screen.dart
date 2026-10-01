@@ -10,6 +10,7 @@ import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/comment_with_time.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -239,6 +240,15 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
 
   Future<void> _approve(String candidateId, String deanUid) async {
     if (_busyComment != null) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Approve this title?',
+      message: "It becomes the thesis's approved title, and the group's "
+          'other candidate titles are set aside.',
+      confirmLabel: 'Approve',
+      confirmKey: const Key('confirmApproveTitle'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _busyComment = candidateId;
       _error = null;
@@ -274,6 +284,15 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
       setState(() => _error = 'Say why the set is being rejected.');
       return;
     }
+
+    final confirmed = await confirmAction(
+      context,
+      title: 'Reject this set of titles?',
+      message: 'The group will see your remark and submit new titles.',
+      confirmLabel: 'Reject',
+      confirmKey: const Key('confirmRejectTitles'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busyReject = true;

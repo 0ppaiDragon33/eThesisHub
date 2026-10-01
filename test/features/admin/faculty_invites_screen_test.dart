@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/features/admin/faculty_invites_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Widget wrap(FakeFirebaseFirestore db,
         {String email = 'coord@isufst.edu.ph'}) =>
@@ -145,6 +146,7 @@ void main() {
     expect(find.text('Claimed'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('retract_open@isufst.edu.ph')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(

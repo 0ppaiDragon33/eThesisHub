@@ -6,6 +6,7 @@ import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
@@ -79,6 +80,19 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
 
   Future<void> _act(String uid, String thesisId) async {
     if (_busy.contains(thesisId)) return; // guards against a double tap
+
+    final confirmed = await confirmAction(
+      context,
+      title: widget.isDean
+          ? 'Approve this nomination?'
+          : 'Recommend this nomination to the Dean?',
+      message: widget.isDean
+          ? 'The adviser and panel are confirmed for this thesis.'
+          : 'The nomination moves on to the Dean for approval.',
+      confirmLabel: widget.isDean ? 'Approve' : 'Recommend',
+      confirmKey: const Key('confirmReview'),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _busy.add(thesisId);

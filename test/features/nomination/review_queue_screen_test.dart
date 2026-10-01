@@ -10,6 +10,7 @@ import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/nomination/review_queue_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Future<FakeFirebaseFirestore> seeded(String status) async {
   final db = FakeFirebaseFirestore();
@@ -84,6 +85,7 @@ void main() {
     // change to `ThesisRepository`.
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('act-t1')));
+      await confirmIfAsked(tester);
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
@@ -101,6 +103,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('act-t1')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final t = await db.collection('theses').doc('t1').get();
@@ -119,6 +122,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('act-t1')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final logs = await db.collection('auditLogs').get();
@@ -191,6 +195,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('act-t1')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('error')), findsOneWidget);
@@ -232,6 +237,7 @@ void main() {
     // could even be scheduled.
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('act-t1')));
+      await confirmIfAsked(tester);
       await tester.pump();
 
       final actButton =

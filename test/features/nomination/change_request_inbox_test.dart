@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/features/nomination/change_request_inbox.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Map<String, dynamic> signoffMap(List<String> roles) => {
   for (final r in roles)
@@ -84,6 +85,7 @@ void main() {
       await tester.tap(
         find.byKey(const Key('acceptChangeRequest-t1-newAdviser')),
       );
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final saved = await db.doc('theses/t1/changeRequests/adviser').get();
@@ -132,6 +134,7 @@ void main() {
       await tester.tap(
         find.byKey(const Key('declineChangeRequest-t1-newAdviser')),
       );
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('reason for declining'), findsOneWidget);
@@ -145,6 +148,7 @@ void main() {
       await tester.tap(
         find.byKey(const Key('declineChangeRequest-t1-newAdviser')),
       );
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       saved = await db.doc('theses/t1/changeRequests/adviser').get();
@@ -222,6 +226,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('acceptChangeRequest-t1-adviser')));
+      await confirmIfAsked(tester);
       await tester.pumpAndSettle();
 
       final saved = await db.doc('theses/t1/changeRequests/title').get();

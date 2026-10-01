@@ -7,6 +7,7 @@ import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -293,6 +294,24 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
 
   Future<void> _setStatus(DefenceStatus status) async {
     if (_statusBusy) return;
+
+    // Cancelling asks in its own dialog; opening and closing the defence
+    // ask here.
+    if (status == DefenceStatus.inProgress ||
+        status == DefenceStatus.completed) {
+      final open = status == DefenceStatus.inProgress;
+      final confirmed = await confirmAction(
+        context,
+        title: open ? 'Open this defence?' : 'Close this defence?',
+        message: open
+            ? 'The panel can highlight the manuscript once it is open.'
+            : 'Highlighting stops and grading begins. A closed defence '
+                'cannot be reopened.',
+        confirmLabel: open ? 'Open defence' : 'Close defence',
+        confirmKey: const Key('confirmStatus'),
+      );
+      if (!confirmed || !mounted) return;
+    }
 
     setState(() {
       _statusBusy = true;

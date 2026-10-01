@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/core/widgets/confirm.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -53,6 +54,15 @@ class _ScheduleRedefenceScreenState
 
   Future<void> _schedule(Defence failed, String uid) async {
     if (_busy) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Schedule this re-defence?',
+      message: 'The group, the adviser and the same panel are notified of '
+          'the date and venue.',
+      confirmLabel: 'Schedule',
+      confirmKey: const Key('confirmScheduleRedefence'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;

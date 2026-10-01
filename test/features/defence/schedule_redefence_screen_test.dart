@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/features/defence/schedule_redefence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import '../../support/confirm_dialog.dart';
 
 Future<FakeFirebaseFirestore> seed({
   String role = 'coordinator',
@@ -86,6 +87,7 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('redefenceVenue')), 'AVR 2');
     await tester.tap(find.byKey(const Key('scheduleRedefenceButton')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
     final again = await db.doc('defenses/f1_redefence').get();
@@ -124,6 +126,7 @@ void main() {
     final db = await seed();
     await pump(tester, db);
     await tester.tap(find.byKey(const Key('scheduleRedefenceButton')));
+    await confirmIfAsked(tester);
     await tester.pumpAndSettle();
     expect(find.text('Give the re-defence a venue.'), findsOneWidget);
   });
