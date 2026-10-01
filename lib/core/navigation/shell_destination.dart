@@ -91,6 +91,14 @@ List<ShellDestination> destinationsFor({
     route: '/defences',
     section: ShellSection.workflow,
   );
+  // Every dated defence by month, right below Defences wherever Defences
+  // is offered.
+  const calendar = ShellDestination(
+    label: 'Calendar',
+    icon: Icons.calendar_month_outlined,
+    route: '/calendar',
+    section: ShellSection.workflow,
+  );
   // The one destination not scoped to what the reader is personally
   // involved in: a student browses theses they had nothing to do with,
   // and that is the point (see archive_screen.dart's own doc comment).
@@ -144,6 +152,7 @@ List<ShellDestination> destinationsFor({
             route: '/thesis/chapters',
           ),
           defences,
+          calendar,
         ],
         archive,
         forms,
@@ -168,6 +177,7 @@ List<ShellDestination> destinationsFor({
             route: '/panels',
           ),
         defences,
+        calendar,
         const ShellDestination(
           label: 'Nominations',
           icon: Icons.drafts_outlined,
@@ -185,6 +195,7 @@ List<ShellDestination> destinationsFor({
           route: '/approvals',
         ),
         defences,
+        calendar,
         const ShellDestination(
           label: 'Readiness',
           icon: Icons.checklist_outlined,
@@ -203,6 +214,7 @@ List<ShellDestination> destinationsFor({
           route: '/recommendations',
         ),
         defences,
+        calendar,
         const ShellDestination(
           label: 'Readiness',
           icon: Icons.checklist_outlined,

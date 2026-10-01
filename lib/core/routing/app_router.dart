@@ -27,6 +27,7 @@ import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
 import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
 import 'package:ethesishub/features/defence/defence_stage.dart';
+import 'package:ethesishub/features/defence/calendar_screen.dart';
 import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/features/defence/manuscript/defence_manuscript_screen.dart';
@@ -488,6 +489,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/overview', builder: (_, _) => const OverviewScreen()),
       GoRoute(
         path: '/defences',
+        // The calendar used to be a view of this page; a saved link to it
+        // still lands on the calendar, which is now its own destination.
+        redirect: (_, state) =>
+            state.uri.queryParameters['view'] == 'calendar'
+                ? '/calendar'
+                : null,
         builder: (_, state) => DefencesScreen(
           // No `stage` at all (the sidebar's bare '/defences') lets the
           // page open where the reader has something open; a stage that is
@@ -495,9 +502,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           initialStage: state.uri.queryParameters.containsKey('stage')
               ? DefenceStage.fromParam(state.uri.queryParameters['stage'])
               : null,
-          initialCalendar: state.uri.queryParameters['view'] == 'calendar',
         ),
       ),
+      GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
       GoRoute(path: '/advisees', builder: (_, _) => const AdviseesScreen()),
       GoRoute(path: '/panels', builder: (_, _) => const PanelsScreen()),
       GoRoute(

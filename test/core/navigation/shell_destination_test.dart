@@ -192,7 +192,7 @@ void main() {
       // Every destination must be a real registered path. A destination
       // that leads nowhere reads as a broken app, not an unfinished one.
       const known = {
-        '/overview', '/thesis', '/thesis/chapters', '/defences',
+        '/overview', '/thesis', '/thesis/chapters', '/defences', '/calendar',
         '/advisees', '/panels', '/nominations', '/approvals',
         '/recommendations', '/title-defences', '/readiness', '/users',
         '/audit', '/archive', '/forms', '/files',

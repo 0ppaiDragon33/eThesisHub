@@ -209,8 +209,9 @@ void main() {
     expect(locationOf(c), '/defences?stage=redefence');
   });
 
-  testWidgets('/defences?stage=preOral&view=calendar opens the calendar',
-      (tester) async {
+  testWidgets(
+      '/calendar is its own page, and an old /defences?view=calendar link '
+      'still lands there', (tester) async {
     final db = FakeFirebaseFirestore();
     final c = await containerForRole('faculty', db, uid: 'u1');
     // At least one defence, or the calendar collapses to its own
@@ -226,15 +227,21 @@ void main() {
     addTearDown(c.dispose);
     await pumpRouted(tester, c);
 
+    c.read(goRouterProvider).go('/calendar');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('calendarScreen')), findsOneWidget);
+    expect(find.byKey(const Key('defenceCalendar')), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
+        'Calendar');
+
+    // A link from before the calendar had its own page.
     c.read(goRouterProvider).go('/defences?stage=preOral&view=calendar');
     await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('defenceCalendar')), findsOneWidget);
-    Set<Object?> selectedView() => tester
-        .widget<SegmentedButton<Object?>>(
-            find.byKey(const Key('defencesViewToggle')))
-        .selected;
-    expect(selectedView().single.toString(), '_DefencesView.calendar');
+    expect(find.byKey(const Key('calendarScreen')), findsOneWidget);
+    expect(
+        c.read(goRouterProvider).routerDelegate.currentConfiguration.uri
+            .toString(),
+        '/calendar');
   });
 
   // Not '/titles' -- '/thesis/titles' already exists for submitting a

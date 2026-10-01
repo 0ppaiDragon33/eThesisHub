@@ -91,6 +91,7 @@ String shellTitleFor(
 const _staticTitles = {
   '/overview': 'Dashboard',
   '/defences': 'Defences',
+  '/calendar': 'Calendar',
   '/advisees': 'Advisees',
   '/panels': 'Panels',
   '/approvals': 'Approvals',

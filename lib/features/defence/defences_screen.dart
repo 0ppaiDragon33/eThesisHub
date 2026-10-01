@@ -6,17 +6,15 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
-import 'package:ethesishub/features/defence/defence_calendar.dart';
 import 'package:ethesishub/features/defence/defence_stage.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/features/defence/redefence_stage.dart';
 import 'package:ethesishub/features/defence/title_defence_stage.dart';
 
-enum _DefencesView { list, calendar }
 
 /// The Defences destination, at '/defences?stage=…' (spec 2026-09-25 §6.1).
 ///
-/// A stage switch, styled like the List / Calendar toggle, reads **Title
+/// A stage switch reads **Title
 /// defence | Pre-oral | Final defence | Re-defence**. In the app the stage is
 /// part of the URL, so a dashboard or a notification can link straight to
 /// one. The router hands it in as [initialStage], and switching stages goes
@@ -27,14 +25,12 @@ enum _DefencesView { list, calendar }
 /// ([defaultDefenceStageProvider]), choosing once, so work arriving later
 /// never moves the tab under them.
 ///
-/// List / Calendar applies to the three stages that have dates. It is not
-/// persisted: a stored preference is not warranted for something changed by
-/// a single tap.
+/// Each stage is a list. The month-by-month view of the same defences is
+/// the separate Calendar destination ('/calendar').
 class DefencesScreen extends ConsumerStatefulWidget {
   const DefencesScreen({
     super.key,
     this.initialStage,
-    this.initialCalendar = false,
     this.title = 'Defences',
     this.subtitle =
         'Title defences, pre-oral and final defences, and re-defences.',
@@ -42,10 +38,6 @@ class DefencesScreen extends ConsumerStatefulWidget {
 
   /// The stage the link named; null lets the page choose.
   final DefenceStage? initialStage;
-
-  /// Whether to open on the Calendar view rather than List, for a link that
-  /// means "the calendar" (`?view=calendar`).
-  final bool initialCalendar;
   final String title;
   final String subtitle;
 
@@ -57,8 +49,6 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
   /// Null until chosen: named by the link, picked by the reader, or settled
   /// once by [defaultDefenceStageProvider].
   late DefenceStage? _stage = widget.initialStage;
-  late _DefencesView _view =
-      widget.initialCalendar ? _DefencesView.calendar : _DefencesView.list;
 
   @override
   void didUpdateWidget(covariant DefencesScreen oldWidget) {
@@ -94,40 +84,16 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
     }
     final stage = _stage!;
     final counts = ref.watch(defenceStageCountsProvider);
-    final calendar = _view == _DefencesView.calendar;
 
     return PageShell(
       key: const Key('defencesScreen'),
       maxWidth: AppTokens.measureWide,
       title: widget.title,
       subtitle: widget.subtitle,
-      actions: [
-        // Title defences have no date, so they have no calendar.
-        if (stage != DefenceStage.title)
-          SegmentedButton<_DefencesView>(
-            key: const Key('defencesViewToggle'),
-            segments: const [
-              ButtonSegment(
-                value: _DefencesView.list,
-                label: Text('List'),
-                icon: Icon(Icons.view_list_outlined),
-              ),
-              ButtonSegment(
-                value: _DefencesView.calendar,
-                label: Text('Calendar'),
-                icon: Icon(Icons.calendar_month_outlined),
-              ),
-            ],
-            selected: {_view},
-            onSelectionChanged: (selection) =>
-                setState(() => _view = selection.first),
-          ),
-      ],
       children: [
         // The switch's own available width decides short vs. full labels --
         // NOT the window's Breakpoint. Between about 720 and 1050px the
-        // window is medium, but this switch (sharing the page with a title
-        // and the List/Calendar toggle) has nowhere near enough room for
+        // window is medium, but this switch has nowhere near enough room for
         // four full labels with icons and counts, and the horizontal scroll
         // below is a last resort a mouse cannot drag, not a fix.
         LayoutBuilder(builder: (context, constraints) {
@@ -157,27 +123,21 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
         const Gap.lg(),
         switch (stage) {
           DefenceStage.title => const TitleDefenceStage(),
-          DefenceStage.redefence => RedefenceStage(calendar: calendar),
-          DefenceStage.preOral => calendar
-              ? const DefenceCalendar(
-                  key: ValueKey('preOralCalendar'), where: _preOral)
-              : const DefencesList(
-                  key: ValueKey('preOralList'),
-                  where: _preOral,
-                  emptyTitle: 'No pre-oral defences',
-                  emptyMessage: 'A pre-oral defence appears here once the '
-                      'Coordinator schedules one you are part of.',
-                ),
-          DefenceStage.finalDefence => calendar
-              ? const DefenceCalendar(
-                  key: ValueKey('finalCalendar'), where: _final)
-              : const DefencesList(
-                  key: ValueKey('finalList'),
-                  where: _final,
-                  emptyTitle: 'No final defences',
-                  emptyMessage: 'A final defence appears here once the '
-                      'Coordinator schedules one you are part of.',
-                ),
+          DefenceStage.redefence => const RedefenceStage(),
+          DefenceStage.preOral => const DefencesList(
+              key: ValueKey('preOralList'),
+              where: _preOral,
+              emptyTitle: 'No pre-oral defences',
+              emptyMessage: 'A pre-oral defence appears here once the '
+                  'Coordinator schedules one you are part of.',
+            ),
+          DefenceStage.finalDefence => const DefencesList(
+              key: ValueKey('finalList'),
+              where: _final,
+              emptyTitle: 'No final defences',
+              emptyMessage: 'A final defence appears here once the '
+                  'Coordinator schedules one you are part of.',
+            ),
         },
       ],
     );

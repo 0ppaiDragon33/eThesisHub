@@ -155,7 +155,7 @@ class _CommandRow extends StatelessWidget {
         icon: Icons.calendar_month_outlined,
         label: 'Defence calendar',
         detail: 'Every scheduled session',
-        go: () => context.go('/defences?stage=preOral&view=calendar'),
+        go: () => context.go('/calendar'),
       ),
       (
         icon: Icons.local_library_outlined,

@@ -8,7 +8,6 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/user_role.dart';
-import 'package:ethesishub/features/defence/defence_calendar.dart';
 import 'package:ethesishub/features/defence/defence_stage.dart';
 import 'package:ethesishub/features/defence/defences_list.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -19,10 +18,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// defences still awaiting their re-defence, then the re-defences
 /// themselves.
 class RedefenceStage extends ConsumerWidget {
-  const RedefenceStage({super.key, required this.calendar});
-
-  /// Show the scheduled re-defences as the calendar rather than the list.
-  final bool calendar;
+  const RedefenceStage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -70,9 +66,7 @@ class RedefenceStage extends ConsumerWidget {
                   ),
                 if (awaiting.isNotEmpty && scheduled) const Gap.lg(),
                 if (scheduled)
-                  calendar
-                      ? const DefenceCalendar(where: _isRedefence)
-                      : const DefencesList(where: _isRedefence),
+                  const DefencesList(where: _isRedefence),
               ],
             );
           },
