@@ -9,7 +9,9 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -96,6 +98,12 @@ class ChaptersScreen extends ConsumerWidget {
         uploaded.values.where((c) => c.status == ChapterStatus.approved).length;
     final waiting =
         uploaded.values.where((c) => c.status == ChapterStatus.submitted).length;
+    // Chapters IV and V open once this thesis's pre-oral is passed. Taken
+    // as not yet passed while the defences are still loading.
+    final preOralPassed = passedPreOral(
+            ref.watch(myDefencesProvider).valueOrNull ?? const [],
+            thesisId) !=
+        null;
     final text = Theme.of(context).textTheme;
 
     return PageShell(
@@ -147,6 +155,8 @@ class ChaptersScreen extends ConsumerWidget {
                   number: i + 1,
                   id: ChapterId.values[i],
                   chapter: uploaded[ChapterId.values[i]],
+                  locked: ChapterId.values[i].needsPassedPreOral &&
+                      !preOralPassed,
                   onTap: () => context.push(
                       '/thesis/chapters/${ChapterId.values[i].value}'
                       '?id=$thesisId'),
@@ -166,12 +176,16 @@ class _ChapterEntry extends StatelessWidget {
     required this.id,
     required this.chapter,
     required this.onTap,
+    this.locked = false,
   });
 
   final int number;
   final ChapterId id;
   final ThesisChapter? chapter;
   final VoidCallback onTap;
+
+  /// Not open for uploads yet: Chapters IV and V wait for a passed pre-oral.
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -212,13 +226,29 @@ class _ChapterEntry extends StatelessWidget {
                   Text(parts.length > 1 ? parts.last : id.label,
                       style: text.titleMedium),
                   const SizedBox(height: 2),
-                  Text(
-                    c == null
-                        ? 'Not started'
-                        : '${ChapterStatusWords.detailFor(c.status)} '
-                            'Version ${c.currentVersion}.',
-                    style: text.bodySmall,
-                  ),
+                  if (c == null && locked)
+                    Row(
+                      key: Key('chapterLocked-${id.value}'),
+                      children: [
+                        Icon(Icons.lock_outline_rounded,
+                            size: 14, color: p.muted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Opens once the pre-oral defence is passed',
+                            style: text.bodySmall,
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Text(
+                      c == null
+                          ? 'Not started'
+                          : '${ChapterStatusWords.detailFor(c.status)} '
+                              'Version ${c.currentVersion}.',
+                      style: text.bodySmall,
+                    ),
                 ],
               ),
             ),

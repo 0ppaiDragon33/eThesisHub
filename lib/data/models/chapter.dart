@@ -32,6 +32,11 @@ enum ChapterId {
 
   /// Approved in full, the final defence may be scheduled.
   static const finalChapters = ChapterId.values;
+
+  /// Chapters IV and V (results, conclusions) are written after the panel
+  /// passes the group's pre-oral; until then they cannot be uploaded.
+  bool get needsPassedPreOral =>
+      this == ChapterId.chapterIV || this == ChapterId.chapterV;
 }
 
 enum ChapterStatus {

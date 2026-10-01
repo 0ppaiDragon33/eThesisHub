@@ -12,9 +12,11 @@ import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -446,6 +448,18 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     final isLeader =
         thesis != null && myUid != null && thesis.leaderUid == myUid;
 
+    // Chapters IV and V open once the panel passes the group's pre-oral.
+    // Watched only for the leader of a gated chapter; locked while the
+    // group's defences are still loading, so Upload never flashes on.
+    final gated = isLeader && widget.chapter.needsPassedPreOral;
+    final preOralPassed = !gated ||
+        passedPreOral(
+                ref.watch(myDefencesProvider).valueOrNull ?? const [],
+                widget.thesisId) !=
+            null;
+    const lockedReason = 'Chapters IV and V open once the panel has passed '
+        'your pre-oral defence.';
+
     final chaptersAsync = ref.watch(chaptersProvider(widget.thesisId));
 
     // Each of the three streams below is checked on its own for loading and
@@ -512,7 +526,11 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         // Leader-only, mirroring `isAdviser` below: only the thesis's own
         // leader can ever write a version, so anyone else sees no control
         // to tap and have denied.
-        if (isLeader) _uploadControl(disabled: false),
+        if (isLeader)
+          _uploadControl(
+            disabled: !preOralPassed,
+            disabledReason: lockedReason,
+          ),
       ]);
     }
 
@@ -677,9 +695,12 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                   icon: Icons.upload_file_outlined,
                   emphasis: status == ChapterStatus.revise,
                   child: _uploadControl(
-                    disabled: status == ChapterStatus.approved,
-                    disabledReason: 'This chapter is approved. Ask your '
-                        'adviser to reopen it before uploading again.',
+                    disabled:
+                        status == ChapterStatus.approved || !preOralPassed,
+                    disabledReason: status == ChapterStatus.approved
+                        ? 'This chapter is approved. Ask your adviser to '
+                            'reopen it before uploading again.'
+                        : lockedReason,
                   ),
                 ),
               // Adviser-only: the rules deny anyone else's review writes.

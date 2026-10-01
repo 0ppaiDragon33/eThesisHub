@@ -201,6 +201,19 @@ class Defence {
 bool hasRedefence(Defence failed, List<Defence> all) =>
     all.any((d) => d.redefenceOf == failed.id);
 
+/// The pre-oral of [thesisId] the panel passed -- the defence itself or its
+/// re-defence -- or null while there is none. Chapters IV and V open on it.
+Defence? passedPreOral(List<Defence> all, String thesisId) {
+  for (final d in all) {
+    if (d.thesisId == thesisId &&
+        d.type == DefenceType.preOral &&
+        d.panelVerdict == PassFail.pass) {
+      return d;
+    }
+  }
+  return null;
+}
+
 /// The defences in [all] whose panel verdict was Fail and that have no
 /// re-defence yet (spec 2026-09-25 §4.3). A failed re-defence is not
 /// listed: a group gets one re-defence per stage.

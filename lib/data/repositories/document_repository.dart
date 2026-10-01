@@ -109,6 +109,34 @@ class DocumentRepository {
           'Chapters can be uploaded once the title has been approved.');
     }
 
+    // Chapters IV and V wait for a passed pre-oral, and their record names
+    // it so the rules can check it. Found through the leader's own
+    // defences: the rules let a leader list defences filtered on
+    // leaderUid, and that snapshot is on every defence.
+    String? preOralDefenceId;
+    if (chapter.needsPassedPreOral) {
+      final leaderUid = thesisSnap.data()!['leaderUid'] as String?;
+      final defences = await _db
+          .collection('defenses')
+          .where('leaderUid', isEqualTo: leaderUid)
+          .get();
+      // Read as plain fields, not through Defence.fromMap: these are raw
+      // Firestore maps, whose timestamps that parser does not convert.
+      for (final d in defences.docs) {
+        final data = d.data();
+        if (data['thesisId'] == thesisId &&
+            data['type'] == 'preOral' &&
+            data['panelVerdict'] == 'pass') {
+          preOralDefenceId = d.id;
+          break;
+        }
+      }
+      if (preOralDefenceId == null) {
+        throw StateError('Chapters IV and V open once the panel has passed '
+            'your pre-oral defence.');
+      }
+    }
+
     final chapterRef = _chapter(thesisId, chapter);
     final chapterSnap = await chapterRef.get();
     final batch = _db.batch();
@@ -121,6 +149,7 @@ class DocumentRepository {
         'currentVersion': 1,
         'status': ChapterStatus.submitted.value,
         'updatedAt': FieldValue.serverTimestamp(),
+        'preOralDefenceId': ?preOralDefenceId,
       });
     } else {
       final chapterData = chapterSnap.data()!;
@@ -139,6 +168,7 @@ class DocumentRepository {
         'status': ChapterStatus.submitted.value,
         'type': chapter.value,
         'updatedAt': FieldValue.serverTimestamp(),
+        'preOralDefenceId': ?preOralDefenceId,
       });
     }
 

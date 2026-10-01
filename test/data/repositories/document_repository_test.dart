@@ -108,6 +108,11 @@ void main() {
     // Firestore's document order, which fake_cloud_firestore returns as
     // insertion order -- V, II, IV in the order they were written below.
     final db = await seed();
+    // IV and V need a passed pre-oral to be uploaded at all.
+    await db.collection('defenses').doc('po').set({
+      'thesisId': 't1', 'type': 'preOral', 'leaderUid': 'l1',
+      'status': 'completed', 'panelVerdict': 'pass',
+    });
     final repo = DocumentRepository(db);
     for (final c in [ChapterId.chapterV, ChapterId.chapterII,
                      ChapterId.chapterIV]) {
@@ -178,5 +183,65 @@ void main() {
       ),
       throwsArgumentError,
     );
+  });
+
+  group('Chapters IV and V wait for a passed pre-oral', () {
+    Future<void> defence(FakeFirebaseFirestore db, String id,
+            {String type = 'preOral',
+            String? verdict,
+            String thesisId = 't1'}) =>
+        db.collection('defenses').doc(id).set({
+          'thesisId': thesisId,
+          'type': type,
+          'leaderUid': 'l1',
+          'adviserUid': 'a1',
+          'panelUids': <String>['p1'],
+          'status': 'completed',
+          'panelVerdict': ?verdict,
+        });
+
+    Future<void> upload(DocumentRepository repo, ChapterId chapter) =>
+        repo.addVersion(
+          thesisId: 't1', chapter: chapter,
+          storagePath: 'p', fileUrl: 'u', mimeType: 'application/pdf',
+          sizeBytes: 10, uploadedBy: 'l1',
+        );
+
+    test('refused while the pre-oral has not passed', () async {
+      final db = await seed();
+      // A failed pre-oral, one with no verdict yet, a passed final (not a
+      // pre-oral) and another thesis's passed pre-oral all count for nothing.
+      await defence(db, 'po-fail', verdict: 'fail');
+      await defence(db, 'po-open');
+      await defence(db, 'fin', type: 'final', verdict: 'pass');
+      await defence(db, 'other', verdict: 'pass', thesisId: 't2');
+      final repo = DocumentRepository(db);
+
+      for (final c in [ChapterId.chapterIV, ChapterId.chapterV]) {
+        await expectLater(upload(repo, c), throwsStateError, reason: c.name);
+      }
+      expect((await db.collection('theses/t1/documents').get()).docs, isEmpty);
+      // Chapters I-III are untouched by the rule.
+      await upload(repo, ChapterId.chapterIII);
+    });
+
+    test('allowed once it passed, naming the defence it relies on',
+        () async {
+      final db = await seed();
+      await defence(db, 'po-fail', verdict: 'fail');
+      // The re-defence that passed is a pre-oral too.
+      await defence(db, 'po-fail_redefence', verdict: 'pass');
+      final repo = DocumentRepository(db);
+
+      await upload(repo, ChapterId.chapterIV);
+      final doc = await db.doc('theses/t1/documents/chapterIV').get();
+      expect(doc.data()!['preOralDefenceId'], 'po-fail_redefence');
+
+      // The next version keeps naming it.
+      await upload(repo, ChapterId.chapterIV);
+      final again = await db.doc('theses/t1/documents/chapterIV').get();
+      expect(again.data()!['currentVersion'], 2);
+      expect(again.data()!['preOralDefenceId'], 'po-fail_redefence');
+    });
   });
 }

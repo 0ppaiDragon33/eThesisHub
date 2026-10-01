@@ -56,7 +56,11 @@ void main() {
                       'chapterV']) {
       expect(find.byKey(Key('chapterRow-$id')), findsOneWidget);
     }
-    expect(find.textContaining('Not started'), findsNWidgets(5));
+    // I-III read "Not started"; IV and V, with no pre-oral passed, say
+    // when they open instead.
+    expect(find.textContaining('Not started'), findsNWidgets(3));
+    expect(find.text('Opens once the pre-oral defence is passed'),
+        findsNWidgets(2));
   });
 
   testWidgets('an uploaded chapter shows its status and version',

@@ -3001,9 +3001,10 @@ test("M2: only the five chapter ids exist", async () => {
     type: "chapterVI", currentVersion: 1, status: "submitted",
     updatedAt: serverTimestamp(),
   }));
-  // Control: a real chapter id, same payload shape.
-  await assertSucceeds(setDoc(doc(leader, "theses/m2c/documents/chapterV"), {
-    type: "chapterV", currentVersion: 1, status: "submitted",
+  // Control: a real chapter id, same payload shape. (Chapter III, not V:
+  // IV and V also need a passed pre-oral, tested on their own below.)
+  await assertSucceeds(setDoc(doc(leader, "theses/m2c/documents/chapterIII"), {
+    type: "chapterIII", currentVersion: 1, status: "submitted",
     updatedAt: serverTimestamp(),
   }));
 });
@@ -6334,3 +6335,101 @@ test("typing: markers only while in progress, but your own may always be cleared
 test.after(async () => {
   await env.cleanup();
 });
+
+// ---------- Chapters IV and V wait for a passed pre-oral (2026-10-01) ----------
+//
+// The group writes Chapters IV and V (results, conclusions) only after the
+// panel passes their pre-oral. A Chapter IV/V record names the passed
+// pre-oral it relies on; the rules check that defence is this thesis's
+// pre-oral with a Pass verdict.
+
+async function seedPreOral(thesisId, id, { verdict = "pass", type = "preOral",
+    otherThesis = false } = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `theses/${thesisId}`), docThesis());
+    await setDoc(doc(db, `defenses/${id}`), {
+      thesisId: otherThesis ? "someone-else" : thesisId, type,
+      scheduledAt: Timestamp.now(), venue: "AVR",
+      panelUids: ["pan-uid"], adviserUid: "adviser-uid",
+      leaderUid: "leader-uid", status: "completed", createdBy: "coord-uid",
+      createdAt: Timestamp.now(),
+      ...(verdict ? { panelVerdict: verdict } : {}),
+    });
+  });
+}
+
+function firstUpload(db, thesisId, chapter, extra = {}) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, `theses/${thesisId}/documents/${chapter}`), {
+    type: chapter, currentVersion: 1, status: "submitted",
+    updatedAt: serverTimestamp(), ...extra,
+  });
+  batch.set(doc(db, `theses/${thesisId}/documents/${chapter}/versions/1`), {
+    version: 1, storagePath: "p", fileUrl: "u", uploadedBy: "leader-uid",
+    uploadedAt: serverTimestamp(), mimeType: "application/pdf",
+    sizeBytes: 100,
+  });
+  return batch.commit();
+}
+
+test("chapters IV-V: refused without a passed pre-oral", async () => {
+  await env.clearFirestore();
+  await seedPreOral("c45a", "po-fail", { verdict: "fail" });
+  await seedPreOral("c45a", "po-none", { verdict: null });
+  await seedPreOral("c45a", "fin-pass", { type: "final" });
+  await seedPreOral("c45a", "other-pass", { otherThesis: true });
+  const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+
+  await assertFails(firstUpload(leader, "c45a", "chapterIV"));
+  for (const id of ["po-fail", "po-none", "fin-pass", "other-pass",
+                    "does-not-exist"]) {
+    await assertFails(
+      firstUpload(leader, "c45a", "chapterIV", { preOralDefenceId: id }));
+  }
+  await assertFails(
+    firstUpload(leader, "c45a", "chapterV", { preOralDefenceId: "po-fail" }));
+  // Control: Chapters I-III need nothing of the kind.
+  await assertSucceeds(firstUpload(leader, "c45a", "chapterI"));
+});
+
+test("chapters IV-V: allowed once the pre-oral passed, and stay allowed",
+  async () => {
+    await env.clearFirestore();
+    await seedPreOral("c45b", "po-pass");
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/adviser-uid"),
+        { role: "faculty", active: true });
+    });
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
+
+    await assertSucceeds(
+      firstUpload(leader, "c45b", "chapterIV", { preOralDefenceId: "po-pass" }));
+    await assertSucceeds(
+      firstUpload(leader, "c45b", "chapterV", { preOralDefenceId: "po-pass" }));
+
+    // The adviser's review leaves the reference alone...
+    await assertFails(updateDoc(doc(adv, "theses/c45b/documents/chapterIV"),
+      { status: "revise", updatedAt: serverTimestamp(),
+        preOralDefenceId: "other" }));
+    await assertSucceeds(updateDoc(doc(adv, "theses/c45b/documents/chapterIV"),
+      { status: "revise", updatedAt: serverTimestamp() }));
+
+    // ...and the group's next version still carries a passed pre-oral.
+    const next = (extra) => {
+      const batch = writeBatch(leader);
+      batch.update(doc(leader, "theses/c45b/documents/chapterIV"), {
+        currentVersion: 2, status: "submitted",
+        updatedAt: serverTimestamp(), ...extra,
+      });
+      batch.set(doc(leader, "theses/c45b/documents/chapterIV/versions/2"), {
+        version: 2, storagePath: "p2", fileUrl: "u2",
+        uploadedBy: "leader-uid", uploadedAt: serverTimestamp(),
+        mimeType: "application/pdf", sizeBytes: 100,
+      });
+      return batch.commit();
+    };
+    await assertFails(next({ preOralDefenceId: "does-not-exist" }));
+    await assertSucceeds(next({}));
+  });

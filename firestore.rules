@@ -1370,6 +1370,22 @@ service cloud.firestore {
                 'chapterV'];
       }
 
+      // Chapters IV and V (results, conclusions) are written after the
+      // panel passes the group's pre-oral. Their record names that defence
+      // (`preOralDefenceId`); it must be this thesis's pre-oral, re-defence
+      // or not, with a Pass verdict. Chapters I-III need nothing of the kind.
+      function passedPreOral(defenceId) {
+        let d = get(/databases/$(database)/documents/defenses/$(defenceId)).data;
+        return d.thesisId == thesisId
+            && d.type == 'preOral'
+            && d.get('panelVerdict', null) == 'pass';
+      }
+      function chapterGateOpen(chapterId) {
+        return !(chapterId in ['chapterIV', 'chapterV'])
+            || (request.resource.data.get('preOralDefenceId', null) is string
+                && passedPreOral(request.resource.data.preOralDefenceId));
+      }
+
       match /documents/{chapterId} {
         // The dean reads status here and the files below it (spec
         // 2026-09-26), but not the adviser's feedback: that is between the
@@ -1382,11 +1398,13 @@ service cloud.firestore {
                       && thesisData(thesisId).status == 'titleApproved'
                       && chapterId in chapterIds()
                       && request.resource.data.keys().hasOnly(
-                           ['type', 'currentVersion', 'status', 'updatedAt'])
+                           ['type', 'currentVersion', 'status', 'updatedAt',
+                            'preOralDefenceId'])
                       && request.resource.data.type == chapterId
                       && request.resource.data.currentVersion == 1
                       && request.resource.data.status == 'submitted'
-                      && request.resource.data.updatedAt == request.time;
+                      && request.resource.data.updatedAt == request.time
+                      && chapterGateOpen(chapterId);
 
         // Two disjoint arms, OR'd. The student reaches `submitted` only by
         // adding a version; the adviser writes only a decision. Neither can
@@ -1399,22 +1417,29 @@ service cloud.firestore {
                       && isThesisLeader(thesisId)
                       && resource.data.status in ['submitted', 'revise']
                       && request.resource.data.keys().hasOnly(
-                           ['type', 'currentVersion', 'status', 'updatedAt'])
+                           ['type', 'currentVersion', 'status', 'updatedAt',
+                            'preOralDefenceId'])
                       && request.resource.data.currentVersion
                          == resource.data.currentVersion + 1
                       && request.resource.data.status == 'submitted'
                       && request.resource.data.type == resource.data.type
-                      && request.resource.data.updatedAt == request.time;
+                      && request.resource.data.updatedAt == request.time
+                      && chapterGateOpen(chapterId);
 
         // Adviser: a decision, never a version bump.
         allow update: if verified()
                       && isAdviser(thesisId)
                       && request.resource.data.keys().hasOnly(
-                           ['type', 'currentVersion', 'status', 'updatedAt'])
+                           ['type', 'currentVersion', 'status', 'updatedAt',
+                            'preOralDefenceId'])
                       && request.resource.data.status in ['revise', 'approved']
                       && request.resource.data.currentVersion
                          == resource.data.currentVersion
                       && request.resource.data.type == resource.data.type
+                      // A decision never moves the pre-oral a chapter IV/V
+                      // record relies on.
+                      && request.resource.data.get('preOralDefenceId', null)
+                         == resource.data.get('preOralDefenceId', null)
                       && request.resource.data.updatedAt == request.time;
 
         allow delete: if false;
