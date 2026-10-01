@@ -25,8 +25,7 @@ class AuditLogScreen extends ConsumerWidget {
       child: PageShell(
         kicker: 'Management',
         title: 'Activity log',
-        subtitle: 'A record of privileged actions — publishing, deactivating '
-            'an account, issuing an invite, releasing evaluations.',
+        subtitle: 'Privileged actions taken in the app.',
         maxWidth: AppTokens.measureWide,
         children: [
           logAsync.when(

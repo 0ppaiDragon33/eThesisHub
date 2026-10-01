@@ -103,8 +103,8 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
         setState(() {
           _decliningThesisId = null;
           _reason.clear();
-          _error = 'The group is revising this nomination. You will get an '
-              'updated request to respond to.';
+          _error = 'The group is revising this nomination. A new request is '
+              'coming.';
         });
       }
     } on StateError catch (_) {
@@ -138,8 +138,7 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
     // No Scaffold and no AppBar: the app shell owns both for every
     // signed-in route now.
     const title = 'Nomination inbox';
-    const subtitle = 'Groups asking you to serve as their adviser or on '
-        'their panel. Your answer is the Conforme on their Form 1.';
+    const subtitle = 'Requests to be an adviser or panel member.';
 
     return KeyedSubtree(
       key: const Key('nominationInboxScreen'),
@@ -166,8 +165,7 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
               const EmptyState(
                 icon: Icons.drafts_outlined,
                 title: 'No nominations waiting',
-                message: 'When a group nominates you as their adviser or a '
-                    'panel member, the request appears here.',
+                message: 'Nominations for you appear here.',
               ),
             if (_error != null) ...[
               ErrorState(key: const Key('error'), message: _error!),

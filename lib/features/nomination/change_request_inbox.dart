@@ -139,9 +139,7 @@ class _ChangeRequestInboxState extends ConsumerState<ChangeRequestInbox> {
                   icon: Icons.rule_folder_outlined,
                   title: 'No change requests waiting',
                   message:
-                      'When a group asks you to sign off on a '
-                      'change of adviser or title, the request appears '
-                      'here.',
+                      'Change requests you need to sign appear here.',
                 ),
               if (_error != null) ...[
                 ErrorState(

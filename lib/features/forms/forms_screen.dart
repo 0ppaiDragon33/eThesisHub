@@ -45,9 +45,7 @@ class FormsScreen extends StatelessWidget {
       maxWidth: AppTokens.measureWide,
       title: 'Forms',
       subtitle:
-          'Blank templates for every research form, and the filled '
-          'versions you have on file, grouped by where they fall in the '
-          'thesis.',
+          'Blank templates and your filled forms.',
       children: children,
     ),
   );
@@ -221,13 +219,11 @@ class _Form1Card extends ConsumerWidget {
       cardKey: const Key('form1Card'),
       name: 'Form 1 — Nomination of Thesis Adviser and Panel Members',
       purpose:
-          'The letter that starts a thesis\'s approval chain, naming '
-          'its adviser and panel.',
+          'Names the thesis adviser and panel.',
       actions: [
         Text(
-          'The filled Form 1 is made from a thesis\'s own nominations. '
-          'Open your thesis to download it, or start your own copy to '
-          'edit here.',
+          'Download the filled Form 1 from your thesis, or edit your own copy '
+          'here.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -281,8 +277,7 @@ class _Form5cCardState extends State<_Form5cCard> {
       cardKey: const Key('form5cCard'),
       name: 'Form 5c — Evaluation Guide',
       purpose:
-          'The rubric a panelist scores a title or final defence '
-          'with, eleven criteria across content and presentation.',
+          'The panel\'s scoring rubric for a defence.',
       actions: [
         OutlinedButton(
           key: const Key('form5cBlankButton'),
@@ -291,8 +286,7 @@ class _Form5cCardState extends State<_Form5cCard> {
         ),
         const Gap.sm(),
         Text(
-          'Sheets you have already submitted are attached to the defence '
-          'they were scored at.',
+          'Submitted sheets are kept with their defence.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -372,8 +366,7 @@ class _Form8CardState extends State<_Form8Card> {
           cardKey: const Key('form8Card'),
           name: 'Form 8 — Certification of Submission of Bound Copies',
           purpose:
-              'The coordinator\'s certificate that bound copies of a '
-              'thesis reached the Dean, the Library and R&D.',
+              'Certifies the bound copies were delivered.',
           actions: [
             OutlinedButton(
               key: const Key('form8BlankButton'),
@@ -446,8 +439,7 @@ class _Form3Card extends StatelessWidget {
       cardKey: const Key('form3Card'),
       name: 'Form 3 — Request to Convene the Panel for Pre-Oral Defense',
       purpose:
-          'The adviser\'s letter asking the Dean to convene the '
-          'panel for a group\'s pre-oral defence.',
+          'Asks the Dean to convene the pre-oral panel.',
       actions: [
         OutlinedButton(
           key: const Key('form3BlankButton'),
@@ -524,8 +516,7 @@ class _Form5bCard extends StatelessWidget {
       cardKey: const Key('form5bCard'),
       name: 'Form 5b — Presenter and Evaluator Profile',
       purpose:
-          'Identifies the presenter and the evaluator ahead of a '
-          'defence\'s Form 5c scoring.',
+          'Presenter and evaluator details for Form 5c.',
       actions: [
         OutlinedButton(
           key: const Key('form5bBlankButton'),
@@ -568,8 +559,7 @@ class _Form4aCard extends StatelessWidget {
       cardKey: const Key('form4aCard'),
       name: 'Form 4a — Change of Undergraduate Thesis Adviser',
       purpose:
-          'A request to change a group\'s adviser. Not a workflow '
-          'this app tracks — print, complete and route by hand.',
+          'Change of adviser. Print and route by hand.',
       actions: [
         OutlinedButton(
           key: const Key('form4aBlankButton'),
@@ -607,8 +597,7 @@ class _Form4bCard extends StatelessWidget {
       cardKey: const Key('form4bCard'),
       name: 'Form 4b — Change of Undergraduate Thesis Title',
       purpose:
-          'A request to change an approved thesis title. Not a '
-          'workflow this app tracks — print, complete and route by hand.',
+          'Change of title. Print and route by hand.',
       actions: [
         OutlinedButton(
           key: const Key('form4bBlankButton'),

@@ -126,9 +126,7 @@ class ThesisStatusScreen extends ConsumerWidget {
                 EmptyState(
                   icon: Icons.groups_outlined,
                   title: 'No thesis group yet',
-                  message: 'Create your group to name your working title and '
-                      'list your members. You will nominate an adviser and '
-                      'panel next.',
+                  message: 'Create your group to get started.',
                   action: FilledButton(
                     key: const Key('goToCreateThesis'),
                     onPressed: () => context.go('/thesis/create'),
@@ -386,10 +384,8 @@ class _NextAction extends StatelessWidget {
             // reopen a thesis (see the class note on ThesisStatusScreen).
             ErrorState(
               key: const Key('reNominationGap'),
-              message: 'One or more nominees declined, and this thesis '
-                  'cannot be re-nominated from here. Please contact your '
-                  'Research Coordinator so they can reopen this thesis for '
-                  're-nomination.',
+              message: 'A nominee declined. Ask the Research Coordinator to '
+                  'reopen this thesis.',
             ),
           ],
           // The student cannot fix what they cannot read, so the remark

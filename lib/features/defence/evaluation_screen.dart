@@ -112,9 +112,8 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Submit a ${pass ? 'Pass' : 'Fail'} rating?',
-      message: 'Your total is ${totalOf(_scores)} of 100, rated '
-          '${pass ? 'Pass' : 'Fail'}. You can still edit your sheet until '
-          'the adviser releases the evaluations.',
+      message: 'Total ${totalOf(_scores)} of 100. You can edit it until the '
+          'grades are released.',
       confirmLabel: 'Submit ${pass ? 'Pass' : 'Fail'}',
       confirmKey: const Key('confirmSubmitEvaluation'),
     );
@@ -301,8 +300,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'Advisers comment on a defence but do not score it. Your '
-            'remarks are in the defence log.',
+            'Advisers do not score defences.',
             key: Key('adviserRefusal'),
           ),
         ),
@@ -544,8 +542,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
           ],
           const Gap.sm(),
           Text(
-            'Your own rating under §8a. The panel\'s verdict is decided '
-            'separately, after deliberation.',
+            'Your own rating. The panel decides the verdict separately.',
             key: const Key('ratingIsYours'),
             style: text.bodySmall,
           ),
@@ -557,8 +554,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
           if (!released) ...[
             if (hasSheet) ...[
               Text(
-                'You submitted this sheet already. It can be changed until '
-                'the adviser releases the evaluations.',
+                'Submitted. You can edit it until the grades are released.',
                 key: const Key('editableUntilRelease'),
                 style: text.bodySmall,
               ),

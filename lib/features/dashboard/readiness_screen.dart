@@ -15,8 +15,8 @@ class ReadinessScreen extends StatelessWidget {
       key: Key('readinessScreen'),
       maxWidth: AppTokens.measureWide,
       title: 'Defence readiness',
-      subtitle: 'Pre-oral needs Chapters I–III approved; the final defence '
-          'needs all five.',
+      subtitle: 'Pre-oral needs Chapters I–III approved; the final needs '
+          'all five.',
       children: [DefenceReadinessList()],
     );
   }

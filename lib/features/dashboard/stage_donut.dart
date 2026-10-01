@@ -73,7 +73,7 @@ class _Body extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: AppTokens.sm),
         child: Text(
-          'No theses yet. Once groups are underway, their stages appear here.',
+          'No theses yet.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       );

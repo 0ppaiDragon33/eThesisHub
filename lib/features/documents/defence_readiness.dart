@@ -72,8 +72,7 @@ class DefenceReadinessList extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.event_available_outlined,
             title: 'No theses with an approved title yet',
-            message: 'Once a group\'s candidate title is approved, its '
-                'chapter progress toward a defence appears here.',
+            message: 'Groups appear here once their title is approved.',
           );
         }
         return Column(

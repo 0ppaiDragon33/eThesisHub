@@ -180,8 +180,7 @@ class _ChangeRequestQueueState extends ConsumerState<ChangeRequestQueue> {
                   icon: Icons.rule_folder_outlined,
                   title: 'Nothing waiting',
                   message:
-                      'A change of adviser or title appears here once it '
-                      'reaches your step.',
+                      'Requests appear here once they reach your step.',
                 ),
               if (_error != null) ...[
                 ErrorState(

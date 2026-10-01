@@ -420,7 +420,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Submit a Pass rating?'), findsOneWidget);
-    expect(find.textContaining('Your total is 100 of 100'), findsOneWidget);
+    expect(find.textContaining('Total 100 of 100'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 

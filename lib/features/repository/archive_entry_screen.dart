@@ -161,9 +161,7 @@ class _EntryViewState extends ConsumerState<_EntryView> {
       error: (e, _) => [
         note(
           'form8RoleUnavailable',
-          'Could not check your role, so Form 8 is unavailable here. This is '
-              'a failed read, not an answer about your permissions — try '
-              'again.',
+          'Could not check your role, so Form 8 is unavailable. Try again.',
         ),
       ],
       data: (user) => user?.role == UserRole.coordinator

@@ -180,9 +180,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     }
     if (chosenUids.length > _maxPanelists) {
       setState(() => _error =
-          'Choose at most $_maxPanelists panel members. This thesis already '
-          'reserves ${_exOfficio.length} ex-officio seat(s), and nominations '
-          'per thesis are capped at $kMaxNominationDocs total.');
+          'Choose at most $_maxPanelists panel members.');
       return;
     }
     if (chosenUids.contains(_adviserUid)) {
@@ -218,20 +216,15 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
           .join(', ');
       final effective = chosenUids.length - collided.length;
       setState(() => _error =
-          'Choose at least three panel members who are not already on this '
-          'panel ex officio. $names already ${collided.length == 1 ? 'has' : 'have'} '
-          'an automatic ex-officio seat on every panel, so choosing '
-          '${collided.length == 1 ? 'that person' : 'them'} as a panel member '
-          'adds nobody new — that leaves only $effective. '
-          'Please choose ${3 - effective} more.');
+          '$names already ${collided.length == 1 ? 'sits' : 'sit'} on every '
+          'panel ex officio. Please choose ${3 - effective} more.');
       return;
     }
 
     final adviser = _byUid(faculty, _adviserUid!);
     if (adviser == null) {
       setState(() => _error =
-          'The selected adviser is no longer in the faculty directory. '
-          'Please choose again.');
+          'That adviser is no longer listed. Please choose again.');
       return;
     }
 
@@ -240,8 +233,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       final entry = _byUid(faculty, uid);
       if (entry == null) {
         setState(() => _error =
-            'One of the selected panel members is no longer in the faculty '
-            'directory. Please choose again.');
+            'A panel member is no longer listed. Please choose again.');
         return;
       }
       panelists.add(entry);
@@ -250,9 +242,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Submit this nomination?',
-      message: '${adviser.fullName} is asked to be your adviser, and '
-          '${panelists.length} faculty to sit on your panel. Each of them '
-          'must accept.',
+      message: '${adviser.fullName} and ${panelists.length} panel members '
+          'will be asked to accept.',
       confirmLabel: 'Submit',
       confirmKey: const Key('confirmSubmitNomination'),
     );
@@ -355,9 +346,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
 
     final named =
         candidates.map((c) => '${c.$1} (${c.$2})').join(', ');
-    return 'One of your nominees is not available for the position you '
-        'chose this semester: $named. Please choose someone else, or '
-        'contact your coordinator.';
+    return 'Not available this semester: $named. Please choose someone else.';
   }
 
   /// One line in a picker: the name, then whatever actually distinguishes
@@ -572,9 +561,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
               key: Key('notDraft'),
               icon: Icons.how_to_reg_outlined,
               title: 'Nominations already sent',
-              message: 'Nominations can only be submitted while this thesis '
-                  'is still a draft. This thesis has already moved past that '
-                  'stage.',
+              message: 'This thesis is past the nomination stage.',
             ),
           ]);
         }
@@ -632,10 +619,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                   ),
                   if (atCap)
                     Text(
-                      'Panel limited to $_maxPanelists member(s): this '
-                      'thesis reserves ${_exOfficio.length} ex-officio '
-                      'seat(s), and nominations per thesis are capped at '
-                      '$kMaxNominationDocs total.',
+                      'Up to $_maxPanelists panel members.',
                       key: const Key('panelCapReason'),
                       style: text.bodySmall,
                     ),
@@ -665,10 +649,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                     ),
                   const Gap.sm(),
                   Text(
-                    'They sit on every panel by role, so there is nothing to '
-                    'choose and nothing for them to accept. One of them may '
-                    'still be chosen as your adviser, which they would be '
-                    'asked to accept.',
+                    'They sit on every panel automatically.',
                     style: text.bodySmall,
                   ),
                 ],
@@ -684,8 +665,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
               const Gap.md(),
             ],
             Text(
-              'Each nominee is asked to accept. Once all have, the Research '
-              'Coordinator and then the Dean review the nomination.',
+              'Each nominee must accept, then the Coordinator and the Dean '
+              'review it.',
               style: text.bodySmall,
             ),
             const Gap.md(),

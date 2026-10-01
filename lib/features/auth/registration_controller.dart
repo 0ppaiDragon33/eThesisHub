@@ -88,8 +88,8 @@ class RegistrationController {
       try {
         await auth.sendEmailVerification();
       } catch (e) {
-        return 'Account created, but we could not send the verification '
-            'email. Use the Resend button on the next screen.';
+        return 'Account created, but the verification email failed. Tap '
+            'Resend on the next screen.';
       }
 
       return null;

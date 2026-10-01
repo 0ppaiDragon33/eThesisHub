@@ -81,8 +81,7 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
     // here only so the coordinator gets a reason rather than a denial.
     if (email == myEmail.toLowerCase()) {
       setState(() => _error =
-          'You cannot invite yourself. Ask another coordinator to change '
-          'your own role.');
+          'You cannot invite yourself.');
       return;
     }
 
@@ -113,8 +112,8 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
       } catch (_) {/* audit must never block the action */}
       if (!mounted) return;
       setState(() {
-        _notice = 'Invited $email as ${roleLabel(_role)}. They will hold that role '
-            'the next time they sign in with a verified address.';
+        _notice = 'Invited $email as ${roleLabel(_role)}. The role applies at '
+            'their next sign-in.';
         _email.clear();
         _specialization.clear();
       });
@@ -180,8 +179,7 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
         maxWidth: AppTokens.measureWide,
         kicker: 'Research office',
         title: 'Users',
-        subtitle: 'Invite faculty by their institutional address. The role '
-            'is applied the first time they sign in with it verified.',
+        subtitle: 'Invite faculty by institutional email.',
         children: [
           // Both Users tabs carry the same strip.
           const UsersTabs(selected: UsersTab.invites),

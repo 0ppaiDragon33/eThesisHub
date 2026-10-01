@@ -147,7 +147,7 @@ void main() {
     );
     expect(find.byKey(const Key('chapterReopened-chapterII')), findsOneWidget);
     expect(
-        find.text('Chapter II has been reopened for revision. Showing the '
+        find.text('Chapter II was reopened. Showing the '
             'version the panel marked.'),
         findsOneWidget);
     expect(find.byKey(const Key('pageTile-chapterII-2-0')), findsOneWidget);

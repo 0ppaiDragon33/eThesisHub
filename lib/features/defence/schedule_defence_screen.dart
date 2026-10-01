@@ -92,8 +92,7 @@ class _ScheduleDefenceScreenState
     if (adviserUid == null || adviserUid.isEmpty) {
       if (mounted) {
         setState(() => _error =
-            'This thesis has no adviser on record, so a defence cannot be '
-            'scheduled for it yet.');
+            'This thesis has no adviser yet, so it cannot be scheduled.');
       }
       return;
     }

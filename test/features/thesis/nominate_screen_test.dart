@@ -417,7 +417,7 @@ void main() {
 
     expect(find.byKey(const Key('error')), findsOneWidget);
     final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
-    expect(error.message, contains('no longer in the faculty directory'));
+    expect(error.message, contains('no longer listed'));
 
     final noms = await db.collection('theses/t1/nominations').get();
     expect(noms.docs, isEmpty,

@@ -37,8 +37,7 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
           maxWidth: AppTokens.measureWide,
           kicker: 'College archive',
           title: 'Thesis archive',
-          subtitle: 'Every published thesis, across every college. Search '
-              'by title or author, or narrow by college, program and year.',
+          subtitle: 'Every published thesis.',
           children: children,
         ),
       );

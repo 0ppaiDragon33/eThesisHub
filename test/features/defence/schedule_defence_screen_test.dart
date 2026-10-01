@@ -222,7 +222,7 @@ void main() {
     // stored null and blame the coordinator's authorization for a data
     // problem they cannot act on. This message names the real cause.
     expect(
-        find.textContaining('This thesis has no adviser on record'),
+        find.textContaining('This thesis has no adviser yet'),
         findsOneWidget);
     expect((await db.collection('defenses').get()).docs, isEmpty);
   });

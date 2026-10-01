@@ -327,9 +327,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
         child: ErrorState(
           key: const Key('manuscriptDefenceError'),
           error: defencesAsync.error,
-          message: 'Could not check whether your final defence has passed, '
-              'so the manuscript upload is not being offered. Retry in a '
-              'moment.',
+          message: 'Could not check your final defence. Try again in a moment.',
         ),
       );
     }

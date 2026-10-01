@@ -173,8 +173,8 @@ class _FormCopyEditorScreenState extends ConsumerState<FormCopyEditorScreen> {
       context,
       title: 'Reset every field?',
       message:
-          'All your edits in this copy go back to the form\'s original '
-          'wording. Nothing is saved until you press Save.',
+          'Every field goes back to the original wording. Nothing is saved '
+          'until you press Save.',
       confirmLabel: 'Reset',
       confirmKey: const Key('confirmResetAll'),
     );

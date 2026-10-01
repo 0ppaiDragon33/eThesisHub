@@ -41,8 +41,8 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Reopen this thesis for re-nomination?',
-      message: 'It goes back to the group as a draft. Nominees who already '
-          'accepted keep their seat; the group replaces whoever declined.',
+      message: 'It goes back to the group as a draft. Accepted nominees keep '
+          'their seat.',
       confirmLabel: 'Reopen',
       confirmKey: Key('confirmReopen-$thesisId'),
     );
@@ -97,9 +97,8 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
 
     // No Scaffold and no AppBar: the app shell owns both.
     const title = 'Stalled nominations';
-    const subtitle = 'A nominee declined on each of these, so the thesis '
-        'cannot advance. Reopening returns it to draft so the group can '
-        'nominate again.';
+    const subtitle = 'A nominee declined. Reopen to let the group nominate '
+        'again.';
 
     return KeyedSubtree(
       key: const Key('stalledThesesScreen'),
@@ -128,8 +127,7 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
                     key: Key('empty'),
                     icon: Icons.done_all_rounded,
                     title: 'Nothing is stuck',
-                    message: 'Every nomination in progress is still waiting '
-                        'on answers, not blocked by a decline.',
+                    message: 'No nomination is blocked by a decline.',
                   )
                 : Panel(
                     flush: true,

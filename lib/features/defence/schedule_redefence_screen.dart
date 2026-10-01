@@ -87,9 +87,8 @@ class _ScheduleRedefenceScreenState
       if (mounted) {
         setState(
           () => _error = e.code == 'permission-denied'
-              ? 'You do not have permission to schedule this re-defence. '
-                    'If the panel changed since the defence, the re-defence '
-                    'cannot use the old one [permission-denied].'
+              ? 'You do not have permission to schedule this re-defence. The '
+                  'panel may have changed [permission-denied].'
               : 'Could not schedule this re-defence. Please try again.',
         );
       }

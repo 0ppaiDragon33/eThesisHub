@@ -37,10 +37,8 @@ class DeactivatedScreen extends StatelessWidget {
         ),
         const SizedBox(height: AppTokens.md),
         const Text(
-          'Your account has been deactivated by the College Research '
-          'Coordinator, so it can no longer be used to sign in. If you '
-          'think this is a mistake, contact the coordinator to have it '
-          'restored.',
+          'Your account was deactivated. Contact the Research Coordinator to '
+          'restore it.',
         ),
         const SizedBox(height: AppTokens.lg),
         const Row(

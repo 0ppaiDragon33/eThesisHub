@@ -257,8 +257,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
           key: Key('notReady'),
           icon: Icons.hourglass_empty,
           title: 'Not ready for candidate titles',
-          message: 'Candidate titles can be submitted once the nomination '
-              'is approved, or after a set has been rejected.',
+          message: 'You can submit titles once the nomination is approved.',
         ),
       ]);
     }
@@ -297,9 +296,8 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
             ? 'Step 3 of 3, round ${thesis.titleRound + 1}'
             : 'Step 3 of 3',
         title: 'Candidate titles',
-        subtitle: 'Propose at least ${TitleDefenceRepository.minCandidates} '
-            'titles, each with a justification, plus one presentation for '
-            'the panel.',
+        subtitle: 'At least ${TitleDefenceRepository.minCandidates} titles, '
+            'each with a justification, plus a presentation.',
         children: [
           if (thesis.status == ThesisStatus.titleRejected &&
               (thesis.titleRejectionRemark ?? '').isNotEmpty) ...[
@@ -352,10 +350,8 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
           ),
           if (atCap)
             Text(
-              'Candidate titles are capped at '
-              '${TitleDefenceRepository.maxCandidates} per submission: '
-              'each one costs a security-rules check, and a larger batch '
-              'is denied.',
+              'Up to ${TitleDefenceRepository.maxCandidates} titles per '
+              'submission.',
               key: const Key('candidateCapReason'),
               style: text.bodySmall,
             ),

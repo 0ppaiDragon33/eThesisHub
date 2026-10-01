@@ -287,7 +287,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.textContaining('same as the former adviser'),
+          find.textContaining('already the adviser'),
           findsOneWidget,
         );
         expect(

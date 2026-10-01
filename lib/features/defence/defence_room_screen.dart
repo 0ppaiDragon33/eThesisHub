@@ -273,8 +273,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Cancel this defence?'),
         content: const Text(
-            'It stays in the record as cancelled rather than disappearing, '
-            'and it cannot be reopened. Schedule a new one instead.'),
+            'It stays on record as cancelled and cannot be reopened.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -412,11 +411,8 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               // highlights are theirs to read once the adviser releases.
               Text(
                 defence.isReleased
-                    ? 'The panel has marked up your manuscript. Read each '
-                        'highlight and its comment on the page it is about.'
-                    : 'The panel marks up your manuscript during the '
-                        'defence. You can read their highlights here once '
-                        'your adviser releases them.',
+                    ? 'Read each highlight on its page.'
+                    : 'Highlights appear here once your adviser releases them.',
                 key: const Key('leaderRefusal'),
               ),
               // D47: the group's route to the numbers is the paper grading
@@ -433,8 +429,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                   RedefenceNotice(defence: defence),
                 ] else
                   const Text(
-                    'The panel has not recorded a verdict for this defence '
-                    'yet.',
+                    'No verdict recorded yet.',
                     key: Key('leaderVerdictPending'),
                   ),
               ],
@@ -628,8 +623,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                   if (tooEarly) ...[
                     const Gap.sm(),
                     Text(
-                      'Opens ${_formatDateTime(opensAt)}, 30 minutes '
-                          'before the scheduled time.',
+                      'Opens ${_formatDateTime(opensAt)}.',
                       key: const Key('openNotYet'),
                       style: text.bodySmall,
                     ),

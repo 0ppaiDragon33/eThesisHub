@@ -176,8 +176,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 title: _filter == _Filter.all
                     ? 'No notifications yet'
                     : 'No unread notifications',
-                message: 'Decisions on your nominations, titles, chapters '
-                    'and defences are posted here as they happen.',
+                message: 'Updates on your thesis appear here.',
               );
             }
             return FadeIn(child: NotificationGroups(items: items));

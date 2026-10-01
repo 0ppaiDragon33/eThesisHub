@@ -110,8 +110,7 @@ class ChaptersScreen extends ConsumerWidget {
       key: const Key('chaptersScreen'),
       kicker: thesis.workingTitle,
       title: 'Chapters',
-      subtitle: 'Each chapter goes to the adviser for review. Every upload is '
-          'kept, so nothing is ever overwritten.',
+      subtitle: 'Every upload is kept for your adviser to review.',
       children: [
         Panel(
           child: Row(

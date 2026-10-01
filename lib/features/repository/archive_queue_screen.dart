@@ -69,8 +69,7 @@ class ArchiveQueueScreen extends ConsumerWidget {
           key: Key('emptyQueue'),
           icon: Icons.inbox_outlined,
           title: 'Nothing is waiting to be published.',
-          message: 'A thesis appears here once it passes its final '
-              'defence and its manuscript is uploaded.',
+          message: 'Theses that passed the final defence appear here.',
         ),
       ]);
     }
@@ -157,8 +156,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
     final confirmed = await confirmAction(
       context,
       title: 'Publish to the archive?',
-      message: 'The manuscript becomes readable to everyone in the college. '
-          'It can be retracted, but only by a coordinator.',
+      message: 'Everyone in the college will be able to read the manuscript.',
       confirmLabel: 'Publish',
       confirmKey: Key('confirmPublish-${widget.thesis.id}'),
     );

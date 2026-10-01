@@ -97,8 +97,8 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
       if (!mounted) return;
       setState(() {
         _error = e.code == 'permission-denied'
-            ? 'You do not have permission to create a thesis group. Make '
-                'sure your email is verified.'
+            ? 'You do not have permission to create a group. Is your email '
+                'verified?'
             : 'Could not create the group. Please try again.';
       });
     } catch (_) {
@@ -152,8 +152,7 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
     return PageShell(
       kicker: 'Step 1 of 3',
       title: 'Create your thesis group',
-      subtitle: 'Next you will nominate an adviser and panel, then submit '
-          'candidate titles once the Dean approves.',
+      subtitle: 'Next you will nominate an adviser and panel.',
       children: [
         Panel(
           title: 'Working title',

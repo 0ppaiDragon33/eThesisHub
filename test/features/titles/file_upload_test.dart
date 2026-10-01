@@ -91,7 +91,7 @@ void main() {
         allowed: kJustificationTypes, maxBytes: kJustificationMaxBytes);
     expect(error, isNotNull);
     expect(error, contains('PDF'));
-    expect(error, contains('renamed'));
+    expect(error, contains('not a real PDF'));
   });
 
   test('accepts a real docx by its zip signature', () {

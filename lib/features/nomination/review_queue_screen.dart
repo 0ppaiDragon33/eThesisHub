@@ -163,10 +163,8 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                 ? 'Approve nominations'
                 : 'Recommend nominations',
             subtitle: widget.isDean
-                ? 'The Coordinator has recommended each of these. Check the '
-                    'roster, then approve to issue Form 1.'
-                : 'Every nominee below has accepted. Check the roster, then '
-                    'recommend each to the Dean.',
+                ? 'Check each roster, then approve to issue Form 1.'
+                : 'Check each roster, then recommend it to the Dean.',
             children: [
               if (_error != null) ...[
                 ErrorState(key: const Key('error'), message: _error!),

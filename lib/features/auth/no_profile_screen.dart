@@ -60,9 +60,8 @@ class NoProfileScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Your account exists, but its profile record is missing. '
-              'This usually means registration did not finish. Ask the '
-              'College Research Coordinator to check the account.',
+              'Your profile is missing. Ask the Research Coordinator to check '
+              'your account.',
             ),
             const SizedBox(height: 16),
             actions,

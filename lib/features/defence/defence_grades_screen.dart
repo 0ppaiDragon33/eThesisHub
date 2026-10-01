@@ -75,8 +75,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Release evaluations to the group?',
-      message: 'The students will be able to see their scores and comments. '
-          'This cannot be taken back.',
+      message: 'The students will see their scores and comments. This cannot '
+          'be undone.',
       confirmLabel: 'Release',
       confirmKey: const Key('confirmRelease'),
     );
@@ -128,8 +128,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Record a ${pass ? 'Pass' : 'Fail'} verdict?',
-      message: "This is the panel's decision on the defence and goes into the "
-          'permanent record.',
+      message: 'This is the panel\'s decision and goes on the permanent '
+          'record.',
       confirmLabel: 'Record ${pass ? 'Pass' : 'Fail'}',
       confirmKey: const Key('confirmVerdict'),
     );
@@ -228,8 +228,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       final count = submitted.length;
       return [
         Text(
-          '$count of $total have submitted (the panel, the Coordinator and '
-          'the Dean)',
+          '$count of $total have submitted',
           key: const Key('submittedCount'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
@@ -291,8 +290,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       return [
         Text(
           submitted
-              ? 'You have submitted your evaluation. The panel\'s grades '
-                    'are released by the adviser once every evaluation is in.'
+              ? 'Submitted. The adviser releases the grades once every sheet '
+                  'is in.'
               : 'You have not submitted your evaluation yet.',
           key: const Key('mySubmissionStatus'),
           style: Theme.of(context).textTheme.titleMedium,
@@ -615,10 +614,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           // this sentence says.
           defence.verdictRecordedAt != null
               ? 'Recorded by the adviser on '
-                    '${_formatDateTime(defence.verdictRecordedAt!)}, as the '
-                    'panel deliberated it under §8b.'
-              : 'Recorded by the adviser, as the panel deliberated it '
-                    'under §8b.',
+                  '${_formatDateTime(defence.verdictRecordedAt!)}.'
+              : 'Recorded by the adviser.',
           key: const Key('verdictScribe'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
@@ -630,8 +627,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     if (!isAdviser) {
       return const [
         Text(
-          'The panel deliberates over the released grades under §8b. The '
-          'adviser records the verdict once decided.',
+          'The adviser records the verdict after the panel deliberates.',
           key: Key('verdictPending'),
         ),
       ];
@@ -649,8 +645,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
     return [
       Text(
-        'Record the panel\'s deliberated decision under §8b. A panel mean '
-        'below $passingMark admits only Fail.',
+        'Record the panel\'s decision.',
         key: const Key('verdictCaption'),
         style: Theme.of(context).textTheme.bodySmall,
       ),
@@ -660,8 +655,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           // The precise mean, not the one-decimal figure shown above: 74.96
           // displays as "75.0", and without the exact number here a locked
           // Pass reads as a broken button rather than a rule.
-          'Panel mean ${mean.toStringAsFixed(2)} is below the passing mark '
-          'of $passingMark, so only Fail may be recorded.',
+          'Mean ${mean.toStringAsFixed(2)} is under $passingMark, so only '
+          'Fail is allowed.',
           key: const Key('verdictLocked'),
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),

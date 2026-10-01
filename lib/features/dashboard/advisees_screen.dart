@@ -33,8 +33,8 @@ class AdviseesScreen extends ConsumerWidget {
       subtitle: count == null
           ? 'Chapters I–V for each thesis you advise.'
           : count == 1
-              ? 'One group. Chapters I–V, and what waits on your review.'
-              : '$count groups. Chapters I–V, and what waits on your review.',
+              ? 'One group.'
+              : '$count groups.',
       children: const [AdviseeRegister()],
     );
   }
@@ -62,8 +62,7 @@ class AdviseeRegister extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.school_outlined,
             title: 'No advisees yet',
-            message: 'Once a group nominates you as adviser and the Dean '
-                'approves, their thesis appears here.',
+            message: 'Theses you advise appear here once approved.',
           );
         }
         final shown = limit == null ? advisees : advisees.take(limit!).toList();

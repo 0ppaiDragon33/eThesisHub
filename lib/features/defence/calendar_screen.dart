@@ -20,8 +20,7 @@ class CalendarScreen extends StatelessWidget {
       key: Key('calendarScreen'),
       maxWidth: AppTokens.measureWide,
       title: 'Calendar',
-      subtitle: 'Every scheduled defence: pre-oral, final and re-defences. '
-          'Title defences have no date, so they stay on Defences.',
+      subtitle: 'Scheduled pre-oral, final and re-defences.',
       children: [DefenceCalendar()],
     );
   }

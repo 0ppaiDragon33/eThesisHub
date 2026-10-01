@@ -243,8 +243,7 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Approve this title?',
-      message: "It becomes the thesis's approved title, and the group's "
-          'other candidate titles are set aside.',
+      message: 'The other candidate titles are set aside.',
       confirmLabel: 'Approve',
       confirmKey: const Key('confirmApproveTitle'),
     );
@@ -407,10 +406,8 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
         kicker: 'Title defence, round ${thesis.titleRound}',
         title: thesis.workingTitle,
         subtitle: isDean
-            ? 'Read each candidate and the panel\'s remarks, then approve '
-                'one title or return the set.'
-            : 'Read each candidate and its justification, and leave your '
-                'remarks for the group.',
+            ? 'Approve one title or return the set.'
+            : 'Leave your remarks for the group.',
         actions: [
           OutlinedButton.icon(
             key: const Key('openPresentation'),

@@ -151,8 +151,8 @@ String? validateDocument(
   // Content check last: the cheap extension and size checks reject the common
   // mistakes first, and this catches the file that lies about what it is.
   if (!contentMatchesExtension(ext, file.bytes)) {
-    return 'That file does not look like a real ${ext.toUpperCase()} — it '
-        'may have been renamed or is damaged. Choose the original file.';
+    return 'That file is not a real ${ext.toUpperCase()}. Choose the original '
+        'file.';
   }
   return null;
 }

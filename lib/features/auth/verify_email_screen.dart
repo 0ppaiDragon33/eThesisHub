@@ -165,8 +165,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
             const SizedBox(width: AppTokens.md),
             const Expanded(
               child: Text(
-                'We sent a verification link to your institutional email. '
-                'Open it, then return here and continue.',
+                'Open the link we sent to your email, then continue.',
               ),
             ),
           ],

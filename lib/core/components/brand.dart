@@ -64,8 +64,7 @@ class AuthScaffold extends StatelessWidget {
   final List<Widget> children;
 
   static const String brandSentence =
-      'Nomination, defence and the thesis record — '
-      'in one place, for the whole college.';
+      'Nomination, defence and the thesis record in one place.';
 
   /// Above this width the route panel sits beside the form.
   static const double wideBreakpoint = 900;

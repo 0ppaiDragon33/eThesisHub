@@ -117,8 +117,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       maxWidth: AppTokens.measureWide,
       kicker: 'Research office',
       title: 'Users',
-      subtitle: 'Every account in the college. Activate, deactivate, and set '
-          'who may be nominated as an adviser or a panelist.',
+      subtitle: 'Activate accounts and set who can be nominated.',
       actions: [
         OutlinedButton.icon(
           key: const Key('stalledLink'),
@@ -189,9 +188,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                   ErrorState(
                     key: const Key('positionsUnavailable'),
                     error: thesesAsync.error,
-                    message: 'Could not load current positions. The Positions '
-                        'column below is unknown for every row — it does not '
-                        'mean these accounts hold nothing.',
+                    message: 'Could not load positions, so the Positions '
+                        'column is unknown.',
                   ),
                   const Gap.md(),
                 ],
@@ -199,10 +197,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                   ErrorState(
                     key: const Key('directoryUnavailable'),
                     error: directoryAsync.error,
-                    message: 'Could not load the faculty directory, so this '
-                        'screen cannot say which accounts have never signed '
-                        'in and therefore have no designation in the '
-                        'nomination picker yet.',
+                    message: 'Could not load the faculty directory. Sign-in '
+                        'status is unknown.',
                   ),
                   const Gap.md(),
                 ],
@@ -573,8 +569,7 @@ class _NameCell extends StatelessWidget {
                 // is only created client-side at sign-in -- so a
                 // designation set here has not reached the nomination
                 // picker. This is that window, named rather than hidden.
-                'Not yet signed in — designation has not reached the '
-                'nomination picker yet.',
+                'Not signed in yet.',
                 key: Key('notSignedIn-${user.uid}'),
                 style: Theme.of(context)
                     .textTheme
@@ -703,8 +698,7 @@ class _DesignationCellState extends ConsumerState<_DesignationCell> {
         ),
         if (disabled)
           Text(
-            'This is your own account — you cannot set your own '
-            'designation.',
+            'You cannot set your own designation.',
             key: Key('ownRowDesignationReason-${user.uid}'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -714,9 +708,8 @@ class _DesignationCellState extends ConsumerState<_DesignationCell> {
             child: ErrorState(
               key: Key('designationWriteError-${user.uid}'),
               error: _error,
-              message: 'Could not save the designation for '
-                  '${user.fullName}. Their account may still say something '
-                  'different from the nomination picker.',
+              message: 'Could not save the designation for ${user.fullName}. '
+                  'Please try again.',
             ),
           ),
       ],
@@ -745,8 +738,8 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
       final confirmed = await confirmAction(
         context,
         title: 'Deactivate this account?',
-        message: '${widget.user.fullName} will be signed out and cannot sign '
-            'back in until an account is reactivated.',
+        message: '${widget.user.fullName} will be signed out until '
+            'reactivated.',
         confirmLabel: 'Deactivate',
         cancelLabel: 'Keep active',
         confirmKey: Key('confirmDeactivate-${widget.user.uid}'),
@@ -799,8 +792,7 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
           SizedBox(
             width: 160,
             child: Text(
-              'This is your own account — you cannot activate or '
-              'deactivate yourself.',
+              'You cannot deactivate your own account.',
               key: Key('ownRowReason-${user.uid}'),
               style: Theme.of(context).textTheme.bodySmall,
             ),

@@ -37,8 +37,7 @@ class RedefenceStage extends ConsumerWidget {
                 icon: Icons.replay_outlined,
                 title: 'No re-defences',
                 message:
-                    'A group re-defends a stage when the panel\'s '
-                    'verdict on it is Fail.',
+                    'Defences the panel rated Fail.',
               );
             }
             final canSchedule =

@@ -68,7 +68,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('noProfileScreen')), findsOneWidget);
-    expect(find.textContaining('profile record is missing'), findsOneWidget);
+    expect(find.textContaining('Your profile is missing'), findsOneWidget);
   });
 
   testWidgets('an absent profile offers a way out', (tester) async {
@@ -94,7 +94,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('errorCode')), findsOneWidget);
-    expect(find.textContaining('profile record is missing'), findsNothing);
+    expect(find.textContaining('Your profile is missing'), findsNothing);
   });
 
   testWidgets('never renders a dashboard', (tester) async {

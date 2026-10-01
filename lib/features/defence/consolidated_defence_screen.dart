@@ -52,8 +52,8 @@ class _ConsolidatedDefenceScreenState
     final confirmed = await confirmAction(
       context,
       title: 'Release the comments to the group?',
-      message: "The group will see the panel's consolidated comments and "
-          'highlights. This cannot be taken back.',
+      message: 'The group will see the comments and highlights. This cannot '
+          'be undone.',
       confirmLabel: 'Release',
       confirmKey: const Key('confirmReleaseComments'),
     );
@@ -148,8 +148,7 @@ class _ConsolidatedDefenceScreenState
           const EmptyState(
             icon: Icons.lock_clock_outlined,
             title: 'Not released yet',
-            message: 'Your adviser releases the panel\'s consolidated '
-                'comments after the defence is closed.',
+            message: 'Your adviser releases these after the defence.',
             action: Text(
               'The adviser has not released these comments yet.',
               key: Key('notReleasedReason'),
@@ -231,8 +230,7 @@ class _ConsolidatedDefenceScreenState
       child: PageShell(
         kicker: defence.type.label,
         title: 'Consolidated comments',
-        subtitle: 'Every remark from the session, grouped by the panel '
-            'member who made it.',
+        subtitle: 'Every remark, grouped by panel member.',
         actions: [
           ToneBadge(
             label: defence.isReleased
@@ -264,8 +262,7 @@ class _ConsolidatedDefenceScreenState
                       Expanded(
                         child: Text(
                           defence.status != DefenceStatus.completed
-                              ? 'Release once the defence is completed, so '
-                                  'the log is the whole record.'
+                              ? 'Release once the defence is completed.'
                               : 'The group will be able to read everything '
                                   'below.',
                           key: defence.status != DefenceStatus.completed

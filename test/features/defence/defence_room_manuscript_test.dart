@@ -421,7 +421,7 @@ void main() {
             matching: find.byType(Scrollable)));
     await settle(tester);
     expect(
-        find.text('Chapter II has been reopened for revision. Showing the '
+        find.text('Chapter II was reopened. Showing the '
             'version the panel marked.'),
         findsOneWidget);
     expect(find.text('Chapter II is not approved yet.'), findsNothing);

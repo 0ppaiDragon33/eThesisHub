@@ -100,8 +100,7 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
       if (_newAdviserUid == formerAdviserUid) {
         setState(
           () => _error =
-              'The new adviser is the same as the former adviser — this '
-              'request would not change anything.',
+              'That is already the adviser. Choose someone else.',
         );
         return;
       }
@@ -113,8 +112,8 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
       title: isTitle
           ? 'Request a change of title?'
           : 'Request a change of adviser?',
-      message: 'The request goes to the people who must accept it, then to '
-          'the Coordinator and the Dean.',
+      message: 'It goes to the people who must accept it, then the '
+          'Coordinator and the Dean.',
       confirmLabel: 'Submit request',
       confirmKey: const Key('confirmSubmitChangeRequest'),
     );

@@ -110,8 +110,7 @@ class DeanOverview extends ConsumerWidget {
               theses: approvalsAsync,
               actionLabel: 'Review',
               routeFor: (_) => '/review',
-              emptyText: 'No nominations are waiting on you. They arrive '
-                  'here once the Coordinator recommends them.',
+              emptyText: 'No nominations waiting on you.',
             ),
             _DecisionDocket(
               title: 'Title defences to close',

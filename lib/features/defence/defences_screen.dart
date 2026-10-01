@@ -128,15 +128,13 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
               key: ValueKey('preOralList'),
               where: _preOral,
               emptyTitle: 'No pre-oral defences',
-              emptyMessage: 'A pre-oral defence appears here once the '
-                  'Coordinator schedules one you are part of.',
+              emptyMessage: 'Scheduled pre-oral defences appear here.',
             ),
           DefenceStage.finalDefence => const DefencesList(
               key: ValueKey('finalList'),
               where: _final,
               emptyTitle: 'No final defences',
-              emptyMessage: 'A final defence appears here once the '
-                  'Coordinator schedules one you are part of.',
+              emptyMessage: 'Scheduled final defences appear here.',
             ),
         },
       ],

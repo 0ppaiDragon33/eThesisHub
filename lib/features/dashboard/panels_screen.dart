@@ -27,8 +27,7 @@ class PanelsScreen extends ConsumerWidget {
       maxWidth: AppTokens.measureWide,
       kicker: 'Panelist',
       title: 'My panels',
-      subtitle: 'Candidate titles ready for your review, and the other '
-          'theses you sit on.',
+      subtitle: 'Titles to review and theses you sit on.',
       children: [
         idsAsync.when(
           loading: () => const LoadingState(label: 'Loading your panels…'),
@@ -61,8 +60,7 @@ class PanelRegister extends ConsumerWidget {
       return const EmptyState(
         icon: Icons.forum_outlined,
         title: 'No panels yet',
-        message: 'When you are nominated onto a thesis panel and accept, '
-            'it appears here.',
+        message: 'Panels you join appear here.',
       );
     }
 

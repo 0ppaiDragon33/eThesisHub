@@ -220,8 +220,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
           ? 'Approve this chapter?'
           : 'Send this chapter back for revision?',
       message: approve
-          ? 'The chapter is locked as approved and the group cannot upload '
-              'new versions of it.'
+          ? 'The group can no longer upload new versions.'
           : 'The group is asked to revise it and upload a new version.',
       confirmLabel: approve ? 'Approve' : 'Send back',
       confirmKey: const Key('confirmChapterStatus'),
@@ -744,8 +743,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
               if (!isLeader && !isAdviser)
                 Panel(
                   child: Text(
-                    'Only the group leader uploads and only the adviser '
-                    'reviews. You are viewing this chapter read-only.',
+                    'Read-only.',
                     style: text.bodySmall,
                   ),
                 ),

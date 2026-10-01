@@ -52,7 +52,7 @@ void main() {
     expect(check(picked('exe', Uint8List.fromList([0x4D, 0x5A]))), isNotNull,
         reason: 'not an allowed type');
     expect(check(picked('png', Uint8List.fromList(pdf))),
-        contains('does not look like a real PNG'));
+        contains('is not a real PNG'));
 
     final big = Uint8List(kPersonalFileMaxBytes + 1)..setRange(0, 4, pdf);
     expect(check(picked('pdf', big)), 'That file is larger than 25 MB.');

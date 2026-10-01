@@ -152,7 +152,7 @@ void main() {
     expect(find.byKey(const Key('submittedCount')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
-      '1 of 4 have submitted (the panel, the Coordinator and the Dean)',
+      '1 of 4 have submitted',
     );
     expect(find.byKey(const Key('gradesTable')), findsNothing);
   });
@@ -536,7 +536,7 @@ void main() {
 
     expect(
       tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
-      '0 of 4 have submitted (the panel, the Coordinator and the Dean)',
+      '0 of 4 have submitted',
     );
     expect(find.byKey(const Key('panelMean')), findsNothing);
   });

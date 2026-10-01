@@ -118,8 +118,7 @@ class _Desk extends ConsumerWidget {
           NeedsYouQueue(
             items: needsYouAsync,
             emptyTitle: 'All caught up',
-            emptyMessage: 'Nothing needs your attention right now. '
-                'We will post here when an office acts on your thesis.',
+            emptyMessage: 'Nothing needs your attention right now.',
           ),
           _ChapterRegister(thesis: thesis, chapters: chaptersAsync),
         ],
@@ -361,8 +360,7 @@ class _AdviserPanel extends ConsumerWidget {
       child: uid == null
           ? Text(
               thesis.status == ThesisStatus.draft
-                  ? 'Not yet nominated. Nominate an adviser and panel from '
-                      'your thesis workspace.'
+                  ? 'Not yet nominated.'
                   : 'Not yet assigned.',
               style: Theme.of(context).textTheme.bodySmall,
             )
@@ -404,8 +402,7 @@ class _NextDefencePanel extends StatelessWidget {
           final next = StudentOverview.nextDefence(list);
           if (next == null) {
             return Text(
-              'None scheduled. The Research Coordinator schedules pre-oral '
-              'and final defences once your chapters are ready.',
+              'None scheduled yet.',
               style: text.bodySmall,
             );
           }
@@ -482,8 +479,7 @@ class _NoGroupYet extends StatelessWidget {
           Text('Start your thesis', style: text.headlineSmall),
           const SizedBox(height: AppTokens.xs),
           Text(
-            'Your group leader creates the thesis group. Everything else '
-            'follows from it.',
+            'Your group leader creates the thesis group.',
             style: text.bodyMedium?.copyWith(color: p.muted),
           ),
           const SizedBox(height: AppTokens.lg),

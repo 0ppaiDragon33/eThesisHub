@@ -25,10 +25,8 @@ class ChangeRequestQueueScreen extends ConsumerWidget {
       kicker: asDean ? 'Office of the Dean' : 'Research office',
       title: 'Change requests',
       subtitle: asDean
-          ? 'Requests the Coordinator has recommended. Approving one '
-                'applies the change to the thesis.'
-          : 'Requests every co-signer has accepted, waiting on your '
-                'recommendation to the Dean.',
+          ? 'Approving applies the change to the thesis.'
+          : 'Accepted requests waiting on your recommendation.',
       children: [ChangeRequestQueue(asDean: asDean)],
     );
   }

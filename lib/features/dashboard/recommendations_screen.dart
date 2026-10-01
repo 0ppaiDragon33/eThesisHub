@@ -25,8 +25,7 @@ class RecommendationsScreen extends ConsumerWidget {
       maxWidth: AppTokens.measureWide,
       kicker: 'Research office',
       title: 'Nomination recommendations',
-      subtitle: 'Every nominee on these theses has accepted. Recommend '
-          'each one to the Dean, or return it.',
+      subtitle: 'Recommend each to the Dean, or return it.',
       actions: [
         OutlinedButton.icon(
           key: const Key('goToFaculty'),
@@ -46,8 +45,7 @@ class RecommendationsScreen extends ConsumerWidget {
           waitingSince: (t) => t.nominationsSubmittedAt,
           errorMessage: 'Could not load the review queue.',
           emptyTitle: 'Nothing waiting',
-          emptyMessage: 'A thesis appears here once every nominee has '
-              'accepted their Conforme.',
+          emptyMessage: 'Theses appear here once every nominee accepts.',
           rowAction: (context, t) => FilledButton.tonal(
             onPressed: openReview,
             child: const Text('Review'),

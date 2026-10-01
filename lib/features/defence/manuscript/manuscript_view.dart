@@ -349,8 +349,8 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
             ),
             alignment: Alignment.centerLeft,
             child: Text(
-              'Chapter $numeral has been reopened for revision. Showing the '
-              'version the panel marked.',
+              'Chapter $numeral was reopened. Showing the version the panel '
+              'marked.',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Color(0xFFE3E8ED), fontSize: 12),

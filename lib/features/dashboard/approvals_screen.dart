@@ -26,8 +26,7 @@ class ApprovalsScreen extends ConsumerWidget {
       maxWidth: AppTokens.measureWide,
       kicker: 'Office of the Dean',
       title: 'Nomination approvals',
-      subtitle: 'Nominations the Research Coordinator has recommended. '
-          'Approving one issues the group\'s Form 1.',
+      subtitle: 'Approving issues the group\'s Form 1.',
       actions: [
         FilledButton(
           key: const Key('goToReview'),
@@ -41,8 +40,7 @@ class ApprovalsScreen extends ConsumerWidget {
           waitingSince: (t) => t.coordinatorRecommendedAt,
           errorMessage: 'Could not load the approval queue.',
           emptyTitle: 'Nothing waiting',
-          emptyMessage: 'Nominations appear here once the College Research '
-              'Coordinator has recommended them.',
+          emptyMessage: 'Recommended nominations appear here.',
           rowAction: (context, t) => FilledButton.tonal(
             onPressed: openReview,
             child: const Text('Decide'),
