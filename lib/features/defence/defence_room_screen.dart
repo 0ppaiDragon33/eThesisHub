@@ -23,20 +23,23 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-enum _RoomTab { room, highlights }
-
-/// The live comment log every participant watches during the presentation.
+/// The defence room: the manuscript the panel marks up, with the highlights
+/// beside it, and the session controls.
 ///
-/// Comments may be written only while `defence.status.acceptsComments` --
+/// The panel's remarks are highlights on the manuscript, each with its own
+/// comment. There is no separate live comment log: a remark belongs to the
+/// passage it is about. (Comments written before this are still stored, and
+/// the adviser's consolidation still shows them.)
+///
+/// Highlights may be drawn only while `defence.status.acceptsComments` --
 /// i.e. only while the defence is `inProgress`. The security rules and
-/// [DefenceRepository.addComment] both enforce that independently, but this
-/// screen never offers a control that would always fail: the comment box is
-/// hidden, with the reason shown instead, whenever the gate is closed.
+/// [DefenceRepository.addAnnotation] both enforce that independently, but
+/// this screen never offers a control that would always fail.
 ///
 /// `authorPosition` is derived from the signed-in user's relationship to
 /// THIS defence -- not from their account role -- because the position held
 /// at a defence must not change retroactively when the account's role does
-/// later. See [Defence]'s and [DefenceComment]'s own doc comments.
+/// later. See [Defence]'s and [DefenceAnnotation]'s own doc comments.
 class DefenceRoomScreen extends ConsumerStatefulWidget {
   const DefenceRoomScreen({super.key, required this.defenceId});
 
@@ -47,38 +50,14 @@ class DefenceRoomScreen extends ConsumerStatefulWidget {
 }
 
 class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
-  final _bodyController = TextEditingController();
-  final _commentFocus = FocusNode();
   final _manuscript = ManuscriptController();
   DefenceTyping? _typing;
-  _RoomTab _tab = _RoomTab.room;
-  bool _posting = false;
   bool _statusBusy = false;
-  String? _commentError;
   String? _statusError;
-
-  @override
-  void initState() {
-    super.initState();
-    _bodyController.addListener(_onCommentChanged);
-    _commentFocus.addListener(_onCommentChanged);
-  }
-
-  /// The room comment box's half of the typing indicator: a marker while it
-  /// has focus and text, none otherwise.
-  void _onCommentChanged() {
-    _typing?.typing(ComposingTarget.room,
-        active: _commentFocus.hasFocus &&
-            _bodyController.text.trim().isNotEmpty);
-  }
 
   @override
   void dispose() {
     _typing?.dispose();
-    _bodyController.removeListener(_onCommentChanged);
-    _commentFocus.removeListener(_onCommentChanged);
-    _bodyController.dispose();
-    _commentFocus.dispose();
     _manuscript.dispose();
     super.dispose();
   }
@@ -163,7 +142,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
   /// `'Adviser'` if the signed-in uid matches this defence's adviser,
   /// `'Panel Member'` if it sits among this defence's panel, else the
   /// account's own role for a coordinator or dean. Null for anyone else --
-  /// which is exactly who [_canComment] also refuses.
+  /// who may not highlight either.
   String? _authorPositionFor(Defence defence, String? uid, UserRole? role) {
     if (uid == null) return null;
     if (uid == defence.adviserUid) return 'Adviser';
@@ -171,26 +150,6 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     if (role == UserRole.coordinator) return 'Coordinator';
     if (role == UserRole.dean) return 'Dean';
     return null;
-  }
-
-  bool _canComment(Defence defence, String? uid, UserRole? role) {
-    if (!defence.status.acceptsComments) return false;
-    return _authorPositionFor(defence, uid, role) != null;
-  }
-
-  String _commentReasonFor(Defence defence, String? uid, UserRole? role) {
-    switch (defence.status) {
-      case DefenceStatus.scheduled:
-        return 'The comment log opens once the defence begins.';
-      case DefenceStatus.completed:
-        return 'This defence is closed. The comment log cannot be added to '
-            'anymore.';
-      case DefenceStatus.inProgress:
-        return 'Only the adviser, the panel, the coordinator, or the dean '
-            'may comment here.';
-      case DefenceStatus.cancelled:
-        return 'This defence was cancelled, so it has no comment log.';
-    }
   }
 
   /// A date and time a coordinator can read at a glance.
@@ -332,50 +291,6 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     await _setStatus(DefenceStatus.cancelled);
   }
 
-  Future<void> _postComment({
-    required String uid,
-    required String authorName,
-    required String authorPosition,
-  }) async {
-    if (_posting) return;
-    final body = _bodyController.text;
-
-    setState(() {
-      _posting = true;
-      _commentError = null;
-    });
-
-    try {
-      await ref.read(defenceRepositoryProvider).addComment(
-            defenceId: widget.defenceId,
-            authorUid: uid,
-            authorName: authorName,
-            authorPosition: authorPosition,
-            body: body,
-          );
-      if (mounted) _bodyController.clear();
-      _typing?.stop();
-    } on ArgumentError catch (e) {
-      if (mounted) setState(() => _commentError = e.message.toString());
-    } on StateError catch (e) {
-      if (mounted) setState(() => _commentError = e.message);
-    } on FirebaseException catch (e) {
-      if (mounted) {
-        setState(() => _commentError = e.code == 'permission-denied'
-            ? 'You do not have permission to comment here '
-                '[permission-denied].'
-            : 'Could not post that comment. Please try again.');
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() =>
-            _commentError = 'Could not post that comment. Please try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _posting = false);
-    }
-  }
-
   Future<void> _setStatus(DefenceStatus status) async {
     if (_statusBusy) return;
 
@@ -425,14 +340,13 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final defenceAsync = ref.watch(defenceProvider(widget.defenceId));
-    final commentsAsync = ref.watch(defenceCommentsProvider(widget.defenceId));
     final meAsync = ref.watch(currentUserProvider);
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
 
-    // Each of the three streams gets its own isLoading/hasError branch,
-    // checked apart from the others -- collapsing them would tell a viewer
-    // whose comment log is merely still connecting that the defence itself
-    // does not exist, or vice versa.
+    // Each stream gets its own isLoading/hasError branch, checked apart from
+    // the others -- collapsing them would tell a viewer whose profile is
+    // merely still connecting that the defence itself does not exist, or
+    // vice versa.
     if (defenceAsync.isLoading) {
       return _framed(const [LoadingState(label: 'Loading defence…')]);
     }
@@ -455,13 +369,11 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       ]);
     }
 
-    // The group reads the adviser's consolidation, never this raw log --
-    // M3-2 forbids it, because the log may hold half-finished remarks and
-    // ones the panel withdrew. Decided from `defence` alone, before the
-    // comments stream is even consulted: once released, the rules DO permit
-    // a leader to read `comments`, so waiting on that stream here would let
-    // it resolve and render every raw remark to the one reader who must
-    // never see them.
+    // The group sees the panel's highlights only once the adviser has
+    // released them, never while the defence is live (M3-2): a remark may
+    // be half-finished or withdrawn. Decided from `defence` alone, before
+    // any highlight stream is consulted, so nothing here can render a live
+    // highlight to the one reader who must not see it yet.
     final isLeader = uid != null && uid == defence.leaderUid;
     if (isLeader) {
       final completed = defence.status == DefenceStatus.completed;
@@ -477,10 +389,16 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                 icon: defenceStatusIcon(defence.status),
               ),
               const Gap.md(),
-              const Text(
-                'The group reads the adviser\'s consolidated comments for '
-                'this defence, not the live log.',
-                key: Key('leaderRefusal'),
+              // What the group can do now, said plainly: the panel's
+              // highlights are theirs to read once the adviser releases.
+              Text(
+                defence.isReleased
+                    ? 'The panel has marked up your manuscript. Read each '
+                        'highlight and its comment on the page it is about.'
+                    : 'The panel marks up your manuscript during the '
+                        'defence. You can read their highlights here once '
+                        'your adviser releases them.',
+                key: const Key('leaderRefusal'),
               ),
               // D47: the group's route to the numbers is the paper grading
               // sheet, so nothing here links to '/grades'.
@@ -506,23 +424,25 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                 spacing: AppTokens.sm,
                 runSpacing: AppTokens.sm,
                 children: [
-                  FilledButton.icon(
+                  // The panel's highlights reach the group on the adviser's
+                  // release (spec §7.2): the main thing to do here.
+                  if (defence.isReleased)
+                    FilledButton.icon(
+                      key: const Key('goToManuscript'),
+                      onPressed: () => context
+                          .go('/defence/room/${widget.defenceId}/manuscript'),
+                      icon: const Icon(Icons.highlight_alt, size: 18),
+                      label: const Text('View manuscript and highlights'),
+                    ),
+                  // Remarks written before highlights replaced the live
+                  // log are still the adviser's to consolidate and release.
+                  OutlinedButton.icon(
                     key: const Key('goToConsolidated'),
                     onPressed: () => context
                         .go('/defence/room/${widget.defenceId}/consolidated'),
                     icon: const Icon(Icons.summarize_outlined, size: 18),
                     label: const Text('View consolidated comments'),
                   ),
-                  // The panel's highlights reach the group with the
-                  // comments, on the adviser's release (spec §7.2).
-                  if (defence.isReleased)
-                    OutlinedButton.icon(
-                      key: const Key('goToManuscript'),
-                      onPressed: () => context
-                          .go('/defence/room/${widget.defenceId}/manuscript'),
-                      icon: const Icon(Icons.menu_book_outlined, size: 18),
-                      label: const Text('View manuscript'),
-                    ),
                 ],
               ),
             ],
@@ -530,23 +450,6 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
         ),
       ]);
     }
-
-    if (commentsAsync.isLoading) {
-      return _framed(
-        const [LoadingState(label: 'Loading comments…')],
-      );
-    }
-    if (commentsAsync.hasError) {
-      return _framed(
-        [
-          ErrorState(
-            error: commentsAsync.error,
-            message: 'Could not load the comment log.',
-          ),
-        ],
-      );
-    }
-    final comments = commentsAsync.valueOrNull ?? const <DefenceComment>[];
 
     if (meAsync.isLoading) {
       return _framed(
@@ -566,10 +469,9 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final me = meAsync.valueOrNull;
     final role = me?.role;
 
-    // Coordinator only -- not the dean, who also grants comment access but
-    // does not drive the room's own open/close lifecycle.
+    // Coordinator only -- not the dean, who may also highlight but does not
+    // drive the room's own open/close lifecycle.
     final isCoordinator = role == UserRole.coordinator;
-    final canComment = _canComment(defence, uid, role);
     final authorPosition = _authorPositionFor(defence, uid, role);
 
     // Thesis title only, shown for orientation; never gates the room --
@@ -590,7 +492,9 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final canHighlight = defence.status == DefenceStatus.inProgress &&
         uid != null &&
         authorPosition != null;
-    if (canComment && uid != null && authorPosition != null) {
+    // The "is typing" marker for a highlight's comment, made only for
+    // someone who may highlight.
+    if (canHighlight) {
       _typing ??= DefenceTyping(
         repo: ref.read(defenceRepositoryProvider),
         defenceId: widget.defenceId,
@@ -599,130 +503,10 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
         position: authorPosition,
       );
     }
-    final highlightCount =
-        ref.watch(defenceAnnotationsProvider(widget.defenceId)).valueOrNull
-                ?.length ??
-            0;
-    final composing =
-        ref.watch(defenceComposingProvider(widget.defenceId)).valueOrNull ??
-            const <DefenceComposing>[];
 
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     final at = defence.scheduledAt;
-
-    final roomLog = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (comments.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(AppTokens.lg - 4),
-              child: Text('No comments yet. Remarks made during the defence '
-                  'will appear here.', style: text.bodySmall),
-            ),
-          for (final c in comments)
-            Container(
-              key: Key('commentRow-${c.id}'),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.lg - 4, vertical: AppTokens.md - 4),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: p.rule)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InitialsAvatar(c.authorName, size: 32),
-                  const SizedBox(width: AppTokens.sm + 2),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${c.authorName}, ${c.authorPosition}',
-                            style: text.labelMedium),
-                        const SizedBox(height: 2),
-                        Text(c.body, style: text.bodyMedium),
-                      ],
-                    ),
-                  ),
-                  if (c.createdAt != null)
-                    Text(Dates.time(c.createdAt!), style: text.bodySmall),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppTokens.md, AppTokens.sm, AppTokens.md, 0),
-            child: TypingLine(
-              markers: composing,
-              target: ComposingTarget.room,
-              myUid: uid,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppTokens.md),
-            child: canComment
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_commentError != null) ...[
-                        ErrorState(
-                          key: const Key('commentError'),
-                          message: _commentError!,
-                        ),
-                        const Gap.sm(),
-                      ],
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              key: const Key('commentBody'),
-                              controller: _bodyController,
-                              focusNode: _commentFocus,
-                              decoration: const InputDecoration(
-                                hintText: 'Add a remark to the log',
-                              ),
-                              minLines: 1,
-                              maxLines: 4,
-                            ),
-                          ),
-                          const SizedBox(width: AppTokens.sm),
-                          FilledButton(
-                            key: const Key('postComment'),
-                            style: FilledButton.styleFrom(
-                                minimumSize: const Size(64, 52)),
-                            onPressed: _posting ||
-                                    uid == null ||
-                                    authorPosition == null
-                                ? null
-                                : () => _postComment(
-                                      uid: uid,
-                                      authorName: me?.fullName ?? '',
-                                      authorPosition: authorPosition,
-                                    ),
-                            child: Text(_posting ? 'Posting…' : 'Post'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Icon(Icons.lock_outline_rounded,
-                          size: 18, color: p.muted),
-                      const SizedBox(width: AppTokens.sm),
-                      Expanded(
-                        child: Text(
-                          _commentReasonFor(defence, uid, role),
-                          key: const Key('commentReason'),
-                          style: text.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-    );
 
     final live = defence.status == DefenceStatus.inProgress
         ? const ToneBadge(
@@ -732,51 +516,21 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             dense: true,
           )
         : null;
-    final onHighlights = showManuscript && _tab == _RoomTab.highlights;
-    final tabsPanel = Panel(
-      title: onHighlights ? 'Highlights' : 'Session log',
-      subtitle: onHighlights
-          ? 'Boxes drawn on the manuscript, in page order'
-          : defence.status == DefenceStatus.inProgress
-              ? 'Live. Remarks appear as they are posted'
-              : 'Remarks made during the defence',
-      icon: onHighlights ? Icons.highlight_alt : Icons.forum_outlined,
+    // The panel's remarks: each highlight with its own comment, in page
+    // order, beside the manuscript. The only place remarks are written.
+    final highlightsPanel = Panel(
+      title: 'Highlights',
+      subtitle: defence.status == DefenceStatus.inProgress
+          ? 'Live. Highlights appear as they are made'
+          : 'Boxes drawn on the manuscript, in page order',
+      icon: Icons.highlight_alt,
       flush: true,
       trailing: live,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (showManuscript)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppTokens.md, AppTokens.sm, AppTokens.md, AppTokens.sm),
-              child: SegmentedButton<_RoomTab>(
-                showSelectedIcon: false,
-                segments: [
-                  const ButtonSegment(
-                    value: _RoomTab.room,
-                    label: Text('Room comments', key: Key('tabRoom')),
-                  ),
-                  ButtonSegment(
-                    value: _RoomTab.highlights,
-                    label: Text('Highlights ($highlightCount)',
-                        key: const Key('tabHighlights')),
-                  ),
-                ],
-                selected: {_tab},
-                onSelectionChanged: (s) => setState(() => _tab = s.first),
-              ),
-            ),
-          if (onHighlights)
-            HighlightsTab(
-              defence: defence,
-              myUid: uid,
-              onSelect: _manuscript.reveal,
-              onDelete: uid == null ? null : (a) => _deleteHighlight(a, uid),
-            )
-          else
-            roomLog,
-        ],
+      child: HighlightsTab(
+        defence: defence,
+        myUid: uid,
+        onSelect: _manuscript.reveal,
+        onDelete: uid == null ? null : (a) => _deleteHighlight(a, uid),
       ),
     );
 
@@ -957,10 +711,12 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
 
     final stacked = SplitColumns(
       secondaryFirstWhenStacked: true,
-      primary: [tabsPanel],
+      primary: [highlightsPanel],
       secondary: [session, after],
     );
 
+    // A cancelled defence has no manuscript and no highlights: just its
+    // record.
     if (!showManuscript) {
       return KeyedSubtree(
         key: const Key('defenceRoom'),
@@ -968,7 +724,24 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
           maxWidth: AppTokens.measureWide,
           kicker: defence.label,
           title: thesisTitle ?? defence.label,
-          children: [...redefenceLink, stacked],
+          children: [
+            ...redefenceLink,
+            SplitColumns(
+              secondaryFirstWhenStacked: true,
+              primary: [
+                Panel(
+                  title: 'Highlights',
+                  icon: Icons.highlight_alt,
+                  child: Text(
+                    'This defence was cancelled, so nothing was marked.',
+                    key: const Key('cancelledNote'),
+                    style: text.bodySmall,
+                  ),
+                ),
+              ],
+              secondary: [session, after],
+            ),
+          ],
         ),
       );
     }
@@ -998,7 +771,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                         children: [
                           session,
                           const Gap.lg(),
-                          tabsPanel,
+                          highlightsPanel,
                           const Gap.lg(),
                           after,
                         ],
@@ -1057,7 +830,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                                   ),
                                 ),
                               ),
-                              tabsPanel,
+                              highlightsPanel,
                               const Gap.md(),
                               session,
                               const Gap.md(),

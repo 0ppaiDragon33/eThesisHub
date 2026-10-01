@@ -14,6 +14,7 @@ import 'package:ethesishub/data/models/defence_annotation.dart';
 import 'package:ethesishub/data/repositories/defence_repository.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
 import 'package:ethesishub/features/defence/manuscript/defence_manuscript_screen.dart';
+import 'package:ethesishub/features/defence/manuscript/highlights_panel.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -227,7 +228,8 @@ void main() {
     expect(saved.single.data()['chapter'], 'chapterI');
     expect(saved.single.data()['version'], 1);
     expect(saved.single.data()['page'], 0);
-    expect(find.text('Highlights (1)'), findsOneWidget);
+    expect(find.byKey(Key('highlightRow-${saved.single.id}')), findsOneWidget,
+        reason: 'the new highlight is listed beside the manuscript');
     expect((await db.doc('defenses/d1/composing/p1').get()).exists, isFalse);
   });
 
@@ -276,9 +278,6 @@ void main() {
       {'authorUid': 'a1'},
     ]);
     await pumpScreen(tester, db, 'p1', room);
-    await tester.ensureVisible(find.byKey(const Key('tabHighlights')));
-    await tester.tap(find.byKey(const Key('tabHighlights')));
-    await settle(tester);
 
     expect(find.byKey(const Key('deleteHighlight-h1')), findsNothing);
     await tester.ensureVisible(find.byKey(const Key('deleteHighlight-h0')));
@@ -319,9 +318,6 @@ void main() {
     await pumpScreen(tester, db, 'p1', room, overrides: [
       defenceRepositoryProvider.overrideWithValue(_BrokenRepository(db)),
     ]);
-    await tester.ensureVisible(find.byKey(const Key('tabHighlights')));
-    await tester.tap(find.byKey(const Key('tabHighlights')));
-    await settle(tester);
     await tester.ensureVisible(find.byKey(const Key('deleteHighlight-h0')));
     await tester.tap(find.byKey(const Key('deleteHighlight-h0')));
     await settle(tester);
@@ -331,36 +327,30 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('typing in the room box shows up for others, and clears',
+  testWidgets('someone writing a highlight comment shows as typing',
       (tester) async {
+    // The highlight comment is the only place remarks are written now, so
+    // that is where "is typing" shows. (The marker written while typing is
+    // checked in the drawing test above.)
     final db = await seed(composing: {
       'a1': {
         'name': 'Dr. Adviser',
         'position': 'Adviser',
-        'target': 'room',
+        'target': 'manuscript',
         'updatedAt': Timestamp.fromDate(DateTime.now()),
       },
     });
     await pumpScreen(tester, db, 'p1', room);
     expect(find.text('Dr. Adviser is typing…'), findsOneWidget);
-
-    await tester.ensureVisible(find.byKey(const Key('commentBody')));
-    await tester.enterText(find.byKey(const Key('commentBody')), 'Why?');
-    await tester.pump();
-    expect((await db.doc('defenses/d1/composing/p1').get()).data()!['target'],
-        'room');
-    await tester.enterText(find.byKey(const Key('commentBody')), '');
-    await tester.pump();
-    expect((await db.doc('defenses/d1/composing/p1').get()).exists, isFalse);
   });
 
-  testWidgets('on a phone the tabs sit in a sheet over the manuscript',
+  testWidgets('on a phone the highlights sit in a sheet over the manuscript',
       (tester) async {
     await pumpScreen(tester, await seed(), 'p1', room,
         size: const Size(400, 860));
     expect(find.byKey(const Key('roomSheet')), findsOneWidget);
     expect(find.byKey(const Key('manuscriptPane')), findsOneWidget);
-    expect(find.byKey(const Key('tabHighlights')), findsOneWidget);
+    expect(find.byType(HighlightsTab), findsOneWidget);
   });
 
   testWidgets('the leader has no View manuscript before release',

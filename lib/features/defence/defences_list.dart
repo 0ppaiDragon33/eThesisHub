@@ -205,10 +205,10 @@ class DefenceRow extends ConsumerWidget {
         ),
       FilledButton.tonal(
         key: Key('goToDefence-${d.id}'),
-        // The group reads the adviser's consolidation, never the raw log.
-        onPressed: () => context.push(uid != null && uid == d.leaderUid
-            ? '/defence/room/${d.id}/consolidated'
-            : '/defence/room/${d.id}'),
+        // Everyone opens the room. Its leader view shows the group only
+        // what the adviser has released: the manuscript with the panel's
+        // highlights, and the consolidated comments.
+        onPressed: () => context.push('/defence/room/${d.id}'),
         child: const Text('Open'),
       ),
     ];

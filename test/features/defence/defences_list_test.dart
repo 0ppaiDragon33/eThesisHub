@@ -214,11 +214,12 @@ void main() {
   });
 
   testWidgets(
-      'the leader\'s Open button goes to the consolidated route, not the '
-      'raw room', (tester) async {
-    // FIX 4: every role, students included, used to route into
-    // `/defence/room/${d.id}` -- the raw live log. M3-2 forbids the group
-    // from ever reading it; the group reads the adviser's consolidation.
+      'the leader\'s Open button goes to their defence page, which leads to '
+      'the released highlights', (tester) async {
+    // The room no longer holds a live comment log: the panel's remarks are
+    // highlights, and the room's leader view shows only what the adviser
+    // has released (M3-2). So the group opens the room like everyone else,
+    // and finds "View manuscript and highlights" there.
     // `_seedDefence` snapshots `leaderUid: 'l1'`, so signing in as l1 is
     // what makes this the leader's own row.
     final db = await _seedUser('l1', role: 'student');
@@ -273,7 +274,7 @@ void main() {
     await tester.tap(find.byKey(const Key('goToDefence-d1')));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(AppBar, 'Consolidated d1'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Room d1'), findsOneWidget);
   });
 
   // ---- M4: the evaluation affordances on a row ----

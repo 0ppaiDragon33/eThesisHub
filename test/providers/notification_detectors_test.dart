@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ethesishub/data/models/app_notification.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/notification_providers.dart';
 
@@ -268,41 +269,84 @@ void main() {
   });
 
   group('defenceDetectorProvider', () {
-    test('a comment from someone else writes a notification', () async {
-      final container = await containerFor('student1');
+    // The panel's remarks are highlights now, and the group reads them once
+    // the adviser releases. That release is what the group is told about.
+    Future<ProviderContainer> releasedSetup(String reader,
+        {bool released = true, List<String> panel = const []}) async {
+      final container = await containerFor(reader);
       final firestore = container.read(firestoreProvider);
-      await firestore.collection('users').doc('student1').set({'role': 'student'});
+      await firestore
+          .collection('users')
+          .doc(reader)
+          .set({'role': reader.startsWith('faculty') ? 'faculty' : 'student'});
       await firestore.collection('defenses').doc('d1').set({
         'thesisId': 't1',
-        'type': 'final',
+        'type': 'preOral',
         'venue': 'Room 1',
-        'panelUids': <String>[],
+        'panelUids': panel,
         'adviserUid': 'adviser1',
         'leaderUid': 'student1',
-        'status': 'scheduled',
+        'status': 'completed',
         'createdBy': 'coord1',
         'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
+        if (released)
+          'consolidatedAt': Timestamp.fromDate(DateTime(2026, 5, 2)),
       });
-      await firestore.collection('defenses').doc('d1').collection('comments').doc('c1').set({
-        'authorUid': 'adviser1',
-        'authorName': 'Dr. Cruz',
-        'authorPosition': 'adviser',
-        'body': 'Please prepare the slides.',
-        'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
-      });
-
       container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
       await container.read(notificationsProvider.future);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      for (var i = 0; i < 4; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      return container;
+    }
 
-      final items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
-      expect(items.any((i) => i.type.name == 'defenceComment'), isTrue);
-      // The room route is built from this; without it the reader is sent
-      // to the defences list instead of the defence they were told about.
-      expect(items.firstWhere((i) => i.type.name == 'defenceComment').defenceId,
-          'd1');
+    test('releasing the highlights tells the group leader, linked to the '
+        'defence', () async {
+      final container = await releasedSetup('student1');
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('student1')
+          .first;
+      final released =
+          items.where((i) => i.type == NotificationType.highlightsReleased);
+      expect(released, hasLength(1));
+      expect(released.single.defenceId, 'd1');
+      expect(released.single.message, contains('highlights'));
+    });
+
+    test('nothing is said before release, and the release arrives live',
+        () async {
+      final container = await releasedSetup('student1', released: false);
+      var items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('student1')
+          .first;
+      expect(items.where((i) => i.type == NotificationType.highlightsReleased),
+          isEmpty);
+
+      await container.read(firestoreProvider).doc('defenses/d1').update(
+          {'consolidatedAt': Timestamp.fromDate(DateTime(2026, 5, 2))});
+      for (var i = 0; i < 4; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('student1')
+          .first;
+      expect(items.where((i) => i.type == NotificationType.highlightsReleased),
+          hasLength(1));
+    });
+
+    test('the release does NOT notify a faculty panelist -- only the group '
+        'leader', () async {
+      final container =
+          await releasedSetup('faculty1', panel: const ['faculty1']);
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('faculty1')
+          .first;
+      expect(items.where((i) => i.type == NotificationType.highlightsReleased),
+          isEmpty);
     });
 
     test('a schedule change writes a notification keyed by the new value', () async {
@@ -334,49 +378,6 @@ void main() {
       expect(
           items.firstWhere((i) => i.type.name == 'defenceScheduled').defenceId,
           'd1');
-    });
-
-    test('a comment added mid-session (after the defence was already known) still notifies live', () async {
-      final container = await containerFor('student1');
-      final firestore = container.read(firestoreProvider);
-      await firestore.collection('users').doc('student1').set({'role': 'student'});
-      await firestore.collection('defenses').doc('d1').set({
-        'thesisId': 't1',
-        'type': 'final',
-        'venue': 'Room 1',
-        'panelUids': <String>[],
-        'adviserUid': 'adviser1',
-        'leaderUid': 'student1',
-        'status': 'scheduled',
-        'createdBy': 'coord1',
-        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
-      });
-
-      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
-      await container.read(notificationsProvider.future);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      // No comment existed at subscription time.
-      var items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
-      expect(items.where((i) => i.type.name == 'defenceComment'), isEmpty);
-
-      // A comment written after the standing subscription was already
-      // live -- exactly the case the one-shot `.future` read used to miss.
-      await firestore.collection('defenses').doc('d1').collection('comments').doc('c1').set({
-        'authorUid': 'adviser1',
-        'authorName': 'Dr. Cruz',
-        'authorPosition': 'adviser',
-        'body': 'Please prepare the slides.',
-        'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
-      });
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
-      expect(items.any((i) => i.type.name == 'defenceComment'), isTrue);
     });
 
     test('the scheduled message is worded for a panelist, not as a student',
@@ -414,47 +415,6 @@ void main() {
       expect(scheduled.message, isNot(contains('Your defence')));
     });
 
-    test('a comment does NOT notify a faculty panelist -- only the group '
-        'leader', () async {
-      // A defence comment (the adviser's consolidation, a panelist's remark)
-      // is the student group's to act on. Faculty parties heard it live in
-      // the defence room and must not get a bell for their own defence.
-      // 'faculty1' sits on the panel but is not the leaderUid, so the comment
-      // must land in the leader's feed and nowhere else.
-      final container = await containerFor('faculty1');
-      final firestore = container.read(firestoreProvider);
-      await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
-      await firestore.collection('defenses').doc('d1').set({
-        'thesisId': 't1',
-        'type': 'final',
-        'venue': 'Room 1',
-        'panelUids': ['faculty1'],
-        'adviserUid': 'adviser1',
-        'leaderUid': 'student1',
-        'status': 'scheduled',
-        'createdBy': 'coord1',
-        'scheduledAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
-      });
-      await firestore.collection('defenses').doc('d1').collection('comments').doc('c1').set({
-        'authorUid': 'adviser1',
-        'authorName': 'Dr. Cruz',
-        'authorPosition': 'adviser',
-        'body': 'Please prepare the slides.',
-        'createdAt': Timestamp.fromDate(DateTime(2026, 4, 1)),
-      });
-
-      container.listen(defenceDetectorProvider, (_, _) {}); // kept alive, as AppShellHost does
-      await container.read(notificationsProvider.future);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-
-      final items = await container
-          .read(notificationRepositoryProvider)
-          .watchItems('faculty1')
-          .first;
-      expect(items.where((i) => i.type.name == 'defenceComment'), isEmpty);
-    });
   });
 
   group('evaluationAwaitsDetectorProvider', () {

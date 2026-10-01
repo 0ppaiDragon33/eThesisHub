@@ -13,10 +13,15 @@ enum NotificationType {
   titleApproved,
   titleRejected,
   chapterFeedback,
+  /// A live room comment. No longer written (the panel's remarks are
+  /// highlights now); kept so items already in a feed still read and route.
   defenceComment,
   defenceScheduled,
   evaluationAwaits,
-  archivePublished;
+  archivePublished,
+
+  /// The adviser released the panel's highlights on the group's defence.
+  highlightsReleased;
 
   String get value => name;
 

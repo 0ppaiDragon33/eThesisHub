@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
+import 'package:ethesishub/features/defence/manuscript/highlights_panel.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 
@@ -138,92 +139,23 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('the log is live for the panel', (tester) async {
-    final db = await seed();
-    final comments = db.collection('defenses/d1/comments');
-
-    // Seeded newest-first on purpose. fake_cloud_firestore returns
-    // documents in insertion order, so a fixture inserted already-sorted
-    // would pass with the repository's sort deleted, proving nothing: this
-    // order forces the screen (via the repository's chronological sort) to
-    // actually reorder them to prove it works.
-    await comments.doc('cm1').set({
-      'authorUid': 'p1',
-      'authorName': 'Panelist One',
-      'authorPosition': 'Panel Member',
-      'body': 'Methodology looks solid.',
-      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 9, 1, 9, 20)),
-    });
-    await comments.doc('cm0').set({
-      'authorUid': 'a1',
-      'authorName': 'Dr. Adviser',
-      'authorPosition': 'Adviser',
-      'body': 'Please tighten chapter two.',
-      'createdAt': Timestamp.fromDate(DateTime.utc(2026, 9, 1, 9, 10)),
-    });
-
-    await tester.pumpWidget(app(db, 'p2'));
-    await tester.pumpAndSettle();
-
-    final row0 = find.byKey(const Key('commentRow-cm0'));
-    final row1 = find.byKey(const Key('commentRow-cm1'));
-    expect(row0, findsOneWidget);
-    expect(row1, findsOneWidget);
-
-    // Oldest first, by widget position: cm0 (9:10) sits above cm1 (9:20)
-    // even though cm1 was inserted first.
-    final y0 = tester.getTopLeft(row0).dy;
-    final y1 = tester.getTopLeft(row1).dy;
-    expect(y0, lessThan(y1),
-        reason: 'cm0 (created 9:10) must render above cm1 (created 9:20), '
-            'oldest first, regardless of insertion order');
-
-    // Body order, not just position: names what went wrong if the log ever
-    // renders in insertion order instead of chronological order.
-    final bodies = tester
-        .widgetList<Text>(find.byType(Text))
-        .map((w) => w.data ?? '')
-        .toList();
-    final adviserIndex =
-        bodies.indexWhere((t) => t.contains('Please tighten chapter two.'));
-    final panelIndex =
-        bodies.indexWhere((t) => t.contains('Methodology looks solid.'));
-    expect(adviserIndex, greaterThanOrEqualTo(0));
-    expect(panelIndex, greaterThanOrEqualTo(0));
-    expect(adviserIndex, lessThan(panelIndex),
-        reason: 'the 9:10 comment must be laid out before the 9:20 comment');
-  });
-
-  testWidgets('the comment box is absent while the defence is scheduled',
+  testWidgets(
+      'the room has no comment log: the panel remarks by highlighting',
       (tester) async {
-    final db = await seed(status: 'scheduled');
+    // The live comment log is gone: a remark is a highlight with a comment,
+    // on the passage it is about. Checked in every status a panelist sees.
+    for (final status in ['scheduled', 'inProgress', 'completed']) {
+      final db = await seed(status: status);
+      await tester.pumpWidget(app(db, 'p1'));
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(app(db, 'p1'));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('commentBody')), findsNothing);
-    expect(find.byKey(const Key('commentReason')), findsOneWidget);
-  });
-
-  testWidgets('the comment box appears once the defence is in progress',
-      (tester) async {
-    final db = await seed(status: 'inProgress');
-
-    await tester.pumpWidget(app(db, 'p1'));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('commentBody')), findsOneWidget);
-    expect(find.byKey(const Key('postComment')), findsOneWidget);
-  });
-
-  testWidgets('the comment box is gone again once completed', (tester) async {
-    final db = await seed(status: 'completed');
-
-    await tester.pumpWidget(app(db, 'p1'));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('commentBody')), findsNothing);
-    expect(find.textContaining('closed'), findsOneWidget);
+      expect(find.byKey(const Key('commentBody')), findsNothing,
+          reason: status);
+      expect(find.byKey(const Key('postComment')), findsNothing,
+          reason: status);
+      expect(find.text('Session log'), findsNothing, reason: status);
+      expect(find.byType(HighlightsTab), findsOneWidget, reason: status);
+    }
   });
 
   testWidgets('only the coordinator sees open and close', (tester) async {
@@ -248,29 +180,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('openDefence')), findsNothing);
     expect(find.byKey(const Key('closeDefence')), findsOneWidget);
-  });
-
-  testWidgets(
-      'posting a comment writes it in the author\'s own name and position',
-      (tester) async {
-    final db = await seed();
-
-    await tester.pumpWidget(app(db, 'p1'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-        find.byKey(const Key('commentBody')), 'Great defence overall.');
-    await tester.ensureVisible(find.byKey(const Key('postComment')));
-    await tester.tap(find.byKey(const Key('postComment')));
-    await tester.pumpAndSettle();
-
-    final saved = await db.collection('defenses/d1/comments').get();
-    expect(saved.docs, hasLength(1));
-    final data = saved.docs.first.data();
-    expect(data['authorUid'], 'p1');
-    expect(data['authorPosition'], 'Panel Member');
-    expect(data['authorName'], 'Panelist One');
-    expect(data['body'], 'Great defence overall.');
   });
 
   testWidgets(
@@ -321,36 +230,6 @@ void main() {
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.byKey(const Key('commentBody')), findsNothing);
     expect(find.textContaining('Pre-oral'), findsNothing);
-  });
-
-  testWidgets(
-      'the comments stream loading is shown, not collapsed into absent',
-      (tester) async {
-    final neverComments = StreamController<List<DefenceComment>>();
-    addTearDown(neverComments.close);
-
-    await tester.pumpWidget(app(
-      await seed(),
-      'p1',
-      overrides: [
-        defenceCommentsProvider('d1')
-            .overrideWith((ref) => neverComments.stream),
-      ],
-    ));
-    // The defence stream still has to resolve through the real auth stream
-    // and the real fake-firestore query before the comments branch is even
-    // reached -- that is its own async gap, so one pump only gets partway.
-    // Pumping a few more times (never pumpAndSettle, which would also drain
-    // the never-emitting comments stream's non-existent event) lets the
-    // defence settle while leaving the comments stream untouched.
-    await tester.pump();
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('Loading comments…'), findsOneWidget);
-    expect(find.byType(AppBar), findsOneWidget);
-    expect(find.byKey(const Key('commentBody')), findsNothing);
-    expect(find.byKey(const Key('commentRow-cm0')), findsNothing);
   });
 
   testWidgets(

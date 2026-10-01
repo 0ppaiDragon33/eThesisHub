@@ -52,6 +52,15 @@ import 'package:ethesishub/providers/notification_providers.dart';
       );
     case NotificationType.archivePublished:
       return (route: '/archive/${n.thesisId}', mode: null);
+    // Straight to the manuscript with the panel's highlights on it.
+    case NotificationType.highlightsReleased:
+      final id = n.defenceId;
+      return (
+        route: id == null
+            ? '/defences?stage=preOral'
+            : '/defence/room/$id/manuscript',
+        mode: null,
+      );
   }
 }
 
@@ -78,6 +87,8 @@ import 'package:ethesishub/providers/notification_providers.dart';
         (icon: Icons.fact_check_outlined, tone: Tone.act),
       NotificationType.archivePublished =>
         (icon: Icons.local_library_outlined, tone: Tone.endorsed),
+      NotificationType.highlightsReleased =>
+        (icon: Icons.highlight_alt, tone: Tone.act),
     };
 
 /// Marks [n] read, switches faculty mode when the target needs it, then

@@ -268,15 +268,15 @@ String _scheduledMessage(Defence defence, String uid) {
   return 'A defence is scheduled for $when.';
 }
 
-/// New comments and schedule changes on every defence the reader is party
-/// to.
+/// Schedule changes on every defence the reader is party to, and, for the
+/// group leader, the release of the panel's highlights.
 ///
 /// Restricted to student and faculty readers. `myDefencesProvider` returns
 /// EVERY defence in the college for a coordinator or dean (their own
 /// `allow list` arm has no per-thesis restriction), and this detector is
 /// about a defence's own parties knowing what happened on their defence,
-/// not a college-wide comment firehose for the two roles who already have
-/// a dedicated overview of every defence's status.
+/// not a college-wide firehose for the two roles who already have a
+/// dedicated overview of every defence's status.
 ///
 /// The role check is read fresh with `ref.read` INSIDE the `_detect`
 /// callback, not with `ref.watch` at the top of the provider body. A
@@ -293,7 +293,6 @@ final defenceDetectorProvider = Provider<void>((ref) {
   // Built per account: see _detect. Nothing is detected while signed out.
   final uid = ref.watch(signedInUidProvider);
   if (uid == null) return;
-  final registeredCommentDefenceIds = <String>{};
 
   _detect<List<Defence>>(ref, uid, myDefencesProvider, (
     defences,
@@ -321,45 +320,26 @@ final defenceDetectorProvider = Provider<void>((ref) {
         );
       }
 
-      // A defence comment reaches the student group leader alone. The
-      // adviser's consolidation and every panel remark are the group's to
-      // act on; the faculty parties authored or heard them live in the
-      // defence room and must not get a bell for a comment on their own
-      // defence. `myDefencesProvider` returns a faculty member every defence
-      // they advise or sit on, so without this guard the whole panel was
-      // pinged. Gated here, before the subscription is even opened, so a
-      // non-leader reader never registers a comment listener at all.
-      //
-      // A standing subscription, not a one-shot read: opened once per
-      // defence id and kept alive for the life of that defence so a new
-      // comment arriving mid-session notifies without waiting for
-      // `myDefencesProvider` to re-emit for an unrelated reason. Guarded
-      // by `registeredCommentDefenceIds` so a re-emission of the outer
-      // source does not stack up duplicate `_detect` listeners for a
-      // defence already covered.
-      if (defence.leaderUid == uid &&
-          registeredCommentDefenceIds.add(defence.id)) {
-        _detect<List<DefenceComment>>(
-          ref,
+      // The panel's highlights reach the group leader alone, once the
+      // adviser releases them (`consolidatedAt`). The faculty made or saw
+      // them live in the room and need no bell. `myDefencesProvider`
+      // re-emits when the defence document changes, so a release arriving
+      // mid-session is seen without any extra listener. Keyed by the
+      // defence, so it is said once.
+      final releasedAt = defence.consolidatedAt;
+      if (defence.leaderUid == uid && releasedAt != null) {
+        await repo.upsertIfAbsent(
           uid,
-          defenceCommentsProvider(defence.id),
-          (comments, repo, uid) async {
-            for (final c in comments) {
-              if (c.authorUid == uid) continue;
-              await repo.upsertIfAbsent(
-                uid,
-                AppNotification(
-                  id: notificationId(NotificationType.defenceComment, c.id),
-                  type: NotificationType.defenceComment,
-                  thesisId: defence.thesisId,
-                  defenceId: defence.id,
-                  message: '${c.authorName} commented on your defence.',
-                  read: false,
-                  createdAt: c.createdAt ?? DateTime.now(),
-                ),
-              );
-            }
-          },
+          AppNotification(
+            id: notificationId(NotificationType.highlightsReleased, defence.id),
+            type: NotificationType.highlightsReleased,
+            thesisId: defence.thesisId,
+            defenceId: defence.id,
+            message: "The panel's highlights on your "
+                '${defence.label.toLowerCase()} are ready to read.',
+            read: false,
+            createdAt: releasedAt,
+          ),
         );
       }
     }
