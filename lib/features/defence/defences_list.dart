@@ -185,9 +185,12 @@ class DefenceRow extends ConsumerWidget {
     final at = d.scheduledAt;
 
     final buttons = <Widget>[
-      // A completed defence's panelist gets the sheet; `push`, not `go`:
+      // A completed defence's graders get the sheet: the panel, and the
+      // Coordinator and the Dean (never the adviser). `push`, not `go`:
       // these are deep screens under the Defences destination.
-      if (completed && isPanelist)
+      if (completed &&
+          !isAdviser &&
+          (isPanelist || isCoordinator || isDean))
         FilledButton(
           key: Key('goToEvaluate-${d.id}'),
           onPressed: () => context.push('/defence/room/${d.id}/evaluate'),

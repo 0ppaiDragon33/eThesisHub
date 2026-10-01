@@ -221,7 +221,17 @@ class DefenceRepository {
     required Map<String, int> scores,
     required Map<String, String> comments,
     required PassFail rating,
+    // The Coordinator and the Dean grade every defence too (2026-10-01).
+    // The caller says so from the signed-in role; the rules check the role
+    // itself.
+    bool officeHolder = false,
   }) async {
+    // The passing mark, as on the Grades screen: a sheet under it can only
+    // read Fail. The same number is in firestore.rules.
+    if (rating == PassFail.pass && totalOf(scores) < passingMark) {
+      throw ArgumentError(
+          'A total under $passingMark can only be rated Fail.');
+    }
     for (final c in evaluationCriteria) {
       final v = scores[c.key];
       if (v == null) {
@@ -253,12 +263,14 @@ class DefenceRepository {
     // because they cannot mark at arm's length after months on the thesis.
     // Without this the whole Dart suite would prove nothing about it.
     final panelUids = (data['panelUids'] as List?)?.cast<String>() ?? const [];
-    if (!panelUids.contains(evaluatorUid)) {
-      if (evaluatorUid == data['adviserUid']) {
-        throw StateError(
-            'An adviser guides the thesis and cannot also score it.');
-      }
-      throw StateError('Only a panelist assigned to this defence can score it.');
+    // The adviser never scores, even one who holds an office.
+    if (evaluatorUid == data['adviserUid']) {
+      throw StateError(
+          'An adviser guides the thesis and cannot also score it.');
+    }
+    if (!panelUids.contains(evaluatorUid) && !officeHolder) {
+      throw StateError('Only the panel, the Coordinator or the Dean can score '
+          'this defence.');
     }
 
     final status = DefenceStatus.fromString(data['status'] as String?);

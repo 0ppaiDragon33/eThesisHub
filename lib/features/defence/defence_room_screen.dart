@@ -479,15 +479,18 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final thesisTitle =
         ref.watch(thesisByIdProvider(defence.thesisId)).valueOrNull?.workingTitle;
 
-    // The panelist's own sheet, watched only for a panelist on a closed
-    // defence -- the only reader this figure is ever shown to. Watching it
-    // unconditionally for everyone else would open a stream the rules deny
-    // to a role that never asked for it.
+    // The grader's own sheet, watched only for a grader on a closed defence
+    // -- the only reader this figure is ever shown to. Graders are the
+    // panel, and the Coordinator and the Dean (2026-10-01); never the
+    // adviser. Watching it for anyone else would open a stream the rules
+    // deny to a role that never asked for it.
     final isPanelist = uid != null && defence.panelUids.contains(uid);
-    final myEvaluation = isPanelist && defence.status == DefenceStatus.completed
+    final isAdviser = uid != null && uid == defence.adviserUid;
+    final isGrader = !isAdviser &&
+        (isPanelist || role == UserRole.coordinator || role == UserRole.dean);
+    final myEvaluation = isGrader && defence.status == DefenceStatus.completed
         ? ref.watch(myEvaluationProvider(widget.defenceId)).valueOrNull
         : null;
-    final isAdviser = uid != null && uid == defence.adviserUid;
     final showManuscript = defence.status != DefenceStatus.cancelled;
     final canHighlight = defence.status == DefenceStatus.inProgress &&
         uid != null &&
@@ -662,7 +665,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                 context.go('/defence/room/${widget.defenceId}/consolidated'),
           ),
           // Form 5c scores what happened, so only on a closed defence.
-          if (completed && isPanelist) ...[
+          if (completed && isGrader) ...[
             const Gap.sm(),
             FilledButton(
               key: const Key('goToEvaluate'),

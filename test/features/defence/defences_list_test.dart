@@ -377,7 +377,7 @@ void main() {
 
       expect(find.byKey(const Key('goToGrades-d1')), findsOneWidget,
           reason: entry.key);
-      expect(find.byKey(const Key('goToEvaluate-d1')), findsNothing,
+      expect(find.byKey(const Key('goToEvaluate-d1')), findsOneWidget,
           reason: entry.key);
     }
   });
@@ -396,6 +396,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
+    // But they grade: they file a sheet like the panel.
+    expect(find.byKey(const Key('goToEvaluate-d1')), findsOneWidget);
   });
 
   // The leader never reaches either: D47 puts the numbers out of reach

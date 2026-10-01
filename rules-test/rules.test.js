@@ -4271,14 +4271,73 @@ test("M4 attack: the ADVISER may NOT write an evaluation", async () => {
     evalDoc()));
 });
 
-test("M4 attack: a non-panelist may NOT write one", async () => {
+test("M4 attack: the group may NOT write one", async () => {
   await seedM4();
-  for (const uid of ["leader-uid", "coord-uid", "dean-uid"]) {
+  await assertFails(setDoc(
+    doc(asDefUser("leader-uid", "leader@isufst.edu.ph"),
+        "defenses/m4/evaluations/leader-uid"),
+    evalDoc()));
+});
+
+// 2026-10-01: the Coordinator and the Dean grade every defence too, each
+// on their own sheet, alongside the panel.
+test("grading: the Coordinator and the Dean write their own evaluation",
+  async () => {
+    await seedM4();
+    for (const uid of ["coord-uid", "dean-uid"]) {
+      await assertSucceeds(setDoc(
+        doc(asDefUser(uid, `${uid}@isufst.edu.ph`),
+            `defenses/m4/evaluations/${uid}`),
+        evalDoc({ evaluatorName: uid })));
+    }
+    // Never in someone else's name.
     await assertFails(setDoc(
-      doc(asDefUser(uid, `${uid}@isufst.edu.ph`),
-          `defenses/m4/evaluations/${uid}`),
+      doc(asDefUser("coord-uid", "coord@isufst.edu.ph"),
+          "defenses/m4/evaluations/pan-uid"),
       evalDoc()));
-  }
+    // A deactivated Dean grades nothing.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "users/dean-uid"),
+        { role: "dean", active: false });
+    });
+    await assertFails(setDoc(
+      doc(asDefUser("dean-uid", "dean@isufst.edu.ph"),
+          "defenses/m4/evaluations/dean-uid"),
+      evalDoc()));
+  });
+
+test("grading: before release the Coordinator reads only their own sheet",
+  async () => {
+    await seedM4();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "defenses/m4/evaluations/coord-uid"),
+        { ...evalDoc(), submittedAt: Timestamp.now(),
+          updatedAt: Timestamp.now() });
+      await setDoc(doc(db, "defenses/m4/evaluations/pan-uid"),
+        { ...evalDoc(), submittedAt: Timestamp.now(),
+          updatedAt: Timestamp.now() });
+    });
+    const coord = asDefUser("coord-uid", "coord@isufst.edu.ph");
+    await assertSucceeds(
+      getDoc(doc(coord, "defenses/m4/evaluations/coord-uid")));
+    await assertFails(getDoc(doc(coord, "defenses/m4/evaluations/pan-uid")));
+  });
+
+test("grading: Pass needs a total of at least 75", async () => {
+  await seedM4();
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  // 74: personality 10 -> 0 and alertness 25 -> 9 takes 100 down to 74.
+  const low = fullScores({ personality: 0, alertness: 9 });
+  await assertFails(setDoc(doc(pan, "defenses/m4/evaluations/pan-uid"),
+    evalDoc({ scores: low, rating: "pass" })));
+  await assertSucceeds(setDoc(doc(pan, "defenses/m4/evaluations/pan-uid"),
+    evalDoc({ scores: low, rating: "fail" })));
+  // Exactly 75 passes.
+  const pan2 = asDefUser("pan2-uid", "pan2@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(pan2, "defenses/m4/evaluations/pan2-uid"),
+    evalDoc({ scores: fullScores({ personality: 0, alertness: 10 }),
+              rating: "pass" })));
 });
 
 test("M4 attack: a panelist may NOT score in a colleague's name",

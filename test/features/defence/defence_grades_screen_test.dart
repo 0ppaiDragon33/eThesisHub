@@ -152,7 +152,7 @@ void main() {
     expect(find.byKey(const Key('submittedCount')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
-      '1 of 2 panelists have submitted',
+      '1 of 4 have submitted (the panel, the Coordinator and the Dean)',
     );
     expect(find.byKey(const Key('gradesTable')), findsNothing);
   });
@@ -164,7 +164,7 @@ void main() {
     await tester.pumpWidget(app(await seedWithOne(), 'a1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Release 1 of 2 evaluations'), findsOneWidget);
+    expect(find.text('Release 1 of 4 evaluations'), findsOneWidget);
   });
 
   // Ruling 2: before release, a panelist NEVER opens the evaluations list
@@ -536,7 +536,7 @@ void main() {
 
     expect(
       tester.widget<Text>(find.byKey(const Key('submittedCount'))).data,
-      '0 of 2 panelists have submitted',
+      '0 of 4 have submitted (the panel, the Coordinator and the Dean)',
     );
     expect(find.byKey(const Key('panelMean')), findsNothing);
   });

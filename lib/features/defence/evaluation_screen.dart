@@ -15,6 +15,7 @@ import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/forms/form5c_data.dart';
 import 'package:ethesishub/features/forms/form5c_pdf.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -102,7 +103,8 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     });
   }
 
-  Future<void> _submit(String uid, String name) async {
+  Future<void> _submit(String uid, String name, PassFail rating,
+      {required bool officeHolder}) async {
     if (_submitting) return;
 
     setState(() {
@@ -120,7 +122,8 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
               for (final e in _comments.entries)
                 if (e.value.text.isNotEmpty) e.key: e.value.text,
             },
-            rating: _rating!,
+            rating: rating,
+            officeHolder: officeHolder,
           );
     } on ArgumentError catch (e) {
       if (mounted) setState(() => _submitError = e.message.toString());
@@ -323,7 +326,11 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     }
 
     final isPanelist = uid != null && defence.panelUids.contains(uid);
-    if (!isPanelist) {
+    // The Coordinator and the Dean grade every defence too (2026-10-01).
+    final role = meAsync.valueOrNull?.role;
+    final isOfficeHolder =
+        role == UserRole.coordinator || role == UserRole.dean;
+    if (uid == null || (!isPanelist && !isOfficeHolder)) {
       return _framed(const [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
@@ -346,6 +353,12 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     final released = defence.evaluationsReleased;
     final locked = released || _submitting;
     final complete = _scores.length == evaluationCriteria.length;
+    // Pass needs the passing mark, as the adviser's verdict does. A Pass
+    // chosen earlier falls away the moment the total drops below it, so
+    // the sheet can never be submitted that way.
+    final passLocked = totalOf(_scores) < passingMark;
+    final rating =
+        passLocked && _rating == PassFail.pass ? null : _rating;
 
     final text = Theme.of(context).textTheme;
     final pal = Palette.of(context);
@@ -488,23 +501,34 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
           Text('Your rating', style: text.labelMedium),
           const Gap.sm(),
           SegmentedButton<PassFail>(
-            segments: const [
+            key: const Key('ratingSelector'),
+            segments: [
               ButtonSegment(
                   value: PassFail.pass,
-                  label: Text('Pass'),
-                  icon: Icon(Icons.check_rounded)),
-              ButtonSegment(
+                  label: const Text('Pass'),
+                  icon: const Icon(Icons.check_rounded),
+                  enabled: !passLocked),
+              const ButtonSegment(
                   value: PassFail.fail,
                   label: Text('Fail'),
                   icon: Icon(Icons.close_rounded)),
             ],
-            selected: {?_rating},
+            selected: {?rating},
             emptySelectionAllowed: true,
             onSelectionChanged: locked
                 ? null
                 : (selection) =>
                     setState(() => _rating = selection.firstOrNull),
           ),
+          if (passLocked && !released) ...[
+            const Gap.sm(),
+            Text(
+              'A total under $passingMark can only be rated Fail.',
+              key: const Key('passLocked'),
+              style: text.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
           const Gap.sm(),
           Text(
             'Your own rating under §8a. The panel\'s verdict is decided '
@@ -529,14 +553,15 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
             ],
             FilledButton(
               key: const Key('submitEvaluation'),
-              onPressed: !locked && complete && _rating != null
-                  ? () => _submit(uid, myName)
+              onPressed: !locked && complete && rating != null
+                  ? () => _submit(uid, myName, rating,
+                      officeHolder: isOfficeHolder && !isPanelist)
                   : null,
               child: Text(_submitting
                   ? (hasSheet ? 'Updating…' : 'Submitting…')
                   : (hasSheet ? 'Update evaluation' : 'Submit evaluation')),
             ),
-            if (!complete || _rating == null) ...[
+            if (!complete || rating == null) ...[
               const Gap.sm(),
               Text(
                 !complete

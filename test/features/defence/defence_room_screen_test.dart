@@ -534,7 +534,7 @@ void main() {
 
       expect(find.byKey(const Key('goToGrades')), findsOneWidget,
           reason: uid);
-      expect(find.byKey(const Key('goToEvaluate')), findsNothing, reason: uid);
+      expect(find.byKey(const Key('goToEvaluate')), findsOneWidget, reason: uid);
     }
   });
 

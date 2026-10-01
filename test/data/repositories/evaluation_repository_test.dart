@@ -117,6 +117,60 @@ void main() {
     );
   });
 
+  // 2026-10-01: the Coordinator and the Dean grade every defence too.
+  test('the Coordinator and the Dean score as office holders', () async {
+    final db = await seed();
+    final repo = DefenceRepository(db);
+    for (final uid in ['coord1', 'dean1']) {
+      await repo.submitEvaluation(
+        defenceId: 'd1', evaluatorUid: uid, evaluatorName: uid,
+        scores: perfect(), comments: const {}, rating: PassFail.pass,
+        officeHolder: true,
+      );
+    }
+    expect((await repo.watchEvaluations('d1').first).map((e) => e.evaluatorUid),
+        ['coord1', 'dean1']);
+  });
+
+  test('being an office holder never lets the adviser score', () async {
+    final repo = DefenceRepository(await seed());
+    await expectLater(
+      repo.submitEvaluation(
+        defenceId: 'd1', evaluatorUid: 'a1', evaluatorName: 'Dr. Adviser',
+        scores: perfect(), comments: const {}, rating: PassFail.pass,
+        officeHolder: true),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  group('Pass needs a total of at least 75', () {
+    // 74: 100 less personality (10) and 16 of alertness's 25.
+    Map<String, int> seventyFour() =>
+        {...perfect(), 'personality': 0, 'alertness': 9};
+
+    test('Pass under 75 is refused', () async {
+      final repo = DefenceRepository(await seed());
+      await expectLater(
+        repo.submitEvaluation(
+          defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'P',
+          scores: seventyFour(), comments: const {}, rating: PassFail.pass),
+        throwsArgumentError,
+      );
+    });
+
+    test('Fail under 75, and Pass at exactly 75, are accepted', () async {
+      final repo = DefenceRepository(await seed());
+      await repo.submitEvaluation(
+        defenceId: 'd1', evaluatorUid: 'p1', evaluatorName: 'P',
+        scores: seventyFour(), comments: const {}, rating: PassFail.fail);
+      await repo.submitEvaluation(
+        defenceId: 'd1', evaluatorUid: 'p2', evaluatorName: 'P',
+        scores: {...perfect(), 'personality': 0, 'alertness': 10},
+        comments: const {}, rating: PassFail.pass);
+      expect(await repo.watchEvaluations('d1').first, hasLength(2));
+    });
+  });
+
   test('a missing criterion is refused before it reaches Firestore',
       () async {
     final repo = DefenceRepository(await seed());

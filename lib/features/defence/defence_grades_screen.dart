@@ -10,6 +10,7 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/defence/redefence_notice.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -198,9 +199,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     Defence defence,
     String? uid,
     bool isAdviser,
-    bool isPanelist,
+    bool isGrader,
   ) {
-    final total = defence.panelUids.length;
+    // Every panelist, plus the Coordinator and the Dean, each file a sheet.
+    final total = defence.panelUids.length + 2;
 
     if (isAdviser) {
       final evalsAsync = ref.watch(
@@ -226,7 +228,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       final count = submitted.length;
       return [
         Text(
-          '$count of $total panelists have submitted',
+          '$count of $total have submitted (the panel, the Coordinator and '
+          'the Dean)',
           key: const Key('submittedCount'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
@@ -269,7 +272,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       ];
     }
 
-    if (isPanelist) {
+    if (isGrader) {
       final mineAsync = ref.watch(myEvaluationProvider(widget.defenceId));
       if (mineAsync.isLoading) {
         return const [
@@ -729,12 +732,18 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     }
 
     final isAdviser = uid != null && uid == defence.adviserUid;
-    final isPanelist = uid != null && defence.panelUids.contains(uid);
+    // Graders: the panel, and the Coordinator and the Dean (2026-10-01).
+    final role = ref.watch(currentUserProvider).valueOrNull?.role;
+    final isGrader = uid != null &&
+        !isAdviser &&
+        (defence.panelUids.contains(uid) ||
+            role == UserRole.coordinator ||
+            role == UserRole.dean);
     final released = defence.evaluationsReleased;
 
     final children = released
         ? _postRelease(context, defence, uid, isAdviser)
-        : _preRelease(context, defence, uid, isAdviser, isPanelist);
+        : _preRelease(context, defence, uid, isAdviser, isGrader);
 
     return _framed(children, title: defence.label, subtitle: 'Grades');
   }

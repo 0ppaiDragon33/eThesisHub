@@ -1939,6 +1939,13 @@ service cloud.firestore {
         function isPanelistHere() {
           return activeUser() && request.auth.uid in parent().panelUids;
         }
+        // Who grades (2026-10-01): the panel, and the Coordinator and the
+        // Dean on every defence. Never the adviser, whatever else they are.
+        // isCoordinator()/isDean() already require an active account.
+        function isGraderHere() {
+          return (isPanelistHere() || isCoordinator() || isDean())
+              && parent().adviserUid != request.auth.uid;
+        }
         // Presence, never a sentinel: `.get(k, <sentinel>) == <sentinel>`
         // silently changes meaning the day a legitimate value equals the
         // sentinel, which cost this project two rounds already.
@@ -2010,6 +2017,9 @@ service cloud.firestore {
                           + s.conclusion + s.recommendation + s.references
                           + s.preciseness + s.alertness + s.personality
               && d.rating in ['pass', 'fail']
+              // Pass needs a total of at least 75, the passing mark (the same
+              // number as `passingMark` in lib/data/models/evaluation.dart).
+              && (d.rating == 'fail' || d.total >= 75)
               // Section B carries no comment lines on the printed form,
               // so its three keys are not accepted here.
               && d.comments.keys().hasOnly(['title', 'introduction',
@@ -2034,16 +2044,16 @@ service cloud.firestore {
         // why that one snapshots leaderUid rather than reading the thesis.
         allow get, list: if (activeUser()
                              && ((request.auth.uid == evaluatorUid
-                                  && isPanelistHere())
+                                  && isGraderHere())
                                  || parent().adviserUid == request.auth.uid))
                          || (released()
-                             && (isPanelistHere()
+                             && (isGraderHere()
                                  || isCoordinator() || isDean()));
 
         // Nothing has been presented to score while the defence is merely
         // scheduled, and a cancelled one is never scorable.
         allow create: if verified()
-                      && isPanelistHere()
+                      && isGraderHere()
                       && request.auth.uid == evaluatorUid
                       && parent().status in ['inProgress', 'completed']
                       && !released()
@@ -2070,7 +2080,7 @@ service cloud.firestore {
         // case is a create. Weight drift is caught there, not by any
         // ordering here.
         allow update: if verified()
-                      && isPanelistHere()
+                      && isGraderHere()
                       && request.auth.uid == evaluatorUid
                       && !released()
                       && wellFormed()

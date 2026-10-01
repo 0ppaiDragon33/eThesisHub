@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/defence/evaluation_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -363,5 +364,78 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('downloadForm5c')), findsNothing);
+  });
+
+  // A total under the passing mark can only be rated Fail (2026-10-01).
+  testWidgets('Pass is locked while the total is under 75', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('passLocked')), findsOneWidget);
+    await tester.tap(find.text('Pass'));
+    await tester.pump();
+    expect(
+        tester
+            .widget<SegmentedButton<PassFail>>(
+                find.byKey(const Key('ratingSelector')))
+            .selected,
+        isEmpty);
+
+    for (final c in evaluationCriteria) {
+      for (var i = 0; i < c.weight; i++) {
+        await tester.tap(find.byKey(Key('plus_${c.key}')));
+        await tester.pump();
+      }
+    }
+    expect(find.byKey(const Key('passLocked')), findsNothing);
+    await tester.tap(find.text('Pass'));
+    await tester.pump();
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('submitEvaluation')))
+            .onPressed,
+        isNotNull);
+  });
+
+  // The Coordinator and the Dean grade too, alongside the panel.
+  testWidgets('the coordinator and the dean can score and submit',
+      (tester) async {
+    for (final entry in {'c1': 'coordinator', 'dn1': 'dean'}.entries) {
+      useTallSurface(tester);
+      final db = await seed();
+      await db.collection('users').doc(entry.key).set({
+        'fullName': 'Office ${entry.value}',
+        'email': '${entry.key}@isufst.edu.ph',
+        'role': entry.value,
+        'active': true,
+      });
+      await tester.pumpWidget(app(db, entry.key));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notPanelist')), findsNothing,
+          reason: entry.key);
+      for (final c in evaluationCriteria) {
+        for (var i = 0; i < c.weight; i++) {
+          await tester.tap(find.byKey(Key('plus_${c.key}')));
+          await tester.pump();
+        }
+      }
+      await tester.tap(find.text('Pass'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('submitEvaluation')));
+      await tester.pumpAndSettle();
+
+      final stored = await db
+          .collection('defenses')
+          .doc('d1')
+          .collection('evaluations')
+          .doc(entry.key)
+          .get();
+      expect(stored.data()!['evaluatorName'], 'Office ${entry.value}',
+          reason: entry.key);
+      expect(stored.data()!['total'], 100, reason: entry.key);
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 }
