@@ -9,6 +9,7 @@ import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -693,7 +694,10 @@ class _CandidateCard extends StatelessWidget {
                                   style: text.labelMedium,
                                 ),
                                 const SizedBox(height: 2),
-                                Text(comment.body, style: text.bodyMedium),
+                                CommentWithTime(
+                                  body: comment.body,
+                                  at: comment.createdAt,
+                                ),
                               ],
                             ),
                           ),

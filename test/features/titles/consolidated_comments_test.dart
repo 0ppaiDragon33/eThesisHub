@@ -100,11 +100,11 @@ void main() {
       // transcript, so the test seeds an order that alphabetising breaks.
       final blocks = blocksFor(const [
         (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',
-         body: 'First remark.'),
+         body: 'First remark.', createdAt: null),
         (authorUid: 'a1', authorName: 'Dr. Armada', authorRole: 'Panel Member',
-         body: 'Second remark.'),
+         body: 'Second remark.', createdAt: null),
         (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',
-         body: 'Third remark, same speaker.'),
+         body: 'Third remark, same speaker.', createdAt: null),
       ]);
 
       expect(blocks.map((b) => b.authorName), ['Dr. Zamora', 'Dr. Armada']);
@@ -118,9 +118,9 @@ void main() {
       // hold at the time.
       final blocks = blocksFor(const [
         (authorUid: 'c1', authorName: 'Dr. Cruz', authorRole: 'Coordinator',
-         body: 'As coordinator.'),
+         body: 'As coordinator.', createdAt: null),
         (authorUid: 'c1', authorName: 'Dr. Cruz', authorRole: 'Panel Member',
-         body: 'As panel member.'),
+         body: 'As panel member.', createdAt: null),
       ]);
 
       expect(blocks, hasLength(2));
@@ -130,6 +130,25 @@ void main() {
 
     test('no remarks is no blocks, not an empty block', () {
       expect(blocksFor(const []), isEmpty);
+    });
+
+    test('each remark keeps its own time, in the same order', () {
+      final first = DateTime(2026, 9, 29, 9, 10);
+      final third = DateTime(2026, 9, 29, 9, 40);
+      final blocks = blocksFor([
+        (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',
+         body: 'First remark.', createdAt: first),
+        (authorUid: 'a1', authorName: 'Dr. Armada', authorRole: 'Panel Member',
+         body: 'Second remark.', createdAt: null),
+        (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',
+         body: 'Third remark, same speaker.', createdAt: third),
+      ]);
+
+      expect(blocks.first.times, [first, third]);
+      expect(blocks.first.timeAt(1), third);
+      expect(blocks.last.timeAt(0), isNull,
+          reason: 'a remark still awaiting its server time has none');
+      expect(blocks.last.timeAt(5), isNull);
     });
   });
 }

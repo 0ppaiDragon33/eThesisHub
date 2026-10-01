@@ -8,6 +8,7 @@ import 'package:ethesishub/core/design/motion.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -1108,7 +1109,7 @@ class _CommenterBlock extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppTokens.sm),
-              for (final body in block.bodies)
+              for (var j = 0; j < block.bodies.length; j++)
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: AppTokens.xs + 2),
@@ -1124,7 +1125,16 @@ class _CommenterBlock extends StatelessWidget {
                     ),
                     border: Border.all(color: p.rule),
                   ),
-                  child: SelectableText(body, style: text.bodyMedium),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SelectableText(block.bodies[j], style: text.bodyMedium),
+                      if (block.timeAt(j) != null) ...[
+                        const SizedBox(height: 2),
+                        CommentTime(block.timeAt(j)),
+                      ],
+                    ],
+                  ),
                 ),
             ],
           ),

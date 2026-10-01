@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
@@ -200,6 +201,7 @@ class _ConsolidatedDefenceScreenState
           authorName: c.authorName,
           authorRole: c.authorPosition,
           body: c.body,
+          createdAt: c.createdAt,
         ),
     ];
     final blocks = blocksFor(remarks);
@@ -299,7 +301,7 @@ class _ConsolidatedDefenceScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(blocks[i].header, style: text.labelLarge),
-                            for (final body in blocks[i].bodies)
+                            for (var j = 0; j < blocks[i].bodies.length; j++)
                               Padding(
                                 padding:
                                     const EdgeInsets.only(top: AppTokens.sm),
@@ -320,8 +322,10 @@ class _ConsolidatedDefenceScreenState
                                       ),
                                     ),
                                     Expanded(
-                                      child: Text(body,
-                                          style: text.bodyMedium),
+                                      child: CommentWithTime(
+                                        body: blocks[i].bodies[j],
+                                        at: blocks[i].timeAt(j),
+                                      ),
                                     ),
                                   ],
                                 ),

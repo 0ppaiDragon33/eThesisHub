@@ -162,6 +162,21 @@ void main() {
     final adviserBlock = tester.getTopLeft(find.byKey(const Key('blockFor-a1')));
     final panelistBlock = tester.getTopLeft(find.byKey(const Key('blockFor-p1')));
     expect(adviserBlock.dy, lessThan(panelistBlock.dy));
+
+    // Each remark carries its own time (seeded 9:00, 9:01, 9:02), so the
+    // adviser's two remarks under one block are still told apart.
+    final adviser = find.byKey(const Key('blockFor-a1'));
+    expect(
+        find.descendant(of: adviser, matching: find.text('Aug 20, 9:00 AM')),
+        findsOneWidget);
+    expect(
+        find.descendant(of: adviser, matching: find.text('Aug 20, 9:02 AM')),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('blockFor-p1')),
+            matching: find.text('Aug 20, 9:01 AM')),
+        findsOneWidget);
   });
 
   testWidgets('only the adviser sees the release control', (tester) async {

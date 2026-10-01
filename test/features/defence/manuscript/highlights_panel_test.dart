@@ -58,6 +58,36 @@ Future<void> pumpList(WidgetTester tester, List<DefenceAnnotation> list,
 }
 
 void main() {
+  testWidgets('each highlight shows when it was made', (tester) async {
+    final at = DateTime(2026, 9, 29, 16, 5);
+    final timed = DefenceAnnotation(
+      id: 'h1',
+      authorUid: 'p1',
+      authorName: 'Dr. Panel',
+      authorPosition: 'Panel Member',
+      chapter: ChapterId.chapterI,
+      version: 2,
+      page: 0,
+      rect: const NormRect(x: 0, y: 0, w: 0.5, h: 0.1),
+      body: 'Cite the data.',
+      createdAt: at,
+    );
+    await pumpList(tester, [timed, note('h2', 'a1')]);
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('highlightRow-h1')),
+          matching: find.text('Sep 29, 4:05 PM')),
+      findsOneWidget,
+    );
+    // One still awaiting its server time shows no time rather than a guess.
+    expect(
+      find.descendant(
+          of: find.byKey(const Key('highlightRow-h2')),
+          matching: find.textContaining(' PM')),
+      findsNothing,
+    );
+  });
+
   testWidgets('nothing yet', (tester) async {
     await pumpList(tester, []);
     expect(find.byKey(const Key('highlightsEmpty')), findsOneWidget);

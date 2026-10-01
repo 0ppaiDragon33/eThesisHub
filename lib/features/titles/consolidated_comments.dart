@@ -13,11 +13,19 @@ class CommentBlock {
     required this.authorName,
     required this.authorRole,
     required this.bodies,
+    this.times = const [],
   });
 
   final String authorName;
   final String authorRole;
   final List<String> bodies;
+
+  /// When each of [bodies] was written, in the same order. Null for a
+  /// remark still awaiting its server time.
+  final List<DateTime?> times;
+
+  /// The time of the remark at [index], if known.
+  DateTime? timeAt(int index) => index < times.length ? times[index] : null;
 
   /// The bracket header, exactly as it prints.
   String get header => '[$authorName — $authorRole]';
@@ -63,13 +71,14 @@ List<ConsolidatedCandidate> consolidate({
               authorName: m.authorName,
               authorRole: m.authorRole,
               body: m.body,
+              createdAt: m.createdAt,
             ),
         ]),
       ),
   ];
 }
 
-/// One remark, reduced to the four things grouping needs. A record rather
+/// One remark, reduced to what grouping and printing need. A record rather
 /// than an interface so both M1b's `TitleComment` and M3's `DefenceComment`
 /// can be mapped into it without either model knowing about the other.
 typedef Remark = ({
@@ -77,6 +86,7 @@ typedef Remark = ({
   String authorName,
   String authorRole,
   String body,
+  DateTime? createdAt,
 });
 
 /// Groups remarks per commenter — parent design §5.3, Guidelines §4d.
@@ -107,6 +117,7 @@ List<CommentBlock> blocksFor(List<Remark> remarks) {
         authorName: grouped[key]!.first.authorName,
         authorRole: grouped[key]!.first.authorRole,
         bodies: grouped[key]!.map((r) => r.body).toList(),
+        times: grouped[key]!.map((r) => r.createdAt).toList(),
       ),
   ];
 }

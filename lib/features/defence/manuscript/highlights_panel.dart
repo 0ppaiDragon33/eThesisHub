@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/defence_annotation.dart';
@@ -110,7 +111,7 @@ class HighlightsList extends StatelessWidget {
                     style: text.labelMedium,
                   ),
                   const SizedBox(height: 2),
-                  Text(a.body, style: text.bodyMedium),
+                  CommentWithTime(body: a.body, at: a.createdAt),
                   if (!current)
                     Text(
                       'On an earlier version of Chapter $numeral',

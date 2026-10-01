@@ -6,6 +6,7 @@ import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/states.dart';
@@ -640,7 +641,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              Text(f.body, style: text.bodyMedium),
+                              CommentWithTime(body: f.body, at: f.createdAt),
                             ],
                           ),
                         ),
