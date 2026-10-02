@@ -120,8 +120,9 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
     final confirmed = await confirmAction(
       context,
       title: 'Submit this manuscript?',
-      message: '"${file.name}" becomes the manuscript the panel reads for '
-          'this defence.',
+      message: '"${file.name}" will be published to the college archive '
+          'once the Coordinator approves it. Make sure it has the complete '
+          'Chapters I to V.',
       confirmLabel: 'Submit',
       confirmKey: const Key('confirmSubmitManuscript'),
     );
@@ -262,7 +263,17 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
           children: [
             Text('Submit final manuscript',
                 style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+            // The archive publishes this file, not the chapter drafts, so
+            // say plainly what it must contain.
+            Text(
+              'Upload your complete, final manuscript — the front matter and '
+              'Chapters I to V — as one PDF. This is the copy published to '
+              'the college archive.',
+              key: const Key('manuscriptInstructions'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const Key('pickManuscript'),
               icon: const Icon(Icons.upload_file),

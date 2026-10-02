@@ -6,6 +6,7 @@ import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/candidate_title.dart';
@@ -289,24 +290,43 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
               ErrorState(message: _error!),
             ],
             const SizedBox(height: AppTokens.md),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                key: Key('publish-${thesis.id}'),
-                onPressed: _publishing ? null : _publish,
-                icon: _publishing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.local_library_outlined, size: 18),
-                label: const Text('Publish to archive'),
-              ),
+            // Check the file is the complete manuscript before publishing
+            // it: the app cannot tell what a PDF contains.
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppTokens.sm,
+              runSpacing: AppTokens.sm,
+              children: [
+                OutlinedButton.icon(
+                  key: Key('openManuscript-${thesis.id}'),
+                  onPressed: () => openStoredDocument(
+                    context,
+                    ref,
+                    thesis.manuscriptPath ?? '',
+                    label: 'the manuscript',
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('Open manuscript'),
+                ),
+                _publishButton(thesis),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _publishButton(Thesis thesis) => FilledButton.icon(
+        key: Key('publish-${thesis.id}'),
+        onPressed: _publishing ? null : _publish,
+        icon: _publishing
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.local_library_outlined, size: 18),
+        label: const Text('Publish to archive'),
+      );
 }

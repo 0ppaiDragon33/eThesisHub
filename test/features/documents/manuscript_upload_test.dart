@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/documents/manuscript_upload.dart';
+import 'package:ethesishub/features/titles/file_upload.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -131,9 +134,18 @@ class _ThesisLoader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final thesis = ref.watch(myThesisProvider).valueOrNull;
     if (thesis == null) return const SizedBox.shrink();
-    return ManuscriptUpload(thesis: thesis);
+    return ManuscriptUpload(thesis: thesis, pickDocument: _testPicker);
   }
 }
+
+/// Hands back a small PDF instead of opening a file dialog.
+Future<PickedDocument?> _testPicker({required Set<String> allowed}) async =>
+    PickedDocument(
+      name: 'Final Manuscript.pdf',
+      bytes: Uint8List.fromList('%PDF-1.4\n%%EOF'.codeUnits),
+      extension: 'pdf',
+      contentType: 'application/pdf',
+    );
 
 /// A tall surface: matches the repo's own idiom, see
 /// `defence_grades_screen_test.dart`.
@@ -167,6 +179,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('manuscriptUpload')), findsOneWidget);
+  });
+
+  // The archive publishes this file, not the chapter drafts, so the card
+  // says it must be the complete Chapters I to V in one PDF.
+  testWidgets('says to upload the complete Chapters I to V as one PDF',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(verdict: 'pass')));
+    await tester.pumpAndSettle();
+
+    final instructions = tester.widget<Text>(
+        find.byKey(const Key('manuscriptInstructions')));
+    expect(instructions.data, contains('Chapters I to V'));
+    expect(instructions.data, contains('one PDF'));
+    expect(instructions.data, contains('archive'));
+  });
+
+  testWidgets('the confirmation says the file goes to the archive',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(verdict: 'pass')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('pickManuscript')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('manuscriptAbstract')), 'An abstract.');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('submitManuscript')));
+    await tester.pumpAndSettle();
+
+    Finder inDialog(String s) => find.descendant(
+        of: find.byType(AlertDialog), matching: find.textContaining(s));
+    expect(inDialog('will be published to the college archive'),
+        findsOneWidget);
+    expect(inDialog('complete Chapters I to V'), findsOneWidget);
+    expect(find.textContaining('the panel reads'), findsNothing);
+
+    // Cancel: nothing is uploaded.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('submit is disabled until both the file and abstract exist',

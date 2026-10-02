@@ -8,9 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/data/models/archive_entry.dart';
+import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/repository/archive_queue_screen.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/service_providers.dart';
 
 /// A thesis `t1` led by `l1`, with a completed FINAL defence `d1`.
 ///
@@ -337,4 +339,43 @@ void main() {
     expect(find.byKey(const Key('queueLoading')), findsOneWidget);
     expect(find.byKey(const Key('queueRow-t1')), findsNothing);
   });
+
+  testWidgets('Open manuscript asks for that thesis\'s manuscript file',
+      (tester) async {
+    final storage = _RecordingStorage();
+    useTallSurface(tester);
+    await tester.pumpWidget(app(
+      await seed(verdict: 'pass', withManuscript: true),
+      overrides: [storageServiceProvider.overrideWithValue(storage)],
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('openManuscript-t1')));
+    await tester.pumpAndSettle();
+
+    expect(storage.asked, ['theses/t1/manuscript/abc.pdf']);
+  });
+}
+
+/// Records which file a reader asked to open. Refuses the link so the test
+/// does not reach the platform's URL launcher.
+class _RecordingStorage implements StorageService {
+  final asked = <String>[];
+
+  @override
+  Future<StoredFile> upload({
+    required List<int> bytes,
+    required String path,
+    required String contentType,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> delete(String path) async {}
+
+  @override
+  Future<String> signedUrl(String path) async {
+    asked.add(path);
+    throw const StorageFailure('stub', code: 'stub');
+  }
 }
