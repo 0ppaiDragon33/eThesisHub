@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/repositories/form_copy_repository.dart';
 import 'package:ethesishub/features/forms/editable/form_copies_section.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -161,55 +160,6 @@ void main() {
     expect(confirm.onPressed, isNull);
   });
 
-  testWidgets('My copies lists only this person\'s copies of this form',
-      (tester) async {
-    final db = await seeded();
-    await seedCopy(db, 'u1', 'a', 'form1', 'Group 3', DateTime(2026, 9, 1));
-    await seedCopy(db, 'u1', 'b', 'form1', 'Group 5', DateTime(2026, 9, 2));
-    await seedCopy(db, 'u1', 'c', 'form3', 'A Form 3', DateTime(2026, 9, 3));
-    await seedCopy(db, 'u2', 'd', 'form1', 'Not mine', DateTime(2026, 9, 4));
-    await pumpSection(tester, db);
-
-    expect(find.text('My copies (2)'), findsOneWidget);
-    expect(find.text('Group 3'), findsOneWidget);
-    expect(find.text('Group 5'), findsOneWidget);
-    expect(find.text('A Form 3'), findsNothing);
-    expect(find.text('Not mine'), findsNothing);
-  });
-
-  testWidgets('with no copies there is no My copies list', (tester) async {
-    await pumpSection(tester, await seeded());
-    expect(find.byKey(const Key('form1MyCopies')), findsNothing);
-    expect(find.byKey(const Key('form1NewCopy')), findsOneWidget);
-  });
-
-  testWidgets('Open goes to the editor for that copy', (tester) async {
-    final db = await seeded();
-    await seedCopy(db, 'u1', 'a', 'form1', 'Group 3', DateTime(2026, 9, 1));
-    await pumpSection(tester, db);
-
-    await tester.tap(find.byKey(const Key('openCopy-a')));
-    await tester.pumpAndSettle();
-    expect(find.text('editor a'), findsOneWidget);
-  });
-
-  testWidgets('Rename changes the name', (tester) async {
-    final db = await seeded();
-    await seedCopy(db, 'u1', 'a', 'form1', 'Group 3', DateTime(2026, 9, 1));
-    await pumpSection(tester, db);
-
-    await tester.tap(find.byKey(const Key('renameCopy-a')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('copyNameField')), 'Renamed');
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('copyNameConfirm')));
-    await settleReal(tester);
-
-    expect((await db.doc('users/u1/formCopies/a').get()).data()!['name'],
-        'Renamed');
-    expect(find.text('Renamed'), findsOneWidget);
-  });
-
   testWidgets(
       'New copy is disabled while a create is pending, so it cannot make '
       'duplicates', (tester) async {
@@ -239,46 +189,15 @@ void main() {
         hasLength(1));
   });
 
-  testWidgets('a stream error under New copy shows a short inline message',
+  testWidgets('the card lists no copies, only where they are saved',
       (tester) async {
-    final router = GoRouter(
-      initialLocation: '/forms',
-      routes: [
-        GoRoute(
-          path: '/forms',
-          builder: (_, _) => const Scaffold(
-            body: FormCopiesSection(
-                formId: 'form1', defaultName: 'Form 1 copy'),
-          ),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        myFormCopiesProvider('form1').overrideWith(
-            (ref) => Stream<List<FormCopy>>.error('permission-denied')),
-      ],
-      child: MaterialApp.router(routerConfig: router),
-    ));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('form1CopiesError')), findsOneWidget);
-    expect(find.text('Could not load your copies.'), findsOneWidget);
-  });
-
-  testWidgets('Delete asks first, then deletes', (tester) async {
     final db = await seeded();
     await seedCopy(db, 'u1', 'a', 'form1', 'Group 3', DateTime(2026, 9, 1));
     await pumpSection(tester, db);
 
-    await tester.tap(find.byKey(const Key('deleteCopy-a')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('confirmDeleteCopy')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('confirmDeleteCopy')));
-    await settleReal(tester);
-
-    expect((await db.doc('users/u1/formCopies/a').get()).exists, isFalse);
+    expect(find.byKey(const Key('form1NewCopy')), findsOneWidget);
+    expect(find.text('Saved in My files.'), findsOneWidget);
     expect(find.text('Group 3'), findsNothing);
+    expect(find.byKey(const Key('form1MyCopies')), findsNothing);
   });
 }

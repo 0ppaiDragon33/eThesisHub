@@ -260,8 +260,15 @@ class _RequestCard extends StatelessWidget {
           // declining.
           Align(
             alignment: Alignment.centerLeft,
-            child: ViewForm1Button(
-                key: Key('viewForm1-$thesisId'), thesisId: thesisId),
+            child: Wrap(
+              children: [
+                ViewForm1Button(
+                    key: Key('viewForm1-$thesisId'), thesisId: thesisId),
+                ViewForm1CopyButton(
+                    key: Key('viewForm1Copy-$thesisId'),
+                    thesisId: thesisId),
+              ],
+            ),
           ),
           const Gap.sm(),
           if (declining) ...[

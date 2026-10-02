@@ -1253,6 +1253,37 @@ service cloud.firestore {
       // record. `nominationData()` is reused here (rather than a second
       // `get()`) because each `get()` counts against the per-evaluation
       // limit.
+      // An optional copy of Form 1 the leader attaches when submitting the
+      // nomination: a snapshot of one of their My files copies, so the people
+      // who must sign can read it (the copy itself is private to its owner).
+      // It sits beside the official Form 1, which is still built from the
+      // live nominations. Written only while the thesis is a draft, in the
+      // same batch as the submit; read by anyone who can read the thesis.
+      match /attachments/{attachmentId} {
+        function validAttachment(d) {
+          return attachmentId == 'form1'
+              && d.keys().hasOnly(['formId', 'copyName', 'overrides',
+                                   'attachedBy', 'attachedAt'])
+              && d.keys().hasAll(['formId', 'copyName', 'overrides',
+                                  'attachedBy', 'attachedAt'])
+              && d.formId == 'form1'
+              && d.copyName is string && d.copyName.size() >= 1
+              && d.copyName.size() <= 100
+              && d.overrides is map && d.overrides.size() <= 300
+              && d.attachedBy == request.auth.uid
+              && d.attachedAt == request.time;
+        }
+
+        allow get, list: if mayReadThesis() || isCoordinator() || isDean();
+
+        allow create, update: if isThesisLeader(thesisId)
+                              && thesisData(thesisId).status == 'draft'
+                              && validAttachment(request.resource.data);
+
+        allow delete: if isThesisLeader(thesisId)
+                      && thesisData(thesisId).status == 'draft';
+      }
+
       function isOnPanel() {
         let t = thesisData(thesisId);
         return signedIn() && isActive() && (

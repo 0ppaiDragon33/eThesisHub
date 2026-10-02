@@ -278,6 +278,8 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
             ),
             // The form being signed off, readable before deciding.
             ViewForm1Button(key: Key('viewForm1-${t.id}'), thesisId: t.id),
+            ViewForm1CopyButton(
+                key: Key('viewForm1Copy-${t.id}'), thesisId: t.id),
           ],
         ),
       ],

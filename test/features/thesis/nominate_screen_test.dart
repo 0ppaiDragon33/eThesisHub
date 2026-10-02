@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/features/thesis/nominate_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -28,6 +30,8 @@ class PermissionDeniedThesisRepository extends ThesisRepository {
     required FacultyDirectoryEntry adviser,
     required List<FacultyDirectoryEntry> panelists,
     required List<FacultyDirectoryEntry> exOfficio,
+    FormCopy? form1Copy,
+    String? leaderUid,
   }) {
     throw FirebaseException(
       plugin: 'cloud_firestore',
@@ -518,6 +522,95 @@ void main() {
     final panel = noms.docs.where((d) =>
         d.data()['position'] == 'panelist' && d.data()['exOfficio'] == false);
     expect(panel, hasLength(3));
+  });
+
+  Future<void> pickFullPanel(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('adviser')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dr. Armada — CICT').last);
+    await tester.pumpAndSettle();
+    for (final pick in [
+      ('panel0', 'Dr. Diamante — CICT'),
+      ('panel1', 'Dr. Padojinog — CICT'),
+      ('panel2', 'Dr. Braganza — CICT'),
+    ]) {
+      await tester.tap(find.byKey(Key(pick.$1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(pick.$2).last);
+      await tester.pumpAndSettle();
+    }
+  }
+
+  Future<void> submitAndSettle(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('submitNomination')));
+      await confirmIfAsked(tester);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> seedForm1Copy(FakeFirebaseFirestore db, String id, String name,
+      {String formId = 'form1'}) async {
+    await db.collection('users/leader-1/formCopies').doc(id).set({
+      'formId': formId,
+      'name': name,
+      'overrides': {'salutation': 'Dear Sir:'},
+      'folderId': null,
+      'createdAt': Timestamp.fromDate(DateTime(2026, 9, 1)),
+      'updatedAt': Timestamp.fromDate(DateTime(2026, 9, 1)),
+    });
+  }
+
+  testWidgets('with no saved Form 1 copy there is no attach picker',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('form1CopyPicker')), findsNothing);
+  });
+
+  testWidgets(
+      'the picker lists only Form 1 copies, and the picked one is attached '
+      'as a snapshot', (tester) async {
+    useTallSurface(tester);
+    final db = await seeded();
+    await seedForm1Copy(db, 'c1', 'Group 3 – Santos');
+    await seedForm1Copy(db, 'c2', 'A Form 3', formId: 'form3');
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+    await pickFullPanel(tester);
+
+    await tester.tap(find.byKey(const Key('form1CopyPicker')));
+    await tester.pumpAndSettle();
+    expect(find.text('A Form 3'), findsNothing);
+    await tester.tap(find.text('Group 3 – Santos').last);
+    await tester.pumpAndSettle();
+
+    await submitAndSettle(tester);
+    expect(find.byKey(const Key('landedOnStatus')), findsOneWidget);
+
+    final attached = await db.doc('theses/t1/attachments/form1').get();
+    expect(attached.exists, isTrue);
+    expect(attached.data()!['copyName'], 'Group 3 – Santos');
+    expect(attached.data()!['overrides'], {'salutation': 'Dear Sir:'});
+    expect(attached.data()!['attachedBy'], 'leader-1');
+  });
+
+  testWidgets('leaving the picker on None attaches nothing', (tester) async {
+    useTallSurface(tester);
+    final db = await seeded();
+    await seedForm1Copy(db, 'c1', 'Group 3 – Santos');
+
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+    await pickFullPanel(tester);
+    await submitAndSettle(tester);
+
+    expect(find.byKey(const Key('landedOnStatus')), findsOneWidget);
+    expect((await db.doc('theses/t1/attachments/form1').get()).exists,
+        isFalse);
   });
 
   testWidgets(

@@ -6492,3 +6492,89 @@ test("chapters IV-V: allowed once the pre-oral passed, and stay allowed",
     await assertFails(next({ preOralDefenceId: "does-not-exist" }));
     await assertSucceeds(next({}));
   });
+
+// ---- Form 1 attachment: a snapshot of the leader's own My files copy,
+// written in the submit batch, read by everyone who can read the thesis.
+
+async function seedAttachmentWorld(status = "draft") {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const profile = (email, role) => ({
+      fullName: "P", email, role, active: true, college: null,
+      program: null, specialization: null, createdAt: serverTimestamp(),
+      createdBy: null,
+    });
+    await setDoc(doc(db, "users/att-leader"),
+      profile("attleader@isufst.edu.ph", "student"));
+    await setDoc(doc(db, "users/att-stranger"),
+      profile("attstranger@isufst.edu.ph", "student"));
+    await setDoc(doc(db, "users/att-nominee"),
+      profile("attnominee@isufst.edu.ph", "faculty"));
+    await setDoc(doc(db, "theses/t-att"), {
+      leaderUid: "att-leader", status, panelistUids: [], adviserUid: null,
+      memberNames: [], workingTitle: "T", college: "CICT", program: "BSIT",
+      semester: "First", academicYear: "2026-2027",
+    });
+    await setDoc(doc(db, "theses/t-att/nominations/att-nominee"),
+      nominationDoc("att-nominee"));
+  });
+}
+
+const attachmentDoc = (extra = {}) => ({
+  formId: "form1", copyName: "Group 3", overrides: { salutation: "Dear Sir:" },
+  attachedBy: "att-leader", attachedAt: serverTimestamp(), ...extra,
+});
+
+test("Form 1 attachment: the leader MAY attach a copy while the thesis is a draft", async () => {
+  await seedAttachmentWorld();
+  const l = asUser("att-leader", "attleader@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(l, "theses/t-att/attachments/form1"), attachmentDoc()));
+  await assertSucceeds(setDoc(doc(l, "theses/t-att/attachments/form1"),
+    attachmentDoc({ copyName: "Group 3 v2" })));
+  await assertSucceeds(deleteDoc(doc(l, "theses/t-att/attachments/form1")));
+});
+
+test("Form 1 attachment: a nominee and the leader read it, a stranger does not", async () => {
+  await seedAttachmentWorld();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/t-att/attachments/form1"), {
+      ...attachmentDoc(), attachedAt: Timestamp.now(),
+    });
+  });
+  await assertSucceeds(getDoc(doc(asUser("att-nominee", "attnominee@isufst.edu.ph"),
+    "theses/t-att/attachments/form1")));
+  await assertSucceeds(getDoc(doc(asUser("att-leader", "attleader@isufst.edu.ph"),
+    "theses/t-att/attachments/form1")));
+  await assertFails(getDoc(doc(asUser("att-stranger", "attstranger@isufst.edu.ph"),
+    "theses/t-att/attachments/form1")));
+});
+
+test("Form 1 attachment: nobody but the leader may write it", async () => {
+  await seedAttachmentWorld();
+  await assertFails(setDoc(doc(asUser("att-stranger", "attstranger@isufst.edu.ph"),
+    "theses/t-att/attachments/form1"), attachmentDoc({ attachedBy: "att-stranger" })));
+  await assertFails(setDoc(doc(asUser("att-nominee", "attnominee@isufst.edu.ph"),
+    "theses/t-att/attachments/form1"), attachmentDoc({ attachedBy: "att-nominee" })));
+});
+
+test("Form 1 attachment: refused once the thesis has left draft", async () => {
+  await seedAttachmentWorld("nominationPendingConforme");
+  const l = asUser("att-leader", "attleader@isufst.edu.ph");
+  await assertFails(setDoc(doc(l, "theses/t-att/attachments/form1"), attachmentDoc()));
+});
+
+test("Form 1 attachment: shape is pinned (author, time, form, size, extra fields)", async () => {
+  await seedAttachmentWorld();
+  const l = asUser("att-leader", "attleader@isufst.edu.ph");
+  const at = doc(l, "theses/t-att/attachments/form1");
+  await assertFails(setDoc(at, attachmentDoc({ attachedBy: "someone-else" })));
+  await assertFails(setDoc(at, attachmentDoc({ attachedAt: Timestamp.fromDate(new Date("1999-01-01")) })));
+  await assertFails(setDoc(at, attachmentDoc({ formId: "form3" })));
+  await assertFails(setDoc(at, attachmentDoc({ copyName: "" })));
+  await assertFails(setDoc(at, attachmentDoc({ overrides: "not a map" })));
+  await assertFails(setDoc(at, attachmentDoc({ extra: "x" })));
+  await assertFails(setDoc(doc(l, "theses/t-att/attachments/other"), attachmentDoc()));
+  const big = Object.fromEntries(Array.from({ length: 301 }, (_, i) => [`b${i}`, "x"]));
+  await assertFails(setDoc(at, attachmentDoc({ overrides: big })));
+});

@@ -8,6 +8,8 @@ import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/repositories/faculty_directory_repository.dart';
 import 'package:ethesishub/features/forms/editable/editor_services.dart';
+import 'package:ethesishub/features/forms/editable/form1_template.dart';
+import 'package:ethesishub/features/forms/editable/form_pdf.dart';
 import 'package:ethesishub/features/forms/form1_data.dart';
 import 'package:ethesishub/features/forms/form1_pdf.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -222,6 +224,27 @@ class _FormViewerState extends ConsumerState<_FormViewer> {
           Expanded(child: preview(_source)),
         ],
       ),
+    );
+  }
+}
+
+/// "View attached copy": the Form 1 copy the leader attached to the
+/// nomination, shown beside the official Form 1 for the people who sign.
+/// Draws nothing when no copy was attached.
+class ViewForm1CopyButton extends ConsumerWidget {
+  const ViewForm1CopyButton({super.key, required this.thesisId});
+
+  final String thesisId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final attachment = ref.watch(form1AttachmentProvider(thesisId)).valueOrNull;
+    if (attachment == null) return const SizedBox.shrink();
+    return ViewFormButton(
+      label: 'View attached copy',
+      title: attachment.copyName,
+      filename: 'Form1-copy-$thesisId.pdf',
+      buildPdf: () => buildFormPdf(form1Template, attachment.overrides),
     );
   }
 }

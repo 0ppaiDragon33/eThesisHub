@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/form_attachment.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -67,6 +68,14 @@ final thesisByIdProvider =
   // Rebuilt on a change of user: see [signedInUidProvider].
   ref.watch(signedInUidProvider);
   return ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
+});
+
+/// The copy of Form 1 the leader attached to this thesis's nomination
+/// (the family argument is the thesis id); null when none was attached.
+final form1AttachmentProvider =
+    StreamProvider.family<FormAttachment?, String>((ref, thesisId) {
+  ref.watch(signedInUidProvider);
+  return ref.watch(thesisRepositoryProvider).watchForm1Attachment(thesisId);
 });
 
 /// Every thesis currently sitting at one stage of the approval chain.

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/features/dashboard/change_request_queue.dart';
 import 'package:ethesishub/features/forms/change_request_form.dart';
 import 'package:ethesishub/features/forms/editable/editor_services.dart';
+import 'package:ethesishub/features/forms/form_viewer.dart';
 import 'package:ethesishub/features/nomination/change_request_inbox.dart';
 import 'package:ethesishub/features/nomination/nomination_inbox_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -201,5 +203,40 @@ void main() {
     final text = extractPdfText(await buildChangeRequestPdf(request));
     expect(text, contains('Dr. New'));
     expect(text, contains('Dr. Old'));
+  });
+
+  group('the attached Form 1 copy', () {
+    Future<void> seedAttachment(FakeFirebaseFirestore db) =>
+        db.doc('theses/t1/attachments/form1').set({
+          'formId': 'form1',
+          'copyName': 'Group 3 – Santos',
+          'overrides': {'salutation': 'Respected Sir/Madam:'},
+          'attachedBy': 'l1',
+          'attachedAt': Timestamp.fromDate(DateTime(2026, 9, 20)),
+        });
+
+    testWidgets('shows nothing when none was attached', (tester) async {
+      final db = FakeFirebaseFirestore();
+      await _pump(tester, db, 'a1', _Capture(),
+          const ViewForm1CopyButton(thesisId: 't1'));
+      expect(find.text('View attached copy'), findsNothing);
+    });
+
+    testWidgets('opens the copy with the text the leader edited',
+        (tester) async {
+      final db = FakeFirebaseFirestore();
+      await seedAttachment(db);
+      final capture = _Capture();
+      await _pump(tester, db, 'a1', capture,
+          const ViewForm1CopyButton(thesisId: 't1'));
+
+      await tester.tap(find.text('View attached copy'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('formViewer')), findsOneWidget);
+      expect(find.text('Group 3 – Santos'), findsWidgets);
+
+      final text = extractPdfText(await capture.build!());
+      expect(text, contains('Respected Sir/Madam:'));
+    });
   });
 }

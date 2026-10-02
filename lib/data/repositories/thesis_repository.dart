@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/form_attachment.dart';
+import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -54,6 +56,17 @@ class ThesisRepository {
 
   DocumentReference<Map<String, dynamic>> _thesis(String thesisId) =>
       _theses.doc(thesisId);
+
+  DocumentReference<Map<String, dynamic>> _form1Attachment(String thesisId) =>
+      _theses.doc(thesisId).collection('attachments').doc('form1');
+
+  /// The copy of Form 1 the leader attached to this nomination, or null.
+  Stream<FormAttachment?> watchForm1Attachment(String thesisId) {
+    return _form1Attachment(thesisId).snapshots().map((s) {
+      final data = s.data();
+      return data == null ? null : FormAttachment.fromMap(data);
+    });
+  }
 
   static DateTime? _date(Object? v) => _firestoreDate(v);
 
@@ -176,7 +189,13 @@ class ThesisRepository {
     required FacultyDirectoryEntry adviser,
     required List<FacultyDirectoryEntry> panelists,
     required List<FacultyDirectoryEntry> exOfficio,
+    FormCopy? form1Copy,
+    String? leaderUid,
   }) async {
+    if (form1Copy != null && form1Copy.formId != 'form1') {
+      throw ArgumentError('Only a copy of Form 1 can be attached here.');
+    }
+
     // Counted AFTER the precedence collapse below, not before it. A raw
     // `panelists.length >= 3` accepts a selection that commits as two: an
     // office holder picked as a panelist collapses into their single
@@ -325,6 +344,21 @@ class ThesisRepository {
         '$who $why, so their seat cannot be removed. Only a nominee who '
         'declined can be replaced.',
       );
+    }
+
+    // The attached copy is a snapshot: later edits to the copy in My files
+    // do not change what the signers read. Choosing none clears one from an
+    // earlier round (a reopened thesis is submitted again).
+    if (form1Copy != null) {
+      batch.set(_form1Attachment(thesisId), {
+        'formId': 'form1',
+        'copyName': form1Copy.name,
+        'overrides': form1Copy.overrides,
+        'attachedBy': leaderUid,
+        'attachedAt': FieldValue.serverTimestamp(),
+      });
+    } else if ((await _form1Attachment(thesisId).get()).exists) {
+      batch.delete(_form1Attachment(thesisId));
     }
 
     batch.update(_theses.doc(thesisId), {
