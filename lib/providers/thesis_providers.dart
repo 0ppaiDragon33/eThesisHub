@@ -70,12 +70,14 @@ final thesisByIdProvider =
   return ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
 });
 
-/// The copy of Form 1 the leader attached to this thesis's nomination
-/// (the family argument is the thesis id); null when none was attached.
-final form1AttachmentProvider =
-    StreamProvider.family<FormAttachment?, String>((ref, thesisId) {
+/// The copy of a form (form1, form4a or form4b) the leader attached to a
+/// request on this thesis; null when none was attached.
+final formAttachmentProvider = StreamProvider.family<FormAttachment?,
+    ({String thesisId, String formId})>((ref, key) {
   ref.watch(signedInUidProvider);
-  return ref.watch(thesisRepositoryProvider).watchForm1Attachment(thesisId);
+  return ref
+      .watch(thesisRepositoryProvider)
+      .watchAttachment(key.thesisId, key.formId);
 });
 
 /// Every thesis currently sitting at one stage of the approval chain.

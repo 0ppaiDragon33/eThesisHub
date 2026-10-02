@@ -10,8 +10,11 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/features/forms/editable/form_copy_picker.dart';
 import 'package:ethesishub/providers/change_request_providers.dart';
+import 'package:ethesishub/providers/form_copy_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// The student leader's form for requesting a change of adviser (Form 4a) or
@@ -44,6 +47,9 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
   final _reasonsController = TextEditingController();
   final _titleController = TextEditingController();
   String? _newAdviserUid;
+
+  /// The My files copy of this request's form (4a or 4b) sent with it.
+  String? _copyId;
   String? _error;
   bool _busy = false;
 
@@ -107,13 +113,18 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
     }
 
     final isTitle = widget.type == ChangeRequestType.title;
+    final formId = isTitle ? 'form4b' : 'form4a';
+    final copies =
+        ref.read(myFormCopiesProvider(formId)).valueOrNull ?? const [];
+    final FormCopy? copy = copies.where((c) => c.id == _copyId).firstOrNull;
     final confirmed = await confirmAction(
       context,
       title: isTitle
           ? 'Request a change of title?'
           : 'Request a change of adviser?',
       message: 'It goes to the people who must accept it, then the '
-          'Coordinator and the Dean.',
+          'Coordinator and the Dean.'
+          '${copy == null ? '' : ' Your copy "${copy.name}" goes with it.'}',
       confirmLabel: 'Submit request',
       confirmKey: const Key('confirmSubmitChangeRequest'),
     );
@@ -132,6 +143,7 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
               thesis: thesis,
               newTitle: _titleController.text.trim(),
               reasons: reasons,
+              copy: copy,
             );
       } else {
         final directory =
@@ -161,6 +173,7 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
               newAdviser: newAdviser,
               formerAdviserName: formerAdviserName,
               reasons: reasons,
+              copy: copy,
             );
       }
       if (mounted) context.pop();
@@ -310,6 +323,15 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
                 ),
               ],
             ),
+          ),
+          const Gap.lg(),
+          FormCopyPicker(
+            formId: widget.type == ChangeRequestType.title ? 'form4b' : 'form4a',
+            label: widget.type == ChangeRequestType.title
+                ? 'Attach a Form 4b copy (optional)'
+                : 'Attach a Form 4a copy (optional)',
+            value: _copyId,
+            onChanged: (v) => setState(() => _copyId = v),
           ),
           const Gap.lg(),
           if (_error != null) ...[

@@ -12,6 +12,7 @@ import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/forms/editable/form_copy_picker.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/form_copy_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -504,44 +505,6 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     );
   }
 
-  /// Optional: send one of the leader's Form 1 copies from My files along
-  /// with the nomination. Hidden when they have none.
-  Widget _form1CopyPicker(TextTheme text) {
-    final copies = ref.watch(myFormCopiesProvider('form1')).valueOrNull ??
-        const <FormCopy>[];
-    if (copies.isEmpty) return const SizedBox.shrink();
-    // A pick that was deleted since falls back to none, which the dropdown
-    // would otherwise assert on.
-    final value = copies.any((c) => c.id == _form1CopyId) ? _form1CopyId : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<String?>(
-          key: const Key('form1CopyPicker'),
-          initialValue: value,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Attach a Form 1 copy (optional)',
-          ),
-          items: [
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('None'),
-            ),
-            for (final c in copies)
-              DropdownMenuItem<String?>(
-                value: c.id,
-                child: Text(c.name, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (v) => setState(() => _form1CopyId = v),
-        ),
-        const SizedBox(height: 4),
-        Text('Copies saved in My files.', style: text.bodySmall),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Watched, not read lazily inside the submit handler: watching in build
@@ -710,7 +673,12 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
               ),
             ),
             const Gap.lg(),
-            _form1CopyPicker(text),
+            FormCopyPicker(
+              formId: 'form1',
+              label: 'Attach a Form 1 copy (optional)',
+              value: _form1CopyId,
+              onChanged: (v) => setState(() => _form1CopyId = v),
+            ),
             const Gap.lg(),
             if (_error != null) ...[
               ErrorState(

@@ -1239,6 +1239,74 @@ service cloud.firestore {
                       && resource.data.conformeStatus == 'declined';
       }
 
+      // An optional copy of a form the leader attaches to a request: a
+      // snapshot of one of their My files copies, so the people who must
+      // sign can read it (the copy itself is private to its owner). It sits
+      // beside the official form, which the app still builds from the
+      // request. One document per form, written in the same batch as the
+      // request it goes with:
+      //   form1  -- the nomination; written while the thesis is a draft.
+      //   form4a -- a change of adviser, form4b -- a change of title;
+      //             written while the thesis is titleApproved, alongside a
+      //             pending changeRequests/adviser (or /title) in that batch.
+      match /attachments/{attachmentId} {
+        function requestIdFor(id) {
+          return id == 'form4a' ? 'adviser' : 'title';
+        }
+
+        function validAttachment(d) {
+          return attachmentId in ['form1', 'form4a', 'form4b']
+              && d.keys().hasOnly(['formId', 'copyName', 'overrides',
+                                   'attachedBy', 'attachedAt'])
+              && d.keys().hasAll(['formId', 'copyName', 'overrides',
+                                  'attachedBy', 'attachedAt'])
+              && d.formId == attachmentId
+              && d.copyName is string && d.copyName.size() >= 1
+              && d.copyName.size() <= 100
+              && d.overrides is map && d.overrides.size() <= 300
+              && d.attachedBy == request.auth.uid
+              && d.attachedAt == request.time;
+        }
+
+        // The stage the thesis must be at for this form's request to be made.
+        function leaderMayWrite() {
+          return isThesisLeader(thesisId)
+              && thesisData(thesisId).status ==
+                 (attachmentId == 'form1' ? 'draft' : 'titleApproved');
+        }
+
+        // The change request this form goes with is made or resubmitted in
+        // this very write: it is pending and stamped with this request's
+        // time. An open request already being signed is never matched, so the
+        // leader cannot swap the copy under the people reading it.
+        function requestWrittenNow() {
+          let r = getAfter(/databases/$(database)/documents/theses/$(thesisId)/changeRequests/$(requestIdFor(attachmentId))).data;
+          return r.stage in ['pendingAdvisers', 'pendingAdviser']
+              && r.updatedAt == request.time;
+        }
+
+        // A signer on a change request who cannot read the thesis (the
+        // proposed new adviser) reaches the form through the request itself.
+        function onThisRequest() {
+          let r = get(/databases/$(database)/documents/theses/$(thesisId)/changeRequests/$(requestIdFor(attachmentId))).data;
+          return signedIn() && isActive() && (
+            request.auth.uid == r.get('newAdviserUid', '') ||
+            request.auth.uid == r.get('formerAdviserUid', '') ||
+            request.auth.uid in r.get('awaitingUids', []));
+        }
+
+        allow get, list: if mayReadThesis() || isCoordinator() || isDean()
+                         || (attachmentId in ['form4a', 'form4b']
+                             && onThisRequest());
+
+        allow create, update: if leaderMayWrite()
+                              && validAttachment(request.resource.data)
+                              && (attachmentId == 'form1'
+                                  || requestWrittenNow());
+
+        allow delete: if leaderMayWrite();
+      }
+
       // A panel member on this thesis: the adviser, anyone on panelistUids,
       // or anyone holding an accepted/ex-officio nomination — which covers
       // the ex officio Coordinator and Dean, who never appear in
@@ -1253,37 +1321,6 @@ service cloud.firestore {
       // record. `nominationData()` is reused here (rather than a second
       // `get()`) because each `get()` counts against the per-evaluation
       // limit.
-      // An optional copy of Form 1 the leader attaches when submitting the
-      // nomination: a snapshot of one of their My files copies, so the people
-      // who must sign can read it (the copy itself is private to its owner).
-      // It sits beside the official Form 1, which is still built from the
-      // live nominations. Written only while the thesis is a draft, in the
-      // same batch as the submit; read by anyone who can read the thesis.
-      match /attachments/{attachmentId} {
-        function validAttachment(d) {
-          return attachmentId == 'form1'
-              && d.keys().hasOnly(['formId', 'copyName', 'overrides',
-                                   'attachedBy', 'attachedAt'])
-              && d.keys().hasAll(['formId', 'copyName', 'overrides',
-                                  'attachedBy', 'attachedAt'])
-              && d.formId == 'form1'
-              && d.copyName is string && d.copyName.size() >= 1
-              && d.copyName.size() <= 100
-              && d.overrides is map && d.overrides.size() <= 300
-              && d.attachedBy == request.auth.uid
-              && d.attachedAt == request.time;
-        }
-
-        allow get, list: if mayReadThesis() || isCoordinator() || isDean();
-
-        allow create, update: if isThesisLeader(thesisId)
-                              && thesisData(thesisId).status == 'draft'
-                              && validAttachment(request.resource.data);
-
-        allow delete: if isThesisLeader(thesisId)
-                      && thesisData(thesisId).status == 'draft';
-      }
-
       function isOnPanel() {
         let t = thesisData(thesisId);
         return signedIn() && isActive() && (

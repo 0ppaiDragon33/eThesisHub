@@ -218,7 +218,7 @@ void main() {
     testWidgets('shows nothing when none was attached', (tester) async {
       final db = FakeFirebaseFirestore();
       await _pump(tester, db, 'a1', _Capture(),
-          const ViewForm1CopyButton(thesisId: 't1'));
+          const ViewAttachedCopyButton(thesisId: 't1', formId: 'form1'));
       expect(find.text('View attached copy'), findsNothing);
     });
 
@@ -228,7 +228,7 @@ void main() {
       await seedAttachment(db);
       final capture = _Capture();
       await _pump(tester, db, 'a1', capture,
-          const ViewForm1CopyButton(thesisId: 't1'));
+          const ViewAttachedCopyButton(thesisId: 't1', formId: 'form1'));
 
       await tester.tap(find.text('View attached copy'));
       await tester.pumpAndSettle();
@@ -237,6 +237,100 @@ void main() {
 
       final text = extractPdfText(await capture.build!());
       expect(text, contains('Respected Sir/Madam:'));
+    });
+  });
+
+  group('the attached Form 4a / 4b copy on a change request card', () {
+    ChangeRequest request(String type) => ChangeRequest.fromMap(type, {
+      'type': type,
+      'stage': type == 'adviser' ? 'pendingAdvisers' : 'pendingAdviser',
+      'reasons': 'Reasons on the request.',
+      'leaderUid': 'l1',
+      if (type == 'adviser') ...{
+        'newAdviserUid': 'a2',
+        'newAdviserName': 'Dr. New',
+        'formerAdviserUid': 'a1',
+        'formerAdviserName': 'Dr. Old',
+      } else ...{
+        'newTitle': 'New Title',
+        'oldTitle': 'Old Title',
+      },
+      'signoffs': _signoffs(
+        type == 'adviser' ? ['newAdviser', 'formerAdviser'] : ['adviser'],
+      ),
+    });
+
+    Future<void> seedAttachment(
+      FakeFirebaseFirestore db,
+      String formId,
+      String reasons,
+    ) => db.doc('theses/t1/attachments/$formId').set({
+      'formId': formId,
+      'copyName': 'My $formId',
+      'overrides': {'reasons': reasons},
+      'attachedBy': 'l1',
+      'attachedAt': Timestamp.fromDate(DateTime(2026, 9, 20)),
+    });
+
+    testWidgets('a signer sees it beside Form 4a', (tester) async {
+      final db = FakeFirebaseFirestore();
+      await seedAttachment(db, 'form4a', 'Copy reasons for 4a');
+      final capture = _Capture();
+      await _pump(
+        tester,
+        db,
+        'a2',
+        capture,
+        ViewChangeRequestFormButton(
+          thesisId: 't1',
+          request: request('adviser'),
+        ),
+      );
+
+      expect(find.text('View Form 4a'), findsOneWidget);
+      await tester.tap(find.text('View attached copy'));
+      await tester.pumpAndSettle();
+      final text = extractPdfText(await capture.build!());
+      expect(text, contains('Copy reasons for 4a'));
+      expect(text, isNot(contains('Reasons on the request.')));
+    });
+
+    testWidgets('a title request shows the Form 4b copy', (tester) async {
+      final db = FakeFirebaseFirestore();
+      await seedAttachment(db, 'form4b', 'Copy reasons for 4b');
+      final capture = _Capture();
+      await _pump(
+        tester,
+        db,
+        'a1',
+        capture,
+        ViewChangeRequestFormButton(
+          thesisId: 't1',
+          request: request('title'),
+        ),
+      );
+
+      await tester.tap(find.text('View attached copy'));
+      await tester.pumpAndSettle();
+      expect(
+        extractPdfText(await capture.build!()),
+        contains('Copy reasons for 4b'),
+      );
+    });
+
+    testWidgets('no copy attached, no extra button', (tester) async {
+      await _pump(
+        tester,
+        FakeFirebaseFirestore(),
+        'a2',
+        _Capture(),
+        ViewChangeRequestFormButton(
+          thesisId: 't1',
+          request: request('adviser'),
+        ),
+      );
+      expect(find.text('View Form 4a'), findsOneWidget);
+      expect(find.text('View attached copy'), findsNothing);
     });
   });
 }

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -455,5 +456,131 @@ void main() {
     await tester.pump();
 
     expect(find.text('Loading thesis…'), findsOneWidget);
+  });
+
+  group('attached form copy', () {
+    Future<void> seedCopy(
+      FakeFirebaseFirestore db,
+      String id,
+      String formId,
+      String name,
+    ) async {
+      await db.collection('users/l1/formCopies').doc(id).set({
+        'formId': formId,
+        'name': name,
+        'overrides': {'reasons': 'Edited reasons'},
+        'folderId': null,
+        'createdAt': Timestamp.fromDate(DateTime(2026, 9, 1)),
+        'updatedAt': Timestamp.fromDate(DateTime(2026, 9, 1)),
+      });
+    }
+
+    Future<void> submit(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const Key('submitChangeRequest')));
+      await tester.tap(find.byKey(const Key('submitChangeRequest')));
+      await confirmIfAsked(tester);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('no picker without a saved copy of this form', (tester) async {
+      final db = await seed();
+      await seedCopy(db, 'x', 'form4b', 'A 4b');
+      await tester.pumpWidget(
+        _wrap(db, uid: 'l1', type: ChangeRequestType.adviser),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('form4aCopyPicker')), findsNothing);
+    });
+
+    testWidgets('an adviser change sends the picked Form 4a copy', (
+      tester,
+    ) async {
+      final db = await seed(adviserUid: 'a1');
+      await seedCopy(db, 'c1', 'form4a', 'My 4a');
+      await seedCopy(db, 'c2', 'form4b', 'Not this one');
+      await tester.pumpWidget(
+        _wrap(db, uid: 'l1', type: ChangeRequestType.adviser),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('newAdviserPicker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dr. Adviser Two').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('changeReasons')),
+        'A good reason',
+      );
+      await tester.ensureVisible(find.byKey(const Key('form4aCopyPicker')));
+      await tester.tap(find.byKey(const Key('form4aCopyPicker')));
+      await tester.pumpAndSettle();
+      expect(find.text('Not this one'), findsNothing);
+      await tester.tap(find.text('My 4a').last);
+      await tester.pumpAndSettle();
+
+      await submit(tester);
+
+      final attached = await db.doc('theses/t1/attachments/form4a').get();
+      expect(attached.exists, isTrue);
+      expect(attached.data()!['copyName'], 'My 4a');
+      expect(attached.data()!['overrides'], {'reasons': 'Edited reasons'});
+      expect(attached.data()!['attachedBy'], 'l1');
+    });
+
+    testWidgets('a title change sends the picked Form 4b copy', (tester) async {
+      final db = await seed();
+      await seedCopy(db, 'c2', 'form4b', 'My 4b');
+      await tester.pumpWidget(
+        _wrap(db, uid: 'l1', type: ChangeRequestType.title),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('newTitleField')),
+        'A New Working Title',
+      );
+      await tester.enterText(
+        find.byKey(const Key('changeReasons')),
+        'A good reason',
+      );
+      await tester.ensureVisible(find.byKey(const Key('form4bCopyPicker')));
+      await tester.tap(find.byKey(const Key('form4bCopyPicker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('My 4b').last);
+      await tester.pumpAndSettle();
+
+      await submit(tester);
+
+      final attached = await db.doc('theses/t1/attachments/form4b').get();
+      expect(attached.data()!['copyName'], 'My 4b');
+    });
+
+    testWidgets('leaving it on None attaches nothing', (tester) async {
+      final db = await seed();
+      await seedCopy(db, 'c2', 'form4b', 'My 4b');
+      await tester.pumpWidget(
+        _wrap(db, uid: 'l1', type: ChangeRequestType.title),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('newTitleField')),
+        'A New Working Title',
+      );
+      await tester.enterText(
+        find.byKey(const Key('changeReasons')),
+        'A good reason',
+      );
+      await submit(tester);
+
+      expect(
+        (await db.doc('theses/t1/changeRequests/title').get()).exists,
+        isTrue,
+      );
+      expect(
+        (await db.doc('theses/t1/attachments/form4b').get()).exists,
+        isFalse,
+      );
+    });
   });
 }

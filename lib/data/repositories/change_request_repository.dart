@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
@@ -65,14 +66,51 @@ class ChangeRequestRepository {
       },
   };
 
+  /// Writes the request and, in the same batch, the leader's attached copy of
+  /// its form (Form 4a for an adviser change, 4b for a title change) -- or
+  /// clears one from an earlier round when [copy] is null. Same batch because
+  /// the rules accept the copy only alongside the request it goes with.
+  Future<void> _write(
+    Thesis thesis,
+    ChangeRequestType type,
+    Map<String, dynamic> data,
+    FormCopy? copy,
+  ) async {
+    final formId = type == ChangeRequestType.adviser ? 'form4a' : 'form4b';
+    if (copy != null && copy.formId != formId) {
+      throw ArgumentError('Only a copy of Form ${formId.substring(4)} can be '
+          'attached to this request.');
+    }
+    final attachment = _db
+        .collection('theses')
+        .doc(thesis.id)
+        .collection('attachments')
+        .doc(formId);
+    final batch = _db.batch();
+    batch.set(_request(thesis.id, type), data);
+    if (copy != null) {
+      batch.set(attachment, {
+        'formId': formId,
+        'copyName': copy.name,
+        'overrides': copy.overrides,
+        'attachedBy': thesis.leaderUid,
+        'attachedAt': FieldValue.serverTimestamp(),
+      });
+    } else if ((await attachment.get()).exists) {
+      batch.delete(attachment);
+    }
+    await batch.commit();
+  }
+
   Future<void> submitAdviserChange({
     required Thesis thesis,
     required FacultyDirectoryEntry newAdviser,
     required String formerAdviserName,
     required String reasons,
+    FormCopy? copy,
   }) async {
     if (reasons.trim().isEmpty) throw ArgumentError('Give a reason.');
-    await _request(thesis.id, ChangeRequestType.adviser).set({
+    await _write(thesis, ChangeRequestType.adviser, {
       'type': ChangeRequestType.adviser.value,
       'stage': ChangeRequestStage.pendingAdvisers.value,
       'reasons': reasons.trim(),
@@ -85,17 +123,18 @@ class ChangeRequestRepository {
       'awaitingUids': [newAdviser.uid, thesis.adviserUid],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }, copy);
   }
 
   Future<void> submitTitleChange({
     required Thesis thesis,
     required String newTitle,
     required String reasons,
+    FormCopy? copy,
   }) async {
     if (newTitle.trim().isEmpty) throw ArgumentError('Give a new title.');
     if (reasons.trim().isEmpty) throw ArgumentError('Give a reason.');
-    await _request(thesis.id, ChangeRequestType.title).set({
+    await _write(thesis, ChangeRequestType.title, {
       'type': ChangeRequestType.title.value,
       'stage': ChangeRequestStage.pendingAdviser.value,
       'reasons': reasons.trim(),
@@ -106,7 +145,7 @@ class ChangeRequestRepository {
       'awaitingUids': [thesis.adviserUid],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }, copy);
   }
 
   /// Records one role's accept or decline, advancing the stage when the step

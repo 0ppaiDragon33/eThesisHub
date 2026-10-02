@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
+import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/repositories/change_request_repository.dart';
 
@@ -276,5 +277,90 @@ void main() {
       repo.approveAsDean(thesisId: 't1', type: ChangeRequestType.title),
       throwsStateError,
     );
+  });
+
+  group('an attached copy of the form', () {
+    FormCopy copy(String formId) => FormCopy(
+      id: 'c1',
+      formId: formId,
+      name: 'My copy',
+      overrides: const {'reasons': 'Edited reasons'},
+    );
+
+    test('an adviser change stores a Form 4a copy beside the request', () async {
+      final db = await seed();
+      final repo = ChangeRequestRepository(db);
+      await repo.submitAdviserChange(
+        thesis: await theThesis(db),
+        newAdviser: newAdv(),
+        formerAdviserName: 'Dr. Old',
+        reasons: 'The adviser moved campus.',
+        copy: copy('form4a'),
+      );
+
+      final doc = await db.doc('theses/t1/attachments/form4a').get();
+      expect(doc.data()!['formId'], 'form4a');
+      expect(doc.data()!['copyName'], 'My copy');
+      expect(doc.data()!['overrides'], {'reasons': 'Edited reasons'});
+      expect(doc.data()!['attachedBy'], 'l1');
+      expect(
+        (await db.doc('theses/t1/changeRequests/adviser').get()).exists,
+        isTrue,
+      );
+    });
+
+    test('a title change stores a Form 4b copy', () async {
+      final db = await seed();
+      final repo = ChangeRequestRepository(db);
+      await repo.submitTitleChange(
+        thesis: await theThesis(db),
+        newTitle: 'New Title',
+        reasons: 'Clearer.',
+        copy: copy('form4b'),
+      );
+
+      final doc = await db.doc('theses/t1/attachments/form4b').get();
+      expect(doc.data()!['formId'], 'form4b');
+    });
+
+    test('no copy stores no attachment, and clears an earlier one', () async {
+      final db = await seed();
+      final repo = ChangeRequestRepository(db);
+      await repo.submitTitleChange(
+        thesis: await theThesis(db),
+        newTitle: 'New Title',
+        reasons: 'Clearer.',
+        copy: copy('form4b'),
+      );
+      await repo.submitTitleChange(
+        thesis: await theThesis(db),
+        newTitle: 'Newer Title',
+        reasons: 'Clearer still.',
+      );
+
+      expect(
+        (await db.doc('theses/t1/attachments/form4b').get()).exists,
+        isFalse,
+      );
+    });
+
+    test('the wrong form is refused before anything is written', () async {
+      final db = await seed();
+      final repo = ChangeRequestRepository(db);
+      await expectLater(
+        repo.submitAdviserChange(
+          thesis: await theThesis(db),
+          newAdviser: newAdv(),
+          formerAdviserName: 'Dr. Old',
+          reasons: 'The adviser moved campus.',
+          copy: copy('form4b'),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        (await db.doc('theses/t1/changeRequests/adviser').get()).exists,
+        isFalse,
+      );
+    });
   });
 }

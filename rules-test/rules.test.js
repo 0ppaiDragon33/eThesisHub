@@ -6578,3 +6578,86 @@ test("Form 1 attachment: shape is pinned (author, time, form, size, extra fields
   const big = Object.fromEntries(Array.from({ length: 301 }, (_, i) => [`b${i}`, "x"]));
   await assertFails(setDoc(at, attachmentDoc({ overrides: big })));
 });
+
+// ---- Form 4a / 4b attachment: a copy sent with a change request ----
+
+const attPath4a = "theses/cr1/attachments/form4a";
+const attDoc = (formId, extra = {}) => ({
+  formId, copyName: "My 4a", overrides: { reasons: "Edited reasons" },
+  attachedBy: "cr-leader", attachedAt: serverTimestamp(), ...extra,
+});
+
+function submitWithCopy(leader, copy = attDoc("form4a")) {
+  const batch = writeBatch(leader);
+  batch.set(doc(leader, crPath), adviserReq());
+  batch.set(doc(leader, attPath4a), copy);
+  return batch.commit();
+}
+
+test("Form 4a attachment: the leader MAY attach it in the batch that makes the request", async () => {
+  await seedCr();
+  await assertSucceeds(submitWithCopy(asCrUser("cr-leader", "cr-leader@isufst.edu.ph")));
+});
+
+test("Form 4a attachment: refused without the request in the same write", async () => {
+  await seedCr();
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, attPath4a), attDoc("form4a")));
+});
+
+test("Form 4a attachment: cannot be swapped under an open request being signed", async () => {
+  await seedCr({});
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  await assertFails(setDoc(doc(leader, attPath4a), attDoc("form4a")));
+});
+
+test("Form 4a attachment: refused when the thesis is not titleApproved", async () => {
+  await seedCr(null, { status: "titlePendingDefence" });
+  await assertFails(submitWithCopy(asCrUser("cr-leader", "cr-leader@isufst.edu.ph")));
+});
+
+test("Form 4a attachment: only the leader writes it, and its shape is pinned", async () => {
+  await seedCr();
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  const other = asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph");
+  const asOther = writeBatch(other);
+  asOther.set(doc(other, crPath), adviserReq());
+  asOther.set(doc(other, attPath4a), attDoc("form4a", { attachedBy: "cr-new-adv" }));
+  await assertFails(asOther.commit());
+  await assertFails(submitWithCopy(leader, attDoc("form4b")));
+  await assertFails(submitWithCopy(leader, attDoc("form4a", { attachedBy: "cr-old-adv" })));
+  await assertFails(submitWithCopy(leader, attDoc("form4a", { extra: "x" })));
+});
+
+test("Form 4a attachment: the new adviser, who cannot read the thesis, reads it; a stranger does not", async () => {
+  await seedCr({});
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, attPath4a), {
+      ...attDoc("form4a"), attachedAt: Timestamp.now() });
+    await setDoc(doc(db, "users/cr-stranger"),
+      { role: "student", active: true });
+  });
+  await assertSucceeds(getDoc(doc(
+    asCrUser("cr-new-adv", "cr-new-adv@isufst.edu.ph"), attPath4a)));
+  await assertSucceeds(getDoc(doc(
+    asCrUser("cr-coord", "cr-coord@isufst.edu.ph"), attPath4a)));
+  await assertFails(getDoc(doc(
+    asCrUser("cr-stranger", "cr-stranger@isufst.edu.ph"), attPath4a)));
+});
+
+test("Form 4b attachment: goes with a title request", async () => {
+  await seedCr();
+  const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
+  const batch = writeBatch(leader);
+  batch.set(doc(leader, "theses/cr1/changeRequests/title"), {
+    type: "title", stage: "pendingAdviser", reasons: "Clearer.",
+    leaderUid: "cr-leader", newTitle: "New Title", oldTitle: "Old Title",
+    signoffs: { adviser: { status: "pending" }, coordinator: { status: "pending" },
+      dean: { status: "pending" } },
+    awaitingUids: ["cr-old-adv"],
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(leader, "theses/cr1/attachments/form4b"), attDoc("form4b"));
+  await assertSucceeds(batch.commit());
+});

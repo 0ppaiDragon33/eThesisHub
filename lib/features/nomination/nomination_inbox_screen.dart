@@ -264,7 +264,8 @@ class _RequestCard extends StatelessWidget {
               children: [
                 ViewForm1Button(
                     key: Key('viewForm1-$thesisId'), thesisId: thesisId),
-                ViewForm1CopyButton(
+                ViewAttachedCopyButton(
+                    formId: 'form1',
                     key: Key('viewForm1Copy-$thesisId'),
                     thesisId: thesisId),
               ],

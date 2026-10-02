@@ -61,13 +61,22 @@ class ViewChangeRequestFormButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final adviser = request.type == ChangeRequestType.adviser;
-    return ViewFormButton(
-      label: adviser ? 'View Form 4a' : 'View Form 4b',
-      title: adviser
-          ? 'Form 4a · Change of Undergraduate Thesis Adviser'
-          : 'Form 4b · Change of Undergraduate Thesis Title',
-      filename: '${adviser ? 'Form4a' : 'Form4b'}-$thesisId.pdf',
-      buildPdf: () => buildChangeRequestPdf(request),
+    return Wrap(
+      children: [
+        ViewFormButton(
+          label: adviser ? 'View Form 4a' : 'View Form 4b',
+          title: adviser
+              ? 'Form 4a · Change of Undergraduate Thesis Adviser'
+              : 'Form 4b · Change of Undergraduate Thesis Title',
+          filename: '${adviser ? 'Form4a' : 'Form4b'}-$thesisId.pdf',
+          buildPdf: () => buildChangeRequestPdf(request),
+        ),
+        // The copy the leader sent with the request, if any.
+        ViewAttachedCopyButton(
+          thesisId: thesisId,
+          formId: adviser ? 'form4a' : 'form4b',
+        ),
+      ],
     );
   }
 }

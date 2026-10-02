@@ -66,7 +66,7 @@ void main() {
   test('the attachment is read back for the signers', () async {
     await submit(form1Copy: copy());
 
-    final attached = await repo.watchForm1Attachment('t1').first;
+    final attached = await repo.watchAttachment('t1', 'form1').first;
     expect(attached, isNotNull);
     expect(attached!.copyName, 'Group 3');
     expect(attached.overrides, {'salutation': 'Dear Sir:'});
@@ -76,7 +76,7 @@ void main() {
     await submit();
 
     expect((await db.doc('theses/t1/attachments/form1').get()).exists, isFalse);
-    expect(await repo.watchForm1Attachment('t1').first, isNull);
+    expect(await repo.watchAttachment('t1', 'form1').first, isNull);
   });
 
   test('submitting again without a copy clears the earlier one', () async {

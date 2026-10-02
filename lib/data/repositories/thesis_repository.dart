@@ -57,12 +57,15 @@ class ThesisRepository {
   DocumentReference<Map<String, dynamic>> _thesis(String thesisId) =>
       _theses.doc(thesisId);
 
-  DocumentReference<Map<String, dynamic>> _form1Attachment(String thesisId) =>
-      _theses.doc(thesisId).collection('attachments').doc('form1');
+  DocumentReference<Map<String, dynamic>> _attachment(
+    String thesisId,
+    String formId,
+  ) => _theses.doc(thesisId).collection('attachments').doc(formId);
 
-  /// The copy of Form 1 the leader attached to this nomination, or null.
-  Stream<FormAttachment?> watchForm1Attachment(String thesisId) {
-    return _form1Attachment(thesisId).snapshots().map((s) {
+  /// The copy of [formId] (form1, form4a or form4b) the leader attached to a
+  /// request on this thesis, or null.
+  Stream<FormAttachment?> watchAttachment(String thesisId, String formId) {
+    return _attachment(thesisId, formId).snapshots().map((s) {
       final data = s.data();
       return data == null ? null : FormAttachment.fromMap(data);
     });
@@ -350,15 +353,15 @@ class ThesisRepository {
     // do not change what the signers read. Choosing none clears one from an
     // earlier round (a reopened thesis is submitted again).
     if (form1Copy != null) {
-      batch.set(_form1Attachment(thesisId), {
+      batch.set(_attachment(thesisId, 'form1'), {
         'formId': 'form1',
         'copyName': form1Copy.name,
         'overrides': form1Copy.overrides,
         'attachedBy': leaderUid,
         'attachedAt': FieldValue.serverTimestamp(),
       });
-    } else if ((await _form1Attachment(thesisId).get()).exists) {
-      batch.delete(_form1Attachment(thesisId));
+    } else if ((await _attachment(thesisId, 'form1').get()).exists) {
+      batch.delete(_attachment(thesisId, 'form1'));
     }
 
     batch.update(_theses.doc(thesisId), {
