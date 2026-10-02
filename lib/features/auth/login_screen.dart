@@ -39,6 +39,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _lockedMessage(Duration left) =>
       'Too many attempts. Try again in ${waitText(left)}.';
 
+  /// "Incorrect email or password." with an attempts-left warning once it is
+  /// close to the lock. [left] is tries remaining before a lock.
+  String _incorrectMessage(int left) {
+    const base = 'Incorrect email or password.';
+    if (left <= 0 || left > 3) return base;
+    return '$base $left ${left == 1 ? 'attempt' : 'attempts'} left before a '
+        'temporary lock.';
+  }
+
   Future<void> _submit() async {
     final limits = ref.read(authLimitsProvider);
     final locked = limits.loginLock(_email.text);
@@ -111,14 +120,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           e.code == 'user-not-found';
       if (wrongCredential) limits.loginFailed(_email.text);
       final lockedNow = wrongCredential ? limits.loginLock(_email.text) : null;
+      // How many tries remain before the lock, shown as it gets close so the
+      // lock is never a surprise.
+      final left = wrongCredential ? limits.loginAttemptsLeft(_email.text) : 0;
       if (!mounted) return;
       setState(() {
         _error = lockedNow != null
             ? _lockedMessage(lockedNow)
             : switch (e.code) {
           'wrong-password' || 'invalid-credential' =>
-            'Incorrect email or password.',
-          'user-not-found' => 'Incorrect email or password.',
+            _incorrectMessage(left),
+          'user-not-found' => _incorrectMessage(left),
           'too-many-requests' => 'Too many attempts. Try again later.',
           _ => 'Sign-in failed. Please try again.',
         };

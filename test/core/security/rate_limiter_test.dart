@@ -73,6 +73,28 @@ void main() {
       expect(th.lockedFor('b'), isNull);
     });
 
+    test('remainingAttempts counts down, floors at zero, and resets', () {
+      final th = make();
+      expect(th.remainingAttempts('a'), 5);
+      th.recordFailure('a');
+      expect(th.remainingAttempts('a'), 4);
+      for (var i = 0; i < 10; i++) {
+        th.recordFailure('a');
+      }
+      expect(th.remainingAttempts('a'), 0);
+      th.reset('a');
+      expect(th.remainingAttempts('a'), 5);
+    });
+
+    test('remainingAttempts is full again after failures age out', () {
+      final th = make();
+      th.recordFailure('a');
+      th.recordFailure('a');
+      expect(th.remainingAttempts('a'), 3);
+      advance(const Duration(hours: 1, minutes: 1));
+      expect(th.remainingAttempts('a'), 5);
+    });
+
     test('a success clears the count', () {
       final th = make();
       for (var i = 0; i < 6; i++) {
@@ -153,6 +175,15 @@ void main() {
         limits.loginFailed('  Kj@ISUFST.edu.ph ');
       }
       expect(limits.loginLock('kj@isufst.edu.ph'), isNotNull);
+    });
+
+    test('loginAttemptsLeft is the smaller of the two allowances', () {
+      final limits = AuthLimits(null);
+      // Per email (5) runs down faster than per device (15).
+      expect(limits.loginAttemptsLeft('a@isufst.edu.ph'), 5);
+      limits.loginFailed('a@isufst.edu.ph');
+      limits.loginFailed('a@isufst.edu.ph');
+      expect(limits.loginAttemptsLeft('a@isufst.edu.ph'), 3);
     });
 
     test('a success clears both locks', () {

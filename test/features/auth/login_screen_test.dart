@@ -112,6 +112,24 @@ void main() {
     expect(service.attempts, 5);
   });
 
+  testWidgets('warns how many tries are left as the lock nears',
+      (tester) async {
+    final service = CountingFailingAuthService();
+    await pumpLogin(tester, service);
+
+    // The first two mistakes read plainly; the warning starts once 3 or
+    // fewer remain (of the 5 free attempts).
+    await tryPassword(tester, 'kj@isufst.edu.ph');
+    expect(find.textContaining('attempts left'), findsNothing);
+    await tryPassword(tester, 'kj@isufst.edu.ph');
+    expect(find.textContaining('3 attempts left before a temporary lock'),
+        findsOneWidget);
+    await tryPassword(tester, 'kj@isufst.edu.ph');
+    expect(find.textContaining('2 attempts left'), findsOneWidget);
+    await tryPassword(tester, 'kj@isufst.edu.ph');
+    expect(find.textContaining('1 attempt left'), findsOneWidget);
+  });
+
   testWidgets('the sixth wrong password locks sign-in and says for how long',
       (tester) async {
     final service = CountingFailingAuthService();

@@ -95,6 +95,19 @@ class Throttle {
     return left > Duration.zero ? left : null;
   }
 
+  /// How many more failures [key] has before the next one locks it. Counts
+  /// decay in, so a key whose failures have aged out is back to the full
+  /// allowance. Zero once the free attempts are spent (the next failure
+  /// locks).
+  int remainingAttempts(String key) {
+    final e = _entries[key];
+    if (e == null) return policy.freeAttempts;
+    final failures =
+        _now().difference(e.last) > ThrottlePolicy.decayAfter ? 0 : e.failures;
+    final left = policy.freeAttempts - failures;
+    return left < 0 ? 0 : left;
+  }
+
   /// Records a failed attempt. Returns the lock that now applies, or null.
   Duration? recordFailure(String key) {
     final now = _now();
@@ -260,6 +273,14 @@ class AuthLimits {
     if (a == null) return b;
     if (b == null) return a;
     return a > b ? a : b;
+  }
+
+  /// Sign-in tries left before a lock: the smaller of the per-email and
+  /// per-device allowances, since either can lock first.
+  int loginAttemptsLeft(String email) {
+    final byEmail = loginPerEmail.remainingAttempts(emailKey(email));
+    final byDevice = loginPerDevice.remainingAttempts(deviceKey);
+    return byEmail < byDevice ? byEmail : byDevice;
   }
 
   void loginFailed(String email) {
