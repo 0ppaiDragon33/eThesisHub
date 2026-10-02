@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:ethesishub/core/components/brand.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/tone.dart';
+import 'package:ethesishub/core/security/rate_limiter.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/password_field.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
@@ -35,7 +36,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  String _lockedMessage(Duration left) =>
+      'Too many attempts. Try again in ${waitText(left)}.';
+
   Future<void> _submit() async {
+    final limits = ref.read(authLimitsProvider);
+    final locked = limits.loginLock(_email.text);
+    if (locked != null) {
+      setState(() => _error = _lockedMessage(locked));
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -47,6 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: _email.text,
         password: _password.text,
       );
+      limits.loginSucceeded(_email.text);
 
       // Apply any pending faculty invite at first login.
       final user = credential.user;
@@ -92,9 +104,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       }
     } on FirebaseAuthException catch (e) {
+      // Only a wrong credential counts toward the lock; a network error or a
+      // server-side refusal is not the person guessing.
+      final wrongCredential = e.code == 'wrong-password' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'user-not-found';
+      if (wrongCredential) limits.loginFailed(_email.text);
+      final lockedNow = wrongCredential ? limits.loginLock(_email.text) : null;
       if (!mounted) return;
       setState(() {
-        _error = switch (e.code) {
+        _error = lockedNow != null
+            ? _lockedMessage(lockedNow)
+            : switch (e.code) {
           'wrong-password' || 'invalid-credential' =>
             'Incorrect email or password.',
           'user-not-found' => 'Incorrect email or password.',
@@ -128,8 +149,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _error = 'Enter your email first, then tap Reset.');
       return;
     }
+    final cooldown = ref.read(authLimitsProvider).passwordReset;
+    final key = AuthLimits.emailKey(email);
+    final wait = cooldown.remaining(key);
+    if (wait != null) {
+      setState(() => _error =
+          'A reset link was just sent. Wait ${waitText(wait)} to send another.');
+      return;
+    }
     try {
       await ref.read(authServiceProvider).sendPasswordReset(email);
+      cooldown.start(key);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Password reset link sent to $email')),

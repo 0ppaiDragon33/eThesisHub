@@ -288,6 +288,38 @@ void main() {
     expect(find.textContaining('Failed to resend'), findsOneWidget);
   });
 
+  testWidgets('a second resend within a minute is held back', (tester) async {
+    final mockAuth = MockFirebaseAuth(
+      mockUser: MockUser(
+        uid: 'uid-1',
+        email: 'user@isufst.edu.ph',
+        isEmailVerified: false,
+      ),
+    );
+    final service = _CountingEmailService(mockAuth);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+          firebaseAuthProvider.overrideWithValue(mockAuth),
+          authServiceProvider.overrideWithValue(service),
+        ],
+        child: const MaterialApp(home: VerifyEmailScreen()),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('resend')));
+    await tester.pumpAndSettle();
+    expect(service.sent, 1);
+    expect(find.textContaining('Verification link resent'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('resend')));
+    await tester.pumpAndSettle();
+    expect(service.sent, 1, reason: 'the second tap sent nothing');
+    expect(find.textContaining('Wait 1 minute to resend'), findsOneWidget);
+  });
+
   testWidgets('signout button shows error on failure', (tester) async {
     final mockAuth = MockFirebaseAuth(
       mockUser: MockUser(
@@ -524,5 +556,17 @@ class _TokenTrackingAuthService extends AuthService {
   @override
   Future<void> refreshIdToken() async {
     forcedRefreshes++;
+  }
+}
+
+/// Counts verification emails sent.
+class _CountingEmailService extends AuthService {
+  _CountingEmailService(MockFirebaseAuth mockAuth) : super(mockAuth);
+
+  int sent = 0;
+
+  @override
+  Future<void> sendEmailVerification() async {
+    sent++;
   }
 }

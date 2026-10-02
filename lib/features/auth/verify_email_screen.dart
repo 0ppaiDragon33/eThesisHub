@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/components/brand.dart';
+import 'package:ethesishub/core/security/rate_limiter.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -124,8 +125,23 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   }
 
   Future<void> _handleResend() async {
+    final cooldown = ref.read(authLimitsProvider).resendVerification;
+    final wait = cooldown.remaining('self');
+    if (wait != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'A link was just sent. Wait ${waitText(wait)} to resend.',
+          ),
+        ),
+      );
+      return;
+    }
     try {
       await ref.read(authServiceProvider).sendEmailVerification();
+      cooldown.start('self');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Verification link resent. Check your email.')),

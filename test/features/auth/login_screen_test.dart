@@ -68,7 +68,121 @@ class FailingAuthServiceReset extends AuthService {
   }
 }
 
+/// Counts sign-in attempts, all of them wrong.
+class CountingFailingAuthService extends AuthService {
+  CountingFailingAuthService() : super(MockFirebaseAuth());
+
+  int attempts = 0;
+
+  @override
+  Future<UserCredential> signIn({
+    required String email,
+    required String password,
+  }) {
+    attempts++;
+    throw FirebaseAuthException(code: 'invalid-credential');
+  }
+}
+
+/// Counts password reset emails sent.
+class CountingResetAuthService extends AuthService {
+  CountingResetAuthService() : super(MockFirebaseAuth());
+
+  int sent = 0;
+
+  @override
+  Future<void> sendPasswordReset(String email) async {
+    sent++;
+  }
+}
+
 void main() {
+  Future<void> pumpLogin(WidgetTester tester, AuthService service) {
+    // Tall, so the error line cannot push the Sign in button off screen.
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    return tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+          firebaseAuthProvider.overrideWithValue(MockFirebaseAuth()),
+          authServiceProvider.overrideWithValue(service),
+        ],
+        child: const MaterialApp(home: LoginScreen()),
+      ),
+    );
+  }
+
+  Future<void> tryPassword(WidgetTester tester, String email) async {
+    await tester.enterText(find.byKey(const Key('email')), email);
+    await tester.enterText(find.byKey(const Key('password')), 'wrong');
+    await tester.tap(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('five wrong passwords still read as a plain mistake',
+      (tester) async {
+    final service = CountingFailingAuthService();
+    await pumpLogin(tester, service);
+
+    for (var i = 0; i < 5; i++) {
+      await tryPassword(tester, 'kj@isufst.edu.ph');
+    }
+    expect(find.textContaining('Incorrect'), findsOneWidget);
+    expect(find.textContaining('Too many attempts'), findsNothing);
+    expect(service.attempts, 5);
+  });
+
+  testWidgets('the sixth wrong password locks sign-in and says for how long',
+      (tester) async {
+    final service = CountingFailingAuthService();
+    await pumpLogin(tester, service);
+
+    for (var i = 0; i < 6; i++) {
+      await tryPassword(tester, 'kj@isufst.edu.ph');
+    }
+    expect(find.textContaining('Too many attempts. Try again in 1 minute.'),
+        findsOneWidget);
+
+    // While locked, the sign-in is not even attempted.
+    await tryPassword(tester, 'kj@isufst.edu.ph');
+    expect(service.attempts, 6);
+    expect(find.textContaining('Too many attempts'), findsOneWidget);
+  });
+
+  testWidgets('another email is not locked by one email\'s failures',
+      (tester) async {
+    final service = CountingFailingAuthService();
+    await pumpLogin(tester, service);
+
+    for (var i = 0; i < 6; i++) {
+      await tryPassword(tester, 'kj@isufst.edu.ph');
+    }
+    await tryPassword(tester, 'someone.else@isufst.edu.ph');
+
+    expect(service.attempts, 7);
+    expect(find.textContaining('Incorrect'), findsOneWidget);
+  });
+
+  testWidgets('a second reset link is held back for a minute',
+      (tester) async {
+    final service = CountingResetAuthService();
+    await pumpLogin(tester, service);
+
+    await tester.enterText(
+        find.byKey(const Key('email')), 'kj@isufst.edu.ph');
+    await tester.tap(find.byKey(const Key('reset')));
+    await tester.pumpAndSettle();
+    expect(service.sent, 1);
+
+    await tester.tap(find.byKey(const Key('reset')));
+    await tester.pumpAndSettle();
+    expect(service.sent, 1);
+    expect(find.textContaining('Wait 1 minute to send another'),
+        findsOneWidget);
+  });
+
   testWidgets('shows an error when credentials are rejected', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
