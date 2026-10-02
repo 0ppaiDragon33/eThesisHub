@@ -143,31 +143,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _resetPassword() async {
+  /// Resetting a password has its own page; the email typed here goes with it.
+  void _forgotPassword() {
     final email = _email.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Enter your email first, then tap Reset.');
-      return;
-    }
-    final cooldown = ref.read(authLimitsProvider).passwordReset;
-    final key = AuthLimits.emailKey(email);
-    final wait = cooldown.remaining(key);
-    if (wait != null) {
-      setState(() => _error =
-          'A reset link was just sent. Wait ${waitText(wait)} to send another.');
-      return;
-    }
-    try {
-      await ref.read(authServiceProvider).sendPasswordReset(email);
-      cooldown.start(key);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Password reset link sent to $email')),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'Failed to send reset link. Please try again.');
-    }
+    context.go(email.isEmpty
+        ? '/forgot-password'
+        : Uri(path: '/forgot-password', queryParameters: {'email': email})
+            .toString());
   }
 
   @override
@@ -232,7 +214,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           alignment: Alignment.centerRight,
           child: TextButton(
             key: const Key('reset'),
-            onPressed: _busy ? null : _resetPassword,
+            onPressed: _busy ? null : _forgotPassword,
             child: const Text('Forgot password?'),
           ),
         ),

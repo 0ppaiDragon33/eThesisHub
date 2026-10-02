@@ -58,16 +58,6 @@ class FirestoreErrorUserRepository extends UserRepository {
   }
 }
 
-/// Password reset always fails.
-class FailingAuthServiceReset extends AuthService {
-  FailingAuthServiceReset() : super(MockFirebaseAuth());
-
-  @override
-  Future<void> sendPasswordReset(String email) async {
-    throw FirebaseAuthException(code: 'user-not-found');
-  }
-}
-
 /// Counts sign-in attempts, all of them wrong.
 class CountingFailingAuthService extends AuthService {
   CountingFailingAuthService() : super(MockFirebaseAuth());
@@ -81,18 +71,6 @@ class CountingFailingAuthService extends AuthService {
   }) {
     attempts++;
     throw FirebaseAuthException(code: 'invalid-credential');
-  }
-}
-
-/// Counts password reset emails sent.
-class CountingResetAuthService extends AuthService {
-  CountingResetAuthService() : super(MockFirebaseAuth());
-
-  int sent = 0;
-
-  @override
-  Future<void> sendPasswordReset(String email) async {
-    sent++;
   }
 }
 
@@ -165,24 +143,6 @@ void main() {
     expect(find.textContaining('Incorrect'), findsOneWidget);
   });
 
-  testWidgets('a second reset link is held back for a minute',
-      (tester) async {
-    final service = CountingResetAuthService();
-    await pumpLogin(tester, service);
-
-    await tester.enterText(
-        find.byKey(const Key('email')), 'kj@isufst.edu.ph');
-    await tester.tap(find.byKey(const Key('reset')));
-    await tester.pumpAndSettle();
-    expect(service.sent, 1);
-
-    await tester.tap(find.byKey(const Key('reset')));
-    await tester.pumpAndSettle();
-    expect(service.sent, 1);
-    expect(find.textContaining('Wait 1 minute to send another'),
-        findsOneWidget);
-  });
-
   testWidgets('shows an error when credentials are rejected', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -244,23 +204,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect((await repo.fetchUser('uid-1'))!.role, UserRole.faculty);
-  });
-
-  testWidgets('reset requires an email address first', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
-          firebaseAuthProvider.overrideWithValue(MockFirebaseAuth()),
-        ],
-        child: const MaterialApp(home: LoginScreen()),
-      ),
-    );
-
-    await tester.tap(find.byKey(const Key('reset')));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Enter your email first'), findsOneWidget);
   });
 
   testWidgets('handles permission-denied from unverified invite read',
@@ -359,26 +302,6 @@ void main() {
     );
     expect(submitButton.onPressed, isNotNull,
         reason: 'finally must reset _busy so the button is usable again');
-  });
-
-  testWidgets('password reset shows error on failure', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
-          firebaseAuthProvider.overrideWithValue(MockFirebaseAuth()),
-          authServiceProvider.overrideWithValue(FailingAuthServiceReset()),
-        ],
-        child: const MaterialApp(home: LoginScreen()),
-      ),
-    );
-
-    await tester.enterText(
-        find.byKey(const Key('email')), 'unknown@isufst.edu.ph');
-    await tester.tap(find.byKey(const Key('reset')));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Failed to send'), findsOneWidget);
   });
 
   testWidgets('renders at a phone width and at a desktop width',

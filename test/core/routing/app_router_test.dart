@@ -258,6 +258,50 @@ void main() {
     expect(find.text('Sign in'), findsWidgets);
   });
 
+  testWidgets('a signed-out user can reach Forgot password and come back',
+      (tester) async {
+    final container = await containerForSignedOut();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('reset')));
+    await tester.pumpAndSettle();
+    expect(find.text('Reset your password'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('backToSignIn')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in'), findsWidgets);
+  });
+
+  testWidgets('a signed-in user is sent home from Forgot password',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final container = await containerFor(UserRole.student, uid: 'u1');
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const EThesisHubApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    container.read(goRouterProvider).go('/forgot-password');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reset your password'), findsNothing);
+  });
+
   testWidgets('signing out from a signed-in screen returns to the login screen',
       (tester) async {
     // Sign-out used to be repeated in four dashboards' app bars; it is one

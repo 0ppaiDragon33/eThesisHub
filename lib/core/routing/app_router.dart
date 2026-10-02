@@ -13,6 +13,7 @@ import 'package:ethesishub/features/admin/audit_log_screen.dart';
 import 'package:ethesishub/features/admin/users_screen.dart';
 import 'package:ethesishub/features/auth/login_screen.dart';
 import 'package:ethesishub/features/auth/deactivated_screen.dart';
+import 'package:ethesishub/features/auth/forgot_password_screen.dart';
 import 'package:ethesishub/features/auth/no_profile_screen.dart';
 import 'package:ethesishub/features/auth/register_screen.dart';
 import 'package:ethesishub/features/auth/verify_email_screen.dart';
@@ -112,7 +113,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authStateAsync = ref.read(authStateProvider);
       final location = state.matchedLocation;
-      final onAuthScreen = location == '/login' || location == '/register';
+      final onAuthScreen = location == '/login' ||
+          location == '/register' ||
+          location == '/forgot-password';
 
       // Distinguish loading from signed-out. While loading, stay put rather than
       // routing to login. Only a settled null means the user is signed out.
@@ -427,6 +430,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, state) => ForgotPasswordScreen(
+          email: state.uri.queryParameters['email'],
+        ),
+      ),
       GoRoute(
         path: '/verify-email',
         builder: (_, _) => const VerifyEmailScreen(),
