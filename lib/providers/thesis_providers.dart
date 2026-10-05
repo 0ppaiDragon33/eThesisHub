@@ -7,6 +7,7 @@ import 'package:ethesishub/data/models/form_attachment.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/data/repositories/faculty_directory_repository.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -15,6 +16,38 @@ final facultyDirectoryRepositoryProvider =
     Provider<FacultyDirectoryRepository>(
   (ref) => FacultyDirectoryRepository(ref.watch(firestoreProvider)),
 );
+
+/// Keeps the signed-in faculty member's, coordinator's or dean's own entry in
+/// the faculty directory, which is what the nomination pickers list.
+///
+/// Written from here, not from the sign-in screen. The router replaces that
+/// screen the moment sign-in succeeds, so a write it made after a network
+/// call ran with its `ref` already disposed, threw, and was swallowed: the
+/// entry never appeared, and a new faculty member only showed up once a
+/// coordinator ticked their designation (which creates the entry itself).
+///
+/// Watched by `AppShellHost`, so it runs for the whole signed-in session,
+/// every launch -- which also fills in anyone who signed in before this
+/// existed, with no need to sign out. It writes only name, role, college and
+/// specialization; the designation flags are never touched, so an absent
+/// flag still means "nominable for both" (see `firestore.rules`).
+/// Best-effort: a failure here must never get in the way of the app.
+final ownDirectoryEntrySyncProvider = Provider<void>((ref) {
+  final key = ref.watch(currentUserProvider.select((a) {
+    final u = a.valueOrNull;
+    if (u == null || !u.active || u.role == UserRole.student) return null;
+    return (u.uid, u.fullName, u.role, u.college, u.specialization);
+  }));
+  if (key == null) return;
+  final profile = ref.read(currentUserProvider).valueOrNull;
+  if (profile == null) return;
+  unawaited(
+    ref
+        .read(facultyDirectoryRepositoryProvider)
+        .upsertOwnEntry(profile)
+        .catchError((Object _) {}),
+  );
+});
 
 /// Every nominable directory entry — faculty, coordinators and the dean
 /// alike. Backs the nomination pickers, which offer coordinators and the

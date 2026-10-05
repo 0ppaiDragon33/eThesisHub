@@ -16,6 +16,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/notification_providers.dart';
 import 'package:ethesishub/providers/shell_providers.dart';
 import 'package:ethesishub/providers/theme_provider.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// What the app bar calls the page you are on.
 ///
@@ -138,6 +139,7 @@ class AppShellHost extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(notificationDetectorsProvider);
+    ref.watch(ownDirectoryEntrySyncProvider);
     final destinations = ref.watch(shellDestinationsProvider);
     final role = ref.watch(currentUserProvider).valueOrNull?.role;
     final list = destinations.valueOrNull ?? const <ShellDestination>[];

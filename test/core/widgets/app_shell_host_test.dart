@@ -348,7 +348,8 @@ void main() {
     // `containerFor` uses, plus a seeded `users/{uid}` doc so
     // `currentUserProvider` resolves to a real (student) role instead of
     // sitting in `AsyncLoading` forever.
-    Future<void> pumpAppShellHost(WidgetTester tester, {required String uid}) async {
+    Future<FakeFirebaseFirestore> pumpAppShellHost(WidgetTester tester,
+        {required String uid, UserRole role = UserRole.student}) async {
       final mockUser =
           MockUser(uid: uid, isEmailVerified: true, email: 'reader@isufst.edu.ph');
       final auth = MockFirebaseAuth(signedIn: true, mockUser: mockUser);
@@ -356,7 +357,7 @@ void main() {
       await firestore.collection('users').doc(uid).set({
         'fullName': 'Reader Dela Cruz',
         'email': 'reader@isufst.edu.ph',
-        'role': UserRole.student.value,
+        'role': role.value,
         'active': true,
         'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
       });
@@ -385,6 +386,7 @@ void main() {
           ),
         ),
       );
+      return firestore;
     }
 
     testWidgets('watching the shell keeps every notification detector alive',
@@ -398,6 +400,29 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'a signed-in faculty member is put in the faculty directory by the '
+        'shell', (tester) async {
+      // The picker lists this directory. It used to be written by the sign-in
+      // screen, which is already gone by then, so a new faculty member never
+      // appeared until a coordinator ticked their designation.
+      final db = await pumpAppShellHost(tester,
+          uid: 'faculty1', role: UserRole.faculty);
+      await tester.pumpAndSettle();
+
+      final entry = await db.doc('facultyDirectory/faculty1').get();
+      expect(entry.exists, isTrue);
+      expect(entry.data()!['fullName'], 'Reader Dela Cruz');
+      expect(entry.data()!.containsKey('nominableAsAdviser'), isFalse);
+    });
+
+    testWidgets('a student is not put in the faculty directory', (tester) async {
+      final db = await pumpAppShellHost(tester, uid: 'student1');
+      await tester.pumpAndSettle();
+
+      expect((await db.doc('facultyDirectory/student1').get()).exists, isFalse);
     });
   });
 }
