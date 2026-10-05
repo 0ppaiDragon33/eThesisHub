@@ -231,7 +231,10 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
         for (final f in offerable)
           DropdownMenuItem(
             value: f.uid,
-            child: Text(f.fullName, overflow: TextOverflow.ellipsis),
+            child: Text(
+              f.subtitle.isEmpty ? f.fullName : '${f.fullName} — ${f.subtitle}',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
       ],
       onChanged: (v) => setState(() => _newAdviserUid = v),

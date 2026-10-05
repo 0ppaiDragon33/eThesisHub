@@ -37,7 +37,7 @@ class FacultyDirectoryRepository {
   /// sign-in. An administrator filling them in through the Firebase Console —
   /// the only way they can currently be set at all — would watch the values
   /// disappear the next time that person signed in, with no error anywhere.
-  /// They feed [FacultyDirectoryEntry.subtitle], the "— CICT" that
+  /// They feed [FacultyDirectoryEntry.subtitle], the "— MIT · CICI" that
   /// disambiguates two faculty who share a surname in the nomination picker.
   ///
   /// The merge is safe against the security rules: under `SetOptions(merge:

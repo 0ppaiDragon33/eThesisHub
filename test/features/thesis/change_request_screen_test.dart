@@ -458,6 +458,24 @@ void main() {
     expect(find.text('Loading thesis…'), findsOneWidget);
   });
 
+  testWidgets('the new-adviser picker shows specialization then college', (
+    tester,
+  ) async {
+    final db = await seed();
+    await db.collection('facultyDirectory').doc('a2').update({
+      'specialization': 'MIT',
+      'college': 'CICI',
+    });
+    await tester.pumpWidget(
+      _wrap(db, uid: 'l1', type: ChangeRequestType.adviser),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('newAdviserPicker')));
+    await tester.pumpAndSettle();
+    expect(find.text('Dr. Adviser Two — MIT · CICI'), findsWidgets);
+  });
+
   group('attached form copy', () {
     Future<void> seedCopy(
       FakeFirebaseFirestore db,

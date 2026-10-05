@@ -176,6 +176,26 @@ void main() {
     expect(docs.docs, hasLength(1));
     expect(docs.docs.first.data()['leaderUid'], 'leader-1');
     expect(docs.docs.first.data()['status'], 'draft');
+    // CICI is the one college for now, and the default.
+    expect(docs.docs.first.data()['college'], 'CICI');
+  });
+
+  testWidgets('the college picker offers only CICI', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(FakeFirebaseFirestore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('college')));
+    await tester.pumpAndSettle();
+    final offered = tester
+        .widgetList<DropdownMenuItem<String>>(
+            find.byType(DropdownMenuItem<String>))
+        .map((i) => i.value)
+        .toSet();
+    expect(offered, contains('CICI'));
+    for (final old in ['CICT', 'CFAS', 'COED', 'COAG', 'CIT']) {
+      expect(offered, isNot(contains(old)), reason: old);
+    }
   });
 
   testWidgets('a blank working title never reaches the repository',

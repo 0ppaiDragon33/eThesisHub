@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:ethesishub/core/config/colleges.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
@@ -46,13 +47,11 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
   final _specialization = TextEditingController();
 
   UserRole _role = UserRole.faculty;
-  String _college = 'CICT';
+  String _college = kColleges.first;
 
   String? _error;
   String? _notice;
   bool _busy = false;
-
-  static const _colleges = ['CICT', 'CFAS', 'COED', 'COAG', 'CIT'];
 
   /// The three roles the rules accept on an invite. `student` is absent by
   /// design — an account starts as a student and is only ever promoted.
@@ -226,7 +225,7 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
                         initialValue: _college,
                         isExpanded: true,
                         items: [
-                          for (final c in _colleges)
+                          for (final c in kColleges)
                             DropdownMenuItem(
                               value: c,
                               child: Text(c, overflow: TextOverflow.ellipsis),

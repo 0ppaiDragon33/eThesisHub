@@ -29,8 +29,9 @@ class FacultyDirectoryEntry {
   /// office, not from a coordinator's list (spec D32).
   final bool nominableAsPanelist;
 
-  /// Shown under the name in the picker.
-  String get subtitle => [college, specialization]
+  /// Shown beside the name in the pickers: specialization, then college
+  /// ("MIT · CICI").
+  String get subtitle => [specialization, college]
       .where((s) => s != null && s.isNotEmpty)
       .join(' · ');
 

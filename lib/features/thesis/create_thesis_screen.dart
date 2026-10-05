@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/config/colleges.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
@@ -12,7 +13,6 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-const kColleges = ['CICT', 'CFAS', 'COED', 'COAG', 'CIT'];
 const kPrograms = ['BSIT', 'BSCS', 'BSIS'];
 const kSemesters = ['First', 'Second'];
 const kAcademicYears = ['2026-2027', '2027-2028'];

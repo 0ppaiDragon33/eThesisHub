@@ -66,7 +66,7 @@ void main() {
         reason: 'a plain set() would have overwritten this with null');
     expect(entry.specialization, 'Software Engineering');
     // Which is what the picker actually renders under the name.
-    expect(entry.subtitle, 'CICT · Software Engineering');
+    expect(entry.subtitle, 'Software Engineering · CICT');
   });
 
   test('a profile that does carry a college still writes it', () async {

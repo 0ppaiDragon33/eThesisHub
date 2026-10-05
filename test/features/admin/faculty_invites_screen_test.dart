@@ -55,7 +55,7 @@ void main() {
         await db.collection('facultyInvites').doc('armada@isufst.edu.ph').get();
     expect(doc.exists, isTrue);
     expect(doc.data()!['role'], 'faculty');
-    expect(doc.data()!['college'], 'CICT');
+    expect(doc.data()!['college'], 'CICI');
     expect(doc.data()!['specialization'], 'Software Engineering');
     expect(doc.data()!['invitedBy'], 'coord-1',
         reason: 'the rules pin invitedBy to the caller uid');
