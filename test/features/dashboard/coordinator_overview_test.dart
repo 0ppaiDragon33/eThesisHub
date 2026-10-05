@@ -93,6 +93,13 @@ Future<ProviderContainer> containerFor(String role, String uid,
   ]);
 }
 
+/// Wide enough that the dashboard is two columns and nothing is folded.
+void useDesktopWidth(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1400, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets(
       'the coordinator lands on the overview, not the recommendations list',
@@ -138,6 +145,8 @@ void main() {
   });
 
   testWidgets('both college-wide chart panels are present', (tester) async {
+    // A desktop width: on a phone the charts and table start folded.
+    useDesktopWidth(tester);
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
         uid: 'c1', role: 'coordinator'));
@@ -204,6 +213,8 @@ void main() {
 
   testWidgets('the table orders by working title, not by insertion',
       (tester) async {
+    // A desktop width: on a phone the charts and table start folded.
+    useDesktopWidth(tester);
     // fake_cloud_firestore returns documents in insertion order, so the
     // fixture is seeded AGAINST the expected order. Seeded alphabetically,
     // this test would pass with the sort deleted -- exactly how a vacuous
@@ -231,6 +242,8 @@ void main() {
   });
 
   testWidgets('a filter tab narrows the table', (tester) async {
+    // A desktop width: on a phone the charts and table start folded.
+    useDesktopWidth(tester);
     final db = FakeFirebaseFirestore();
     await db
         .collection('theses')
@@ -334,5 +347,59 @@ void main() {
         findsNothing);
     expect(find.descendant(of: tile, matching: find.text('—')),
         findsNothing);
+  });
+
+  group('on a phone', () {
+    void usePhoneWidth(WidgetTester tester) {
+      tester.view.physicalSize = const Size(400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    testWidgets('the analytics fold to rows with a peek; stages start open',
+        (tester) async {
+      usePhoneWidth(tester);
+      final db = FakeFirebaseFirestore();
+      await db
+          .collection('theses')
+          .doc('t1')
+          .set(thesis(workingTitle: 'Alpha', status: 'draft'));
+      await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
+          uid: 'c1', role: 'coordinator'));
+      await tester.pumpAndSettle();
+
+      for (final id in ['stages', 'week', 'theses', 'submissions']) {
+        expect(find.byKey(Key('panelToggle-$id')), findsOneWidget, reason: id);
+      }
+      // Folded: the title shows, the content does not.
+      expect(find.text('All theses'), findsOneWidget);
+      expect(find.text('Alpha'), findsNothing);
+      expect(find.textContaining('past 7 months'), findsNothing);
+      expect(find.text('No defences'), findsOneWidget);
+      // Stages opens by default.
+      expect(find.text('Theses by stage'), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const Key('panelToggle-theses')));
+      await tester.tap(find.byKey(const Key('panelToggle-theses')));
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsOneWidget);
+
+      await tester.ensureVisible(
+          find.byKey(const Key('panelToggle-submissions')));
+      await tester.tap(find.byKey(const Key('panelToggle-submissions')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('past 7 months'), findsOneWidget);
+    });
+
+    testWidgets('a desktop width folds nothing', (tester) async {
+      useDesktopWidth(tester);
+      await tester.pumpWidget(await wrap(
+          const CoordinatorOverview(), FakeFirebaseFirestore(),
+          uid: 'c1', role: 'coordinator'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('panelToggle-theses')), findsNothing);
+      expect(find.textContaining('past 7 months'), findsOneWidget);
+    });
   });
 }

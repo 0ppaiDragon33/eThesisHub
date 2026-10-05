@@ -64,6 +64,21 @@ class _MonthBucket {
 /// month" instead of excluding it.
 DateTime? _submissionDate(Thesis t) => t.createdAt;
 
+/// The tooltip for one month on the trend: "3 groups · Sep".
+String trendTooltip(int count, String month) =>
+    '$count group${count == 1 ? '' : 's'} · $month';
+
+/// New thesis groups so far this month: the trend's peek when its panel is
+/// folded on a phone.
+int submissionsThisMonth(List<Thesis> theses, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  return theses.where((t) {
+    // Bucketed exactly as the chart buckets it, so the two always agree.
+    final d = _submissionDate(t);
+    return d != null && d.year == n.year && d.month == n.month;
+  }).length;
+}
+
 class _Body extends StatelessWidget {
   const _Body({required this.theses});
 
@@ -137,7 +152,29 @@ class _Body extends StatelessWidget {
               // At least 1 so a flat all-zero trailing window still draws a
               // visible axis instead of collapsing to a single line.
               maxY: maxCount == 0 ? 1 : maxCount.toDouble() * 1.2,
-              lineTouchData: const LineTouchData(enabled: false),
+              // Hover (desktop) or tap (phone) a month to read its count.
+              lineTouchData: LineTouchData(
+                handleBuiltInTouches: true,
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (_) => scheme.inverseSurface,
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  getTooltipItems: (spots) => [
+                    for (final s in spots)
+                      LineTooltipItem(
+                        trendTooltip(
+                          s.y.round(),
+                          _monthLabels[months[s.x.round()].month - 1],
+                        ),
+                        TextStyle(
+                          color: scheme.onInverseSurface,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               gridData: FlGridData(
                 drawVerticalLine: false,
                 horizontalInterval: maxCount == 0 ? 1 : null,

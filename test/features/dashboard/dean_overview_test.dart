@@ -94,6 +94,13 @@ Future<ProviderContainer> containerFor(String role, String uid) async {
   ]);
 }
 
+/// Wide enough that the dashboard is two columns and nothing is folded.
+void useDesktopWidth(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1400, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('the dean lands on the overview, not the approvals list',
       (tester) async {
@@ -141,6 +148,8 @@ void main() {
   });
 
   testWidgets('both college-wide chart panels are present', (tester) async {
+    // A desktop width: on a phone the charts and table start folded.
+    useDesktopWidth(tester);
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(
         await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));

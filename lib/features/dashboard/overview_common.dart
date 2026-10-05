@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/motion.dart';
+import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
@@ -147,18 +148,91 @@ class DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PageShell(
-      maxWidth: AppTokens.measureWide,
-      children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(height: AppTokens.lg),
-          // Blocks settle in top to bottom, a beat apart.
-          FadeIn(
-            delay: Duration(milliseconds: 40 * (i < 5 ? i : 5)),
-            child: children[i],
-          ),
-        ],
-      ],
+    // Measured here, once, so every [CollapseOnPhone] on the page agrees
+    // with [SplitColumns] about whether the page is one column. A panel's
+    // own width cannot tell: a side column on a desktop is as narrow as a
+    // phone.
+    return LayoutBuilder(
+      builder: (context, constraints) => _DashboardStacked(
+        stacked: constraints.maxWidth < dashboardStackBelow,
+        child: PageShell(
+          maxWidth: AppTokens.measureWide,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const SizedBox(height: AppTokens.lg),
+              // Blocks settle in top to bottom, a beat apart.
+              FadeIn(
+                delay: Duration(milliseconds: 40 * (i < 5 ? i : 5)),
+                child: children[i],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A folded panel's peek from a stream's current value, or nothing while it
+/// loads or has failed (the panel itself says which when opened).
+String? peekOf<T>(AsyncValue<T> value, String Function(T) format) {
+  final v = value.valueOrNull;
+  return v == null ? null : format(v);
+}
+
+/// "No defences", "1 defence", "3 defences".
+String defencesPeek(int n) =>
+    n == 0 ? 'No defences' : '$n defence${n == 1 ? '' : 's'}';
+
+/// Below this width the dashboard is one column (the same point
+/// [SplitColumns] stacks at), and [CollapseOnPhone] folds its panels.
+const double dashboardStackBelow = 860;
+
+class _DashboardStacked extends InheritedWidget {
+  const _DashboardStacked({required this.stacked, required super.child});
+
+  final bool stacked;
+
+  @override
+  bool updateShouldNotify(_DashboardStacked old) => stacked != old.stacked;
+}
+
+/// Folds the [Panel] in [child] to a single tappable row with a [peek]
+/// value when the dashboard is one column (a phone), so the charts and
+/// tables below the action queue do not make the page a long scroll.
+/// On wider screens it does nothing.
+class CollapseOnPhone extends StatelessWidget {
+  const CollapseOnPhone({
+    super.key,
+    required this.id,
+    required this.child,
+    this.peek,
+    this.initiallyOpen = false,
+    this.openOn,
+  });
+
+  /// Names the toggle for tests: `panelToggle-<id>`.
+  final String id;
+  final Widget child;
+  final String? peek;
+  final bool initiallyOpen;
+
+  /// Opens the panel when this notifies (see [PanelCollapse.openOn]).
+  final Listenable? openOn;
+
+  @override
+  Widget build(BuildContext context) {
+    final stacked = context
+            .dependOnInheritedWidgetOfExactType<_DashboardStacked>()
+            ?.stacked ??
+        false;
+    return PanelCollapse(
+      enabled: stacked,
+      id: id,
+      peek: peek,
+      initiallyOpen: initiallyOpen,
+      openOn: openOn,
+      child: child,
     );
   }
 }

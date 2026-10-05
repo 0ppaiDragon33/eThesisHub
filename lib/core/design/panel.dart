@@ -34,50 +34,78 @@ class Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final collapse = PanelCollapse.maybeOf(context);
+    if (collapse != null && collapse.enabled && title != null) {
+      return _CollapsiblePanel(panel: this, collapse: collapse);
+    }
+    return _frame(
+      context,
+      header: title != null || trailing != null ? _header(context) : null,
+      body: _body(),
+    );
+  }
+
+  Widget _body() => Padding(
+        padding: flush ? EdgeInsets.zero : const EdgeInsets.all(AppTokens.lg - 4),
+        child: child,
+      );
+
+  /// The heading row. [end] replaces [trailing] when given (a folded panel
+  /// shows its peek and chevron there instead), and [showSubtitle] drops the
+  /// subtitle from a folded one.
+  Widget _header(
+    BuildContext context, {
+    Widget? end,
+    bool showSubtitle = true,
+  }) {
     final p = Palette.of(context);
     final text = Theme.of(context).textTheme;
-    final hasHeader = title != null || trailing != null;
-
-    final header = hasHeader
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppTokens.lg - 4, AppTokens.md, AppTokens.md, AppTokens.md),
-            child: Row(
+    final tail = end ?? trailing;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppTokens.lg - 4, AppTokens.md, AppTokens.md, AppTokens.md),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: p.muted),
+            const SizedBox(width: AppTokens.sm),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 18, color: p.muted),
-                  const SizedBox(width: AppTokens.sm),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (title != null)
-                        // Wraps rather than truncating: at a large text
-                        // scale a one-line panel title lost its tail to an
-                        // ellipsis, and a heading you cannot read is worse
-                        // than one that takes a second line.
-                        Text(title!,
-                            style: text.titleSmall,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(subtitle!, style: text.bodySmall),
-                      ],
-                    ],
-                  ),
-                ),
-                if (trailing != null) ...[
-                  const SizedBox(width: AppTokens.sm),
-                  trailing!,
+                if (title != null)
+                  // Wraps rather than truncating: at a large text scale a
+                  // one-line panel title lost its tail to an ellipsis, and a
+                  // heading you cannot read is worse than one that takes a
+                  // second line.
+                  Text(title!,
+                      style: text.titleSmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                if (showSubtitle && subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle!, style: text.bodySmall),
                 ],
               ],
             ),
-          )
-        : null;
+          ),
+          if (tail != null) ...[
+            const SizedBox(width: AppTokens.sm),
+            tail,
+          ],
+        ],
+      ),
+    );
+  }
 
+  Widget _frame(
+    BuildContext context, {
+    required Widget? header,
+    required Widget? body,
+  }) {
+    final p = Palette.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: p.paper,
@@ -96,17 +124,157 @@ class Panel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (header != null) header,
-              if (header != null) Divider(height: 1, color: p.rule),
-              Padding(
-                padding: flush
-                    ? EdgeInsets.zero
-                    : const EdgeInsets.all(AppTokens.lg - 4),
-                child: child,
-              ),
+              ?header,
+              if (header != null && body != null)
+                Divider(height: 1, color: p.rule),
+              ?body,
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Folds the [Panel]s beneath it into a single tappable row when [enabled]:
+/// the title, a short [peek] value, and a chevron. Tapping opens the panel.
+///
+/// The dashboards set [enabled] on phone widths only (see `CollapseOnPhone`
+/// in `overview_common.dart`), so a long page of charts and tables costs one
+/// line each until the reader asks for one. Anywhere this is absent, or
+/// [enabled] is false, a panel draws exactly as it always has.
+class PanelCollapse extends InheritedWidget {
+  const PanelCollapse({
+    super.key,
+    required this.enabled,
+    required this.id,
+    this.peek,
+    this.initiallyOpen = false,
+    this.openOn,
+    required super.child,
+  });
+
+  final bool enabled;
+
+  /// Names the panel's toggle for tests: `panelToggle-<id>`.
+  final String id;
+
+  /// A short value shown on the folded row ("2 defences", "24").
+  final String? peek;
+
+  final bool initiallyOpen;
+
+  /// Opens the panel whenever this notifies, e.g. a filter picked elsewhere
+  /// on the page that only this panel shows the result of.
+  final Listenable? openOn;
+
+  static PanelCollapse? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PanelCollapse>();
+
+  @override
+  bool updateShouldNotify(PanelCollapse old) =>
+      enabled != old.enabled ||
+      peek != old.peek ||
+      id != old.id ||
+      initiallyOpen != old.initiallyOpen ||
+      openOn != old.openOn;
+}
+
+class _CollapsiblePanel extends StatefulWidget {
+  const _CollapsiblePanel({required this.panel, required this.collapse});
+
+  final Panel panel;
+  final PanelCollapse collapse;
+
+  @override
+  State<_CollapsiblePanel> createState() => _CollapsiblePanelState();
+}
+
+class _CollapsiblePanelState extends State<_CollapsiblePanel> {
+  late bool _open = widget.collapse.initiallyOpen;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.collapse.openOn?.addListener(_openUp);
+  }
+
+  @override
+  void didUpdateWidget(_CollapsiblePanel old) {
+    super.didUpdateWidget(old);
+    if (old.collapse.openOn != widget.collapse.openOn) {
+      old.collapse.openOn?.removeListener(_openUp);
+      widget.collapse.openOn?.addListener(_openUp);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.collapse.openOn?.removeListener(_openUp);
+    super.dispose();
+  }
+
+  void _openUp() {
+    if (mounted && !_open) setState(() => _open = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final panel = widget.panel;
+    final p = Palette.of(context);
+    final text = Theme.of(context).textTheme;
+    final peek = widget.collapse.peek;
+
+    final end = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_open && panel.trailing != null) ...[
+          panel.trailing!,
+          const SizedBox(width: AppTokens.sm),
+        ],
+        if (!_open && peek != null && peek.isNotEmpty) ...[
+          Text(
+            peek,
+            style: text.labelMedium?.copyWith(
+              color: p.muted,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(width: AppTokens.xs),
+        ],
+        AnimatedRotation(
+          turns: _open ? 0.25 : 0,
+          duration: const Duration(milliseconds: 180),
+          child: Icon(Icons.chevron_right_rounded, color: p.muted),
+        ),
+      ],
+    );
+
+    final header = Semantics(
+      button: true,
+      expanded: _open,
+      child: InkWell(
+        key: Key('panelToggle-${widget.collapse.id}'),
+        onTap: () => setState(() => _open = !_open),
+        child: panel._header(context, end: end, showSubtitle: _open),
+      ),
+    );
+
+    return panel._frame(
+      context,
+      header: header,
+      body: AnimatedSize(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        // Panels inside this one draw normally, whatever is above.
+        child: _open
+            ? PanelCollapse(
+                enabled: false,
+                id: widget.collapse.id,
+                child: panel._body(),
+              )
+            : const SizedBox(width: double.infinity),
       ),
     );
   }

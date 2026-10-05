@@ -117,15 +117,39 @@ class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
             ),
             _StalledNotice(stalled: stalledAsync),
           ],
+          // On a phone these fold to one row each (with a peek value) under
+          // the action queue; on wider screens they draw as before.
           secondary: [
-            StageDonut(
-              onStageSelected: (stage) => _stageFilter.value = stage,
+            CollapseOnPhone(
+              id: 'stages',
+              initiallyOpen: true,
+              peek: peekOf(
+                  allThesesAsync, (l) => '${activeThesisCount(l)} active'),
+              child: StageDonut(
+                onStageSelected: (stage) => _stageFilter.value = stage,
+              ),
             ),
-            WeekAgenda(defences: defencesAsync),
+            CollapseOnPhone(
+              id: 'week',
+              peek: peekOf(defencesAsync,
+                  (l) => defencesPeek(defencesThisWeek(l).length)),
+              child: WeekAgenda(defences: defencesAsync),
+            ),
           ],
         ),
-        AllThesesTable(filter: _stageFilter),
-        const SubmissionTrend(),
+        CollapseOnPhone(
+          id: 'theses',
+          peek: peekOf(allThesesAsync, (l) => '${l.length}'),
+          // Picking a stage on the donut filters this table, so show it.
+          openOn: _stageFilter,
+          child: AllThesesTable(filter: _stageFilter),
+        ),
+        CollapseOnPhone(
+          id: 'submissions',
+          peek: peekOf(
+              allThesesAsync, (l) => '${submissionsThisMonth(l)} this month'),
+          child: const SubmissionTrend(),
+        ),
       ]),
     );
   }

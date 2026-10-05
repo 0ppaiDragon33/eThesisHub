@@ -129,13 +129,34 @@ class DeanOverview extends ConsumerWidget {
               emptyMessage: 'Nothing else needs your decision right now.',
             ),
           ],
+          // On a phone these fold to one row each (with a peek value) under
+          // the decisions; on wider screens they draw as before.
           secondary: [
-            const StageDonut(),
-            WeekAgenda(defences: defencesAsync),
-            const RecentNotificationsPanel(limit: 3),
+            CollapseOnPhone(
+              id: 'stages',
+              initiallyOpen: true,
+              peek: peekOf(
+                  allThesesAsync, (l) => '${activeThesisCount(l)} active'),
+              child: const StageDonut(),
+            ),
+            CollapseOnPhone(
+              id: 'week',
+              peek: peekOf(defencesAsync,
+                  (l) => defencesPeek(defencesThisWeek(l).length)),
+              child: WeekAgenda(defences: defencesAsync),
+            ),
+            const CollapseOnPhone(
+              id: 'updates',
+              child: RecentNotificationsPanel(limit: 3),
+            ),
           ],
         ),
-        const SubmissionTrend(),
+        CollapseOnPhone(
+          id: 'submissions',
+          peek: peekOf(
+              allThesesAsync, (l) => '${submissionsThisMonth(l)} this month'),
+          child: const SubmissionTrend(),
+        ),
       ]),
     );
   }
