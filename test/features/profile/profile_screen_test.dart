@@ -35,15 +35,9 @@ Future<FakeFirebaseFirestore> pump(
   return db;
 }
 
-Future<void> pick(WidgetTester tester, Key field, String option) async {
-  await tester.tap(find.byKey(field));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(option).last);
-  await tester.pumpAndSettle();
-}
 
 void main() {
-  testWidgets('a BSIT student picks a specialization and saves it',
+  testWidgets('a student types their program and specialization and saves',
       (tester) async {
     final db = await pump(tester, {
       'fullName': 'Ana Cruz',
@@ -52,58 +46,54 @@ void main() {
       'specialization': null,
     });
 
-    // BSIT's three specializations are offered.
-    await tester.tap(find.byKey(const ValueKey('profileSpecialization-BSIT')));
-    await tester.pumpAndSettle();
-    for (final s in [
-      'Artificial Intelligence',
-      'Software Development',
-      'Networking',
-    ]) {
-      expect(find.text(s), findsWidgets, reason: s);
-    }
-    await tester.tap(find.text('Software Development').last);
-    await tester.pumpAndSettle();
-
+    expect(
+      tester.widget<TextField>(find.byKey(const Key('profileProgram'))).controller!.text,
+      'BSIT',
+    );
+    await tester.enterText(
+        find.byKey(const Key('profileSpecialization')), 'Software Development');
     await tester.tap(find.byKey(const Key('saveProfile')));
     await tester.pumpAndSettle();
 
     final saved = (await db.doc('users/u1').get()).data()!;
-    expect(saved['specialization'], 'Software Development');
     expect(saved['program'], 'BSIT');
+    expect(saved['specialization'], 'Software Development');
     expect(find.text('Profile saved.'), findsOneWidget);
   });
 
-  testWidgets('a program with no list offers no specialization',
+  testWidgets('any program or specialization name is accepted',
       (tester) async {
-    await pump(tester, {
+    final db = await pump(tester, {
       'fullName': 'Ben Reyes',
       'role': 'student',
-      'program': 'BSIT',
     });
-    await pick(tester, const Key('profileProgram'), 'BSCS');
-    expect(find.byKey(const ValueKey('profileSpecialization-BSCS')),
-        findsNothing);
+    await tester.enterText(find.byKey(const Key('profileProgram')), 'BSEMC');
+    await tester.enterText(
+        find.byKey(const Key('profileSpecialization')), 'Game Development');
+    await tester.tap(find.byKey(const Key('saveProfile')));
+    await tester.pumpAndSettle();
+
+    final saved = (await db.doc('users/u1').get()).data()!;
+    expect(saved['program'], 'BSEMC');
+    expect(saved['specialization'], 'Game Development');
   });
 
-  testWidgets('switching program clears a specialization it does not offer',
-      (tester) async {
+  testWidgets('clearing a box stores nothing for it', (tester) async {
     final db = await pump(tester, {
       'fullName': 'Ana Cruz',
       'role': 'student',
       'program': 'BSIT',
       'specialization': 'Networking',
     });
-    await pick(tester, const Key('profileProgram'), 'BSCS');
+    await tester.enterText(find.byKey(const Key('profileSpecialization')), '  ');
     await tester.tap(find.byKey(const Key('saveProfile')));
     await tester.pumpAndSettle();
 
-    final saved = (await db.doc('users/u1').get()).data()!;
-    expect(saved['program'], 'BSCS');
-    expect(saved['specialization'], isNull);
+    expect((await db.doc('users/u1').get()).data()!['specialization'], isNull);
   });
 
-  testWidgets('faculty type their specialization freely', (tester) async {
+  testWidgets('faculty see no program box and type their specialization',
+      (tester) async {
     final db = await pump(tester, {
       'fullName': 'Dr. Parcia',
       'role': 'faculty',
@@ -113,8 +103,7 @@ void main() {
     expect(find.byKey(const Key('profileProgram')), findsNothing);
     expect(find.text('CICI'), findsOneWidget);
 
-    await tester.enterText(
-        find.byKey(const Key('profileFacultySpecialization')), 'MSCS');
+    await tester.enterText(find.byKey(const Key('profileSpecialization')), 'MSCS');
     await tester.tap(find.byKey(const Key('saveProfile')));
     await tester.pumpAndSettle();
 

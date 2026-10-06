@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/config/colleges.dart';
-import 'package:ethesishub/core/config/specializations.dart';
+import 'package:ethesishub/core/config/programs.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';

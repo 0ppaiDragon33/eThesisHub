@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/components/document.dart';
-import 'package:ethesishub/core/config/specializations.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
@@ -11,9 +10,8 @@ import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
-/// The signed-in person's own details: name, and for a student their program
-/// and specialization (picked from the program's list), for faculty their
-/// specialization as free text.
+/// The signed-in person's own details: name, specialization, and for a
+/// student their program. Both are typed freely, since the names change.
 ///
 /// A group leader's specialization is copied onto their thesis, so the
 /// adviser and panel see it ("Leader specialization: Software Development").
@@ -53,31 +51,21 @@ class _ProfileForm extends ConsumerStatefulWidget {
 
 class _ProfileFormState extends ConsumerState<_ProfileForm> {
   late final _name = TextEditingController(text: widget.profile.fullName);
-  late final _facultySpecialization =
+  late final _program =
+      TextEditingController(text: widget.profile.program ?? '');
+  late final _specialization =
       TextEditingController(text: widget.profile.specialization ?? '');
-
-  late String? _program = _initialProgram();
-  late String? _specialization = _initialSpecialization();
 
   bool _busy = false;
   String? _error;
 
   bool get _isStudent => widget.profile.role == UserRole.student;
 
-  String? _initialProgram() {
-    final p = widget.profile.program?.trim().toUpperCase();
-    return kPrograms.contains(p) ? p : null;
-  }
-
-  String? _initialSpecialization() {
-    final s = widget.profile.specialization;
-    return specializationsFor(_initialProgram()).contains(s) ? s : null;
-  }
-
   @override
   void dispose() {
     _name.dispose();
-    _facultySpecialization.dispose();
+    _program.dispose();
+    _specialization.dispose();
     super.dispose();
   }
 
@@ -95,10 +83,9 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       await ref.read(userRepositoryProvider).updateOwnProfile(
             uid: widget.profile.uid,
             fullName: _name.text,
-            program: _isStudent ? _program : widget.profile.program,
-            specialization: _isStudent
-                ? _specialization
-                : _facultySpecialization.text,
+            // Faculty have no program box; theirs is kept as it is.
+            program: _isStudent ? _program.text : widget.profile.program,
+            specialization: _specialization.text,
           );
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -117,7 +104,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   @override
   Widget build(BuildContext context) {
     final profile = widget.profile;
-    final options = specializationsFor(_program);
 
     return Panel(
       title: roleLabel(profile.role),
@@ -139,57 +125,30 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
               label: 'College',
               child: Text(profile.college!, key: const Key('profileCollege')),
             ),
-          if (_isStudent) ...[
+          if (_isStudent)
             FormRow(
               label: 'Program',
-              child: DropdownButtonFormField<String>(
-                key: const Key('profileProgram'),
-                initialValue: _program,
-                isExpanded: true,
-                hint: const Text('Choose your program'),
-                items: [
-                  for (final p in kPrograms)
-                    DropdownMenuItem(value: p, child: Text(p)),
-                ],
-                onChanged: (v) => setState(() {
-                  _program = v;
-                  // A specialization belongs to its program.
-                  if (!specializationsFor(v).contains(_specialization)) {
-                    _specialization = null;
-                  }
-                }),
-              ),
-            ),
-            if (options.isNotEmpty)
-              FormRow(
-                label: 'Specialization',
-                hint: 'Shown to your adviser and panel if you lead a group.',
-                child: DropdownButtonFormField<String?>(
-                  // Rebuilt when the program changes its options.
-                  key: ValueKey('profileSpecialization-$_program'),
-                  initialValue: _specialization,
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('None'),
-                    ),
-                    for (final s in options)
-                      DropdownMenuItem<String?>(value: s, child: Text(s)),
-                  ],
-                  onChanged: (v) => setState(() => _specialization = v),
-                ),
-              ),
-          ] else
-            FormRow(
-              label: 'Specialization',
-              hint: 'Shown beside your name when groups nominate you.',
               child: TextField(
-                key: const Key('profileFacultySpecialization'),
-                controller: _facultySpecialization,
-                decoration: const InputDecoration(hintText: 'e.g. MIT'),
+                key: const Key('profileProgram'),
+                controller: _program,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(hintText: 'e.g. BSIT'),
               ),
             ),
+          FormRow(
+            label: 'Specialization',
+            hint: _isStudent
+                ? 'Shown to your adviser and panel if you lead a group.'
+                : 'Shown beside your name when groups nominate you.',
+            child: TextField(
+              key: const Key('profileSpecialization'),
+              controller: _specialization,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: _isStudent ? 'e.g. Software Development' : 'e.g. MIT',
+              ),
+            ),
+          ),
           if (_error != null) ...[
             ErrorState(key: const Key('profileError'), message: _error!),
             const SizedBox(height: AppTokens.md),
