@@ -33,6 +33,7 @@ class Thesis {
     this.manuscriptAbstract,
     this.manuscriptUploadedAt,
     this.leaderName,
+    this.leaderSpecialization,
   });
 
   final String id;
@@ -96,6 +97,11 @@ class Thesis {
   /// thesis created before it existed, until the leader next opens the app.
   final String? leaderName;
 
+  /// The leader's specialization ("Software Development"), copied from their
+  /// profile the same way as [leaderName] and pinned to it by the rules, so
+  /// the adviser and panel can see it. Null or empty when they have none.
+  final String? leaderSpecialization;
+
   /// Both halves, or neither. A URL without its storage path is a
   /// half-written upload that cannot be replaced or deleted later.
   bool get hasManuscript =>
@@ -135,6 +141,7 @@ class Thesis {
       manuscriptAbstract: map['manuscriptAbstract'] as String?,
       manuscriptUploadedAt: map['manuscriptUploadedAt'] as DateTime?,
       leaderName: map['leaderName'] as String?,
+      leaderSpecialization: map['leaderSpecialization'] as String?,
     );
   }
 

@@ -52,6 +52,27 @@ class UserRepository {
     });
   }
 
+  /// Saves the signed-in person's own profile details. The rules let the
+  /// owner change exactly these: name, program and specialization (college is
+  /// left alone here; it comes from the invite). A blank program or
+  /// specialization is stored as null.
+  Future<void> updateOwnProfile({
+    required String uid,
+    required String fullName,
+    String? program,
+    String? specialization,
+  }) {
+    final name = fullName.trim();
+    if (name.isEmpty) throw ArgumentError('Enter your full name.');
+    String? orNull(String? s) =>
+        (s == null || s.trim().isEmpty) ? null : s.trim();
+    return _users.doc(uid).update({
+      'fullName': name,
+      'program': orNull(program),
+      'specialization': orNull(specialization),
+    });
+  }
+
   /// Activates or deactivates an account.
   Future<void> setActive(String uid, bool active) {
     return _users.doc(uid).update({'active': active});

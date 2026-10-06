@@ -13,6 +13,7 @@ import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
+import 'package:ethesishub/data/models/academic_term.dart';
 import 'package:ethesishub/data/models/nomination.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -21,6 +22,7 @@ import 'package:ethesishub/features/documents/manuscript_upload.dart';
 import 'package:ethesishub/features/forms/form_viewer.dart';
 import 'package:ethesishub/features/thesis/change_request_tracker.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
+import 'package:ethesishub/providers/academic_term_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/change_request_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -291,12 +293,12 @@ class _Workspace extends ConsumerWidget {
                 children: [
                   FactLine(label: 'College', value: thesis.college),
                   FactLine(label: 'Program', value: thesis.program),
-                  FactLine(
-                    label: 'Term',
-                    value: [thesis.semester, thesis.academicYear]
-                        .where((s) => s.isNotEmpty)
-                        .join(', '),
-                  ),
+                  if ((thesis.leaderSpecialization ?? '').isNotEmpty)
+                    FactLine(
+                      label: 'Leader specialization',
+                      value: thesis.leaderSpecialization!,
+                    ),
+                  _TermFacts(thesis: thesis),
                   FactLine(
                       label: 'Group created',
                       value: Dates.day(thesis.createdAt)),
@@ -1190,6 +1192,57 @@ class _SilentCandidates extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// When the group started (the term Form 1 prints) and, once the
+/// Coordinator has set the college's current term, where it is now:
+/// "Started: 3rd year · 2nd sem 2026–27", "Now: 4th year · 1st sem 2027–28".
+class _TermFacts extends ConsumerWidget {
+  const _TermFacts({required this.thesis});
+
+  final Thesis thesis;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final started = AcademicTerm(
+      semester: thesis.semester,
+      academicYear: thesis.academicYear,
+    );
+    if (!started.isValid) {
+      return FactLine(
+        label: 'Term',
+        value: [thesis.semester, thesis.academicYear]
+            .where((s) => s.isNotEmpty)
+            .join(', '),
+      );
+    }
+    final now = ref.watch(currentTermProvider).valueOrNull;
+    String describe(AcademicTerm t) {
+      final level = yearLevelIn(started, t);
+      return level == null ? t.short : '${yearLevelLabel(level)} · ${t.short}';
+    }
+
+    final showNow = now != null &&
+        now.isValid &&
+        now != started &&
+        (now.index ?? 0) > (started.index ?? 0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FactLine(
+          key: const Key('termStarted'),
+          label: 'Started',
+          value: describe(started),
+        ),
+        if (showNow)
+          FactLine(
+            key: const Key('termNow'),
+            label: 'Now',
+            value: describe(now),
+          ),
+      ],
     );
   }
 }

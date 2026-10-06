@@ -265,6 +265,28 @@ void main() {
     expect(find.byKey(const Key('queueRow-t1')), findsNothing);
   });
 
+  testWidgets('publishing files the thesis under the current academic year',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed(verdict: 'pass', withManuscript: true);
+    await db.doc('settings/academicTerm').set({
+      'semester': 'First',
+      'academicYear': '2031-2032',
+      'updatedBy': 'c1',
+      'updatedAt': Timestamp.now(),
+    });
+    await tester.pumpWidget(app(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('publish-t1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirmPublish-t1')));
+    await tester.pumpAndSettle();
+
+    final entry = (await db.doc('archive/t1').get()).data()!;
+    expect(entry['academicYear'], '2031-2032');
+  });
+
   testWidgets('cancelling the publish leaves the row', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seed(

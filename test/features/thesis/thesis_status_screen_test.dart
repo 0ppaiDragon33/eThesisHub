@@ -351,4 +351,68 @@ void main() {
 
     expect(find.byKey(const Key('approvedTitle')), findsNothing);
   });
+
+  group('term and specialization', () {
+    void useTall(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1000, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    Future<void> setTerm(
+        FakeFirebaseFirestore db, String semester, String year) =>
+        db.doc('settings/academicTerm').set({
+          'semester': semester,
+          'academicYear': year,
+          'updatedBy': 'c1',
+          'updatedAt': Timestamp.now(),
+        });
+
+    testWidgets('started in 3rd year; with no current term, no Now line',
+        (tester) async {
+      useTall(tester);
+      final db = await seeded('titleApproved', extraFields: {
+        'semester': 'Second', 'academicYear': '2026-2027',
+      });
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3rd year · 2nd sem 2026–27'), findsOneWidget);
+      expect(find.byKey(const Key('termNow')), findsNothing);
+    });
+
+    testWidgets('a new academic year shows the group in 4th year',
+        (tester) async {
+      useTall(tester);
+      final db = await seeded('titleApproved', extraFields: {
+        'semester': 'Second', 'academicYear': '2026-2027',
+      });
+      await setTerm(db, 'First', '2027-2028');
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3rd year · 2nd sem 2026–27'), findsOneWidget,
+          reason: 'the start is history and does not change');
+      expect(find.text('4th year · 1st sem 2027–28'), findsOneWidget);
+    });
+
+    testWidgets('the leader\'s specialization is shown and kept on the thesis',
+        (tester) async {
+      useTall(tester);
+      final db = await seeded('titleApproved');
+      await db.doc('users/leader-1').update({
+        'specialization': 'Software Development',
+      });
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+
+      final thesis = (await db.doc('theses/t1').get()).data()!;
+      expect(thesis['leaderSpecialization'], 'Software Development');
+      expect(thesis['leaderName'], 'Karl Joshua P. Vargas');
+      expect(find.text('Software Development'), findsOneWidget);
+    });
+  });
 }

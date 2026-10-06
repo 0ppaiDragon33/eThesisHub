@@ -68,6 +68,7 @@ class ArchiveRepository {
     required List<String> panelNames,
     required String finalDefenceId,
     required String coordinatorUid,
+    String? academicYear,
   }) async {
     if (!thesis.hasManuscript) {
       throw StateError('This thesis has no manuscript to publish yet.');
@@ -87,7 +88,11 @@ class ArchiveRepository {
       'abstract': thesis.manuscriptAbstract ?? '',
       'college': thesis.college,
       'program': thesis.program,
-      'academicYear': thesis.academicYear,
+      // The year it finished (the current term when published), not the
+      // year the group was formed; the start year when no term is set.
+      'academicYear': (academicYear != null && academicYear.isNotEmpty)
+          ? academicYear
+          : thesis.academicYear,
       'adviserName': adviserName,
       'panelNames': panelNames,
       'manuscriptUrl': thesis.manuscriptUrl,

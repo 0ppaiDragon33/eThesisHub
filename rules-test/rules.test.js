@@ -6661,3 +6661,88 @@ test("Form 4b attachment: goes with a title request", async () => {
   batch.set(doc(leader, "theses/cr1/attachments/form4b"), attDoc("form4b"));
   await assertSucceeds(batch.commit());
 });
+
+// ---- leaderSpecialization: the leader's own specialization on the thesis ----
+// Advisers and panelists read the thesis but not the leader's profile. Like
+// leaderName, it may only ever be the leader's own profile value.
+
+async function seedLeaderWithSpecialization(uid, fullName, specialization) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `users/${uid}`), {
+      ...studentProfile(`${uid}@isufst.edu.ph`), fullName, specialization });
+  });
+}
+
+test("leaderSpecialization: a new thesis may carry the leader's own, and no other",
+  async () => {
+    await seedLeaderWithSpecialization("ls1-uid", "Ana Cruz", "Software Development");
+    const leader = asLeader("ls1-uid");
+    await assertFails(setDoc(doc(leader, "theses/ls-a"),
+      draftFor("ls1-uid", { leaderName: "Ana Cruz", leaderSpecialization: "Networking" })));
+    await assertSucceeds(setDoc(doc(leader, "theses/ls-b"),
+      draftFor("ls1-uid", { leaderName: "Ana Cruz",
+        leaderSpecialization: "Software Development" })));
+  });
+
+test("leaderSpecialization: refreshed later with the name, only as the leader's own",
+  async () => {
+    await seedLeaderWithSpecialization("ls2-uid", "Ana Cruz", "Artificial Intelligence");
+    await seedThesis("ls-c", "ls2-uid", "titleApproved");
+    const leader = asLeader("ls2-uid");
+    await assertFails(updateDoc(doc(leader, "theses/ls-c"),
+      { leaderName: "Ana Cruz", leaderSpecialization: "Networking" }));
+    await assertFails(updateDoc(doc(leader, "theses/ls-c"),
+      { leaderName: "Ana Cruz", leaderSpecialization: "Artificial Intelligence",
+        workingTitle: "Renamed" }));
+    await assertSucceeds(updateDoc(doc(leader, "theses/ls-c"),
+      { leaderName: "Ana Cruz", leaderSpecialization: "Artificial Intelligence" }));
+  });
+
+test("leaderSpecialization: a leader with none may still refresh their name",
+  async () => {
+    // studentProfile() stores specialization: null.
+    await seedLeaderProfile("ls3-uid", "Ben Reyes");
+    await seedThesis("ls-d", "ls3-uid", "titleApproved");
+    await assertSucceeds(updateDoc(doc(asLeader("ls3-uid"), "theses/ls-d"),
+      { leaderName: "Ben Reyes" }));
+    await assertSucceeds(updateDoc(doc(asLeader("ls3-uid"), "theses/ls-d"),
+      { leaderName: "Ben Reyes", leaderSpecialization: "" }));
+    await assertFails(updateDoc(doc(asLeader("ls3-uid"), "theses/ls-d"),
+      { leaderName: "Ben Reyes", leaderSpecialization: "Networking" }));
+  });
+
+// ---- settings/academicTerm: the college's current term ----
+
+const termDoc = (extra = {}) => ({
+  semester: "First", academicYear: "2027-2028",
+  updatedBy: "term-coord", updatedAt: serverTimestamp(), ...extra,
+});
+
+test("term: the Coordinator sets it; a student cannot", async () => {
+  const coord = await asCoordinator("term-coord", "termcoord@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(coord, "settings/academicTerm"), termDoc()));
+  await assertSucceeds(setDoc(doc(coord, "settings/academicTerm"),
+    termDoc({ semester: "Second" })));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/term-student"),
+      studentProfile("termstudent@isufst.edu.ph"));
+  });
+  const stu = asUser("term-student", "termstudent@isufst.edu.ph");
+  await assertFails(setDoc(doc(stu, "settings/academicTerm"),
+    termDoc({ updatedBy: "term-student" })));
+  await assertSucceeds(getDoc(doc(stu, "settings/academicTerm")));
+});
+
+test("term: its shape is pinned", async () => {
+  const coord = await asCoordinator("term-coord2", "termcoord2@isufst.edu.ph");
+  const at = doc(coord, "settings/academicTerm");
+  const t = (extra) => termDoc({ updatedBy: "term-coord2", ...extra });
+  await assertFails(setDoc(at, t({ semester: "Summer" })));
+  await assertFails(setDoc(at, t({ academicYear: "2027-2029" })));
+  await assertFails(setDoc(at, t({ academicYear: "27-28" })));
+  await assertFails(setDoc(at, t({ updatedBy: "someone-else" })));
+  await assertFails(setDoc(at, t({ updatedAt: Timestamp.fromDate(new Date("1999-01-01")) })));
+  await assertFails(setDoc(at, t({ extra: "x" })));
+  await assertFails(setDoc(doc(coord, "settings/other"), t({})));
+  await assertSucceeds(setDoc(at, t({})));
+});

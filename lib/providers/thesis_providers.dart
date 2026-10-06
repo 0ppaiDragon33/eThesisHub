@@ -77,15 +77,26 @@ final myThesisProvider = StreamProvider<Thesis?>((ref) {
 /// created before the field existed gets it the next time they open it.
 /// Written only when missing or out of date; a refused write costs nothing
 /// but a blank name on a form, so it is not reported.
+///
+/// Keeps the leader's specialization (`leaderSpecialization`) there too, for
+/// the same reason: the adviser and panel cannot read the leader's profile.
 final leaderNameBackfillProvider = Provider<void>((ref) {
   final thesis = ref.watch(myThesisProvider).valueOrNull;
   final me = ref.watch(currentUserProvider).valueOrNull;
   if (thesis == null || me == null) return;
   if (thesis.leaderUid != me.uid || me.fullName.isEmpty) return;
-  if (thesis.leaderName == me.fullName) return;
+  final specialization = me.specialization?.trim() ?? '';
+  if (thesis.leaderName == me.fullName &&
+      (thesis.leaderSpecialization ?? '') == specialization) {
+    return;
+  }
   ref
       .read(thesisRepositoryProvider)
-      .setLeaderName(thesis.id, me.fullName)
+      .setLeaderDetails(
+        thesis.id,
+        name: me.fullName,
+        specialization: specialization,
+      )
       .catchError((Object _) {});
 });
 

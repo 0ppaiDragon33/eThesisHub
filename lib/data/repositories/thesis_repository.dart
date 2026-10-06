@@ -91,6 +91,7 @@ class ThesisRepository {
     required String semester,
     required String academicYear,
     String? leaderName,
+    String? leaderSpecialization,
   }) async {
     final doc = _theses.doc();
     await doc.set({
@@ -98,6 +99,9 @@ class ThesisRepository {
       // Must equal the leader's own profile name; the rules check it.
       if (leaderName != null && leaderName.isNotEmpty)
         'leaderName': leaderName,
+      // Must equal the leader's own profile specialization; the rules check it.
+      if (leaderSpecialization != null && leaderSpecialization.isNotEmpty)
+        'leaderSpecialization': leaderSpecialization,
       'workingTitle': workingTitle.trim(),
       'memberNames': memberNames,
       'college': college,
@@ -116,12 +120,20 @@ class ThesisRepository {
     return doc.id;
   }
 
-  /// Records the leader's own name on their thesis, for a thesis created
-  /// before `leaderName` existed or after the leader's name changed. The
-  /// rules accept only the caller's own profile name, and only from the
-  /// leader.
-  Future<void> setLeaderName(String thesisId, String name) =>
-      _thesis(thesisId).update({'leaderName': name});
+  /// Records the leader's own name and specialization on their thesis, for a
+  /// thesis created before these existed or after the leader changed them.
+  /// The rules accept only the caller's own profile values, and only from
+  /// the leader. An empty [specialization] is written as "" so a cleared
+  /// one is cleared on the thesis too.
+  Future<void> setLeaderDetails(
+    String thesisId, {
+    required String name,
+    required String specialization,
+  }) =>
+      _thesis(thesisId).update({
+        'leaderName': name,
+        'leaderSpecialization': specialization,
+      });
 
   Stream<Thesis?> watchThesis(String thesisId) {
     return _theses.doc(thesisId).snapshots().map(

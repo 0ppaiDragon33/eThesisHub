@@ -60,6 +60,7 @@ class PermissionDeniedThesisRepository extends ThesisRepository {
     required String semester,
     required String academicYear,
     String? leaderName,
+    String? leaderSpecialization,
   }) {
     throw FirebaseException(
       plugin: 'cloud_firestore',
@@ -83,6 +84,7 @@ class FailingThesisRepository extends ThesisRepository {
     required String semester,
     required String academicYear,
     String? leaderName,
+    String? leaderSpecialization,
   }) {
     throw Exception('boom');
   }
@@ -106,6 +108,7 @@ class SlowThesisRepository extends ThesisRepository {
     required String semester,
     required String academicYear,
     String? leaderName,
+    String? leaderSpecialization,
   }) async {
     callCount++;
     await Future.delayed(const Duration(milliseconds: 50));
@@ -178,6 +181,61 @@ void main() {
     expect(docs.docs.first.data()['status'], 'draft');
     // CICI is the one college for now, and the default.
     expect(docs.docs.first.data()['college'], 'CICI');
+  });
+
+  testWidgets(
+      'the semester and year default to the current term, and the leader\'s '
+      'specialization goes on the thesis', (tester) async {
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.doc('settings/academicTerm').set({
+      'semester': 'Second',
+      'academicYear': '2030-2031',
+      'updatedBy': 'c1',
+      'updatedAt': Timestamp.now(),
+    });
+    await db.doc('users/leader-1').set({
+      'fullName': 'Ana Cruz',
+      'email': 'l@isufst.edu.ph',
+      'role': 'student',
+      'active': true,
+      'specialization': 'Software Development',
+    });
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('workingTitle')), 'eThesisHub');
+    await tester.tap(find.byKey(const Key('submit')));
+    await tester.pumpAndSettle();
+
+    final data = (await db.collection('theses').get()).docs.single.data();
+    expect(data['semester'], 'Second');
+    expect(data['academicYear'], '2030-2031');
+    expect(data['leaderSpecialization'], 'Software Development');
+  });
+
+  testWidgets('the year picker offers this year and the next', (tester) async {
+    useTallSurface(tester);
+    final db = FakeFirebaseFirestore();
+    await db.doc('settings/academicTerm').set({
+      'semester': 'First',
+      'academicYear': '2030-2031',
+      'updatedBy': 'c1',
+      'updatedAt': Timestamp.now(),
+    });
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('academicYear')));
+    await tester.pumpAndSettle();
+    final offered = tester
+        .widgetList<DropdownMenuItem<String>>(
+            find.byType(DropdownMenuItem<String>))
+        .map((i) => i.value)
+        .toSet();
+    expect(offered, containsAll(['2030-2031', '2031-2032']));
+    expect(offered, isNot(contains('2026-2027')));
   });
 
   testWidgets('the college picker offers only CICI', (tester) async {

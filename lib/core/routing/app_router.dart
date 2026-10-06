@@ -47,6 +47,7 @@ import 'package:ethesishub/features/notifications/notifications_screen.dart';
 import 'package:ethesishub/features/repository/archive_entry_screen.dart';
 import 'package:ethesishub/features/repository/archive_queue_screen.dart';
 import 'package:ethesishub/features/repository/archive_screen.dart';
+import 'package:ethesishub/features/profile/profile_screen.dart';
 import 'package:ethesishub/data/models/change_request.dart';
 import 'package:ethesishub/features/thesis/change_request_screen.dart';
 import 'package:ethesishub/features/thesis/create_thesis_screen.dart';
@@ -855,6 +856,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
+      GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       // '/archive/queue' MUST be registered BEFORE '/archive/:thesisId'
       // below. This is the OPPOSITE situation from '/defence/room/:id' vs
       // '/defence/room/:id/consolidated' above, where the segment counts

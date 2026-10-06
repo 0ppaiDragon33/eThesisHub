@@ -339,10 +339,29 @@ class _ThesisTitle extends ConsumerWidget {
     final thesis = ref.watch(thesisRepositoryProvider).watchThesis(thesisId);
     return StreamBuilder(
       stream: thesis,
-      builder: (context, snap) => Text(
-        snap.data?.workingTitle ?? '…',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
+      builder: (context, snap) {
+        final t = snap.data;
+        final text = Theme.of(context).textTheme;
+        // Who leads the group and in what specialization, so a nominee
+        // can tell whether it matches their own field.
+        final leader = [
+          if ((t?.leaderName ?? '').isNotEmpty) 'Led by ${t!.leaderName}',
+          if ((t?.leaderSpecialization ?? '').isNotEmpty)
+            t!.leaderSpecialization!,
+        ].join(' · ');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t?.workingTitle ?? '…', style: text.titleLarge),
+            if (leader.isNotEmpty)
+              Text(
+                leader,
+                key: Key('inboxLeader-$thesisId'),
+                style: text.bodySmall,
+              ),
+          ],
+        );
+      },
     );
   }
 }

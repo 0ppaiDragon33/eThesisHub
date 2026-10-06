@@ -4,6 +4,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ethesishub/core/navigation/shell_destination.dart';
@@ -424,5 +425,36 @@ void main() {
 
       expect((await db.doc('facultyDirectory/student1').get()).exists, isFalse);
     });
+  });
+
+  testWidgets('tapping your name in the footer opens My profile',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = await SharedPreferences.getInstance();
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const Scaffold(body: AccountFooter()),
+        ),
+        GoRoute(
+          path: '/profile',
+          builder: (_, _) => const Scaffold(body: Text('PROFILE PAGE')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        currentUserProvider.overrideWith((ref) => Stream.value(_user())),
+        sharedPrefsProvider.overrideWithValue(store),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('accountFooterProfile')));
+    await tester.pumpAndSettle();
+    expect(find.text('PROFILE PAGE'), findsOneWidget);
   });
 }

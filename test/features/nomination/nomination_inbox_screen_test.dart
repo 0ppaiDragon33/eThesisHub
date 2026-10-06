@@ -58,6 +58,20 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('the card says who leads the group and in what specialization',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seeded();
+    await db.doc('theses/t1').update({
+      'leaderName': 'Ana Cruz',
+      'leaderSpecialization': 'Software Development',
+    });
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Led by Ana Cruz · Software Development'), findsOneWidget);
+  });
+
   testWidgets('accepting records the conforme', (tester) async {
     final db = await seeded();
     await tester.pumpWidget(wrap(db));

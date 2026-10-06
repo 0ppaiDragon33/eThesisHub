@@ -4,16 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/config/colleges.dart';
+import 'package:ethesishub/core/config/specializations.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/data/models/academic_term.dart';
+import 'package:ethesishub/providers/academic_term_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-const kPrograms = ['BSIT', 'BSCS', 'BSIS'];
 const kSemesters = ['First', 'Second'];
 const kAcademicYears = ['2026-2027', '2027-2028'];
 
@@ -37,8 +39,26 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
 
   String _college = kColleges.first;
   String _program = kPrograms.first;
-  String _semester = kSemesters.first;
-  String _academicYear = kAcademicYears.first;
+  // Null until the leader picks one: until then the college's current term
+  // (set by the Coordinator) is the default, once it has loaded.
+  String? _pickedSemester;
+  String? _pickedAcademicYear;
+
+  AcademicTerm? get _currentTerm => ref.read(currentTermProvider).valueOrNull;
+
+  String get _semester =>
+      _pickedSemester ?? _currentTerm?.semester ?? kSemesters.first;
+
+  String get _academicYear =>
+      _pickedAcademicYear ?? _currentTerm?.academicYear ?? kAcademicYears.first;
+
+  /// The current academic year and the next, once the current term is set;
+  /// the fixed list until then.
+  List<String> _yearOptions(AcademicTerm? term) {
+    final start = term?.startYear;
+    if (start == null) return kAcademicYears;
+    return [AcademicTerm.yearFrom(start), AcademicTerm.yearFrom(start + 1)];
+  }
 
   String? _error;
   bool _busy = false;
@@ -76,6 +96,8 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
       await ref.read(thesisRepositoryProvider).createThesis(
             leaderUid: uid,
             leaderName: ref.read(currentUserProvider).valueOrNull?.fullName,
+            leaderSpecialization:
+                ref.read(currentUserProvider).valueOrNull?.specialization,
             workingTitle: title,
             memberNames: _members
                 .map((c) => c.text.trim())
@@ -133,6 +155,15 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
     // for the first time inside _submit would race the stream's first
     // event and see a stale `null`.
     final signedIn = ref.watch(authStateProvider).valueOrNull != null;
+    // Watched for the same reason: the leader's name and specialization go
+    // on the new thesis, and a first read inside _submit would see nothing.
+    ref.watch(currentUserProvider);
+    final term = ref.watch(currentTermProvider).valueOrNull;
+    final years = _yearOptions(term);
+    // A picked year the list no longer offers falls back to the default.
+    if (_pickedAcademicYear != null && !years.contains(_pickedAcademicYear)) {
+      _pickedAcademicYear = null;
+    }
 
     final text = Theme.of(context).textTheme;
 
@@ -243,11 +274,18 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
               ),
               const Gap.md(),
               pair(
-                _dropdown('semester', 'Semester', _semester, kSemesters,
-                    (v) => setState(() => _semester = v)),
-                _dropdown('academicYear', 'Academic year', _academicYear,
-                    kAcademicYears,
-                    (v) => setState(() => _academicYear = v)),
+                // Keyed on the term so the defaults show once it loads.
+                KeyedSubtree(
+                  key: ValueKey('semester-$term'),
+                  child: _dropdown('semester', 'Semester', _semester,
+                      kSemesters, (v) => setState(() => _pickedSemester = v)),
+                ),
+                KeyedSubtree(
+                  key: ValueKey('academicYear-$term'),
+                  child: _dropdown('academicYear', 'Academic year',
+                      _academicYear, years,
+                      (v) => setState(() => _pickedAcademicYear = v)),
+                ),
               ),
             ],
           ),

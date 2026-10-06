@@ -115,6 +115,7 @@ const _staticTitles = {
   '/archive/queue': 'Publish to archive',
   '/forms': 'Forms',
   '/files': 'My files',
+  '/profile': 'My profile',
 };
 
 /// Wires [AppShell] to this app's providers and router.
@@ -140,6 +141,9 @@ class AppShellHost extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(notificationDetectorsProvider);
     ref.watch(ownDirectoryEntrySyncProvider);
+    // The leader's name and specialization on their thesis, kept current
+    // even when they change their profile without opening the thesis page.
+    ref.watch(leaderNameBackfillProvider);
     final destinations = ref.watch(shellDestinationsProvider);
     final role = ref.watch(currentUserProvider).valueOrNull?.role;
     final list = destinations.valueOrNull ?? const <ShellDestination>[];
@@ -223,6 +227,13 @@ class AccountFooter extends ConsumerWidget {
     final p = Palette.of(context);
     final text = Theme.of(context).textTheme;
 
+    // The name and avatar open My profile; in the phone drawer, close it
+    // first so the page is not left behind it.
+    void openProfile() {
+      Scaffold.maybeOf(context)?.closeDrawer();
+      context.go('/profile');
+    }
+
     final controls = IconTheme.merge(
       data: IconThemeData(color: inSidebar ? p.sidebarMuted : p.muted),
       child: Flex(
@@ -255,7 +266,12 @@ class AccountFooter extends ConsumerWidget {
           children: [
             Tooltip(
               message: '${profile.fullName} · ${roleLabel(profile.role)}',
-              child: InitialsAvatar(profile.fullName, size: 34),
+              child: InkWell(
+                key: const Key('accountFooterProfile'),
+                customBorder: const CircleBorder(),
+                onTap: openProfile,
+                child: InitialsAvatar(profile.fullName, size: 34),
+              ),
             ),
             const SizedBox(height: AppTokens.xs),
             controls,
@@ -277,28 +293,39 @@ class AccountFooter extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          InitialsAvatar(profile.fullName, size: 36),
-          const SizedBox(width: AppTokens.sm + 2),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  profile.fullName,
-                  key: const Key('accountFooterName'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.labelLarge?.copyWith(color: nameColor),
-                ),
-                Text(
-                  roleLabel(profile.role),
-                  key: const Key('accountFooterRole'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.bodySmall?.copyWith(color: roleColor),
-                ),
-              ],
+            child: InkWell(
+              key: const Key('accountFooterProfile'),
+              borderRadius: BorderRadius.circular(AppTokens.radius),
+              onTap: openProfile,
+              child: Row(
+                children: [
+                  InitialsAvatar(profile.fullName, size: 36),
+                  const SizedBox(width: AppTokens.sm + 2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          profile.fullName,
+                          key: const Key('accountFooterName'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.labelLarge?.copyWith(color: nameColor),
+                        ),
+                        Text(
+                          roleLabel(profile.role),
+                          key: const Key('accountFooterRole'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(color: roleColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           controls,

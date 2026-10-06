@@ -254,6 +254,14 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
               .join(', '),
           style: text.bodySmall,
         ),
+        if ((t.leaderSpecialization ?? '').isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Leader specialization: ${t.leaderSpecialization}',
+            key: Key('reviewLeaderSpecialization-${t.id}'),
+            style: text.bodySmall,
+          ),
+        ],
         if (t.memberNames.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text('Members: ${t.memberNames.join(', ')}', style: text.bodySmall),

@@ -108,6 +108,17 @@ service cloud.firestore {
              .data.get('fullName', '');
     }
 
+    // The caller's own specialization as their profile records it ("" when
+    // they have none). A thesis's `leaderSpecialization` may only ever be
+    // this, the same way `leaderName` is pinned above.
+    // A stored null reads as "" too: student profiles are created with
+    // `specialization: null`.
+    function myProfileSpecialization() {
+      let s = get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.get('specialization', '');
+      return s == null ? '' : s;
+    }
+
     match /users/{uid} {
       allow get: if signedIn() &&
                  (request.auth.uid == uid || isCoordinator() || isDean());
@@ -450,10 +461,13 @@ service cloud.firestore {
                           'status', 'adviserUid', 'panelistUids',
                           'coordinatorRecommendedAt', 'coordinatorRecommendedBy',
                           'deanApprovedAt', 'deanApprovedBy', 'createdAt',
-                          'leaderName'])
+                          'leaderName', 'leaderSpecialization'])
                     && request.resource.data.leaderUid == request.auth.uid
                     && (!('leaderName' in request.resource.data)
                         || request.resource.data.leaderName == myProfileName())
+                    && (!('leaderSpecialization' in request.resource.data)
+                        || request.resource.data.leaderSpecialization
+                           == myProfileSpecialization())
                     && request.resource.data.status == 'draft'
                     && request.resource.data.adviserUid == null
                     && request.resource.data.panelistUids.size() == 0
@@ -471,8 +485,10 @@ service cloud.firestore {
       // leader's profile.
       allow update: if verified()
                     && resource.data.leaderUid == request.auth.uid
-                    && onlyChanged(['leaderName'])
-                    && request.resource.data.leaderName == myProfileName();
+                    && onlyChanged(['leaderName', 'leaderSpecialization'])
+                    && request.resource.data.leaderName == myProfileName()
+                    && request.resource.data.get('leaderSpecialization', '')
+                       == myProfileSpecialization();
 
       // The leader edits group details and may submit the nomination, but
       // may never touch the approval fields. Beyond the plan's original
@@ -2368,6 +2384,29 @@ service cloud.firestore {
                     && request.resource.data.read == true;
 
       allow delete: if verified() && request.auth.uid == uid;
+    }
+
+    // The college's current semester and academic year, set by the
+    // Coordinator at the start of each semester. A thesis keeps the term it
+    // started in (Form 1 prints it); the app works out where it is now from
+    // this, so nobody has to edit every thesis when the term turns over.
+    match /settings/academicTerm {
+      allow read: if verified();
+      allow create, update: if isCoordinator()
+                            && request.resource.data.keys().hasOnly(
+                                 ['semester', 'academicYear', 'updatedBy',
+                                  'updatedAt'])
+                            && request.resource.data.keys().hasAll(
+                                 ['semester', 'academicYear', 'updatedBy',
+                                  'updatedAt'])
+                            && request.resource.data.semester in ['First', 'Second']
+                            && request.resource.data.academicYear is string
+                            && request.resource.data.academicYear.matches('[0-9]{4}-[0-9]{4}')
+                            && int(request.resource.data.academicYear.split('-')[1])
+                               == int(request.resource.data.academicYear.split('-')[0]) + 1
+                            && request.resource.data.updatedBy == request.auth.uid
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
 
     // Deny-by-default for everything not matched above.

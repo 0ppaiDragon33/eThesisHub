@@ -14,6 +14,7 @@ import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/providers/academic_term_providers.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
@@ -202,6 +203,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
             panelNames: panelNames,
             finalDefenceId: finalDefence.id,
             coordinatorUid: coordinatorUid,
+            academicYear: ref.read(currentTermProvider).valueOrNull?.academicYear,
           );
       // Best-effort, after the entry is published, swallowing its own failure.
       try {
@@ -229,6 +231,8 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   Widget build(BuildContext context) {
     final thesis = widget.thesis;
     final text = Theme.of(context).textTheme;
+    // Kept loaded so publishing files the thesis under the current year.
+    ref.watch(currentTermProvider);
     // The same resolution [_publish] performs, so the label names the title
     // the button will publish.
     final title = _approvedTitle(
