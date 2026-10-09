@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/widgets/app_shell.dart';
 import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/features/dashboard/mode_switch_transition.dart';
 import 'package:ethesishub/providers/faculty_mode_provider.dart';
 
 /// The Adviser/Panelist switch, which used to live in
@@ -53,6 +54,7 @@ class FacultyModeSwitch extends ConsumerWidget {
     if (mode == null || !bothCapable) return const SizedBox.shrink();
 
     void select(FacultyMode next) {
+      if (next == mode) return;
       ref.read(facultyModeProvider.notifier).set(next);
       // Only when standing on the other mode's own screen. Flipping
       // the mode from, say, a chapter should change what the sidebar
@@ -61,6 +63,9 @@ class FacultyModeSwitch extends ConsumerWidget {
       if (location == '/advisees' || location == '/panels') {
         context.go(next == FacultyMode.adviser ? '/advisees' : '/panels');
       }
+      // A short "Switching to … View" screen while the sidebar and page
+      // change over.
+      showModeSwitchTransition(context, next);
     }
 
     final narrow = MediaQuery.sizeOf(context).width < AppShell.railBreakpoint;
