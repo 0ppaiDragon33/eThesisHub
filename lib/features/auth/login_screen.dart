@@ -11,6 +11,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/password_field.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/core/widgets/welcome_overlay.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
@@ -55,6 +56,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _error = _lockedMessage(locked));
       return;
     }
+
+    // Held before signing in: once sign-in succeeds the router replaces this
+    // screen, so the shell, not this screen, shows the welcome. Every
+    // failure below clears it again.
+    final welcome = ref.read(welcomePendingProvider.notifier);
+    welcome.state = true;
 
     setState(() {
       _busy = true;
@@ -113,6 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       }
     } on FirebaseAuthException catch (e) {
+      welcome.state = false;
       // Only a wrong credential counts toward the lock; a network error or a
       // server-side refusal is not the person guessing.
       final wrongCredential = e.code == 'wrong-password' ||
@@ -136,6 +144,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         };
       });
     } on FirebaseException {
+      welcome.state = false;
       // Handle Firestore errors (e.g., internal errors during invite read).
       // This must come after FirebaseAuthException since it's a subtype.
       if (!mounted) return;
@@ -144,6 +153,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
     } catch (_) {
       // Catch any other unexpected errors
+      welcome.state = false;
       if (!mounted) return;
       setState(() {
         _error = 'An unexpected error occurred. Please try again.';

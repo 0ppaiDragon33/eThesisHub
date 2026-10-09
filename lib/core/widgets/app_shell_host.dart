@@ -7,6 +7,7 @@ import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/app_shell.dart';
+import 'package:ethesishub/core/widgets/welcome_overlay.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/user_role.dart';
@@ -148,37 +149,40 @@ class AppShellHost extends ConsumerWidget {
     final role = ref.watch(currentUserProvider).valueOrNull?.role;
     final list = destinations.valueOrNull ?? const <ShellDestination>[];
 
-    return AppShell(
-      destinations: destinations,
-      location: location,
-      title: shellTitleFor(location, pathParameters, role),
-      // The mode switch is faculty-only and hides itself further when the
-      // member holds no adviser position. Passing it for other roles would
-      // start two position-count queries they have no rules arm for.
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const NotificationBell(),
-          if (role == UserRole.faculty) FacultyModeSwitch(location: location),
-        ],
+    // The welcome after signing in sits over the whole shell.
+    return WelcomeOverlay(
+      child: AppShell(
+        destinations: destinations,
+        location: location,
+        title: shellTitleFor(location, pathParameters, role),
+        // The mode switch is faculty-only and hides itself further when the
+        // member holds no adviser position. Passing it for other roles would
+        // start two position-count queries they have no rules arm for.
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const NotificationBell(),
+            if (role == UserRole.faculty) FacultyModeSwitch(location: location),
+          ],
+        ),
+        // Name, role and sign-out at the foot of the sidebar (spec §5.3),
+        // where it used to be a bare `SignOutButton` repeated in four
+        // dashboards' app bars with no identity shown anywhere but the
+        // '/overview' greeting.
+        accountFooter: const AccountFooter(),
+        // '/no-profile' is this milestone's designated dead end: no
+        // destination owns it (the sidebar is empty for an unknown role, by
+        // design), so `isDeeperThanDestination` always answers true there
+        // and a back control would render -- but `_back` below always falls
+        // through to the same '/overview' redirect that immediately bounces
+        // back to '/no-profile', so tapping it does nothing. A control that
+        // does nothing on the app's own dead-end screen is exactly what this
+        // milestone exists to remove, so it is suppressed here rather than
+        // left to render and fail silently.
+        suppressBackControl: location == '/no-profile',
+        onBack: () => _back(context, list),
+        child: child,
       ),
-      // Name, role and sign-out at the foot of the sidebar (spec §5.3),
-      // where it used to be a bare `SignOutButton` repeated in four
-      // dashboards' app bars with no identity shown anywhere but the
-      // '/overview' greeting.
-      accountFooter: const AccountFooter(),
-      // '/no-profile' is this milestone's designated dead end: no
-      // destination owns it (the sidebar is empty for an unknown role, by
-      // design), so `isDeeperThanDestination` always answers true there
-      // and a back control would render -- but `_back` below always falls
-      // through to the same '/overview' redirect that immediately bounces
-      // back to '/no-profile', so tapping it does nothing. A control that
-      // does nothing on the app's own dead-end screen is exactly what this
-      // milestone exists to remove, so it is suppressed here rather than
-      // left to render and fail silently.
-      suppressBackControl: location == '/no-profile',
-      onBack: () => _back(context, list),
-      child: child,
     );
   }
 
