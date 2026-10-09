@@ -5,11 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import 'package:ethesishub/core/components/brand.dart';
 import 'package:ethesishub/core/components/document.dart';
-import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/security/rate_limiter.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/password_field.dart';
-import 'package:ethesishub/core/widgets/sign_out_button.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/welcome_overlay.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -176,36 +174,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // A signed-in user with no users/{uid} profile document lands here with
-    // no error and no way out (see app_router.dart). Surface who they're
-    // signed in as and let them escape via sign-out.
-    final signedInUser = ref.watch(authStateProvider).valueOrNull;
-
     return AuthScaffold(
       title: 'Sign in',
       subtitle: 'Use your ISUFST account.',
       children: [
-        if (signedInUser != null)
-          Container(
-            margin: const EdgeInsets.only(bottom: AppTokens.lg),
-            padding: const EdgeInsets.fromLTRB(
-                AppTokens.md, AppTokens.sm, AppTokens.xs, AppTokens.sm),
-            decoration: BoxDecoration(
-              color: Tone.awaiting.color(context).withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppTokens.radiusSm),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Signed in as ${signedInUser.email}. Sign out to use '
-                    'another account.',
-                  ),
-                ),
-                const SignOutButton(),
-              ],
-            ),
-          ),
         FormRow(
           label: 'Email',
           child: TextField(
