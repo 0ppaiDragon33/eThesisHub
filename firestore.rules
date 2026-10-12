@@ -119,6 +119,14 @@ service cloud.firestore {
       return s == null ? '' : s;
     }
 
+    // The caller's own year and section ("3-A"), "" when they have none. A
+    // thesis's `leaderSection` may only ever be this.
+    function myProfileSection() {
+      let s = get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.get('section', '');
+      return s == null ? '' : s;
+    }
+
     match /users/{uid} {
       allow get: if signedIn() &&
                  (request.auth.uid == uid || isCoordinator() || isDean());
@@ -141,7 +149,8 @@ service cloud.firestore {
       allow update: if signedIn()
                     && isActive()
                     && request.auth.uid == uid
-                    && onlyChanged(['fullName', 'college', 'program', 'specialization']);
+                    && onlyChanged(['fullName', 'college', 'program', 'specialization',
+                                    'section']);
 
       // Invite promotion: only to exactly the invited role, for your own
       // email, and only while the invite is still unconsumed (so it cannot
@@ -170,7 +179,7 @@ service cloud.firestore {
       allow update: if isCoordinator()
                     && request.auth.uid != uid
                     && onlyChanged(['fullName', 'college', 'program',
-                                    'specialization', 'active',
+                                    'specialization', 'section', 'active',
                                     'nominableAsAdviser', 'nominableAsPanelist']);
 
       allow delete: if false;
@@ -461,13 +470,16 @@ service cloud.firestore {
                           'status', 'adviserUid', 'panelistUids',
                           'coordinatorRecommendedAt', 'coordinatorRecommendedBy',
                           'deanApprovedAt', 'deanApprovedBy', 'createdAt',
-                          'leaderName', 'leaderSpecialization'])
+                          'leaderName', 'leaderSpecialization', 'leaderSection'])
                     && request.resource.data.leaderUid == request.auth.uid
                     && (!('leaderName' in request.resource.data)
                         || request.resource.data.leaderName == myProfileName())
                     && (!('leaderSpecialization' in request.resource.data)
                         || request.resource.data.leaderSpecialization
                            == myProfileSpecialization())
+                    && (!('leaderSection' in request.resource.data)
+                        || request.resource.data.leaderSection
+                           == myProfileSection())
                     && request.resource.data.status == 'draft'
                     && request.resource.data.adviserUid == null
                     && request.resource.data.panelistUids.size() == 0
@@ -485,10 +497,13 @@ service cloud.firestore {
       // leader's profile.
       allow update: if verified()
                     && resource.data.leaderUid == request.auth.uid
-                    && onlyChanged(['leaderName', 'leaderSpecialization'])
+                    && onlyChanged(['leaderName', 'leaderSpecialization',
+                                    'leaderSection'])
                     && request.resource.data.leaderName == myProfileName()
                     && request.resource.data.get('leaderSpecialization', '')
-                       == myProfileSpecialization();
+                       == myProfileSpecialization()
+                    && request.resource.data.get('leaderSection', '')
+                       == myProfileSection();
 
       // The leader edits group details and may submit the nomination, but
       // may never touch the approval fields. Beyond the plan's original

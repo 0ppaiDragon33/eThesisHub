@@ -34,6 +34,7 @@ class Thesis {
     this.manuscriptUploadedAt,
     this.leaderName,
     this.leaderSpecialization,
+    this.leaderSection,
   });
 
   final String id;
@@ -102,6 +103,9 @@ class Thesis {
   /// the adviser and panel can see it. Null or empty when they have none.
   final String? leaderSpecialization;
 
+  /// The leader's year and section ("3-A"), copied and pinned the same way.
+  final String? leaderSection;
+
   /// Both halves, or neither. A URL without its storage path is a
   /// half-written upload that cannot be replaced or deleted later.
   bool get hasManuscript =>
@@ -142,6 +146,7 @@ class Thesis {
       manuscriptUploadedAt: map['manuscriptUploadedAt'] as DateTime?,
       leaderName: map['leaderName'] as String?,
       leaderSpecialization: map['leaderSpecialization'] as String?,
+      leaderSection: map['leaderSection'] as String?,
     );
   }
 

@@ -14,6 +14,7 @@ import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/agenda.dart';
+import 'package:ethesishub/features/dashboard/all_theses_table.dart';
 import 'package:ethesishub/features/dashboard/overview_common.dart';
 import 'package:ethesishub/features/dashboard/stage_donut.dart';
 import 'package:ethesishub/features/dashboard/submission_trend.dart';
@@ -150,6 +151,12 @@ class DeanOverview extends ConsumerWidget {
               child: RecentNotificationsPanel(limit: 3),
             ),
           ],
+        ),
+        // Every group, with the leader's year & section and specialization.
+        CollapseOnPhone(
+          id: 'theses',
+          peek: peekOf(allThesesAsync, (l) => '${l.length}'),
+          child: const AllThesesTable(),
         ),
         CollapseOnPhone(
           id: 'submissions',

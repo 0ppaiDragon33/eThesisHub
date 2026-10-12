@@ -293,6 +293,11 @@ class _Workspace extends ConsumerWidget {
                 children: [
                   FactLine(label: 'College', value: thesis.college),
                   FactLine(label: 'Program', value: thesis.program),
+                  if ((thesis.leaderSection ?? '').isNotEmpty)
+                    FactLine(
+                      label: 'Leader year & section',
+                      value: thesis.leaderSection!,
+                    ),
                   if ((thesis.leaderSpecialization ?? '').isNotEmpty)
                     FactLine(
                       label: 'Leader specialization',

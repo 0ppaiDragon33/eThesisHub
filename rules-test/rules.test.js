@@ -6746,3 +6746,52 @@ test("term: its shape is pinned", async () => {
   await assertFails(setDoc(doc(coord, "settings/other"), t({})));
   await assertSucceeds(setDoc(at, t({})));
 });
+
+// ---- section: a student's year and section ("3-A"), on their profile and,
+// for a leader, copied onto their thesis as leaderSection ----
+
+test("section: a student may set their own, nobody else's", async () => {
+  await seedLeaderWithSpecialization("sec1-uid", "Ana Cruz", null);
+  await seedLeaderWithSpecialization("sec2-uid", "Ben Reyes", null);
+  await assertSucceeds(updateDoc(doc(asLeader("sec1-uid"), "users/sec1-uid"),
+    { section: "3-A" }));
+  await assertFails(updateDoc(doc(asLeader("sec1-uid"), "users/sec2-uid"),
+    { section: "3-A" }));
+});
+
+test("section: the Coordinator may correct it", async () => {
+  await seedLeaderWithSpecialization("sec3-uid", "Ana Cruz", null);
+  const coord = await asCoordinator("sec-coord", "seccoord@isufst.edu.ph");
+  await assertSucceeds(updateDoc(doc(coord, "users/sec3-uid"), { section: "4-B" }));
+});
+
+test("leaderSection: only the leader's own, on create and on refresh", async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "users/sec4-uid"), {
+      ...studentProfile("sec4-uid@isufst.edu.ph"), fullName: "Ana Cruz",
+      specialization: "Networking", section: "3-A" });
+  });
+  const leader = asLeader("sec4-uid");
+  await assertFails(setDoc(doc(leader, "theses/sec-a"), draftFor("sec4-uid", {
+    leaderName: "Ana Cruz", leaderSection: "4-B" })));
+  await assertSucceeds(setDoc(doc(leader, "theses/sec-b"), draftFor("sec4-uid", {
+    leaderName: "Ana Cruz", leaderSpecialization: "Networking",
+    leaderSection: "3-A" })));
+
+  await seedThesis("sec-c", "sec4-uid", "titleApproved");
+  await assertFails(updateDoc(doc(leader, "theses/sec-c"), {
+    leaderName: "Ana Cruz", leaderSpecialization: "Networking",
+    leaderSection: "4-B" }));
+  await assertSucceeds(updateDoc(doc(leader, "theses/sec-c"), {
+    leaderName: "Ana Cruz", leaderSpecialization: "Networking",
+    leaderSection: "3-A" }));
+});
+
+test("leaderSection: a leader with none may still refresh their name", async () => {
+  await seedLeaderProfile("sec5-uid", "Ben Reyes");
+  await seedThesis("sec-d", "sec5-uid", "titleApproved");
+  await assertSucceeds(updateDoc(doc(asLeader("sec5-uid"), "theses/sec-d"),
+    { leaderName: "Ben Reyes" }));
+  await assertSucceeds(updateDoc(doc(asLeader("sec5-uid"), "theses/sec-d"),
+    { leaderName: "Ben Reyes", leaderSpecialization: "", leaderSection: "" }));
+});

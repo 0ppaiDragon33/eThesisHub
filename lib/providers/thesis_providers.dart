@@ -86,8 +86,10 @@ final leaderNameBackfillProvider = Provider<void>((ref) {
   if (thesis == null || me == null) return;
   if (thesis.leaderUid != me.uid || me.fullName.isEmpty) return;
   final specialization = me.specialization?.trim() ?? '';
+  final section = me.section?.trim() ?? '';
   if (thesis.leaderName == me.fullName &&
-      (thesis.leaderSpecialization ?? '') == specialization) {
+      (thesis.leaderSpecialization ?? '') == specialization &&
+      (thesis.leaderSection ?? '') == section) {
     return;
   }
   ref
@@ -96,6 +98,7 @@ final leaderNameBackfillProvider = Provider<void>((ref) {
         thesis.id,
         name: me.fullName,
         specialization: specialization,
+        section: section,
       )
       .catchError((Object _) {});
 });

@@ -402,4 +402,71 @@ void main() {
       expect(find.textContaining('past 7 months'), findsOneWidget);
     });
   });
+
+  group('year & section and specialization in the theses table', () {
+    testWidgets('show the leader\'s, and fall back to the year level',
+        (tester) async {
+      useDesktopWidth(tester);
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set({
+        ...thesis(workingTitle: 'Alpha'),
+        'leaderSection': '3-A',
+        'leaderSpecialization': 'Software Development',
+      });
+      // No section typed: the year level from the current term instead.
+      await db.collection('theses').doc('t2').set({
+        ...thesis(workingTitle: 'Beta'),
+        'semester': 'Second',
+        'academicYear': '2026-2027',
+      });
+      await db.doc('settings/academicTerm').set({
+        'semester': 'First',
+        'academicYear': '2027-2028',
+        'updatedBy': 'c1',
+        'updatedAt': Timestamp.now(),
+      });
+      await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
+          uid: 'c1', role: 'coordinator'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Year & section'), findsOneWidget);
+      expect(find.text('Specialization'), findsOneWidget);
+      Text cell(String key) => tester.widget<Text>(find.descendant(
+          of: find.byKey(Key(key)), matching: find.byType(Text)));
+      expect(cell('thesisYearSection-t1').data, '3-A');
+      expect(cell('thesisSpecialization-t1').data, 'Software Development');
+      expect(cell('thesisYearSection-t2').data, '4th year');
+      expect(cell('thesisSpecialization-t2').data, '—');
+    });
+
+    testWidgets('search finds a group by specialization or section',
+        (tester) async {
+      useDesktopWidth(tester);
+      final db = FakeFirebaseFirestore();
+      await db.collection('theses').doc('t1').set({
+        ...thesis(workingTitle: 'Alpha'),
+        'leaderSection': '3-A',
+        'leaderSpecialization': 'Networking',
+      });
+      await db.collection('theses').doc('t2').set({
+        ...thesis(workingTitle: 'Beta'),
+        'leaderSection': '3-B',
+        'leaderSpecialization': 'Artificial Intelligence',
+      });
+      await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
+          uid: 'c1', role: 'coordinator'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('thesesSearch')));
+      await tester.enterText(find.byKey(const Key('thesesSearch')), 'network');
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Beta'), findsNothing);
+
+      await tester.enterText(find.byKey(const Key('thesesSearch')), '3-b');
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsNothing);
+      expect(find.text('Beta'), findsOneWidget);
+    });
+  });
 }

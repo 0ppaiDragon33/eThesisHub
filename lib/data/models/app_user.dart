@@ -11,6 +11,7 @@ class AppUser {
     this.college,
     this.program,
     this.specialization,
+    this.section,
     this.createdBy,
     this.nominableAsAdviser = true,
     this.nominableAsPanelist = true,
@@ -25,6 +26,10 @@ class AppUser {
   final String? college;
   final String? program;
   final String? specialization;
+
+  /// A student's year and section as they type it ("3-A"). Free text; a
+  /// leader's is copied onto their thesis as `leaderSection`.
+  final String? section;
   final String? createdBy;
 
   /// Whether a group may nominate this account as their adviser.
@@ -53,6 +58,7 @@ class AppUser {
       college: map['college'] as String?,
       program: map['program'] as String?,
       specialization: map['specialization'] as String?,
+      section: map['section'] as String?,
       active: map['active'] as bool? ?? true,
       createdAt: map['createdAt'] as DateTime? ?? DateTime.now().toUtc(),
       createdBy: map['createdBy'] as String?,

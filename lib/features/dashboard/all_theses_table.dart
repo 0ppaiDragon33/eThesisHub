@@ -8,8 +8,10 @@ import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
+import 'package:ethesishub/data/models/academic_term.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/providers/academic_term_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
@@ -41,6 +43,17 @@ final _userNameProvider = FutureProvider.family<String, String?>((ref, uid) asyn
       _ => null,
     };
 
+/// The leader's year and section as they typed it ("3-A"); without one, the
+/// group's year level worked out from the current term ("4th year"), or
+/// nothing when neither is known.
+String yearSectionFor(Thesis t, AcademicTerm? now) {
+  final typed = t.leaderSection?.trim() ?? '';
+  if (typed.isNotEmpty) return typed;
+  final started = AcademicTerm(semester: t.semester, academicYear: t.academicYear);
+  final level = yearLevelIn(started, now ?? started);
+  return level == null ? '' : yearLevelLabel(level);
+}
+
 /// Every thesis in the college: searchable, filterable by stage, with a
 /// contextual action per row. Coordinator and dean only — it watches
 /// [allThesesProvider] directly.
@@ -70,6 +83,7 @@ class _AllThesesTableState extends ConsumerState<AllThesesTable> {
   @override
   Widget build(BuildContext context) {
     final thesesAsync = ref.watch(allThesesProvider);
+    final now = ref.watch(currentTermProvider).valueOrNull;
 
     return Panel(
       title: 'All theses',
@@ -97,7 +111,7 @@ class _AllThesesTableState extends ConsumerState<AllThesesTable> {
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         isDense: true,
-                        hintText: 'Search title or program',
+                        hintText: 'Search title, program, section or specialization',
                         prefixIcon: const Icon(Icons.search_rounded, size: 20),
                         suffixIcon: _query.text.isEmpty
                             ? null
@@ -136,6 +150,7 @@ class _AllThesesTableState extends ConsumerState<AllThesesTable> {
                 theses: theses,
                 filter: filter,
                 query: _query.text.trim().toLowerCase(),
+                now: now,
               )),
             ),
           ],
@@ -180,11 +195,13 @@ class _Table extends StatelessWidget {
     required this.theses,
     required this.filter,
     required this.query,
+    required this.now,
   });
 
   final List<Thesis> theses;
   final ThesisStage? filter;
   final String query;
+  final AcademicTerm? now;
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +210,9 @@ class _Table extends StatelessWidget {
         if ((filter == null || thesisStage(t.status) == filter) &&
             (query.isEmpty ||
                 t.workingTitle.toLowerCase().contains(query) ||
-                t.program.toLowerCase().contains(query)))
+                t.program.toLowerCase().contains(query) ||
+                (t.leaderSection ?? '').toLowerCase().contains(query) ||
+                (t.leaderSpecialization ?? '').toLowerCase().contains(query)))
           t,
     ]..sort((a, b) => a.workingTitle.compareTo(b.workingTitle));
 
@@ -211,23 +230,27 @@ class _Table extends StatelessWidget {
     }
 
     return LayoutBuilder(builder: (context, c) {
-      if (c.maxWidth < 760) {
+      // Seven columns need room; below this the rows stack.
+      if (c.maxWidth < 900) {
         return Column(
-          children: [for (final t in visible) _StackedRow(thesis: t)],
+          children: [
+            for (final t in visible) _StackedRow(thesis: t, now: now),
+          ],
         );
       }
       return Column(
         children: [
           const _HeaderRow(),
-          for (final t in visible) _WideRow(thesis: t),
+          for (final t in visible) _WideRow(thesis: t, now: now),
         ],
       );
     });
   }
 }
 
-const _flexTitle = 5;
+const _flexTitle = 4;
 const _flexPerson = 2;
+const _flexDetail = 2;
 const _flexStatus = 2;
 const _actionWidth = 132.0;
 
@@ -250,6 +273,10 @@ class _HeaderRow extends StatelessWidget {
               flex: _flexTitle, child: Text('Working title', style: style)),
           Expanded(flex: _flexPerson, child: Text('Leader', style: style)),
           Expanded(flex: _flexPerson, child: Text('Adviser', style: style)),
+          Expanded(
+              flex: _flexDetail, child: Text('Year & section', style: style)),
+          Expanded(
+              flex: _flexDetail, child: Text('Specialization', style: style)),
           Expanded(flex: _flexStatus, child: Text('Status', style: style)),
           const SizedBox(width: _actionWidth),
         ],
@@ -259,9 +286,10 @@ class _HeaderRow extends StatelessWidget {
 }
 
 class _WideRow extends StatelessWidget {
-  const _WideRow({required this.thesis});
+  const _WideRow({required this.thesis, required this.now});
 
   final Thesis thesis;
+  final AcademicTerm? now;
 
   @override
   Widget build(BuildContext context) {
@@ -301,6 +329,20 @@ class _WideRow extends StatelessWidget {
           Expanded(flex: _flexPerson, child: _NameCell(uid: thesis.leaderUid)),
           Expanded(flex: _flexPerson, child: _NameCell(uid: thesis.adviserUid)),
           Expanded(
+            flex: _flexDetail,
+            child: _DetailCell(
+              key: Key('thesisYearSection-${thesis.id}'),
+              value: yearSectionFor(thesis, now),
+            ),
+          ),
+          Expanded(
+            flex: _flexDetail,
+            child: _DetailCell(
+              key: Key('thesisSpecialization-${thesis.id}'),
+              value: thesis.leaderSpecialization ?? '',
+            ),
+          ),
+          Expanded(
             flex: _flexStatus,
             child: Align(
               alignment: Alignment.centerLeft,
@@ -327,9 +369,10 @@ class _WideRow extends StatelessWidget {
 }
 
 class _StackedRow extends StatelessWidget {
-  const _StackedRow({required this.thesis});
+  const _StackedRow({required this.thesis, required this.now});
 
   final Thesis thesis;
+  final AcademicTerm? now;
 
   @override
   Widget build(BuildContext context) {
@@ -359,6 +402,20 @@ class _StackedRow extends StatelessWidget {
             children: [
               Text('Adviser ', style: text.bodySmall),
               Expanded(child: _NameCell(uid: thesis.adviserUid)),
+            ],
+          ),
+          Row(
+            children: [
+              Text('Year & section ', style: text.bodySmall),
+              Expanded(child: _DetailCell(value: yearSectionFor(thesis, now))),
+            ],
+          ),
+          Row(
+            children: [
+              Text('Specialization ', style: text.bodySmall),
+              Expanded(
+                child: _DetailCell(value: thesis.leaderSpecialization ?? ''),
+              ),
             ],
           ),
           if (action != null)
@@ -398,6 +455,27 @@ class _NameCell extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
         style: style,
       ),
+    );
+  }
+}
+
+/// A plain detail in the register; a dash when there is none.
+class _DetailCell extends StatelessWidget {
+  const _DetailCell({super.key, required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final empty = value.trim().isEmpty;
+    return Text(
+      empty ? '—' : value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: empty
+          ? text.bodyMedium?.copyWith(color: Palette.of(context).muted)
+          : text.bodyMedium,
     );
   }
 }

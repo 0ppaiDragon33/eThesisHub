@@ -110,6 +110,24 @@ void main() {
     expect((await db.doc('users/u1').get()).data()!['specialization'], 'MSCS');
   });
 
+  testWidgets('a student sets their year & section', (tester) async {
+    final db = await pump(tester, {
+      'fullName': 'Ana Cruz',
+      'role': 'student',
+      'program': 'BSIT',
+    });
+    await tester.enterText(find.byKey(const Key('profileSection')), '3-A');
+    await tester.tap(find.byKey(const Key('saveProfile')));
+    await tester.pumpAndSettle();
+
+    expect((await db.doc('users/u1').get()).data()!['section'], '3-A');
+  });
+
+  testWidgets('faculty have no year & section box', (tester) async {
+    await pump(tester, {'fullName': 'Dr. Parcia', 'role': 'faculty'});
+    expect(find.byKey(const Key('profileSection')), findsNothing);
+  });
+
   testWidgets('an empty name is refused before any write', (tester) async {
     final db = await pump(tester, {
       'fullName': 'Ana Cruz',

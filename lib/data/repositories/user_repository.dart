@@ -53,7 +53,8 @@ class UserRepository {
   }
 
   /// Saves the signed-in person's own profile details. The rules let the
-  /// owner change exactly these: name, program and specialization (college is
+  /// owner change exactly these: name, program, specialization and section
+  /// (college is
   /// left alone here; it comes from the invite). A blank program or
   /// specialization is stored as null.
   Future<void> updateOwnProfile({
@@ -61,6 +62,7 @@ class UserRepository {
     required String fullName,
     String? program,
     String? specialization,
+    String? section,
   }) {
     final name = fullName.trim();
     if (name.isEmpty) throw ArgumentError('Enter your full name.');
@@ -70,6 +72,7 @@ class UserRepository {
       'fullName': name,
       'program': orNull(program),
       'specialization': orNull(specialization),
+      'section': orNull(section),
     });
   }
 

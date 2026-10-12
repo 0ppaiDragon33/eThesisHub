@@ -11,7 +11,8 @@ import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// The signed-in person's own details: name, specialization, and for a
-/// student their program. Both are typed freely, since the names change.
+/// student their program and year & section. All typed freely, since the
+/// names change.
 ///
 /// A group leader's specialization is copied onto their thesis, so the
 /// adviser and panel see it ("Leader specialization: Software Development").
@@ -55,6 +56,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       TextEditingController(text: widget.profile.program ?? '');
   late final _specialization =
       TextEditingController(text: widget.profile.specialization ?? '');
+  late final _section =
+      TextEditingController(text: widget.profile.section ?? '');
 
   bool _busy = false;
   String? _error;
@@ -66,6 +69,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     _name.dispose();
     _program.dispose();
     _specialization.dispose();
+    _section.dispose();
     super.dispose();
   }
 
@@ -86,6 +90,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
             // Faculty have no program box; theirs is kept as it is.
             program: _isStudent ? _program.text : widget.profile.program,
             specialization: _specialization.text,
+            section: _isStudent ? _section.text : widget.profile.section,
           );
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -133,6 +138,17 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                 controller: _program,
                 textCapitalization: TextCapitalization.characters,
                 decoration: const InputDecoration(hintText: 'e.g. BSIT'),
+              ),
+            ),
+          if (_isStudent)
+            FormRow(
+              label: 'Year & section',
+              hint: 'Shown to the Coordinator and the Dean if you lead a group.',
+              child: TextField(
+                key: const Key('profileSection'),
+                controller: _section,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(hintText: 'e.g. 3-A'),
               ),
             ),
           FormRow(

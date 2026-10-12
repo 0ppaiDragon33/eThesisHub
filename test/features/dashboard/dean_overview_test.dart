@@ -266,4 +266,24 @@ void main() {
     expect(find.descendant(of: tile, matching: find.text('—')),
         findsNothing);
   });
+
+  testWidgets('the Dean sees every group with year & section and specialization',
+      (tester) async {
+    useDesktopWidth(tester);
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      ...thesis(),
+      'workingTitle': 'Alpha',
+      'leaderSection': '4-A',
+      'leaderSpecialization': 'Networking',
+    });
+    await tester.pumpWidget(
+        await wrap(const OverviewScreen(), db, uid: 'd1', role: 'dean'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('All theses'), findsOneWidget);
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('4-A'), findsOneWidget);
+    expect(find.text('Networking'), findsOneWidget);
+  });
 }

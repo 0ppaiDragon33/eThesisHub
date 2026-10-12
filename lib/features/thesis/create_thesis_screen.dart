@@ -98,6 +98,7 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
             leaderName: ref.read(currentUserProvider).valueOrNull?.fullName,
             leaderSpecialization:
                 ref.read(currentUserProvider).valueOrNull?.specialization,
+            leaderSection: ref.read(currentUserProvider).valueOrNull?.section,
             workingTitle: title,
             memberNames: _members
                 .map((c) => c.text.trim())

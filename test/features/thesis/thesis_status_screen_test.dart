@@ -402,6 +402,7 @@ void main() {
       final db = await seeded('titleApproved');
       await db.doc('users/leader-1').update({
         'specialization': 'Software Development',
+        'section': '3-A',
       });
       await tester.pumpWidget(wrap(db));
       await tester.pumpAndSettle();
@@ -412,6 +413,7 @@ void main() {
       final thesis = (await db.doc('theses/t1').get()).data()!;
       expect(thesis['leaderSpecialization'], 'Software Development');
       expect(thesis['leaderName'], 'Karl Joshua P. Vargas');
+      expect(thesis['leaderSection'], '3-A');
       expect(find.text('Software Development'), findsOneWidget);
     });
   });

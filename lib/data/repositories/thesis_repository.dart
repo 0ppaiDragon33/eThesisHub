@@ -92,6 +92,7 @@ class ThesisRepository {
     required String academicYear,
     String? leaderName,
     String? leaderSpecialization,
+    String? leaderSection,
   }) async {
     final doc = _theses.doc();
     await doc.set({
@@ -102,6 +103,8 @@ class ThesisRepository {
       // Must equal the leader's own profile specialization; the rules check it.
       if (leaderSpecialization != null && leaderSpecialization.isNotEmpty)
         'leaderSpecialization': leaderSpecialization,
+      if (leaderSection != null && leaderSection.isNotEmpty)
+        'leaderSection': leaderSection,
       'workingTitle': workingTitle.trim(),
       'memberNames': memberNames,
       'college': college,
@@ -120,7 +123,7 @@ class ThesisRepository {
     return doc.id;
   }
 
-  /// Records the leader's own name and specialization on their thesis, for a
+  /// Records the leader's own name, specialization and section on their thesis, for a
   /// thesis created before these existed or after the leader changed them.
   /// The rules accept only the caller's own profile values, and only from
   /// the leader. An empty [specialization] is written as "" so a cleared
@@ -129,10 +132,12 @@ class ThesisRepository {
     String thesisId, {
     required String name,
     required String specialization,
+    required String section,
   }) =>
       _thesis(thesisId).update({
         'leaderName': name,
         'leaderSpecialization': specialization,
+        'leaderSection': section,
       });
 
   Stream<Thesis?> watchThesis(String thesisId) {
