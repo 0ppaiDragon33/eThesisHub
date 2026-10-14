@@ -469,4 +469,33 @@ void main() {
       expect(find.text('Beta'), findsOneWidget);
     });
   });
+
+  testWidgets('on a phone the table keeps one line per group and scrolls '
+      'sideways', (tester) async {
+    tester.view.physicalSize = const Size(400, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set({
+      ...thesis(workingTitle: 'Alpha'),
+      'leaderSection': '4-A',
+      'leaderSpecialization': 'WM',
+    });
+    await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
+        uid: 'c1', role: 'coordinator'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('panelToggle-theses')));
+    await tester.tap(find.byKey(const Key('panelToggle-theses')));
+    await tester.pumpAndSettle();
+
+    // The column header row is there, not stacked cards.
+    expect(find.text('Year & section'), findsOneWidget);
+    expect(find.byKey(const Key('thesesTableScroll')), findsOneWidget);
+    // Title and specialization sit on the same line.
+    final title = tester.getCenter(find.text('Alpha'));
+    final spec = tester.getCenter(find.text('WM'));
+    expect((title.dy - spec.dy).abs(), lessThan(12));
+    expect(tester.takeException(), isNull);
+  });
 }

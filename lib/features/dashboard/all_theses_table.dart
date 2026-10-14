@@ -229,20 +229,32 @@ class _Table extends StatelessWidget {
       );
     }
 
+    final table = Column(
+      children: [
+        const _HeaderRow(),
+        for (final t in visible) _WideRow(thesis: t, now: now),
+      ],
+    );
+
+    // Always one line per group. When the seven columns do not fit (a
+    // phone), the table keeps its width and scrolls sideways, like the
+    // student's progress rail, with a soft fade on the right edge so a
+    // cut-off column reads as "more here".
     return LayoutBuilder(builder: (context, c) {
-      // Seven columns need room; below this the rows stack.
-      if (c.maxWidth < 900) {
-        return Column(
-          children: [
-            for (final t in visible) _StackedRow(thesis: t, now: now),
-          ],
-        );
-      }
-      return Column(
-        children: [
-          const _HeaderRow(),
-          for (final t in visible) _WideRow(thesis: t, now: now),
-        ],
+      if (c.maxWidth >= _naturalWidth) return table;
+      return ShaderMask(
+        shaderCallback: (bounds) => const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Colors.black, Colors.black, Colors.transparent],
+          stops: [0.0, 0.93, 1.0],
+        ).createShader(bounds),
+        blendMode: BlendMode.dstIn,
+        child: SingleChildScrollView(
+          key: const Key('thesesTableScroll'),
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(width: _naturalWidth, child: table),
+        ),
       );
     });
   }
@@ -253,6 +265,10 @@ const _flexPerson = 2;
 const _flexDetail = 2;
 const _flexStatus = 2;
 const _actionWidth = 132.0;
+
+/// The width the seven columns need; narrower than this the table scrolls
+/// sideways.
+const _naturalWidth = 900.0;
 
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow();
@@ -362,70 +378,6 @@ class _WideRow extends StatelessWidget {
                     ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StackedRow extends StatelessWidget {
-  const _StackedRow({required this.thesis, required this.now});
-
-  final Thesis thesis;
-  final AcademicTerm? now;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    final text = Theme.of(context).textTheme;
-    final action = staffActionFor(thesis);
-    return Container(
-      key: ValueKey('thesisRow-${thesis.id}'),
-      padding: const EdgeInsets.all(AppTokens.md),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: p.rule)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(thesis.workingTitle, style: text.titleMedium),
-          const SizedBox(height: AppTokens.xs),
-          StatusChip(thesis.status, dense: true),
-          const SizedBox(height: AppTokens.sm),
-          Row(
-            children: [
-              Text('Leader ', style: text.bodySmall),
-              Expanded(child: _NameCell(uid: thesis.leaderUid)),
-            ],
-          ),
-          Row(
-            children: [
-              Text('Adviser ', style: text.bodySmall),
-              Expanded(child: _NameCell(uid: thesis.adviserUid)),
-            ],
-          ),
-          Row(
-            children: [
-              Text('Year & section ', style: text.bodySmall),
-              Expanded(child: _DetailCell(value: yearSectionFor(thesis, now))),
-            ],
-          ),
-          Row(
-            children: [
-              Text('Specialization ', style: text.bodySmall),
-              Expanded(
-                child: _DetailCell(value: thesis.leaderSpecialization ?? ''),
-              ),
-            ],
-          ),
-          if (action != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => context.push(action.route),
-                child: Text(action.label),
-              ),
-            ),
         ],
       ),
     );
