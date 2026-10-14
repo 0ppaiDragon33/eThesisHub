@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
@@ -48,6 +49,12 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   final Map<String, TextEditingController> _comments = {
     for (final key in contentKeys) key: TextEditingController(),
   };
+
+  /// The typed score for each criterion. Blank means not scored yet, which
+  /// is not the same as a typed 0.
+  final Map<String, TextEditingController> _scoreText = {
+    for (final c in evaluationCriteria) c.key: TextEditingController(),
+  };
   PassFail? _rating;
 
   /// Guards the one-time seed from [myEvaluationProvider]. Without it, every
@@ -64,6 +71,9 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     for (final c in _comments.values) {
       c.dispose();
     }
+    for (final c in _scoreText.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -72,35 +82,41 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     _seeded = true;
     if (evaluation == null) return;
     _scores.addAll(evaluation.scores);
+    evaluation.scores.forEach((key, value) {
+      _scoreText[key]?.text = '$value';
+    });
     evaluation.comments.forEach((key, value) {
       _comments[key]?.text = value;
     });
     _rating = evaluation.rating;
   }
 
-  /// The stepper's whole reason to exist is that a panelist scores eleven
-  /// criteria on a phone without summoning a numeric keypad eleven times --
-  /// which only holds if the +/- controls are themselves comfortable to
-  /// thumb. Kept at Material's own 48x48 minimum tap target rather than
-  /// shrunk to fit a test surface; the test harness grows to fit the
-  /// product, not the other way around (see `useTallSurface` in the test
-  /// file).
-  Widget _stepperButton({
-    required Key key,
-    required IconData icon,
-    required VoidCallback? onPressed,
-  }) {
-    return IconButton(
-      key: key,
-      icon: Icon(icon, size: 20),
-      onPressed: onPressed,
-    );
+  /// A score typed into a criterion's box. Blank un-scores it; a number above
+  /// the criterion's weight is brought down to it, and the box shows the
+  /// number actually kept.
+  void _typed(EvaluationCriterion c, String raw) {
+    final box = _scoreText[c.key]!;
+    setState(() {
+      if (raw.trim().isEmpty) {
+        _scores.remove(c.key);
+        return;
+      }
+      final n = (int.tryParse(raw.trim()) ?? 0).clamp(0, c.weight);
+      _scores[c.key] = n;
+      if (box.text != '$n') {
+        box.value = TextEditingValue(
+          text: '$n',
+          selection: TextSelection.collapsed(offset: '$n'.length),
+        );
+      }
+    });
   }
 
-  void _adjust(String key, int delta, int weight) {
-    final current = _scores[key] ?? 0;
+  /// Full marks for one criterion in a tap.
+  void _full(EvaluationCriterion c) {
     setState(() {
-      _scores[key] = (current + delta).clamp(0, weight);
+      _scores[c.key] = c.weight;
+      _scoreText[c.key]!.text = '${c.weight}';
     });
   }
 
@@ -404,31 +420,36 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                   ),
                 ),
                 const SizedBox(width: AppTokens.sm),
-                _stepperButton(
-                  key: Key('minus_${c.key}'),
-                  icon: Icons.remove,
-                  onPressed:
-                      locked ? null : () => _adjust(c.key, -1, c.weight),
-                ),
+                // Typed, not stepped: a 25-point criterion took 25 taps.
                 SizedBox(
-                  width: 56,
-                  child: Text.rich(
-                    TextSpan(children: [
-                      TextSpan(
-                        text: '$score',
-                        style: text.titleMedium,
-                      ),
-                      TextSpan(text: '/${c.weight}', style: text.bodySmall),
-                    ]),
+                  width: 64,
+                  child: TextField(
                     key: Key('score_${c.key}'),
+                    controller: _scoreText[c.key],
+                    enabled: !locked,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
                     textAlign: TextAlign.center,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(2),
+                    ],
+                    style: text.titleMedium,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: '–',
+                      suffixText: '/${c.weight}',
+                      suffixStyle: text.bodySmall,
+                    ),
+                    onChanged: (v) => _typed(c, v),
                   ),
                 ),
-                _stepperButton(
-                  key: Key('plus_${c.key}'),
-                  icon: Icons.add,
-                  onPressed:
-                      locked ? null : () => _adjust(c.key, 1, c.weight),
+                TextButton(
+                  key: Key('full_${c.key}'),
+                  onPressed: locked || score == c.weight
+                      ? null
+                      : () => _full(c),
+                  child: const Text('Full'),
                 ),
               ],
             ),

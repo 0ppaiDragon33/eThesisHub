@@ -49,12 +49,11 @@ Future<FakeFirebaseFirestore> seed({
   return db;
 }
 
-/// Eleven criteria, each with its own comfortably-sized (48x48) stepper and
-/// its own helper text, exceed the default 800x600 test surface -- the same
+/// Eleven criteria, each with its own score box and helper text, exceed the default 800x600 test surface -- the same
 /// reason this helper exists verbatim in `submit_titles_screen_test.dart`
 /// and `title_defence_screen_test.dart`. Grown here rather than the widget
 /// shrunk to fit, so a tap on a criterion below the fold (e.g.
-/// `plus_recommendation`, the 7th of 8 Content criteria) still lands.
+/// `score_recommendation`, the 7th of 8 Content criteria) still lands.
 void useTallSurface(WidgetTester tester) {
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -107,39 +106,92 @@ void main() {
     expect(
         tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '0');
 
-    await tester.tap(find.byKey(const Key('plus_title')));
+    await tester.enterText(find.byKey(const Key('score_title')), '4');
     await tester.pump();
     expect(
-        tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '1');
+        tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '4');
+
+    await tester.enterText(find.byKey(const Key('score_result')), '9');
+    await tester.pump();
+    expect(
+        tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '13');
   });
 
-  // D34's mitigation: eleven different maximums, so the control refuses
+  // D34's mitigation: eleven different maximums, so the box refuses
   // out-of-range rather than accepting then rejecting it.
-  testWidgets('a stepper clamps at zero and at its own weight',
+  testWidgets('a typed score is kept within its own weight', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    String boxOf(String key) => tester
+        .widget<TextField>(find.byKey(Key('score_$key')))
+        .controller!
+        .text;
+
+    // recommendation is worth 2: typing 9 keeps 2.
+    await tester.enterText(
+        find.byKey(const Key('score_recommendation')), '9');
+    await tester.pump();
+    expect(boxOf('recommendation'), '2');
+    expect(
+        tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '2');
+
+    // Letters never get in.
+    await tester.enterText(find.byKey(const Key('score_title')), 'ab');
+    await tester.pump();
+    expect(boxOf('title'), '');
+  });
+
+  testWidgets('Full gives full marks in one tap', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('full_alertness')));
+    await tester.pump();
+    expect(
+        tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '25');
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('score_alertness')))
+            .controller!
+            .text,
+        '25');
+  });
+
+  testWidgets('clearing a box un-scores it; a typed 0 still counts',
       (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
     await tester.pumpAndSettle();
 
-    // The score renders as a Text.rich, '<score>/<weight>'; the score is the
-    // first span.
-    String scoreOf(String key) {
-      final span =
-          tester.widget<Text>(find.byKey(Key('score_$key'))).textSpan!
-              as TextSpan;
-      return (span.children!.first as TextSpan).text!;
-    }
-
-    // recommendation is worth 2 -- three taps must not reach 3.
-    for (var i = 0; i < 3; i++) {
-      await tester.tap(find.byKey(const Key('plus_recommendation')));
+    // Every criterion but title at full, title typed as 0: complete.
+    for (final c in evaluationCriteria) {
+      if (c.key == 'title') continue;
+      await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+      await tester.tap(find.byKey(Key('full_${c.key}')));
       await tester.pump();
     }
-    expect(scoreOf('recommendation'), '2');
-
-    await tester.tap(find.byKey(const Key('minus_title')));
+    await tester.enterText(find.byKey(const Key('score_title')), '0');
     await tester.pump();
-    expect(scoreOf('title'), '0');
+    await tester.tap(find.text('Pass'));
+    await tester.pump();
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('submitEvaluation')))
+            .onPressed,
+        isNotNull,
+        reason: 'a typed 0 is a score');
+
+    // Cleared: not scored, so the sheet is incomplete again.
+    await tester.enterText(find.byKey(const Key('score_title')), '');
+    await tester.pump();
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('submitEvaluation')))
+            .onPressed,
+        isNull);
   });
 
   testWidgets('submit is disabled until every criterion is scored',
@@ -166,10 +218,13 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final c in evaluationCriteria) {
-      for (var i = 0; i < c.weight; i++) {
-        await tester.tap(find.byKey(Key('plus_${c.key}')));
-        await tester.pump();
-      }
+
+      await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+
+      await tester.tap(find.byKey(Key('full_${c.key}')));
+
+      await tester.pump();
+
     }
     expect(
         tester
@@ -295,10 +350,13 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final c in evaluationCriteria) {
-      for (var i = 0; i < c.weight; i++) {
-        await tester.tap(find.byKey(Key('plus_${c.key}')));
-        await tester.pump();
-      }
+
+      await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+
+      await tester.tap(find.byKey(Key('full_${c.key}')));
+
+      await tester.pump();
+
     }
     await tester.tap(find.text('Pass'));
     await tester.pumpAndSettle();
@@ -385,10 +443,13 @@ void main() {
         isEmpty);
 
     for (final c in evaluationCriteria) {
-      for (var i = 0; i < c.weight; i++) {
-        await tester.tap(find.byKey(Key('plus_${c.key}')));
-        await tester.pump();
-      }
+
+      await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+
+      await tester.tap(find.byKey(Key('full_${c.key}')));
+
+      await tester.pump();
+
     }
     expect(find.byKey(const Key('passLocked')), findsNothing);
     await tester.tap(find.text('Pass'));
@@ -409,10 +470,13 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final c in evaluationCriteria) {
-      for (var i = 0; i < c.weight; i++) {
-        await tester.tap(find.byKey(Key('plus_${c.key}')));
-        await tester.pump();
-      }
+
+      await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+
+      await tester.tap(find.byKey(Key('full_${c.key}')));
+
+      await tester.pump();
+
     }
     await tester.tap(find.text('Pass'));
     await tester.pumpAndSettle();
@@ -451,10 +515,9 @@ void main() {
       expect(find.byKey(const Key('notPanelist')), findsNothing,
           reason: entry.key);
       for (final c in evaluationCriteria) {
-        for (var i = 0; i < c.weight; i++) {
-          await tester.tap(find.byKey(Key('plus_${c.key}')));
-          await tester.pump();
-        }
+        await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+        await tester.tap(find.byKey(Key('full_${c.key}')));
+        await tester.pump();
       }
       await tester.tap(find.text('Pass'));
       await tester.pumpAndSettle();
