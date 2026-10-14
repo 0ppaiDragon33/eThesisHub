@@ -19,26 +19,26 @@ class AppTheme {
   static const String serif = 'SourceSerif4';
 
   static ThemeData get light => _build(
-        brightness: Brightness.light,
-        ink: AppTokens.ink,
-        inkMuted: AppTokens.inkMuted,
-        seal: AppTokens.seal,
-        paper: AppTokens.paper,
-        canvas: AppTokens.surface,
-        rule: AppTokens.rule,
-        error: AppTokens.returned,
-      );
+    brightness: Brightness.light,
+    ink: AppTokens.ink,
+    inkMuted: AppTokens.inkMuted,
+    seal: AppTokens.seal,
+    paper: AppTokens.paper,
+    canvas: AppTokens.surface,
+    rule: AppTokens.rule,
+    error: AppTokens.returned,
+  );
 
   static ThemeData get dark => _build(
-        brightness: Brightness.dark,
-        ink: AppTokens.inkDark,
-        inkMuted: AppTokens.inkMutedDark,
-        seal: AppTokens.sealDark,
-        paper: AppTokens.surfaceDark,
-        canvas: AppTokens.paperDark,
-        rule: AppTokens.ruleDark,
-        error: AppTokens.returnedDark,
-      );
+    brightness: Brightness.dark,
+    ink: AppTokens.inkDark,
+    inkMuted: AppTokens.inkMutedDark,
+    seal: AppTokens.sealDark,
+    paper: AppTokens.surfaceDark,
+    canvas: AppTokens.paperDark,
+    rule: AppTokens.ruleDark,
+    error: AppTokens.returnedDark,
+  );
 
   static ThemeData _build({
     required Brightness brightness,
@@ -53,27 +53,28 @@ class AppTheme {
     final light = brightness == Brightness.light;
     final onSeal = light ? AppTokens.paper : AppTokens.paperDark;
 
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppTokens.seal,
-      brightness: brightness,
-    ).copyWith(
-      primary: seal,
-      onPrimary: onSeal,
-      primaryContainer: seal.withValues(alpha: 0.12),
-      onPrimaryContainer: ink,
-      secondary: seal,
-      surface: paper,
-      onSurface: ink,
-      onSurfaceVariant: inkMuted,
-      surfaceContainerLowest: paper,
-      surfaceContainerLow: paper,
-      surfaceContainer: canvas,
-      surfaceContainerHigh: canvas,
-      outline: rule,
-      outlineVariant: rule,
-      error: error,
-      onError: onSeal,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppTokens.seal,
+          brightness: brightness,
+        ).copyWith(
+          primary: seal,
+          onPrimary: onSeal,
+          primaryContainer: seal.withValues(alpha: 0.12),
+          onPrimaryContainer: ink,
+          secondary: seal,
+          surface: paper,
+          onSurface: ink,
+          onSurfaceVariant: inkMuted,
+          surfaceContainerLowest: paper,
+          surfaceContainerLow: paper,
+          surfaceContainer: canvas,
+          surfaceContainerHigh: canvas,
+          outline: rule,
+          outlineVariant: rule,
+          error: error,
+          onError: onSeal,
+        );
 
     final text = _typography(ink, inkMuted);
     const r8 = BorderRadius.all(Radius.circular(8));
@@ -111,7 +112,13 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: paper,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        // Light: paper-on-paper with a hairline rule is enough separation.
+        // Dark: surfaceDark sits only a few points above paperDark, so a
+        // very light shadow is added to keep panels from reading as flush
+        // with the canvas behind them. This does not touch the palette —
+        // it is purely a dark-mode elevation cue.
+        elevation: light ? 0 : 1,
+        shadowColor: light ? null : Colors.black.withValues(alpha: 0.4),
         margin: const EdgeInsets.only(bottom: AppTokens.sm + 4),
         shape: RoundedRectangleBorder(
           side: BorderSide(color: rule),
@@ -279,7 +286,8 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 8,
         shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16))),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         titleTextStyle: text.titleLarge,
         contentTextStyle: text.bodyMedium,
       ),
@@ -329,7 +337,8 @@ class AppTheme {
       ),
       checkboxTheme: CheckboxThemeData(
         shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(4))),
+          borderRadius: BorderRadius.all(Radius.circular(4)),
+        ),
         side: BorderSide(color: inkMuted, width: 1.5),
       ),
       expansionTileTheme: ExpansionTileThemeData(
@@ -398,9 +407,15 @@ class AppTheme {
       bodyMedium: TextStyle(fontSize: 14.5, height: 1.5, color: ink),
       bodySmall: TextStyle(fontSize: 13, height: 1.45, color: inkMuted),
       labelLarge: const TextStyle(
-          fontSize: 14.5, fontWeight: FontWeight.w600, letterSpacing: 0),
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
+      ),
       labelMedium: const TextStyle(
-          fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0),
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
+      ),
       labelSmall: TextStyle(
         fontSize: 12,
         height: 1.3,

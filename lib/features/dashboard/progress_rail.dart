@@ -25,7 +25,7 @@ enum RailStage {
   final String label;
 }
 
-class ProgressRail extends StatelessWidget {
+class ProgressRail extends StatefulWidget {
   const ProgressRail({
     super.key,
     required this.status,
@@ -59,20 +59,17 @@ class ProgressRail extends StatelessWidget {
     required ThesisStatus status,
     List<Defence> defences = const [],
     List<ThesisChapter> chapters = const [],
-  }) =>
-      switch (status) {
-        ThesisStatus.draft => RailStage.draft,
-        ThesisStatus.nominationPendingConforme ||
-        ThesisStatus.nominationPendingCoordinator ||
-        ThesisStatus.nominationPendingDean =>
-          RailStage.nomination,
-        ThesisStatus.nominationApproved ||
-        ThesisStatus.titlePendingDefence ||
-        ThesisStatus.titleRejected =>
-          RailStage.title,
-        ThesisStatus.titleApproved => _afterTitle(defences, chapters),
-        ThesisStatus.archived => RailStage.finalDefence,
-      };
+  }) => switch (status) {
+    ThesisStatus.draft => RailStage.draft,
+    ThesisStatus.nominationPendingConforme ||
+    ThesisStatus.nominationPendingCoordinator ||
+    ThesisStatus.nominationPendingDean => RailStage.nomination,
+    ThesisStatus.nominationApproved ||
+    ThesisStatus.titlePendingDefence ||
+    ThesisStatus.titleRejected => RailStage.title,
+    ThesisStatus.titleApproved => _afterTitle(defences, chapters),
+    ThesisStatus.archived => RailStage.finalDefence,
+  };
 
   /// `titleApproved` is the one status that covers three rail stages, so it
   /// is the only one that reads defence and chapter state.
@@ -88,8 +85,7 @@ class ProgressRail extends StatelessWidget {
     List<ThesisChapter> chapters,
   ) {
     if (chapters.isEmpty) return RailStage.chapters;
-    final counted =
-        defences.where((d) => d.status != DefenceStatus.cancelled);
+    final counted = defences.where((d) => d.status != DefenceStatus.cancelled);
     if (counted.any((d) => d.type == DefenceType.final_)) {
       return RailStage.finalDefence;
     }
@@ -101,14 +97,15 @@ class ProgressRail extends StatelessWidget {
 
   /// One sentence per stage, for the reader who is standing on it.
   static String describe(RailStage stage) => switch (stage) {
-        RailStage.draft => 'Group formed, working title named',
-        RailStage.nomination => 'Adviser and panel accept; Coordinator and '
-            'Dean sign off',
-        RailStage.title => 'Candidate titles go before the panel',
-        RailStage.chapters => 'Chapters I–V, reviewed by the adviser',
-        RailStage.preOral => 'Proposal defended before the panel',
-        RailStage.finalDefence => 'Final defence, then the archive',
-      };
+    RailStage.draft => 'Group formed, working title named',
+    RailStage.nomination =>
+      'Adviser and panel accept; Coordinator and '
+          'Dean sign off',
+    RailStage.title => 'Candidate titles go before the panel',
+    RailStage.chapters => 'Chapters I–V, reviewed by the adviser',
+    RailStage.preOral => 'Proposal defended before the panel',
+    RailStage.finalDefence => 'Final defence, then the archive',
+  };
 
   /// A comfortable width for one stage — wide enough that its label sits on a
   /// single line. Six of these is the rail's natural width; below it, the row
@@ -116,11 +113,69 @@ class ProgressRail extends StatelessWidget {
   static const double _stepWidth = 96;
 
   @override
+  State<ProgressRail> createState() => _ProgressRailState();
+}
+
+class _ProgressRailState extends State<ProgressRail> {
+  final _controller = ScrollController();
+  bool _scrolled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleScrollToCurrent();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProgressRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current != widget.current ||
+        oldWidget.status != widget.status) {
+      _scrolled = false;
+      _scheduleScrollToCurrent();
+    }
+  }
+
+  void _scheduleScrollToCurrent() {
+    if (_scrolled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+  }
+
+  void _scrollToCurrent() {
+    if (!mounted || !_controller.hasClients) return;
+    if (_controller.position.maxScrollExtent <= 0) return;
+
+    final archived = widget.status == ThesisStatus.archived;
+    final currentIndex = archived
+        ? RailStage.values.length - 1
+        : RailStage.values.indexOf(widget.current);
+
+    final viewport = _controller.position.viewportDimension;
+    final target =
+        (currentIndex * ProgressRail._stepWidth) -
+        (viewport / 2) +
+        (ProgressRail._stepWidth / 2);
+
+    _scrolled = true;
+    _controller.animateTo(
+      target.clamp(0, _controller.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final archived = status == ThesisStatus.archived;
+    final archived = widget.status == ThesisStatus.archived;
     final currentIndex = archived
         ? RailStage.values.length
-        : RailStage.values.indexOf(current);
+        : RailStage.values.indexOf(widget.current);
 
     final steps = [
       for (var i = 0; i < RailStage.values.length; i++)
@@ -131,8 +186,8 @@ class ProgressRail extends StatelessWidget {
           state: i < currentIndex
               ? _StepState.done
               : i == currentIndex
-                  ? _StepState.current
-                  : _StepState.ahead,
+              ? _StepState.current
+              : _StepState.ahead,
           first: i == 0,
           last: i == RailStage.values.length - 1,
         ),
@@ -147,18 +202,37 @@ class ProgressRail extends StatelessWidget {
       label: archived
           ? 'Thesis journey: every stage complete'
           : 'Thesis journey: stage ${currentIndex + 1} of '
-              '${RailStage.values.length}, ${current.label}',
+                '${RailStage.values.length}, ${widget.current.label}',
       // Always a left-to-right stepper. When the six stages fit, they share
       // the width evenly; when they do not (a phone), the rail scrolls
-      // sideways at their natural width so no label ever wraps or clips.
-      child: LayoutBuilder(builder: (context, constraints) {
-        final natural = RailStage.values.length * _stepWidth;
-        if (constraints.maxWidth >= natural) return row;
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(width: natural, child: row),
-        );
-      }),
+      // sideways at their natural width, auto-centred on the current stage,
+      // with a soft edge fade so a cut-off step reads as "more here" rather
+      // than a hard clip.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final natural = RailStage.values.length * ProgressRail._stepWidth;
+          if (constraints.maxWidth >= natural) return row;
+          return ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.transparent,
+                Colors.black,
+                Colors.black,
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.04, 0.92, 1.0],
+            ).createShader(bounds),
+            blendMode: BlendMode.dstIn,
+            child: SingleChildScrollView(
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(width: natural, child: row),
+            ),
+          );
+        },
+      ),
     );
   }
 }
