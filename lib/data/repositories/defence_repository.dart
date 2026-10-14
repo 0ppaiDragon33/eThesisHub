@@ -580,12 +580,11 @@ class DefenceRepository {
 
   /// The adviser's release of the panel's evaluations to each other.
   ///
-  /// Deliberately NOT conditioned on "everyone has submitted". Firestore
-  /// rules cannot count documents in a collection, so that condition is
-  /// unenforceable at the boundary -- and a check here that the rules
-  /// cannot back would be theatre: anyone with the SDK could bypass it.
-  /// The grades screen prints the count on the button instead, so an
-  /// early release is a visible choice.
+  /// Waits for every grader (the panel, the Coordinator and the Dean): it
+  /// refuses while fewer sheets are in, and the grades screen keeps the
+  /// button disabled until then. This is the app's check only; Firestore
+  /// rules cannot count documents in a collection, so the rules themselves
+  /// do not enforce it.
   Future<void> releaseEvaluations({
     required String defenceId,
     required String adviserUid,
@@ -610,6 +609,15 @@ class DefenceRepository {
     }
     if (data['evaluationsReleasedAt'] != null) {
       throw StateError('These evaluations have already been released.');
+    }
+
+    // Every grader first: the panel, the Coordinator and the Dean.
+    final panel = (data['panelUids'] as List?)?.length ?? 0;
+    final required = panel + 2;
+    final submitted = (await _evaluations(defenceId).get()).docs.length;
+    if (submitted < required) {
+      throw StateError('Every grader must submit first: $submitted of '
+          '$required are in.');
     }
 
     await _defence(defenceId)

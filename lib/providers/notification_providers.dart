@@ -414,6 +414,42 @@ final evaluationAwaitsDetectorProvider = Provider<void>((ref) {
   });
 });
 
+/// Tells the adviser when every grader (the panel, the Coordinator and the
+/// Dean) has submitted their Form 5c on a closed defence they advise, so they
+/// can release the grades. Watches each such defence's evaluations, so the
+/// last sheet coming in is what fires it. Once per defence.
+final evaluationsCompleteDetectorProvider = Provider<void>((ref) {
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return;
+  final defences = ref.watch(myDefencesProvider).valueOrNull ?? const <Defence>[];
+  final repo = ref.read(notificationRepositoryProvider);
+  for (final d in defences) {
+    if (d.adviserUid != uid) continue;
+    if (d.status != DefenceStatus.completed || d.evaluationsReleased) continue;
+    final evaluations = ref.watch(defenceEvaluationsProvider(d.id)).valueOrNull;
+    if (evaluations == null || evaluations.length < d.requiredEvaluations) {
+      continue;
+    }
+    repo
+        .upsertIfAbsent(
+          uid,
+          AppNotification(
+            id: notificationId(NotificationType.evaluationsComplete, d.id),
+            type: NotificationType.evaluationsComplete,
+            thesisId: d.thesisId,
+            defenceId: d.id,
+            message: 'Every grader has submitted their Form 5c. You can '
+                'release the grades.',
+            read: false,
+            createdAt: DateTime.now(),
+          ),
+        )
+        .catchError((Object e) {
+      debugPrint('notification detector failed: $e');
+    });
+  }
+});
+
 /// The reader's own thesis appearing in the archive.
 ///
 /// Scoped to the group leader only (via [myThesisProvider]) for this first
@@ -455,5 +491,6 @@ final notificationDetectorsProvider = Provider<void>((ref) {
   ref.watch(chapterFeedbackDetectorProvider);
   ref.watch(defenceDetectorProvider);
   ref.watch(evaluationAwaitsDetectorProvider);
+  ref.watch(evaluationsCompleteDetectorProvider);
   ref.watch(archivePublishedDetectorProvider);
 });

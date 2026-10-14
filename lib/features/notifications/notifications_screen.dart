@@ -51,6 +51,15 @@ import 'package:ethesishub/providers/notification_providers.dart';
             : '/defence/room/$id/evaluate',
         mode: FacultyMode.panelist,
       );
+    // Straight to the grades, where the adviser releases them.
+    case NotificationType.evaluationsComplete:
+      final gid = n.defenceId;
+      return (
+        route: gid == null
+            ? '/defences?stage=preOral'
+            : '/defence/room/$gid/grades',
+        mode: FacultyMode.adviser,
+      );
     case NotificationType.archivePublished:
       return (route: '/archive/${n.thesisId}', mode: null);
     // Straight to the manuscript with the panel's highlights on it.
@@ -92,6 +101,8 @@ import 'package:ethesishub/providers/notification_providers.dart';
         (icon: Icons.highlight_alt, tone: Tone.act),
       NotificationType.nominationReturned =>
         (icon: Icons.undo_rounded, tone: Tone.returned),
+      NotificationType.evaluationsComplete =>
+        (icon: Icons.fact_check_outlined, tone: Tone.act),
     };
 
 /// Marks [n] read, switches faculty mode when the target needs it, then

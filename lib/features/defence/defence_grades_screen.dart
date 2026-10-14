@@ -202,7 +202,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     bool isGrader,
   ) {
     // Every panelist, plus the Coordinator and the Dean, each file a sheet.
-    final total = defence.panelUids.length + 2;
+    final total = defence.requiredEvaluations;
 
     if (isAdviser) {
       final evalsAsync = ref.watch(
@@ -261,11 +261,19 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
+        // Released only once every grader has submitted.
         FilledButton(
           key: const Key('releaseEvaluations'),
-          onPressed: _releasing ? null : () => _release(widget.defenceId, uid!),
+          onPressed: _releasing || count < total
+              ? null
+              : () => _release(widget.defenceId, uid!),
           child: Text(
-            _releasing ? 'Releasing…' : 'Release $count of $total evaluations',
+            _releasing
+                ? 'Releasing…'
+                : count < total
+                    ? 'Waiting on ${total - count} more '
+                        'evaluation${total - count == 1 ? '' : 's'}'
+                    : 'Release evaluations',
           ),
         ),
       ];

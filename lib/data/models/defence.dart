@@ -169,6 +169,10 @@ class Defence {
 
   bool get evaluationsReleased => evaluationsReleasedAt != null;
 
+  /// How many Form 5c sheets must be in before the adviser may release them:
+  /// every panelist, plus the Coordinator and the Dean.
+  int get requiredEvaluations => panelUids.length + 2;
+
   bool get hasVerdict => panelVerdict != null;
 
   factory Defence.fromMap(String id, Map<String, dynamic> map) {

@@ -93,24 +93,6 @@ void main() {
     expect(find.text('Pre-oral defence'), findsOneWidget);
   });
 
-  testWidgets('the consolidated view is reachable', (tester) async {
-    // The adviser: they are the one actor who both sits in the room live
-    // and later releases the consolidation, so they are guaranteed a
-    // rendered page regardless of release state.
-    final c = await setUpFixture(tester, role: 'faculty', uid: 'a1');
-
-    c.read(goRouterProvider).go('/defence/room/df1/consolidated');
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('consolidated')), findsOneWidget);
-    // Same as the room above: the shell's app bar names the route, and the
-    // defence type -- which only appears once the document resolves -- is
-    // the page's own heading.
-    expect(tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
-        'Consolidated comments');
-    expect(find.text('Pre-oral defence'), findsOneWidget);
-  });
-
   testWidgets('the manuscript view is reachable', (tester) async {
     final c = await setUpFixture(tester, role: 'faculty', uid: 'a1');
 
@@ -179,22 +161,18 @@ void main() {
     expect(find.byKey(const Key('scheduleDefenceScreen')), findsNothing);
   });
 
-  // FIX 6: the sibling test above only proves '/defence/room/df1' itself
-  // survives the studentOnly redirect. After FIX 4, the consolidated route
-  // is the student leader's PRIMARY destination -- DefencesList's Open
-  // button now sends them straight there -- so it needs its own guard
-  // rather than inheriting the room route's prefix exemption by assumption:
-  // `isDefenceRoomRoute` in app_router.dart uses `startsWith('/defence/room/')`,
-  // which happens to also cover this longer path, but nothing proved that
-  // until now.
-  testWidgets(
-      'the student leader also reaches the consolidated route directly',
+  // The sibling test above only proves '/defence/room/df1' itself survives
+  // the studentOnly redirect. The leader's main destination there is the
+  // manuscript with the panel's highlights, a longer path under the same
+  // prefix, so it gets its own guard rather than inheriting the room
+  // route's exemption by assumption.
+  testWidgets('the student leader also reaches the manuscript route directly',
       (tester) async {
     final c = await setUpFixture(tester, role: 'student', uid: 'u1');
 
-    c.read(goRouterProvider).go('/defence/room/df1/consolidated');
+    c.read(goRouterProvider).go('/defence/room/df1/manuscript');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('consolidated')), findsOneWidget);
+    expect(find.byKey(const Key('defenceManuscript')), findsOneWidget);
   });
 }

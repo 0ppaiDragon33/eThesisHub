@@ -24,7 +24,10 @@ enum NotificationType {
   highlightsReleased,
 
   /// The Coordinator or the Dean sent the group's nomination back.
-  nominationReturned;
+  nominationReturned,
+
+  /// Every grader has submitted their Form 5c; the adviser can release them.
+  evaluationsComplete;
 
   String get value => name;
 

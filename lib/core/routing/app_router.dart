@@ -24,7 +24,6 @@ import 'package:ethesishub/features/dashboard/overview_screen.dart';
 import 'package:ethesishub/features/dashboard/panels_screen.dart';
 import 'package:ethesishub/features/dashboard/readiness_screen.dart';
 import 'package:ethesishub/features/dashboard/recommendations_screen.dart';
-import 'package:ethesishub/features/defence/consolidated_defence_screen.dart';
 import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
 import 'package:ethesishub/features/defence/defence_stage.dart';
@@ -324,10 +323,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // '/defences' destination every role reaches through the app
               // shell, which changes nothing about who follows this link --
               // and its "Open" button sends the leader straight
-              // into '/defence/room/${d.id}' to watch the log and, once the
-              // adviser releases it, read the consolidated comments at
-              // '/defence/room/${d.id}/consolidated' — ConsolidatedDefenceScreen
-              // has its own isLeader-gated branch for exactly that reader.
+              // into '/defence/room/${d.id}', and once the adviser releases
+              // them, to the manuscript with the panel's highlights.
               // A blanket prefix match here would bounce that same student
               // straight back home before either screen ever built — the
               // same class of "the link exists but the route refuses the
@@ -682,14 +679,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           return ScheduleDefenceScreen(thesisId: id);
         },
       ),
-      // '/defence/room/:defenceId' is registered before
-      // '/defence/room/:defenceId/consolidated' only because that is
-      // source order here, not because order matters between them: a
-      // static 'consolidated' segment at position 3 can never be swallowed
-      // by ':defenceId' at position 2 -- the segment counts differ, so
-      // go_router never even considers the shorter route for the longer
-      // path. DefenceRoomScreen and ConsolidatedDefenceScreen each render
-      // their own "not found" state through the same `_framed` helper as
+      // '/defence/room/:defenceId' and the three-segment routes under it
+      // ('/manuscript', '/evaluate', '/grades') cannot swallow one another:
+      // the segment counts differ. DefenceRoomScreen renders its own
+      // "not found" state through the same `_framed` helper as
       // their loaded state -- a KeyedSubtree around a PageShell, carrying
       // the screen's own key, with no Scaffold and no AppBar of its own
       // since the shell above supplies both. So no wrapper is needed here
@@ -701,13 +694,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => DefenceRoomScreen(
             defenceId: state.pathParameters['defenceId']!),
       ),
-      GoRoute(
-        path: '/defence/room/:defenceId/consolidated',
-        builder: (context, state) => ConsolidatedDefenceScreen(
-            defenceId: state.pathParameters['defenceId']!),
-      ),
-      // Three segments like 'consolidated', so ':defenceId' at position 2
-      // can never swallow it.
+      // Three segments, so ':defenceId' at position 2 can never swallow it.
       GoRoute(
         path: '/defence/room/:defenceId/manuscript',
         builder: (context, state) => DefenceManuscriptScreen(

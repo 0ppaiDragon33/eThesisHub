@@ -276,8 +276,31 @@ void main() {
     expect(await repo.watchEvaluations('d1').first, isEmpty);
   });
 
+  /// Every grader's sheet: the three panelists, the Coordinator and the Dean.
+  Future<FakeFirebaseFirestore> seedAllIn() async {
+    final db = await seed();
+    for (final uid in ['p1', 'p2', 'p3', 'c1', 'dn1']) {
+      await db.doc('defenses/d1/evaluations/$uid').set({'total': 80});
+    }
+    return db;
+  }
+
+  test('release waits until every grader has submitted', () async {
+    final db = await seed();
+    for (final uid in ['p1', 'p2', 'p3', 'c1']) {
+      await db.doc('defenses/d1/evaluations/$uid').set({'total': 80});
+    }
+    final repo = DefenceRepository(db);
+    await expectLater(
+      repo.releaseEvaluations(defenceId: 'd1', adviserUid: 'a1'),
+      throwsA(isA<StateError>().having(
+          (e) => e.message, 'message', contains('4 of 5'))),
+    );
+    expect((await repo.watchDefence('d1').first)!.evaluationsReleased, isFalse);
+  });
+
   test('release marks the defence and cannot be repeated', () async {
-    final repo = DefenceRepository(await seed());
+    final repo = DefenceRepository(await seedAllIn());
 
     await repo.releaseEvaluations(defenceId: 'd1', adviserUid: 'a1');
     final d = await repo.watchDefence('d1').first;

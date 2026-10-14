@@ -454,6 +454,57 @@ void main() {
 
   });
 
+  group('evaluationsCompleteDetectorProvider', () {
+    Future<ProviderContainer> adviserWith(List<String> submitted) async {
+      final container = await containerFor('adviser1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('users').doc('adviser1').set({'role': 'faculty'});
+      await firestore.collection('defenses').doc('d1').set({
+        'thesisId': 't1',
+        'type': 'preOral',
+        'venue': 'Room 1',
+        'panelUids': ['p1'],
+        'adviserUid': 'adviser1',
+        'leaderUid': 'student1',
+        'status': 'completed',
+        'createdBy': 'coord1',
+      });
+      for (final uid in submitted) {
+        await firestore
+            .doc('defenses/d1/evaluations/$uid')
+            .set({'evaluatorName': uid, 'total': 80, 'scores': <String, int>{}});
+      }
+      container.listen(evaluationsCompleteDetectorProvider, (_, _) {});
+      await container.read(notificationsProvider.future);
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      return container;
+    }
+
+    test('every grader in: the adviser is told they can release', () async {
+      // One panelist, the Coordinator and the Dean.
+      final container = await adviserWith(['p1', 'c1', 'dn1']);
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('adviser1')
+          .first;
+      final done = items.where((i) => i.type == NotificationType.evaluationsComplete);
+      expect(done, hasLength(1));
+      expect(done.single.defenceId, 'd1');
+    });
+
+    test('one still missing: nothing yet', () async {
+      final container = await adviserWith(['p1', 'c1']);
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('adviser1')
+          .first;
+      expect(items.where((i) => i.type == NotificationType.evaluationsComplete),
+          isEmpty);
+    });
+  });
+
   group('evaluationAwaitsDetectorProvider', () {
     test('a completed defence with no evaluation on file from this panelist writes one', () async {
       final container = await containerFor('faculty1');

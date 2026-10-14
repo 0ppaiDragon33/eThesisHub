@@ -237,6 +237,15 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
             chapter: chapter,
             status: status,
           );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(approve
+                ? '${chapter.label} approved.'
+                : '${chapter.label} sent back for revision.'),
+          ));
+      }
     } on FirebaseException catch (e) {
       if (mounted) {
         setState(() => _statusError = e.code == 'permission-denied'
@@ -346,6 +355,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     required String thesisId,
     required ChapterId chapter,
     required int currentVersion,
+    required ChapterStatus status,
     required String reviewerUid,
     required String reviewerName,
   }) {
@@ -390,6 +400,34 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         Text('Decision on version $currentVersion',
             style: Theme.of(context).textTheme.labelMedium),
         const Gap.sm(),
+        // Where the chapter stands, so a decision shows once it is made.
+        if (status != ChapterStatus.submitted) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ToneBadge(
+              key: const Key('chapterDecision'),
+              label: status == ChapterStatus.approved
+                  ? 'Approved'
+                  : 'Sent back for revision',
+              tone: status == ChapterStatus.approved
+                  ? Tone.endorsed
+                  : Tone.returned,
+              icon: status == ChapterStatus.approved
+                  ? Icons.task_alt_rounded
+                  : Icons.undo_rounded,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            status == ChapterStatus.approved
+                ? 'You approved version $currentVersion. Send it back to '
+                    'reopen it for revision.'
+                : 'Waiting for the group to upload a new version.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const Gap.sm(),
+        ],
+        if (status != ChapterStatus.approved) ...[
         FilledButton.icon(
           key: const Key('markApproved'),
           style: FilledButton.styleFrom(
@@ -406,6 +444,8 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
           label: const Text('Approve this chapter'),
         ),
         const Gap.sm(),
+        ],
+        if (status != ChapterStatus.revise)
         OutlinedButton.icon(
           key: const Key('markRevise'),
           onPressed: _statusBusy
@@ -736,6 +776,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                     thesisId: widget.thesisId,
                     chapter: widget.chapter,
                     currentVersion: thisChapter.currentVersion,
+                    status: thisChapter.status,
                     reviewerUid: me.uid,
                     reviewerName: me.fullName,
                   ),

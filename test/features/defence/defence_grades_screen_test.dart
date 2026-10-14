@@ -159,12 +159,35 @@ void main() {
 
   // D40's mitigation. The count is on the button, so releasing early is a
   // visible choice rather than an accident.
-  testWidgets('the release button carries the count', (tester) async {
+  testWidgets('release stays locked until every grader has submitted',
+      (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedWithOne(), 'a1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Release 1 of 4 evaluations'), findsOneWidget);
+    expect(find.text('Waiting on 3 more evaluations'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('releaseEvaluations')))
+            .onPressed,
+        isNull);
+  });
+
+  testWidgets('once every sheet is in, release opens', (tester) async {
+    useTallSurface(tester);
+    final db = await seedWithOne();
+    for (final uid in ['p2', 'c1', 'dn1']) {
+      await _writeEvaluation(db, uid, 90, name: 'Grader $uid');
+    }
+    await tester.pumpWidget(app(db, 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Release evaluations'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('releaseEvaluations')))
+            .onPressed,
+        isNotNull);
   });
 
   // Ruling 2: before release, a panelist NEVER opens the evaluations list

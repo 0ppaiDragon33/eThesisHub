@@ -56,6 +56,40 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
   bool _statusBusy = false;
   String? _statusError;
 
+  bool _releaseBusy = false;
+  String? _releaseError;
+
+  /// The adviser releases the panel's highlights to the group (sets
+  /// `consolidatedAt`). Once released the group can read them.
+  Future<void> _releaseHighlights() async {
+    if (_releaseBusy) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Release the highlights to the group?',
+      message: 'The group will see the panel''s highlights on their '
+          'manuscript. This cannot be undone.',
+      confirmLabel: 'Release',
+      confirmKey: const Key('confirmReleaseHighlights'),
+    );
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _releaseBusy = true;
+      _releaseError = null;
+    });
+    try {
+      await ref.read(defenceRepositoryProvider).release(widget.defenceId);
+    } on StateError catch (e) {
+      if (mounted) setState(() => _releaseError = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _releaseError =
+            'Could not release the highlights. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _releaseBusy = false);
+    }
+  }
+
   @override
   void dispose() {
     _typing?.dispose();
@@ -448,15 +482,6 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                       icon: const Icon(Icons.highlight_alt, size: 18),
                       label: const Text('View manuscript and highlights'),
                     ),
-                  // Remarks written before highlights replaced the live
-                  // log are still the adviser's to consolidate and release.
-                  OutlinedButton.icon(
-                    key: const Key('goToConsolidated'),
-                    onPressed: () => context
-                        .go('/defence/room/${widget.defenceId}/consolidated'),
-                    icon: const Icon(Icons.summarize_outlined, size: 18),
-                    label: const Text('View consolidated comments'),
-                  ),
                 ],
               ),
             ],
@@ -670,13 +695,28 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OutlinedButton.icon(
-            key: const Key('goToConsolidated'),
-            icon: const Icon(Icons.summarize_outlined, size: 18),
-            label: const Text('Consolidated comments'),
-            onPressed: () =>
-                context.go('/defence/room/${widget.defenceId}/consolidated'),
-          ),
+          // The adviser releases the panel's highlights to the group once
+          // the defence is closed.
+          if (isAdviser && completed && !defence.isReleased) ...[
+            FilledButton.icon(
+              key: const Key('releaseHighlights'),
+              onPressed: _releaseBusy ? null : _releaseHighlights,
+              icon: const Icon(Icons.highlight_alt, size: 18),
+              label: Text(_releaseBusy
+                  ? 'Releasing…'
+                  : 'Release highlights to the group'),
+            ),
+            if (_releaseError != null) ...[
+              const Gap.sm(),
+              ErrorState(message: _releaseError!),
+            ],
+          ],
+          if (isAdviser && defence.isReleased)
+            Text(
+              'Highlights released to the group.',
+              key: const Key('highlightsReleasedNote'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           // Form 5c scores what happened, so only on a closed defence.
           if (completed && isGrader) ...[
             const Gap.sm(),

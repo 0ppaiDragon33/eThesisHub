@@ -279,20 +279,19 @@ final facultyNeedsYouProvider =
           d.consolidatedAt == null) {
         items.add(NeedsYouItem(
           title: d.label,
-          detail: 'The defence concluded — release your consolidation to '
-              'the group.',
-          // ConsolidatedDefenceScreen, where the adviser releases. NOT
+          detail: 'The defence concluded — release the panel''s highlights '
+              'to the group.',
+          // The defence room, where the adviser releases. NOT
           // '/defence/${d.id}': that route is M1b's TitleDefenceScreen,
           // keyed by a THESIS id, so a defence id sent there reads a
           // `theses/` document that does not exist — and because
           // `thesisData()` reads `.data` off a null `get()`, the rules
           // raise an evaluation error, which surfaces as permission-denied
           // rather than as "not found".
-          route: '/defence/room/${d.id}/consolidated',
-          chipLabel: 'Consolidate',
+          route: '/defence/room/${d.id}',
+          chipLabel: 'Release',
           tone: NeedsYouTone.act,
-          deep: isDeepForRole(
-              UserRole.faculty, '/defence/room/${d.id}/consolidated'),
+          deep: isDeepForRole(UserRole.faculty, '/defence/room/${d.id}'),
         ));
       }
 

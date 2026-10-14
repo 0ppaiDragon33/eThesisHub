@@ -505,14 +505,14 @@ void main() {
 
       final items = container.read(facultyNeedsYouProvider).requireValue;
       expect(items.length, 2,
-          reason: 'fixture did not emit the Consolidate + Join rows: $items');
+          reason: 'fixture did not emit the Release + Join rows: $items');
 
       final consolidate =
-          items.firstWhere((i) => i.chipLabel == 'Consolidate');
+          items.firstWhere((i) => i.chipLabel == 'Release');
       final join = items.firstWhere((i) => i.chipLabel == 'Join');
 
-      // The adviser releases consolidation on ConsolidatedDefenceScreen.
-      expect(consolidate.route, '/defence/room/d-consolidate/consolidated');
+      // The adviser releases the highlights from the defence room.
+      expect(consolidate.route, '/defence/room/d-consolidate');
       // Joining a defence happening now lands in the live room.
       expect(join.route, '/defence/room/d-join');
 

@@ -91,6 +91,42 @@ void main() {
     expect(find.byKey(const Key('markApproved')), findsOneWidget);
   });
 
+  testWidgets('approving shows the decision and confirms it', (tester) async {
+    _useTallSurface(tester);
+    final db = await seed();
+    await tester.pumpWidget(_wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chapterDecision')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('markApproved')));
+    await confirmIfAsked(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chapter I — Introduction approved.'), findsOneWidget);
+    expect(find.byKey(const Key('chapterDecision')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('chapterDecision')),
+            matching: find.text('Approved')),
+        findsOneWidget);
+    // Already approved: no second Approve, but it can be sent back.
+    expect(find.byKey(const Key('markApproved')), findsNothing);
+    expect(find.byKey(const Key('markRevise')), findsOneWidget);
+  });
+
+  testWidgets('a chapter sent back says so and waits for a new version',
+      (tester) async {
+    _useTallSurface(tester);
+    final db = await seed();
+    await db.doc('theses/t1/documents/chapterI').update({'status': 'revise'});
+    await tester.pumpWidget(_wrap(db, uid: 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sent back for revision'), findsOneWidget);
+    expect(find.byKey(const Key('markRevise')), findsNothing);
+    expect(find.byKey(const Key('markApproved')), findsOneWidget);
+  });
+
   testWidgets('a student does NOT see the review controls', (tester) async {
     _useTallSurface(tester);
     final db = await seed();

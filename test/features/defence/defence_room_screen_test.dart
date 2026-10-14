@@ -6,7 +6,6 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:ethesishub/data/models/app_user.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/defence/defence_room_screen.dart';
@@ -256,48 +255,38 @@ void main() {
     expect(find.byKey(const Key('closeDefence')), findsNothing);
   });
 
-  testWidgets(
-      'tapping the consolidated link from the room reaches the consolidated '
-      'screen', (tester) async {
-    // FIX 2: '/defence/room/:defenceId/consolidated' was reachable only by
-    // typed URL before this -- grep for 'consolidated' across `lib/` found
-    // it in the router and nowhere else, so the adviser closing a completed
-    // defence had no way back to release it.
+  testWidgets('the adviser releases the highlights from the room',
+      (tester) async {
+    useTallSurface(tester);
     final db = await seed(status: 'completed');
-
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        firestoreProvider.overrideWithValue(db),
-        firebaseAuthProvider.overrideWithValue(MockFirebaseAuth(
-          signedIn: true,
-          mockUser:
-              MockUser(uid: 'a1', email: 'a1@isufst.edu.ph', isEmailVerified: true),
-        )),
-      ],
-      child: MaterialApp.router(
-        routerConfig: GoRouter(
-          initialLocation: '/defence/room/d1',
-          routes: [
-            GoRoute(
-              path: '/defence/room/:defenceId',
-              builder: (context, state) => DefenceRoomScreen(
-                  defenceId: state.pathParameters['defenceId']!),
-            ),
-            GoRoute(
-              path: '/defence/room/:defenceId/consolidated',
-              builder: (_, _) =>
-                  const Scaffold(key: Key('consolidated')),
-            ),
-          ],
-        ),
-      ),
-    ));
+    await tester.pumpWidget(app(db, 'a1'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('goToConsolidated')));
+    await tester.ensureVisible(find.byKey(const Key('releaseHighlights')));
+    await tester.tap(find.byKey(const Key('releaseHighlights')));
+    await tester.pumpAndSettle();
+    expect(find.text('Release the highlights to the group?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirmReleaseHighlights')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('consolidated')), findsOneWidget);
+    final saved = (await db.collection('defenses').doc('d1').get()).data()!;
+    expect(saved['consolidatedAt'], isNotNull);
+    expect(find.byKey(const Key('highlightsReleasedNote')), findsOneWidget);
+    expect(find.byKey(const Key('releaseHighlights')), findsNothing);
+  });
+
+  testWidgets('only the adviser can release, and only once it is closed',
+      (tester) async {
+    useTallSurface(tester);
+    final db = await seed(status: 'completed');
+    await tester.pumpWidget(app(db, 'p1'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('releaseHighlights')), findsNothing);
+
+    final live = await seed(status: 'inProgress');
+    await tester.pumpWidget(app(live, 'a1'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('releaseHighlights')), findsNothing);
   });
 
   testWidgets(
@@ -326,7 +315,7 @@ void main() {
 
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
     expect(find.byKey(const Key('leaderRefusal')), findsOneWidget);
-    expect(find.byKey(const Key('goToConsolidated')), findsOneWidget);
+    expect(find.byKey(const Key('goToConsolidated')), findsNothing);
     expect(find.byKey(const Key('commentRow-cm0')), findsNothing);
     expect(find.textContaining('Tighten chapter two.'), findsNothing);
   });
@@ -375,9 +364,7 @@ void main() {
     await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
-    // The room's link to the consolidated view moved out of the app bar
-    // (which belongs to the shell now) and onto the page, so this control
-    // sits lower than it did; tester.tap() does not scroll for you.
+    // The control sits below the fold; tester.tap() does not scroll for you.
     await tester.ensureVisible(find.byKey(const Key('editSchedule')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editSchedule')));
@@ -404,9 +391,7 @@ void main() {
     await tester.pumpWidget(app(db, 'c1'));
     await tester.pumpAndSettle();
 
-    // The room's link to the consolidated view moved out of the app bar
-    // (which belongs to the shell now) and onto the page, so this control
-    // sits lower than it did; tester.tap() does not scroll for you.
+    // The control sits below the fold; tester.tap() does not scroll for you.
     await tester.ensureVisible(find.byKey(const Key('editSchedule')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editSchedule')));
