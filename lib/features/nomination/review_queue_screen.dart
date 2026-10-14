@@ -236,6 +236,19 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
         NominationPosition.dean => 'Dean',
       };
 
+  /// "Leader: Kira Yuuki · 4-A · WM". The name comes from the thesis's own
+  /// `leaderName`, since the Coordinator and Dean may not have the leader's
+  /// profile to hand; it is blank only on a thesis whose leader has not
+  /// opened the app since that field existed.
+  String _leaderLine(Thesis t) {
+    final parts = [
+      t.leaderName ?? '',
+      t.leaderSection ?? '',
+      t.leaderSpecialization ?? '',
+    ].map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    return parts.isEmpty ? '' : 'Leader: ${parts.join(' · ')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = widget.thesis;
@@ -254,11 +267,13 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
               .join(', '),
           style: text.bodySmall,
         ),
-        if ((t.leaderSpecialization ?? '').isNotEmpty) ...[
+        // Who leads the group: name, then year & section and
+        // specialization when the leader has filled them in.
+        if (_leaderLine(t).isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
-            'Leader specialization: ${t.leaderSpecialization}',
-            key: Key('reviewLeaderSpecialization-${t.id}'),
+            _leaderLine(t),
+            key: Key('reviewLeader-${t.id}'),
             style: text.bodySmall,
           ),
         ],

@@ -66,6 +66,36 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('the card names the leader, with year & section and specialization',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = await seeded('nominationPendingCoordinator');
+    await db.doc('theses/t1').update({
+      'leaderName': 'Kira Yuuki',
+      'leaderSection': '4-A',
+      'leaderSpecialization': 'WM',
+    });
+    await tester.pumpWidget(
+        wrap(db, ThesisStatus.nominationPendingCoordinator, false));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Leader: Kira Yuuki · 4-A · WM'), findsOneWidget);
+  });
+
+  testWidgets('the Dean sees the leader too', (tester) async {
+    tester.view.physicalSize = const Size(1000, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = await seeded('nominationPendingDean');
+    await db.doc('theses/t1').update({'leaderName': 'Kira Yuuki'});
+    await tester.pumpWidget(wrap(db, ThesisStatus.nominationPendingDean, true));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Leader: Kira Yuuki'), findsOneWidget);
+  });
+
   testWidgets('coordinator recommends and records who acted', (tester) async {
     useTallSurface(tester);
     final db = await seeded('nominationPendingCoordinator');
