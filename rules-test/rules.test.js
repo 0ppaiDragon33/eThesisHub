@@ -6795,3 +6795,40 @@ test("leaderSection: a leader with none may still refresh their name", async () 
   await assertSucceeds(updateDoc(doc(asLeader("sec5-uid"), "theses/sec-d"),
     { leaderName: "Ben Reyes", leaderSpecialization: "", leaderSection: "" }));
 });
+
+// ---- adviseeCount: a faculty member's own count of groups they advise ----
+
+test("adviseeCount: the faculty member writes their own count", async () => {
+  await seedUser("ac-fac", "faculty", "acfac@isufst.edu.ph");
+  const me = asUser("ac-fac", "acfac@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(me, "facultyDirectory/ac-fac"),
+    { fullName: "Dr. A", role: "faculty", adviseeCount: 3 }));
+  await assertSucceeds(setDoc(doc(me, "facultyDirectory/ac-fac"),
+    { adviseeCount: 5 }, { merge: true }));
+});
+
+test("adviseeCount: must be a sensible whole number", async () => {
+  await seedUser("ac-fac2", "faculty", "acfac2@isufst.edu.ph");
+  const me = asUser("ac-fac2", "acfac2@isufst.edu.ph");
+  const at = doc(me, "facultyDirectory/ac-fac2");
+  await assertFails(setDoc(at, { fullName: "Dr. B", role: "faculty", adviseeCount: -1 }));
+  await assertFails(setDoc(at, { fullName: "Dr. B", role: "faculty", adviseeCount: "5" }));
+  await assertFails(setDoc(at, { fullName: "Dr. B", role: "faculty", adviseeCount: 1.5 }));
+});
+
+test("adviseeCount: nobody else may set someone's count", async () => {
+  await seedUser("ac-fac3", "faculty", "acfac3@isufst.edu.ph");
+  await seedUser("ac-other", "faculty", "acother@isufst.edu.ph");
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "facultyDirectory/ac-fac3"),
+      { fullName: "U", role: "faculty", adviseeCount: 5 });
+  });
+  await assertFails(updateDoc(doc(asUser("ac-other", "acother@isufst.edu.ph"),
+    "facultyDirectory/ac-fac3"), { adviseeCount: 0 }));
+  const coord = await asCoordinator("ac-coord", "accoord@isufst.edu.ph");
+  await assertFails(updateDoc(doc(coord, "facultyDirectory/ac-fac3"),
+    { adviseeCount: 0 }));
+  // The coordinator's designation write still works with a count present.
+  await assertSucceeds(updateDoc(doc(coord, "facultyDirectory/ac-fac3"),
+    { nominableAsAdviser: false }));
+});

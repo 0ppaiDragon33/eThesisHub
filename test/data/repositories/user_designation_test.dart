@@ -71,7 +71,7 @@ class _RulesLikeDirectory implements FacultyDirectoryRepository {
           : null;
 
   @override
-  Future<void> upsertOwnEntry(AppUser user) async {}
+  Future<void> upsertOwnEntry(AppUser user, {int? adviseeCount}) async {}
 
   @override
   Future<List<FacultyDirectoryEntry>> fetchExOfficio() async => const [];

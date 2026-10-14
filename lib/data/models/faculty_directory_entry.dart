@@ -1,3 +1,5 @@
+import 'package:ethesishub/core/config/advising.dart';
+
 class FacultyDirectoryEntry {
   const FacultyDirectoryEntry({
     required this.uid,
@@ -7,6 +9,7 @@ class FacultyDirectoryEntry {
     this.specialization,
     this.nominableAsAdviser = true,
     this.nominableAsPanelist = true,
+    this.adviseeCount = 0,
   });
 
   final String uid;
@@ -29,6 +32,14 @@ class FacultyDirectoryEntry {
   /// office, not from a coordinator's list (spec D32).
   final bool nominableAsPanelist;
 
+  /// How many groups this person holds as adviser (see `myAdviseeCountProvider`),
+  /// kept here by their own app since students cannot count it themselves.
+  /// 0 until their app has reported it.
+  final int adviseeCount;
+
+  /// At the limit: shown greyed out in the adviser pickers.
+  bool get adviserFull => adviseeCount >= kMaxAdvisees;
+
   /// Shown beside the name in the pickers: specialization, then college
   /// ("MIT · CICI").
   String get subtitle => [specialization, college]
@@ -44,6 +55,7 @@ class FacultyDirectoryEntry {
       specialization: map['specialization'] as String?,
       nominableAsAdviser: map['nominableAsAdviser'] as bool? ?? true,
       nominableAsPanelist: map['nominableAsPanelist'] as bool? ?? true,
+      adviseeCount: (map['adviseeCount'] as num?)?.toInt() ?? 0,
     );
   }
 

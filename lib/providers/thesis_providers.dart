@@ -39,12 +39,15 @@ final ownDirectoryEntrySyncProvider = Provider<void>((ref) {
     return (u.uid, u.fullName, u.role, u.college, u.specialization);
   }));
   if (key == null) return;
+  // The advisee count rides along once known, so the pickers can grey out
+  // an adviser who is full.
+  final adviseeCount = ref.watch(myAdviseeCountProvider).valueOrNull;
   final profile = ref.read(currentUserProvider).valueOrNull;
   if (profile == null) return;
   unawaited(
     ref
         .read(facultyDirectoryRepositoryProvider)
-        .upsertOwnEntry(profile)
+        .upsertOwnEntry(profile, adviseeCount: adviseeCount)
         .catchError((Object _) {}),
   );
 });
@@ -147,6 +150,43 @@ final myPendingNominationsProvider =
   final uid = ref.watch(authStateProvider).value?.uid;
   if (uid == null) return Stream.value(const []);
   return ref.watch(thesisRepositoryProvider).watchMyPendingNominations(uid);
+});
+
+/// The theses the signed-in person is nominated on as adviser and has not
+/// declined.
+final myAdviserNominationThesisIdsProvider = StreamProvider<List<String>>((ref) {
+  final uid = ref.watch(signedInUidProvider);
+  if (uid == null) return Stream.value(const []);
+  return ref
+      .watch(thesisRepositoryProvider)
+      .watchMyAdviserNominationThesisIds(uid);
+});
+
+/// How many groups the signed-in person holds as adviser, toward
+/// [kMaxAdvisees]: theses they advise that are not archived, plus adviser
+/// nominations not declined on theses that have no adviser yet (still in
+/// nomination). A thesis whose adviser has since changed to someone else
+/// is not counted, though the old nomination stays on record.
+final myAdviseeCountProvider = FutureProvider<int>((ref) async {
+  final advised = await ref.watch(myAdviseesProvider.future);
+  final nominated = await ref.watch(myAdviserNominationThesisIdsProvider.future);
+  final advisedIds = {for (final t in advised) t.id};
+  var count =
+      advised.where((t) => t.status != ThesisStatus.archived).length;
+  final repo = ref.read(thesisRepositoryProvider);
+  for (final id in nominated.toSet().difference(advisedIds)) {
+    try {
+      final t = await repo.fetchThesis(id);
+      if (t != null &&
+          t.adviserUid == null &&
+          t.status != ThesisStatus.archived) {
+        count++;
+      }
+    } catch (_) {
+      // Unreadable: not counted.
+    }
+  }
+  return count;
 });
 
 /// The theses the signed-in faculty member advises.

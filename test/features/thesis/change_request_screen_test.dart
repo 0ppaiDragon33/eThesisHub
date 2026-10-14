@@ -458,6 +458,29 @@ void main() {
     expect(find.text('Loading thesis…'), findsOneWidget);
   });
 
+  testWidgets('a full adviser is greyed out as the new adviser', (
+    tester,
+  ) async {
+    final db = await seed();
+    await db.collection('facultyDirectory').doc('a2').update({
+      'adviseeCount': 5,
+    });
+    await tester.pumpWidget(
+      _wrap(db, uid: 'l1', type: ChangeRequestType.adviser),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('newAdviserPicker')));
+    await tester.pumpAndSettle();
+    final item = tester
+        .widgetList<DropdownMenuItem<String>>(
+          find.byType(DropdownMenuItem<String>),
+        )
+        .firstWhere((i) => i.value == 'a2');
+    expect(item.enabled, isFalse);
+    expect(find.textContaining('Full (5/5)'), findsWidgets);
+  });
+
   testWidgets('the new-adviser picker shows specialization then college', (
     tester,
   ) async {

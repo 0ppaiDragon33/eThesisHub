@@ -706,6 +706,29 @@ class ThesisRepository {
             .toList());
   }
 
+  /// The theses this person is nominated on as ADVISER and has not declined
+  /// (pending or accepted), by thesis id. Feeds their advisee count. Same
+  /// collection-group read as [watchMyPendingNominations].
+  Stream<List<String>> watchMyAdviserNominationThesisIds(String uid) {
+    return _db
+        .collectionGroup('nominations')
+        .where('nomineeUid', isEqualTo: uid)
+        .snapshots()
+        .map((s) => [
+              for (final d in s.docs)
+                if (_toNomination(d.id, d.data()) case final n
+                    when n.position == NominationPosition.adviser &&
+                        n.conformeStatus != ConformeStatus.declined)
+                  d.reference.parent.parent!.id,
+            ]);
+  }
+
+  /// One thesis, read once (not watched).
+  Future<Thesis?> fetchThesis(String thesisId) async {
+    final snap = await _thesis(thesisId).get();
+    return snap.exists ? _toThesis(snap.id, snap.data()!) : null;
+  }
+
   /// Attaches the final consolidated manuscript and its abstract.
   ///
   /// Replaces any previous upload, so a group that uploaded the wrong file

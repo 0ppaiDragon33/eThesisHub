@@ -44,7 +44,9 @@ class FacultyDirectoryRepository {
   /// true)` `request.resource.data` is the merged *result*, not the written
   /// subset, so `keys().hasOnly([...])` and the `role == myRole()` pin both
   /// still apply to the whole document.
-  Future<void> upsertOwnEntry(AppUser user) async {
+  ///
+  /// [adviseeCount], when known, is written too (see `myAdviseeCountProvider`).
+  Future<void> upsertOwnEntry(AppUser user, {int? adviseeCount}) async {
     if (user.role == UserRole.student) return;
     final college = user.college;
     final specialization = user.specialization;
@@ -54,6 +56,7 @@ class FacultyDirectoryRepository {
       if (college != null && college.isNotEmpty) 'college': college,
       if (specialization != null && specialization.isNotEmpty)
         'specialization': specialization,
+      if (adviseeCount != null) 'adviseeCount': adviseeCount,
     }, SetOptions(merge: true));
   }
 

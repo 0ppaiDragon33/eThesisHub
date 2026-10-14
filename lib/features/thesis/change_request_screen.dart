@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/config/advising.dart';
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
@@ -159,6 +160,14 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
           );
           return;
         }
+        if (newAdviser.adviserFull) {
+          setState(
+            () => _error =
+                '${newAdviser.fullName} already has $kMaxAdvisees groups. '
+                'Please choose another adviser.',
+          );
+          return;
+        }
         final formerAdviserName =
             widget.prefill?.formerAdviserName ??
             directory
@@ -231,8 +240,13 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
         for (final f in offerable)
           DropdownMenuItem(
             value: f.uid,
+            // A full adviser stays listed, greyed out.
+            enabled: !f.adviserFull,
             child: Text(
-              f.subtitle.isEmpty ? f.fullName : '${f.fullName} — ${f.subtitle}',
+              [
+                f.subtitle.isEmpty ? f.fullName : '${f.fullName} — ${f.subtitle}',
+                if (f.adviserFull) 'Full (${f.adviseeCount}/$kMaxAdvisees)',
+              ].join(' · '),
               overflow: TextOverflow.ellipsis,
             ),
           ),

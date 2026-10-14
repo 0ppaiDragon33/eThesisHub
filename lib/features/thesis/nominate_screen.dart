@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/config/advising.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
@@ -57,6 +58,11 @@ class NominateScreen extends ConsumerStatefulWidget {
 
 class _NominateScreenState extends ConsumerState<NominateScreen> {
   String? _adviserUid;
+
+  /// The adviser already holding this thesis's seat (a reopened thesis being
+  /// resubmitted). This thesis is one of their groups, so they stay
+  /// selectable here even when their count is at [kMaxAdvisees].
+  String? _seatedAdviserUid;
 
   /// The My files copy of Form 1 attached to this nomination; null = none.
   String? _form1CopyId;
@@ -145,6 +151,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
 
     setState(() {
       _adviserUid = adviser;
+      _seatedAdviserUid = adviser;
       final slots = <String?>[...panel];
       // Always leave at least three seats so a refill has somewhere to land,
       // and never exceed the cap the ex-officio count leaves.
@@ -231,6 +238,12 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     if (adviser == null) {
       setState(() => _error =
           'That adviser is no longer listed. Please choose again.');
+      return;
+    }
+    if (_isFullAdviser(adviser)) {
+      setState(() => _error =
+          '${adviser.fullName} already has $kMaxAdvisees groups. Please choose '
+          'another adviser.');
       return;
     }
 
@@ -381,6 +394,10 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// choosing one as a PANEL MEMBER adds nobody new and is refused at submit.
   /// Seeing "— coordinator" next to the name is what makes that legible
   /// before the refusal rather than after it.
+  /// At the advisee limit, and not already this thesis's seated adviser.
+  bool _isFullAdviser(FacultyDirectoryEntry f) =>
+      f.adviserFull && f.uid != _seatedAdviserUid;
+
   String _optionLabel(FacultyDirectoryEntry f) {
     final detail = [
       if (f.role == 'coordinator' || f.role == 'dean') f.role,
@@ -498,7 +515,15 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
           if (!taken.contains(f.uid))
             DropdownMenuItem(
               value: f.uid,
-              child: Text(_optionLabel(f), overflow: TextOverflow.ellipsis),
+              // A full adviser stays listed, greyed out, so the group can
+              // see why they cannot pick them.
+              enabled: !(isAdviserSlot && _isFullAdviser(f)),
+              child: Text(
+                isAdviserSlot && _isFullAdviser(f)
+                    ? '${_optionLabel(f)} · Full (${f.adviseeCount}/$kMaxAdvisees)'
+                    : _optionLabel(f),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
       ],
       onChanged: onChanged,

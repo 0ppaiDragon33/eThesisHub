@@ -2306,9 +2306,16 @@ service cloud.firestore {
                && role != 'student'
                && request.resource.data.keys().hasOnly(
                     ['fullName', 'role', 'college', 'specialization',
-                     'nominableAsAdviser', 'nominableAsPanelist'])
+                     'nominableAsAdviser', 'nominableAsPanelist',
+                     'adviseeCount'])
                && request.resource.data.role == role
-               && subjectDesignationUntouched();
+               && subjectDesignationUntouched()
+               // The person's own count of groups they advise, written by
+               // their app so the pickers can grey out a full adviser.
+               && (!('adviseeCount' in request.resource.data)
+                   || (request.resource.data.adviseeCount is int
+                       && request.resource.data.adviseeCount >= 0
+                       && request.resource.data.adviseeCount <= 1000));
       }
 
       // Update-only: a coordinator-created entry would have no name (it
@@ -2350,6 +2357,7 @@ service cloud.firestore {
                && request.resource.data.keys().hasOnly(
                     ['fullName', 'role', 'college', 'specialization',
                      'nominableAsAdviser', 'nominableAsPanelist'])
+               && !('adviseeCount' in request.resource.data)
                && request.resource.data.fullName == u.fullName
                && request.resource.data.role == u.role;
       }

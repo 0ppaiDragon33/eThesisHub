@@ -910,4 +910,87 @@ void main() {
     final noms = await db.collection('theses/t1/nominations').get();
     expect(noms.docs, isEmpty);
   });
+
+  group('an adviser at the limit', () {
+    Future<DropdownMenuItem<String>> adviserItem(
+        WidgetTester tester, String uid) async {
+      await tester.tap(find.byKey(const Key('adviser')));
+      await tester.pumpAndSettle();
+      final item = tester
+          .widgetList<DropdownMenuItem<String>>(
+              find.byType(DropdownMenuItem<String>))
+          .firstWhere((i) => i.value == uid);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      return item;
+    }
+
+    testWidgets('is greyed out and labelled full', (tester) async {
+      useTallSurface(tester);
+      final db = await seeded();
+      await db.doc('facultyDirectory/Armada').update({'adviseeCount': 5});
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      final full = await adviserItem(tester, 'Armada');
+      expect(full.enabled, isFalse);
+      // The label says why, read while the list is open.
+      await tester.tap(find.byKey(const Key('adviser')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Full (5/5)'), findsWidgets);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      final open = await adviserItem(tester, 'Diamante');
+      expect(open.enabled, isTrue);
+    });
+
+    testWidgets('one under the limit can still be picked', (tester) async {
+      useTallSurface(tester);
+      final db = await seeded();
+      await db.doc('facultyDirectory/Armada').update({'adviseeCount': 4});
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      expect((await adviserItem(tester, 'Armada')).enabled, isTrue);
+    });
+
+    testWidgets('stays selectable for the group they already advise',
+        (tester) async {
+      // A reopened thesis: Armada accepted this group's adviser seat, so
+      // this group is one of their five.
+      useTallSurface(tester);
+      final db = await seeded();
+      await db.doc('facultyDirectory/Armada').update({'adviseeCount': 5});
+      await db.doc('theses/t1/nominations/Armada').set({
+        'nomineeUid': 'Armada',
+        'nomineeName': 'Dr. Armada',
+        'position': 'adviser',
+        'exOfficio': false,
+        'conformeStatus': 'accepted',
+        'respondedAt': null,
+        'declineReason': null,
+      });
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      expect((await adviserItem(tester, 'Armada')).enabled, isTrue);
+    });
+
+    testWidgets('only the adviser slot is limited, not the panel',
+        (tester) async {
+      useTallSurface(tester);
+      final db = await seeded();
+      await db.doc('facultyDirectory/Armada').update({'adviseeCount': 5});
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('panel0')));
+      await tester.pumpAndSettle();
+      final item = tester
+          .widgetList<DropdownMenuItem<String>>(
+              find.byType(DropdownMenuItem<String>))
+          .firstWhere((i) => i.value == 'Armada');
+      expect(item.enabled, isTrue);
+    });
+  });
 }

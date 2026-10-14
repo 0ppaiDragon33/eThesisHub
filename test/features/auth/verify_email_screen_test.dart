@@ -59,7 +59,7 @@ class FailingFacultyDirectoryRepository extends FacultyDirectoryRepository {
   FailingFacultyDirectoryRepository(super.db);
 
   @override
-  Future<void> upsertOwnEntry(AppUser user) async {
+  Future<void> upsertOwnEntry(AppUser user, {int? adviseeCount}) async {
     throw FirebaseException(
       plugin: 'cloud_firestore',
       code: 'unavailable',
