@@ -10,7 +10,6 @@ import 'package:ethesishub/core/design/motion.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/navigation/shell_destination.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
-import 'package:ethesishub/core/widgets/double_back_to_exit.dart';
 import 'package:ethesishub/providers/sidebar_provider.dart';
 
 /// Tells shell content (the account footer, mainly) where it is drawn, so
@@ -133,144 +132,139 @@ class AppShell extends ConsumerWidget {
     // tests keep exercising the desktop arrow with no per-test override.
     final showArrow = !isNativeMobile;
 
-    // On a phone the OS back gesture is the only way back, so it is caught
-    // below: a pushed screen still pops in one gesture (routed through
-    // go_router), and a top-level destination is guarded behind a confirming
-    // second back rather than dropping the reader out of the app on a stray
-    // swipe. Web and desktop keep the visible arrow and are left untouched.
-    final guardExit = isNativeMobile;
+    // The mobile OS back gesture is owned in native code (MainActivity), which
+    // pops a pushed screen through go_router and otherwise double-backs to
+    // exit — go_router's ShellRoute reports "nothing to pop" to Android at a
+    // top-level destination, so no Dart-side guard is ever consulted there.
 
-    return DoubleBackToExit(
-      enabled: guardExit,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final wide = width >= railBreakpoint;
-          final canExpand = width >= fullSidebarFrom;
-          final collapsed = !(canExpand && expandedPref);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final wide = width >= railBreakpoint;
+        final canExpand = width >= fullSidebarFrom;
+        final collapsed = !(canExpand && expandedPref);
 
-          // Narrow keeps navigation behind a drawer rather than in a bottom
-          // bar. A bottom bar left an inner screen with no navigation at all,
-          // and this app's longest role (coordinator) overflows five slots, so
-          // the bar could not hold every destination anyway.
-          final narrowMenu = !wide && (loading || showNav);
+        // Narrow keeps navigation behind a drawer rather than in a bottom
+        // bar. A bottom bar left an inner screen with no navigation at all,
+        // and this app's longest role (coordinator) overflows five slots, so
+        // the bar could not hold every destination anyway.
+        final narrowMenu = !wide && (loading || showNav);
 
-          final topBar = _TopBar(
-            title: title,
-            parent: deep && owner != null && owner.route != location
-                ? owner.label
-                : null,
-            showBack: deep && showArrow,
-            onBack: () => _back(context),
-            trailing: trailing,
-            showBrand: !wide && !narrowMenu,
-            showMenu: narrowMenu,
-          );
+        final topBar = _TopBar(
+          title: title,
+          parent: deep && owner != null && owner.route != location
+              ? owner.label
+              : null,
+          showBack: deep && showArrow,
+          onBack: () => _back(context),
+          trailing: trailing,
+          showBrand: !wide && !narrowMenu,
+          showMenu: narrowMenu,
+        );
 
-          // The top bar above the page, in the one shape all three layouts
-          // use.
-          //
-          // The bar is a hard 60px and a Column hands its non-flex children an
-          // unbounded main axis, so the bar asks for 60 however little there
-          // is — and any viewport shorter than that overflows and stripes the
-          // screen. Flutter web hands the app a near-zero canvas for a frame
-          // or two before the browser settles its size, and a desktop window
-          // can be dragged shorter at any time.
-          //
-          // The bar keeps its natural height inside an OverflowBox, so it
-          // never lays out against an impossible constraint and pushes the
-          // overflow inside itself; the SizedBox caps what the Column is asked
-          // for, and the ClipRect throws away what does not fit. Nothing
-          // readable fits in a viewport this small — the point is only that
-          // the shell yields quietly instead of raising.
-          Widget barAndBody() {
-            final barHeight = math.min(_TopBar.height, constraints.maxHeight);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ClipRect(
-                  child: SizedBox(
-                    height: barHeight,
-                    child: OverflowBox(
-                      alignment: Alignment.topCenter,
-                      minHeight: 0,
-                      maxHeight: _TopBar.height,
-                      child: topBar,
-                    ),
+        // The top bar above the page, in the one shape all three layouts
+        // use.
+        //
+        // The bar is a hard 60px and a Column hands its non-flex children an
+        // unbounded main axis, so the bar asks for 60 however little there
+        // is — and any viewport shorter than that overflows and stripes the
+        // screen. Flutter web hands the app a near-zero canvas for a frame
+        // or two before the browser settles its size, and a desktop window
+        // can be dragged shorter at any time.
+        //
+        // The bar keeps its natural height inside an OverflowBox, so it
+        // never lays out against an impossible constraint and pushes the
+        // overflow inside itself; the SizedBox caps what the Column is asked
+        // for, and the ClipRect throws away what does not fit. Nothing
+        // readable fits in a viewport this small — the point is only that
+        // the shell yields quietly instead of raising.
+        Widget barAndBody() {
+          final barHeight = math.min(_TopBar.height, constraints.maxHeight);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRect(
+                child: SizedBox(
+                  height: barHeight,
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minHeight: 0,
+                    maxHeight: _TopBar.height,
+                    child: topBar,
                   ),
                 ),
-                Expanded(child: child),
+              ),
+              Expanded(child: child),
+            ],
+          );
+        }
+
+        Widget narrowScaffold(Widget drawerContent) {
+          return Scaffold(
+            drawer: Drawer(
+              width: expandedRailWidth,
+              backgroundColor: Palette.of(context).sidebar,
+              child: drawerContent,
+            ),
+            body: SafeArea(bottom: false, child: barAndBody()),
+          );
+        }
+
+        if (wide && (loading || showNav)) {
+          return Scaffold(
+            body: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Sidebar(
+                  loading: loading,
+                  destinations: list,
+                  selected: owner,
+                  collapsed: collapsed,
+                  canExpand: canExpand,
+                  onToggle: () =>
+                      ref.read(sidebarExpandedProvider.notifier).toggle(),
+                  onSelect: (d) => _navigate(context, d.route),
+                  footer: accountFooter,
+                ),
+                Expanded(child: barAndBody()),
               ],
-            );
-          }
-
-          Widget narrowScaffold(Widget drawerContent) {
-            return Scaffold(
-              drawer: Drawer(
-                width: expandedRailWidth,
-                backgroundColor: Palette.of(context).sidebar,
-                child: drawerContent,
-              ),
-              body: SafeArea(bottom: false, child: barAndBody()),
-            );
-          }
-
-          if (wide && (loading || showNav)) {
-            return Scaffold(
-              body: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Sidebar(
-                    loading: loading,
-                    destinations: list,
-                    selected: owner,
-                    collapsed: collapsed,
-                    canExpand: canExpand,
-                    onToggle: () =>
-                        ref.read(sidebarExpandedProvider.notifier).toggle(),
-                    onSelect: (d) => _navigate(context, d.route),
-                    footer: accountFooter,
-                  ),
-                  Expanded(child: barAndBody()),
-                ],
-              ),
-            );
-          }
-
-          // Narrow while the role is still resolving: the drawer holds the
-          // same inert skeleton the sidebar shows, so the reader can see
-          // navigation is coming rather than finding an empty drawer.
-          if (narrowMenu && loading) {
-            return narrowScaffold(
-              const SafeArea(child: _SidebarSkeleton(collapsed: false)),
-            );
-          }
-
-          if (!showNav) {
-            return Scaffold(body: SafeArea(bottom: false, child: barAndBody()));
-          }
-
-          // Narrow with navigation: the same ink sidebar the wide layout
-          // uses, behind the drawer. Selecting closes the drawer before
-          // navigating — one left open over the page you just asked for is
-          // the bug this guards against.
-          return narrowScaffold(
-            _Sidebar(
-              loading: false,
-              destinations: list,
-              selected: owner,
-              collapsed: false,
-              canExpand: false,
-              onToggle: () {},
-              onSelect: (d) {
-                Navigator.of(context).pop();
-                _navigate(context, d.route);
-              },
-              footer: accountFooter,
             ),
           );
-        },
-      ),
+        }
+
+        // Narrow while the role is still resolving: the drawer holds the
+        // same inert skeleton the sidebar shows, so the reader can see
+        // navigation is coming rather than finding an empty drawer.
+        if (narrowMenu && loading) {
+          return narrowScaffold(
+            const SafeArea(child: _SidebarSkeleton(collapsed: false)),
+          );
+        }
+
+        if (!showNav) {
+          return Scaffold(body: SafeArea(bottom: false, child: barAndBody()));
+        }
+
+        // Narrow with navigation: the same ink sidebar the wide layout
+        // uses, behind the drawer. Selecting closes the drawer before
+        // navigating — one left open over the page you just asked for is
+        // the bug this guards against.
+        return narrowScaffold(
+          _Sidebar(
+            loading: false,
+            destinations: list,
+            selected: owner,
+            collapsed: false,
+            canExpand: false,
+            onToggle: () {},
+            onSelect: (d) {
+              Navigator.of(context).pop();
+              _navigate(context, d.route);
+            },
+            footer: accountFooter,
+          ),
+        );
+      },
     );
   }
 }
