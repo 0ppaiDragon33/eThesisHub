@@ -395,6 +395,19 @@ class _NextAction extends StatelessWidget {
                   'reopen this thesis.',
             ),
           ],
+          // Sent back by the Coordinator or the Dean: why, before the
+          // button to nominate again.
+          if (thesis.nominationReturned) ...[
+            const Gap.md(),
+            ErrorState(
+              key: const Key('nominationReturned'),
+              message: 'Returned by the '
+                  '${thesis.nominationReturnedRole == 'dean' ? 'Dean' : 'Research Coordinator'}: '
+                  '${thesis.nominationReturnReason}. Choose your adviser and '
+                  'panel again; everyone you nominate is asked to accept '
+                  'again.',
+            ),
+          ],
           // The student cannot fix what they cannot read, so the remark
           // comes before the resubmit action.
           if (thesis.status == ThesisStatus.titleRejected &&

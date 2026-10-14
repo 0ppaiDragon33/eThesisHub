@@ -156,6 +156,27 @@ final nominationLifecycleDetectorProvider = Provider<void>((ref) {
       );
     }
 
+    // Keyed by when it was returned, so a second return is a new item.
+    final returnedAt = thesis.nominationReturnedAt;
+    if (returnedAt != null && (thesis.nominationReturnReason ?? '').isNotEmpty) {
+      final who = thesis.nominationReturnedRole == 'dean'
+          ? 'The Dean'
+          : 'The Research Coordinator';
+      await repo.upsertIfAbsent(
+        uid,
+        AppNotification(
+          id: notificationId(NotificationType.nominationReturned,
+              '${thesis.id}_${returnedAt.millisecondsSinceEpoch}'),
+          type: NotificationType.nominationReturned,
+          thesisId: thesis.id,
+          message: '$who returned your nomination: '
+              '${thesis.nominationReturnReason}',
+          read: false,
+          createdAt: returnedAt,
+        ),
+      );
+    }
+
     if (thesis.deanApprovedAt != null) {
       await repo.upsertIfAbsent(
         uid,

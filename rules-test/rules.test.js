@@ -6832,3 +6832,99 @@ test("adviseeCount: nobody else may set someone's count", async () => {
   await assertSucceeds(updateDoc(doc(coord, "facultyDirectory/ac-fac3"),
     { nominableAsAdviser: false }));
 });
+
+// ---- Return a nomination to the group (Coordinator / Dean decline) ----
+
+async function seedForReturn(status, extra = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const profile = (email, role) => ({ ...studentProfile(email), role });
+    await setDoc(doc(db, "users/rt-leader"), profile("rtleader@isufst.edu.ph", "student"));
+    await setDoc(doc(db, "users/rt-coord"), profile("rtcoord@isufst.edu.ph", "coordinator"));
+    await setDoc(doc(db, "users/rt-dean"), profile("rtdean@isufst.edu.ph", "dean"));
+    await setDoc(doc(db, "users/rt-adv"), profile("rtadv@isufst.edu.ph", "faculty"));
+    await setDoc(doc(db, "theses/rt1"), {
+      leaderUid: "rt-leader", status, panelistUids: [], adviserUid: null,
+      memberNames: [], workingTitle: "T", college: "CICI", program: "BSIT",
+      semester: "First", academicYear: "2026-2027", ...extra,
+    });
+    await setDoc(doc(db, "theses/rt1/nominations/rt-adv"),
+      nominationDoc("rt-adv", { position: "adviser", conformeStatus: "accepted" }));
+  });
+}
+
+const asRt = (uid) => asUser(uid, `${uid.replace("-", "")}@isufst.edu.ph`);
+
+function returnBatch(db, uid, role, extra = {}) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "theses/rt1"), {
+    status: "draft", nominationReturnedBy: uid, nominationReturnedRole: role,
+    nominationReturnReason: "Choose a panel member from CICI.",
+    nominationReturnedAt: serverTimestamp(),
+    coordinatorRecommendedAt: null, coordinatorRecommendedBy: null, ...extra,
+  });
+  batch.delete(doc(db, "theses/rt1/nominations/rt-adv"));
+  return batch.commit();
+}
+
+test("return: the Coordinator returns a nomination waiting on them, clearing every seat",
+  async () => {
+    await seedForReturn("nominationPendingCoordinator");
+    await assertSucceeds(returnBatch(asRt("rt-coord"), "rt-coord", "coordinator"));
+  });
+
+test("return: the Dean returns one waiting on them, clearing the recommendation",
+  async () => {
+    await seedForReturn("nominationPendingDean", {
+      coordinatorRecommendedAt: Timestamp.now(), coordinatorRecommendedBy: "rt-coord",
+    });
+    await assertSucceeds(returnBatch(asRt("rt-dean"), "rt-dean", "dean"));
+  });
+
+test("return: only at your own step", async () => {
+  await seedForReturn("nominationPendingDean");
+  await assertFails(returnBatch(asRt("rt-coord"), "rt-coord", "coordinator"));
+  await seedForReturn("nominationPendingCoordinator");
+  await assertFails(returnBatch(asRt("rt-dean"), "rt-dean", "dean"));
+  await seedForReturn("nominationPendingConforme");
+  await assertFails(returnBatch(asRt("rt-coord"), "rt-coord", "coordinator"));
+});
+
+test("return: never by the group or a nominee", async () => {
+  await seedForReturn("nominationPendingCoordinator");
+  await assertFails(returnBatch(asRt("rt-leader"), "rt-leader", "coordinator"));
+  await assertFails(returnBatch(asRt("rt-adv"), "rt-adv", "coordinator"));
+});
+
+test("return: needs a reason, the caller's own stamp, and the recommendation cleared",
+  async () => {
+    await seedForReturn("nominationPendingDean", {
+      coordinatorRecommendedAt: Timestamp.now(), coordinatorRecommendedBy: "rt-coord",
+    });
+    const dean = asRt("rt-dean");
+    await assertFails(returnBatch(dean, "rt-dean", "dean", { nominationReturnReason: "" }));
+    await assertFails(returnBatch(dean, "rt-coord", "dean"));
+    await assertFails(returnBatch(dean, "rt-dean", "dean",
+      { nominationReturnedAt: Timestamp.fromDate(new Date("1999-01-01")) }));
+    // Keeping the Coordinator's signature is refused.
+    const keep = writeBatch(dean);
+    keep.update(doc(dean, "theses/rt1"), {
+      status: "draft", nominationReturnedBy: "rt-dean", nominationReturnedRole: "dean",
+      nominationReturnReason: "x", nominationReturnedAt: serverTimestamp(),
+    });
+    await assertFails(keep.commit());
+  });
+
+test("return: seats cannot be deleted without returning the thesis", async () => {
+  await seedForReturn("nominationPendingCoordinator");
+  await assertFails(deleteDoc(doc(asRt("rt-coord"), "theses/rt1/nominations/rt-adv")));
+});
+
+test("return: afterwards the group can nominate again", async () => {
+  await seedForReturn("nominationPendingCoordinator");
+  await assertSucceeds(returnBatch(asRt("rt-coord"), "rt-coord", "coordinator"));
+  const leader = asRt("rt-leader");
+  await assertSucceeds(setDoc(doc(leader, "theses/rt1/nominations/rt-adv"),
+    nominationDoc("rt-adv", { position: "adviser" })));
+});

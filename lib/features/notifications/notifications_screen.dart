@@ -27,6 +27,7 @@ import 'package:ethesishub/providers/notification_providers.dart';
       return (route: '/nominations', mode: null);
     case NotificationType.nominationRecommended:
     case NotificationType.nominationApproved:
+    case NotificationType.nominationReturned:
     case NotificationType.titleApproved:
     case NotificationType.titleRejected:
       return (route: '/thesis', mode: null);
@@ -89,6 +90,8 @@ import 'package:ethesishub/providers/notification_providers.dart';
         (icon: Icons.local_library_outlined, tone: Tone.endorsed),
       NotificationType.highlightsReleased =>
         (icon: Icons.highlight_alt, tone: Tone.act),
+      NotificationType.nominationReturned =>
+        (icon: Icons.undo_rounded, tone: Tone.returned),
     };
 
 /// Marks [n] read, switches faculty mode when the target needs it, then

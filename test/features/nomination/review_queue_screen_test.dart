@@ -66,6 +66,90 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
+  group('returning a nomination to the group', () {
+    void tall(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    Future<void> returnWith(WidgetTester tester, String reason) async {
+      await tester.tap(find.byKey(const Key('returnNomination-t1')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('returnReason-t1')), reason);
+      await tester.tap(find.byKey(const Key('confirmReturn-t1')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the Coordinator returns it with a reason', (tester) async {
+      tall(tester);
+      final db = await seeded('nominationPendingCoordinator');
+      await tester.pumpWidget(
+          wrap(db, ThesisStatus.nominationPendingCoordinator, false));
+      await tester.pumpAndSettle();
+
+      await returnWith(tester, 'Choose a CICI panel member.');
+      expect(find.text('Return this nomination to the group?'), findsOneWidget);
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('confirmReturnNomination')));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+
+      final t = (await db.doc('theses/t1').get()).data()!;
+      expect(t['status'], 'draft');
+      expect(t['nominationReturnReason'], 'Choose a CICI panel member.');
+      expect(t['nominationReturnedRole'], 'coordinator');
+      expect((await db.collection('theses/t1/nominations').get()).docs,
+          isEmpty);
+    });
+
+    testWidgets('the Dean can return it too', (tester) async {
+      tall(tester);
+      final db = await seeded('nominationPendingDean');
+      await tester.pumpWidget(wrap(db, ThesisStatus.nominationPendingDean, true));
+      await tester.pumpAndSettle();
+
+      await returnWith(tester, 'The adviser is on leave.');
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('confirmReturnNomination')));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+
+      final t = (await db.doc('theses/t1').get()).data()!;
+      expect(t['status'], 'draft');
+      expect(t['nominationReturnedRole'], 'dean');
+    });
+
+    testWidgets('no reason, no return', (tester) async {
+      tall(tester);
+      final db = await seeded('nominationPendingCoordinator');
+      await tester.pumpWidget(
+          wrap(db, ThesisStatus.nominationPendingCoordinator, false));
+      await tester.pumpAndSettle();
+
+      await returnWith(tester, '');
+      expect(find.text('Give a reason for returning it.'), findsOneWidget);
+      expect((await db.doc('theses/t1').get()).data()!['status'],
+          'nominationPendingCoordinator');
+    });
+
+    testWidgets('Cancel in the confirmation keeps it', (tester) async {
+      tall(tester);
+      final db = await seeded('nominationPendingCoordinator');
+      await tester.pumpWidget(
+          wrap(db, ThesisStatus.nominationPendingCoordinator, false));
+      await tester.pumpAndSettle();
+
+      await returnWith(tester, 'Reason');
+      await tester.tap(find.text('Cancel').last);
+      await tester.pumpAndSettle();
+      expect((await db.doc('theses/t1').get()).data()!['status'],
+          'nominationPendingCoordinator');
+    });
+  });
+
   testWidgets('the card names the leader, with year & section and specialization',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 2000);

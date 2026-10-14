@@ -21,7 +21,10 @@ enum NotificationType {
   archivePublished,
 
   /// The adviser released the panel's highlights on the group's defence.
-  highlightsReleased;
+  highlightsReleased,
+
+  /// The Coordinator or the Dean sent the group's nomination back.
+  nominationReturned;
 
   String get value => name;
 

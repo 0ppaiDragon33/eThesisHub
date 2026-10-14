@@ -22,6 +22,43 @@ Future<ProviderContainer> containerFor(String uid) async {
 
 void main() {
   group('nominationLifecycleDetectorProvider', () {
+    test('a returned nomination tells the leader who returned it and why',
+        () async {
+      final container = await containerFor('student1');
+      final firestore = container.read(firestoreProvider);
+      await firestore.collection('theses').doc('t1').set({
+        'leaderUid': 'student1',
+        'memberNames': <String>[],
+        'workingTitle': 'A Study',
+        'college': 'CICI',
+        'program': 'BSIT',
+        'semester': 'First',
+        'academicYear': '2026-2027',
+        'status': 'draft',
+        'panelistUids': <String>[],
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+        'nominationReturnedBy': 'dean1',
+        'nominationReturnedRole': 'dean',
+        'nominationReturnReason': 'The adviser is on leave.',
+        'nominationReturnedAt': Timestamp.fromDate(DateTime(2026, 3, 1)),
+      });
+
+      container.listen(nominationLifecycleDetectorProvider, (_, _) {});
+      await container.read(notificationsProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('student1')
+          .first;
+      final returned =
+          items.where((i) => i.type == NotificationType.nominationReturned);
+      expect(returned, hasLength(1));
+      expect(returned.single.message,
+          'The Dean returned your nomination: The adviser is on leave.');
+    });
+
     test('a pending Conforme writes a conformeRequested item', () async {
       final container = await containerFor('faculty1');
       final firestore = container.read(firestoreProvider);

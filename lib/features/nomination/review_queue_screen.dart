@@ -66,6 +66,58 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
   String? _error;
   final Set<String> _busy = {};
 
+  /// Sends the nomination back to the group with [reason] (decline).
+  /// Returns true when it went through, so the card can clear its box.
+  Future<bool> _return(String uid, String thesisId, String reason) async {
+    if (_busy.contains(thesisId)) return false;
+    if (reason.trim().isEmpty) {
+      setState(() => _error = 'Give a reason for returning it.');
+      return false;
+    }
+    final confirmed = await confirmAction(
+      context,
+      title: 'Return this nomination to the group?',
+      message: 'The group will see your reason and choose their adviser and '
+          'panel again. Everyone they nominate will be asked to accept again.',
+      confirmLabel: 'Return',
+      confirmKey: const Key('confirmReturnNomination'),
+    );
+    if (!confirmed || !mounted) return false;
+    setState(() {
+      _busy.add(thesisId);
+      _error = null;
+    });
+    try {
+      await ref.read(thesisRepositoryProvider).returnNomination(
+            thesisId: thesisId,
+            actorUid: uid,
+            asDean: widget.isDean,
+            reason: reason,
+          );
+      try {
+        await ref.read(auditServiceProvider).log(
+              actorUid: uid,
+              action: 'nomination.returned',
+              targetType: 'thesis',
+              targetId: thesisId,
+              metadata: {'by': widget.isDean ? 'dean' : 'coordinator'},
+            );
+      } catch (_) {}
+      return true;
+    } on StateError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on ArgumentError catch (e) {
+      if (mounted) setState(() => _error = e.message.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not return the nomination. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy.remove(thesisId));
+    }
+    return false;
+  }
+
   // Created once, in a field, rather than fresh in `build`. This is the
   // standard `StreamBuilder` discipline and it is required on its own terms
   // here: `_act` calls `setState` (busy state, error text) on every tap, and a
@@ -191,6 +243,9 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                     label: label,
                     busy: _busy.contains(t.id),
                     onAct: uid == null ? null : () => _act(uid, t.id),
+                    onReturn: uid == null
+                        ? null
+                        : (reason) => _return(uid, t.id, reason),
                   ),
                   const Gap.md(),
                 ],
@@ -211,6 +266,7 @@ class _DecisionCard extends ConsumerStatefulWidget {
     required this.label,
     required this.busy,
     required this.onAct,
+    required this.onReturn,
   });
 
   final Thesis thesis;
@@ -219,11 +275,23 @@ class _DecisionCard extends ConsumerStatefulWidget {
   final bool busy;
   final VoidCallback? onAct;
 
+  /// Sends it back to the group with a reason; true when it went through.
+  final Future<bool> Function(String reason)? onReturn;
+
   @override
   ConsumerState<_DecisionCard> createState() => _DecisionCardState();
 }
 
 class _DecisionCardState extends ConsumerState<_DecisionCard> {
+  final _reason = TextEditingController();
+  bool _returning = false;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
   // One subscription for the card's lifetime (see the queue stream note).
   late final Stream<List<Nomination>> _nominations = ref
       .read(thesisRepositoryProvider)
@@ -299,6 +367,13 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
                   : const Icon(Icons.verified_outlined, size: 18),
               label: Text(widget.label),
             ),
+            OutlinedButton(
+              key: Key('returnNomination-${t.id}'),
+              onPressed: widget.busy || widget.onReturn == null
+                  ? null
+                  : () => setState(() => _returning = !_returning),
+              child: const Text('Return to group'),
+            ),
             // The form being signed off, readable before deciding.
             ViewForm1Button(key: Key('viewForm1-${t.id}'), thesisId: t.id),
             ViewAttachedCopyButton(
@@ -306,6 +381,45 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
                 key: Key('viewForm1Copy-${t.id}'), thesisId: t.id),
           ],
         ),
+        if (_returning) ...[
+          const Gap.md(),
+          TextField(
+            key: Key('returnReason-${t.id}'),
+            controller: _reason,
+            maxLines: 3,
+            minLines: 2,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Reason for returning',
+              hintText: 'The group will see this.',
+            ),
+          ),
+          const Gap.sm(),
+          Wrap(
+            spacing: AppTokens.sm,
+            children: [
+              FilledButton(
+                key: Key('confirmReturn-${t.id}'),
+                onPressed: widget.busy
+                    ? null
+                    : () async {
+                        final ok = await widget.onReturn!(_reason.text);
+                        if (ok && mounted) {
+                          setState(() {
+                            _returning = false;
+                            _reason.clear();
+                          });
+                        }
+                      },
+                child: const Text('Return'),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _returning = false),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ],
       ],
     );
 

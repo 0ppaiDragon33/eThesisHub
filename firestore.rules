@@ -584,6 +584,38 @@ service cloud.firestore {
                     && resource.data.status == 'nominationPendingConforme'
                     && request.resource.data.status == 'draft';
 
+      // Return a nomination to the group (decline). The Coordinator while it
+      // waits on their recommendation, or the Dean while it waits on their
+      // approval, sends it back to draft with a reason. The Coordinator's
+      // recommendation is cleared so Form 1 does not keep a signature for a
+      // roster that is about to change, and in the same batch every
+      // nomination is deleted (see the nominations delete rule), so the group
+      // may change anyone and each nominee accepts again.
+      allow update: if request.resource.data.status == 'draft'
+                    && onlyChanged(['status', 'nominationReturnedBy',
+                                    'nominationReturnedRole',
+                                    'nominationReturnReason',
+                                    'nominationReturnedAt',
+                                    'coordinatorRecommendedAt',
+                                    'coordinatorRecommendedBy'])
+                    && request.resource.data.nominationReturnedBy
+                       == request.auth.uid
+                    && request.resource.data.nominationReturnedAt
+                       == request.time
+                    && request.resource.data.nominationReturnReason is string
+                    && request.resource.data.nominationReturnReason.size() > 0
+                    && request.resource.data.nominationReturnReason.size() <= 2000
+                    && request.resource.data.get('coordinatorRecommendedAt', null) == null
+                    && request.resource.data.get('coordinatorRecommendedBy', null) == null
+                    && ((resource.data.status == 'nominationPendingCoordinator'
+                         && request.resource.data.nominationReturnedRole
+                            == 'coordinator'
+                         && isCoordinator())
+                        || (resource.data.status == 'nominationPendingDean'
+                            && request.resource.data.nominationReturnedRole
+                               == 'dean'
+                            && isDean()));
+
       allow update: if isThesisLeader(thesisId)
                     && resource.data.status == 'draft'
                     && onlyChanged(['memberNames', 'workingTitle', 'college',
@@ -1268,6 +1300,13 @@ service cloud.firestore {
         allow delete: if isThesisLeader(thesisId)
                       && thesisData(thesisId).status == 'draft'
                       && resource.data.conformeStatus == 'declined';
+        // A Coordinator or Dean returning the nomination clears every seat,
+        // in the same batch that sends the thesis back to draft (the return
+        // stamp is this write's time).
+        allow delete: if (isCoordinator() || isDean())
+                      && getAfter(/databases/$(database)/documents/theses/$(thesisId)).data.status == 'draft'
+                      && getAfter(/databases/$(database)/documents/theses/$(thesisId)).data.get('nominationReturnedAt', null)
+                         == request.time;
       }
 
       // An optional copy of a form the leader attaches to a request: a

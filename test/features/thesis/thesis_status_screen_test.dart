@@ -352,6 +352,28 @@ void main() {
     expect(find.byKey(const Key('approvedTitle')), findsNothing);
   });
 
+  testWidgets('a returned nomination shows who returned it and why',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = await seeded('draft', extraFields: {
+      'nominationReturnedBy': 'c1',
+      'nominationReturnedRole': 'coordinator',
+      'nominationReturnReason': 'Choose a CICI panel member',
+      'nominationReturnedAt': Timestamp.fromDate(DateTime(2026, 3, 1)),
+    });
+    await tester.pumpWidget(wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('nominationReturned')), findsOneWidget);
+    expect(
+        find.textContaining(
+            'Returned by the Research Coordinator: Choose a CICI panel member'),
+        findsOneWidget);
+    expect(find.byKey(const Key('nominateAction')), findsOneWidget);
+  });
+
   group('term and specialization', () {
     void useTall(WidgetTester tester) {
       tester.view.physicalSize = const Size(1000, 3000);

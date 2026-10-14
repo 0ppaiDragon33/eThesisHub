@@ -35,6 +35,9 @@ class Thesis {
     this.leaderName,
     this.leaderSpecialization,
     this.leaderSection,
+    this.nominationReturnReason,
+    this.nominationReturnedRole,
+    this.nominationReturnedAt,
   });
 
   final String id;
@@ -106,6 +109,18 @@ class Thesis {
   /// The leader's year and section ("3-A"), copied and pinned the same way.
   final String? leaderSection;
 
+  /// Why the Coordinator or the Dean sent the nomination back to the group,
+  /// who did ([nominationReturnedRole]: 'coordinator' or 'dean') and when.
+  /// Kept after the group resubmits, as history; the thesis page shows it
+  /// only while the thesis is a draft.
+  final String? nominationReturnReason;
+  final String? nominationReturnedRole;
+  final DateTime? nominationReturnedAt;
+
+  /// Sent back by the Coordinator or the Dean and not resubmitted yet.
+  bool get nominationReturned =>
+      status == ThesisStatus.draft && (nominationReturnReason ?? '').isNotEmpty;
+
   /// Both halves, or neither. A URL without its storage path is a
   /// half-written upload that cannot be replaced or deleted later.
   bool get hasManuscript =>
@@ -147,6 +162,9 @@ class Thesis {
       leaderName: map['leaderName'] as String?,
       leaderSpecialization: map['leaderSpecialization'] as String?,
       leaderSection: map['leaderSection'] as String?,
+      nominationReturnReason: map['nominationReturnReason'] as String?,
+      nominationReturnedRole: map['nominationReturnedRole'] as String?,
+      nominationReturnedAt: map['nominationReturnedAt'] as DateTime?,
     );
   }
 

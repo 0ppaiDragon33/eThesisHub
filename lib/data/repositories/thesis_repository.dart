@@ -28,6 +28,7 @@ Thesis thesisFromFirestore(String id, Map<String, dynamic> data) {
   raw['titlesSubmittedAt'] = _firestoreDate(raw['titlesSubmittedAt']);
   raw['titleDecidedAt'] = _firestoreDate(raw['titleDecidedAt']);
   raw['manuscriptUploadedAt'] = _firestoreDate(raw['manuscriptUploadedAt']);
+  raw['nominationReturnedAt'] = _firestoreDate(raw['nominationReturnedAt']);
   // titleRound (num) and presentationPath/presentationUrl/titleDecidedBy/
   // titleRejectionRemark/approvedTitleId (String) need no conversion —
   // Thesis.fromMap reads them with plain num/String casts, and Firestore
@@ -577,6 +578,45 @@ class ThesisRepository {
     });
 
     if (failure != null) throw failure;
+  }
+
+  /// The Coordinator (while it waits on their recommendation) or the Dean
+  /// (while it waits on their approval) sends the nomination back to the group
+  /// with [reason]. The thesis returns to draft, the Coordinator's
+  /// recommendation is cleared, and every nomination is deleted in the same
+  /// batch, so the group may change anyone and each nominee accepts again.
+  Future<void> returnNomination({
+    required String thesisId,
+    required String actorUid,
+    required bool asDean,
+    required String reason,
+  }) async {
+    final text = reason.trim();
+    if (text.isEmpty) throw ArgumentError('Give a reason for returning it.');
+    final snap = await _thesis(thesisId).get();
+    if (!snap.exists) throw StateError('That thesis no longer exists.');
+    final status = ThesisStatus.fromString(snap.data()!['status'] as String?);
+    final expected = asDean
+        ? ThesisStatus.nominationPendingDean
+        : ThesisStatus.nominationPendingCoordinator;
+    if (status != expected) {
+      throw StateError('This nomination has already moved on.');
+    }
+    final seats = await _nominations(thesisId).get();
+    final batch = _db.batch();
+    batch.update(_thesis(thesisId), {
+      'status': ThesisStatus.draft.value,
+      'nominationReturnedBy': actorUid,
+      'nominationReturnedRole': asDean ? 'dean' : 'coordinator',
+      'nominationReturnReason': text,
+      'nominationReturnedAt': FieldValue.serverTimestamp(),
+      'coordinatorRecommendedAt': null,
+      'coordinatorRecommendedBy': null,
+    });
+    for (final d in seats.docs) {
+      batch.delete(d.reference);
+    }
+    await batch.commit();
   }
 
   /// A Research Coordinator recommends the thesis to the Dean. Only valid
