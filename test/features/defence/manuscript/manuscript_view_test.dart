@@ -241,12 +241,12 @@ void main() {
       tester,
       ManuscriptView(
         parts: [pdfPart],
-        highlightClosedReason: 'Highlighting opens when the defence starts.',
+        highlightClosedReason: 'Highlighting opens when the defense starts.',
       ),
       image: await page(tester),
     );
     expect(find.byKey(const Key('highlightTool')), findsNothing);
-    expect(find.text('Highlighting opens when the defence starts.'),
+    expect(find.text('Highlighting opens when the defense starts.'),
         findsOneWidget);
   });
 

@@ -125,7 +125,7 @@ pw.Widget _page(FormText t) {
   );
 }
 
-/// Form 4b — Change of Undergraduate Thesis Title. Blank template only;
+/// Form 4b. Change of Undergraduate Thesis Title. Blank template only;
 /// see [_page] for why there is no filled version.
 Future<Uint8List> buildForm4bBlank() async {
   final doc = pw.Document(compress: false, theme: await formTheme());

@@ -223,7 +223,7 @@ void main() {
     // Should show "not confirmed yet" message
     expect(find.textContaining('inbox'), findsOneWidget);
 
-    // promoteFromInvite should NOT have been called
+    // promoteFromInvite should not have been called
     expect(repo.promoteFromInviteCallCount, 0,
         reason: 'promoteFromInvite should not be called for unverified email');
   });
@@ -450,7 +450,7 @@ void main() {
     // Tap continue: the directory write throws 'unavailable'. That must be
     // absorbed the same way the audit-log failure is absorbed, so
     // ref.invalidate(authStateProvider) still runs and the router still
-    // redirects onward — the user must not see "Verification failed."
+    // redirects onward: the user must not see "Verification failed."
     await tester.tap(find.byKey(const Key('reload')));
     await tester.pumpAndSettle();
 
@@ -488,7 +488,7 @@ void main() {
   });
 
   // The bug this pins: a user verifies their email, the app lets them in
-  // because `reload()` flips the local `emailVerified` flag — but the ID
+  // because `reload()` flips the local `emailVerified` flag, but the ID
   // token Firestore reads still carries `email_verified: false` until it is
   // force-refreshed. `firestore.rules` gates every write on
   // `request.auth.token.email_verified`, so the very first write (creating a

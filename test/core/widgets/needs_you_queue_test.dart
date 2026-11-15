@@ -85,7 +85,7 @@ void main() {
 
   testWidgets('the headline count equals the number of rows rendered',
       (tester) async {
-    // Spec D16. Two sources for this number would eventually disagree, and
+    // Two sources for this number would eventually disagree, and
     // a dashboard that contradicts itself is worse than one showing nothing.
     const items = AsyncValue<List<NeedsYouItem>>.data([_chapter, _nomination]);
 
@@ -136,8 +136,8 @@ void main() {
 
   group('push vs go by NeedsYouItem.deep (Task 9 fix round 1)', () {
     // Drives a real GoRouter, the way test/core/routing/deep_navigation_
-    // test.dart does for the five call sites Task 9 named -- this row's
-    // "Open" button was the one call site the brief's own file list did
+    // test.dart does for the five call sites it covers: this row's
+    // "Open" button was the one call site the original list did
     // not name, and it went unexercised by any test.
     //
     // The observable consequence asserted here is whether the list route

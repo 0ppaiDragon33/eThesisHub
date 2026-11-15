@@ -5,7 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 /// The embedded serif theme every generated form renders with.
 ///
 /// The `pdf` package's built-in Helvetica covers Latin-1 and silently drops
-/// everything past it — an em dash, a curly quote, or a name carrying a
+/// everything past it: an em dash, a curly quote, or a name carrying a
 /// character like ễ simply did not appear on the page, with no error and
 /// nothing in the bytes to notice afterwards. On a document a group submits
 /// to the university, a name quietly going missing is the worst shape a bug
@@ -39,7 +39,7 @@ const formAccent = PdfColor.fromInt(0xFF0B5FA5);
 
 /// The letterhead every ISUFST research form carries, identically.
 ///
-/// Extracted from Form 1 when Form 5c and Form 8 arrived — three copies of
+/// Extracted from Form 1 when Form 5c and Form 8 arrived: three copies of
 /// the same address block is three places to fix it. Form 1 was moved onto
 /// this FIRST, so its existing tests prove the extraction changed no
 /// rendering before either new form depended on it.
@@ -133,7 +133,7 @@ String monthName(int m) => const [
 /// fragment. Originated in Form 1 (the panel members read as one flowing
 /// clause in the nomination letter) and hoisted here, alongside
 /// `formChrome`, when Form 8 needed the identical join for its certificate
-/// sentence — a pure, side-effect-free string helper belongs with the other
+/// sentence: a pure, side-effect-free string helper belongs with the other
 /// cross-form logic, not behind an import of whichever form happened to
 /// write it first.
 String panelSentence(List<String> panelNames) => panelNames.length <= 1
@@ -142,7 +142,7 @@ String panelSentence(List<String> panelNames) => panelNames.length <= 1
           'and ${panelNames.last}';
 
 /// A name with clear space above it to sign into, and an optional status
-/// line to its right. No rule under the name — the printed forms leave
+/// line to its right. No rule under the name: the printed forms leave
 /// the signing area blank, and this widget matches that on purpose.
 ///
 /// Originated in Form 1 (`_signable`, for its Conforme / Recommending
@@ -189,7 +189,7 @@ pw.Widget signableLine(String name, String role, {String? status}) {
   );
 }
 
-/// A ruled blank of the given width, mid-line — for the underscore runs a
+/// A ruled blank of the given width, mid-line: for the underscore runs a
 /// letter form prints where a value is written by hand (a name, a title,
 /// a place). Distinct from a labelled field's full-width rule: this one
 /// sits inline inside a sentence, so it takes only a width, no label.
@@ -220,12 +220,12 @@ pw.Widget formRule({double? width, double height = 11}) => pw.Container(
 );
 
 /// A "Label: value" row. When [value] is null or empty, [formRule] prints
-/// instead of the literal string "null" or a silent gap — a form built
+/// instead of the literal string "null" or a silent gap: a form built
 /// with no data at all (a blank template) rules every field the same way.
 ///
 /// Originated in Form 5c (`_field`, for its identifying header and its
 /// SUMMARY block) and hoisted here when Form 5b needed the identical
-/// header fields — Form 5c's own D60/D61 borrowed 5b's fields for its
+/// header fields. Form 5c borrowed 5b's fields for its
 /// header, so it was only a matter of time before the row that renders
 /// them was needed by both.
 pw.Widget formField(String label, String? value) {

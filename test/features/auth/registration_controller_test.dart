@@ -90,7 +90,7 @@ void main() {
     expect(profile.exists, isTrue);
     expect(profile.data()!['role'], 'student');
 
-    // The account must NOT have been rolled back.
+    // The account must not have been rolled back.
     expect(trackedUser.deleteCalled, isFalse);
   });
 }

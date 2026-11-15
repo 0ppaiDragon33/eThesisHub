@@ -17,19 +17,32 @@ final archiveRepositoryProvider = Provider<ArchiveRepository>(
 
 /// Every published thesis, newest first.
 ///
-/// One query, and filtering happens on the client (D54) — Firestore has no
+/// One query, and filtering happens on the client. Firestore has no
 /// substring search, so `where('title', isGreaterThanOrEqualTo: q)` would
 /// match prefixes only and a student typing "fisheries" would never find
 /// "A Study of Coastal Fisheries". At a college's scale this is correct;
 /// at thousands of entries it needs an index service.
-final archiveProvider = StreamProvider<List<ArchiveEntry>>((ref) {
+///
+/// Scoped by role: faculty, the coordinator and the dean see every published
+/// thesis; a student sees only the ones they own. Students cannot read each
+/// other's archived work (see `match /archive` in `firestore.rules`).
+final archiveProvider = StreamProvider<List<ArchiveEntry>>((ref) async* {
   // Rebuilt on a change of user: see [signedInUidProvider].
   ref.watch(signedInUidProvider);
-  return ref.watch(archiveRepositoryProvider).watchArchive();
+  final user = await ref.watch(currentUserProvider.future);
+  if (user == null) {
+    yield const <ArchiveEntry>[];
+    return;
+  }
+  yield* ref
+      .watch(archiveRepositoryProvider)
+      .watchArchive(ownerUid: user.isFaculty ? null : user.uid);
 });
 
-final archiveEntryProvider =
-    StreamProvider.family<ArchiveEntry?, String>((ref, thesisId) {
+final archiveEntryProvider = StreamProvider.family<ArchiveEntry?, String>((
+  ref,
+  thesisId,
+) {
   ref.watch(signedInUidProvider);
   return ref.watch(archiveRepositoryProvider).watchEntry(thesisId);
 });
@@ -37,14 +50,14 @@ final archiveEntryProvider =
 /// Decides whether the queue's fan-in may publish yet.
 ///
 /// Follows [facultyNeedsYouProvider]'s `_gate` in
-/// `lib/providers/needs_you_providers.dart` verbatim — that helper is
+/// `lib/providers/needs_you_providers.dart` verbatim: that helper is
 /// library-private to its own file, so this is a second copy rather than a
 /// shared one. `ref.listen(..., fireImmediately: true)` hands its listener
 /// an `AsyncLoading` **value**, not `null`, so a gate written as
 /// `if (source == null) return` passes on the very first frame and a merge
-/// built out of `valueOrNull ?? const []` publishes `data([])` — an empty
-/// queue — before a single snapshot has landed, and forever after a
-/// `permission-denied`. This project has shipped that exact "0 is
+/// built out of `valueOrNull ?? const []` publishes `data([])`: an empty
+/// queue: before a single snapshot has landed, and forever after a
+/// `permission-denied`. We have shipped that exact "0 is
 /// indistinguishable from loading" bug more than once, so this waits for a
 /// real VALUE from every source, and surfaces the first error before
 /// waiting on any source still in flight.
@@ -67,28 +80,28 @@ AsyncValue<bool>? _queueGate(List<AsyncValue<Object?>?> sources) {
 /// defence, has uploaded its manuscript, and is not yet in the archive.
 ///
 /// A three-way live fan-in over [allThesesProvider], [allDefencesProvider]
-/// and [archiveProvider] — one `ref.listen(fireImmediately: true)`
+/// and [archiveProvider]: one `ref.listen(fireImmediately: true)`
 /// subscription per source, gated by [_queueGate], following the shape
 /// proven in `facultyNeedsYouProvider`
-/// (`lib/providers/needs_you_providers.dart`). Do NOT collapse this into an
+/// (`lib/providers/needs_you_providers.dart`). Do not collapse this into an
 /// `await for` over one stream with `.first` read against the others: that
 /// shape only advances when the FIRST stream emits, so a change touching
-/// only a later source — a manuscript upload, or a retraction — would never
-/// arrive. This project has shipped that exact bug once already.
+/// only a later source (a manuscript upload, or a retraction) would never
+/// arrive. We have shipped that exact bug once already.
 ///
 /// "Not yet in the archive" is read off [archiveProvider] itself, the third
-/// fan-in source, rather than off `thesis.status == archived` — the archive
+/// fan-in source, rather than off `thesis.status == archived`: the archive
 /// collection is the literal record of what has been published, and
 /// [ArchiveRepository.publish] writes both in the same batch, so the two
 /// can never disagree.
 ///
-/// Deliberately does NOT `ref.watch(signedInUidProvider)` the way
-/// [archiveProvider] and [allThesesProvider] each do -- that convention is
+/// Deliberately does not `ref.watch(signedInUidProvider)` the way
+/// [archiveProvider] and [allThesesProvider] each do: that convention is
 /// for a single-source `StreamProvider` that reads the uid (or needs a
 /// rebuild edge because its OWN query is user-scoped). A fan-in has no such
 /// need of its own: [coordinatorNeedsYouProvider] and [deanNeedsYouProvider]
 /// (`lib/providers/needs_you_providers.dart`) are the same shape as this
-/// provider and do not watch it either -- user-scoping already lives on the
+/// provider and do not watch it either: user-scoping already lives on the
 /// three sources themselves, and this provider inherits it transitively
 /// through the `ref.listen` subscriptions below the moment any of them
 /// rebuilds. Adding a redundant watch here would only add a second,
@@ -101,7 +114,7 @@ final archiveQueueProvider = StreamProvider<List<Thesis>>((ref) {
   AsyncValue<List<ArchiveEntry>>? archive;
 
   void emit() {
-    // Wait for a real VALUE from each source before emitting -- not merely
+    // Wait for a real VALUE from each source before emitting, not merely
     // for a non-null AsyncValue, which `fireImmediately` supplies on frame
     // one. See [_queueGate].
     final gate = _queueGate([theses, defences, archive]);
@@ -111,12 +124,10 @@ final archiveQueueProvider = StreamProvider<List<Thesis>>((ref) {
       return;
     }
 
-    final archivedIds = {
-      for (final e in archive!.requireValue) e.thesisId,
-    };
+    final archivedIds = {for (final e in archive!.requireValue) e.thesisId};
 
     // A thesis "passed a final defence" if ANY of its final defences carries
-    // a Pass verdict -- there is at most one that matters in practice (a
+    // a Pass verdict: there is at most one that matters in practice (a
     // thesis is archived and leaves the queue the moment its manuscript
     // lands), but nothing here assumes exactly one final defence exists.
     final passedFinalThesisIds = {
@@ -136,32 +147,20 @@ final archiveQueueProvider = StreamProvider<List<Thesis>>((ref) {
     controller.add(queue);
   }
 
-  ref.listen<AsyncValue<List<Thesis>>>(
-    allThesesProvider,
-    (previous, next) {
-      theses = next;
-      emit();
-    },
-    fireImmediately: true,
-  );
+  ref.listen<AsyncValue<List<Thesis>>>(allThesesProvider, (previous, next) {
+    theses = next;
+    emit();
+  }, fireImmediately: true);
 
-  ref.listen<AsyncValue<List<Defence>>>(
-    allDefencesProvider,
-    (previous, next) {
-      defences = next;
-      emit();
-    },
-    fireImmediately: true,
-  );
+  ref.listen<AsyncValue<List<Defence>>>(allDefencesProvider, (previous, next) {
+    defences = next;
+    emit();
+  }, fireImmediately: true);
 
-  ref.listen<AsyncValue<List<ArchiveEntry>>>(
-    archiveProvider,
-    (previous, next) {
-      archive = next;
-      emit();
-    },
-    fireImmediately: true,
-  );
+  ref.listen<AsyncValue<List<ArchiveEntry>>>(archiveProvider, (previous, next) {
+    archive = next;
+    emit();
+  }, fireImmediately: true);
 
   ref.onDispose(controller.close);
 

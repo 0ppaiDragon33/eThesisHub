@@ -34,7 +34,7 @@ service cloud.firestore {
     // though every get and every write was closed. These arms use this
     // instead of bare signedIn(), which closes the asymmetry.
     //
-    // NOT used by the users self-read or the registration create arm — those
+    // not used by the users self-read or the registration create arm: those
     // stay on bare signedIn() so a deactivated account can still read its own
     // doc and discover why everything else refuses it.
     function activeUser() {
@@ -52,14 +52,14 @@ service cloud.firestore {
     // One read, two checks.
     //
     // These used to call myRole() (a get) and then isActive() (an exists
-    // plus a second get) — three document accesses' worth of expression tree
-    // for what is one document. That matters because rules evaluate EVERY
+    // plus a second get): three document accesses' worth of expression tree
+    // for what is one document. That matters because rules evaluate every
     // arm of a match against a 1000-expression budget, not just until one
     // passes: the theses block has nine get()-backed update arms, and once
     // isActive() was folded into every named helper the budget ran out
     // before the later arms were reached. A legitimate write whose
     // authorising arm sat late was then refused with an evaluation-budget
-    // error rather than by any rule — a deny nothing in the file asked for.
+    // error rather than by any rule: a deny nothing in the file asked for.
     //
     // The exists() guard is not needed here the way it is in verified():
     // reading `.role` already requires the document, so a caller with no
@@ -167,14 +167,14 @@ service cloud.firestore {
       // invitee applying an invite the coordinator issued, and coordinators
       // can never invite themselves (see facultyInvites `create`/`update`
       // below). The beneficiary of an elevation can never remove its
-      // facultyInvites record (only mark it consumed) — but coordinators can
+      // facultyInvites record (only mark it consumed), but coordinators can
       // delete or overwrite invites, so this is not a permanent guarantee.
       //
       // `nominableAsAdviser` and `nominableAsPanelist` are designation: set
       // from the Users screen to mark an account eligible to be nominated as
       // an adviser, a panelist, both, or neither. They ride the same
       // `onlyChanged` list as the rest of this arm, so a write touching
-      // `role` alongside them still fails the whole update — `role` remains
+      // `role` alongside them still fails the whole update: `role` remains
       // unwritable here no matter what else is in the payload.
       allow update: if isCoordinator()
                     && request.auth.uid != uid
@@ -184,7 +184,7 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // Personal form copies (editable forms, spec 2026-09-24). One person's
+      // Personal form copies (editable forms). One person's
       // working copies: readable and writable by that person alone. Not the
       // Dean, not a Coordinator; these are not thesis records. Outside the
       // theses block, so none of this counts against its expression budget.
@@ -218,7 +218,7 @@ service cloud.firestore {
         allow delete: if mine();
       }
 
-      // My files: folders (spec 2026-09-24 §6). One level; the owner's alone,
+      // My files: folders. One level; the owner's alone,
       // like form copies.
       match /folders/{folderId} {
         function mine() {
@@ -301,7 +301,7 @@ service cloud.firestore {
       allow list: if isCoordinator();
 
       // Coordinators issue invites, but never to themselves, and only for a
-      // real role — this is what closes off the self-invite escalation path.
+      // real role: this is what closes off the self-invite escalation path.
       //
       // `college` and `specialization` ride along on the invite and are
       // applied to the account at promotion, because nothing else in the app
@@ -309,7 +309,7 @@ service cloud.firestore {
       //
       // The key whitelist is what stops a coordinator planting anything else
       // here. Without it this create was unbounded, the same gap the thesis
-      // create rule had — and an invite document is read during promotion,
+      // create rule had, and an invite document is read during promotion,
       // so junk planted here reaches a privilege decision.
       allow create, update: if isCoordinator()
                             && email != myEmail()
@@ -322,7 +322,7 @@ service cloud.firestore {
                                request.auth.uid
                             // `.get(key, default)` so a caller that omits an
                             // optional field is accepted while one that
-                            // supplies it is held to the pinned value —
+                            // supplies it is held to the pinned value,
                             // absence and the correct value are equivalent,
                             // a wrong value is not. A backdated `createdAt`
                             // or an invite that arrives pre-consumed are both
@@ -340,7 +340,7 @@ service cloud.firestore {
                     && request.resource.data.consumedAt == request.time;
 
       // Only coordinators may delete invites (e.g. to retract an unclaimed
-      // one). The invitee can never delete their own — see the consume-only
+      // one). The invitee can never delete their own: see the consume-only
       // branch above.
       allow delete: if isCoordinator();
     }
@@ -358,8 +358,8 @@ service cloud.firestore {
                     // namespaced pattern (`domain.event`) keeps it
                     // structured and queryable and caps its size, without
                     // hardcoding the exact set: an exact enum would refuse
-                    // every action added later — the same permission-denied
-                    // trap this file has been bitten by — so any new action
+                    // every action added later: the same permission-denied
+                    // trap this file has been bitten by, so any new action
                     // just has to follow the `lowercase.lowercase` shape.
                     && request.resource.data.action is string
                     && request.resource.data.action.size() <= 64
@@ -404,10 +404,10 @@ service cloud.firestore {
     }
 
     // Post-commit view of the same request, used only to pin the dean's
-    // thesis-field write to the SAME atomic batch that also lands the
+    // thesis-field write to the same atomic batch that also lands the
     // request's dean sign-off. `get()` (above) reads pre-commit state, so it
     // reads identically whether the sibling changeRequests write is present
-    // in this commit or not -- it cannot by itself tell a standalone thesis
+    // in this commit or not: it cannot by itself tell a standalone thesis
     // write apart from the batched one. `getAfter()` reads the state the
     // sibling document will have once every write in this commit lands, so
     // it is only 'approved' when this commit's OWN changeRequests write
@@ -419,7 +419,7 @@ service cloud.firestore {
     match /theses/{thesisId} {
       // Finding (h): a nominee who has been asked for their Conforme needs
       // the thesis title in their inbox, and `respondToNomination` reads the
-      // thesis inside its transaction — neither worked before, because a
+      // thesis inside its transaction: neither worked before, because a
       // pending nominee is not yet on `panelistUids` (that array is only
       // filled at dean approval). The thesis document is bound once with
       // `let` so the leader/adviser/panel checks share a single read.
@@ -436,13 +436,13 @@ service cloud.firestore {
       allow get: if mayReadThesis() || isCoordinator() || isDean();
 
       // Finding (b): `watchThesisForLeader` queries
-      // `where('leaderUid', == , uid)`, which is a `list`, not a `get` — the
+      // `where('leaderUid', == , uid)`, which is a `list`, not a `get`: the
       // student dashboard was denied outright. The leader arm is evaluated
       // per returned document and is checked first so a student never pays
       // for the `users` read that isCoordinator()/isDean() cost.
-      // Finding (b) gave the leader arm. M2 adds the adviser arm: an
+      // Finding (b) gave the leader arm. Chapters adds the adviser arm: an
       // adviser must be able to find the theses whose chapters they review.
-      // Narrow by construction -- the arm is evaluated per returned
+      // Narrow by construction: the arm is evaluated per returned
       // document, so it can only ever return theses naming this adviser.
       allow list: if (activeUser() && resource.data.leaderUid == request.auth.uid)
                   || (activeUser() && resource.data.adviserUid == request.auth.uid)
@@ -453,7 +453,7 @@ service cloud.firestore {
       //
       // Finding (d): without `hasOnly` a leader could smuggle in
       // `deanApprovedBy`, a client-chosen `createdAt`, or arbitrary junk at
-      // creation time — the update branches below only police the fields
+      // creation time: the update branches below only police the fields
       // they name, so anything planted at create survived untouched. Every
       // approval-track field is therefore pinned to its empty value here.
       //
@@ -517,7 +517,7 @@ service cloud.firestore {
       //
       // Finding (e): the branch also had no *current*-status floor, so a
       // leader could still rewrite `workingTitle` and `memberNames` on a
-      // thesis the dean had already approved — the approved record could
+      // thesis the dean had already approved: the approved record could
       // drift away from what was signed. The thesis is now frozen to the
       // leader the moment it leaves `draft`; the only write left to them is
       // the single submit step below.
@@ -533,11 +533,11 @@ service cloud.firestore {
       // WARNING TO WHOEVER ADDS THE NEXT ARM HERE.
       //
       // This block is close to the rules engine's 1000-expression budget.
-      // Rules evaluate arms in ORDER and do not stop at a budget overrun --
+      // Rules evaluate arms in ORDER and do not stop at a budget overrun,
       // they simply stop evaluating, and every arm past that point counts as
       // false. A new arm appended to the bottom can therefore be dead on
       // arrival: not denied by any rule, just never reached. That is not
-      // hypothetical -- the reopen arm below was written last, sat last, and
+      // hypothetical: the reopen arm below was written last, sat last, and
       // was refused with an evaluation-budget error until it was moved here.
       //
       // So: put cheap arms first, and after adding one, check the emulator
@@ -561,7 +561,7 @@ service cloud.firestore {
       // longer on it, without which the replaced decliner's document would
       // stall the thesis again immediately).
       //
-      // Rules cannot verify the thesis is ACTUALLY stalled -- that needs a
+      // Rules cannot verify the thesis is ACTUALLY stalled: that needs a
       // query over the nominations subcollection, and rules have no queries.
       // So this authorises the transition, not the diagnosis: a coordinator
       // may return any pending-Conforme thesis to draft. That is a legitimate
@@ -629,16 +629,16 @@ service cloud.firestore {
                     && request.resource.data.get('nominationsSubmittedAt',
                          request.time) == request.time;
 
-      // Leader arm 2 -- THE FINAL MANUSCRIPT.
+      // Leader arm 2: THE FINAL MANUSCRIPT.
       //
       // A separate arm because the arm above freezes the thesis to the
       // leader the moment it leaves 'draft', and this write happens right
       // at the end of the process, long after that.
       //
-      // NOT gated on a passed final defence, and it cannot be: a thesis
+      // not gated on a passed final defence, and it cannot be: a thesis
       // does not know its own defence id, and rules cannot query. Gating
       // would mean denormalizing that id onto the thesis to prevent
-      // something harmless -- the file sits on the group's own thesis,
+      // something harmless: the file sits on the group's own thesis,
       // readable by exactly the people who could already read everything
       // there. PUBLISHING is the act that matters, and `match /archive`
       // gates that properly. The upload button is hidden until the Pass is
@@ -658,13 +658,13 @@ service cloud.firestore {
                     && request.resource.data.manuscriptUploadedAt
                        == request.time;
 
-      // Coordinator arm -- ARCHIVE.
+      // Coordinator arm: ARCHIVE.
       //
       // The terminal state. Forward-only and once: `resource.data.status ==
       // 'titleApproved'` refuses both a second archiving and any route back
       // out of it.
       //
-      // This is one of TWO writes the archiving action makes -- the other
+      // This is one of TWO writes the archiving action makes: the other
       // creates `archive/{thesisId}`. Rules evaluate each write in a batch
       // independently, so neither can require the other; the client sends
       // them as one batch, and a partial result is possible only if the
@@ -675,18 +675,18 @@ service cloud.firestore {
                     && onlyChanged(['status'])
                     && request.resource.data.status == 'archived';
 
-      // Coordinator arm -- RETRACTION.
+      // Coordinator arm: RETRACTION.
       //
       // The exact inverse of the arm above, and the reason 'archived' is
-      // not a one-way door after all. D57 says a thesis published in error
+      // not a one-way door after all. The spec says a thesis published in error
       // must be RETRACTABLE; deleting archive/{thesisId} alone does not
-      // retract it, it STRANDS it -- the thesis would sit at 'archived'
+      // retract it, it STRANDS it: the thesis would sit at 'archived'
       // forever: out of the archive, back in the coordinator's queue,
       // unpublishable (the arm above pins 'titleApproved'), and with the
       // leader's "Replace manuscript" dead too, because the manuscript arm
       // pins 'titleApproved' as well.
       //
-      // So a retraction genuinely UNDOES a publication -- it puts the
+      // So a retraction genuinely UNDOES a publication: it puts the
       // thesis back exactly where publishing found it. Same
       // onlyChanged(['status']) discipline as its mirror, so nothing else
       // can ride along, and only the coordinator, the one role permitted
@@ -700,7 +700,7 @@ service cloud.firestore {
                     && onlyChanged(['status'])
                     && request.resource.data.status == 'titleApproved';
 
-      // A nominee's acceptance advances the status — but ONLY the caller's
+      // A nominee's acceptance advances the status, but only the caller's
       // own nomination on THIS thesis, and only forward from the exact
       // stage that acceptance belongs to. Ruling 2: the plan's original form
       // (`verified() && onlyChanged(['status']) && ... == 'nominationPendingCoordinator'`)
@@ -710,18 +710,18 @@ service cloud.firestore {
       // can never be replayed to walk a thesis backwards from a later stage.
       //
       // Finding (a): mere existence of a nomination was too weak. Two people
-      // who must never advance a thesis both hold one — a nominee who has
+      // who must never advance a thesis both hold one: a nominee who has
       // *declined* (`conformeStatus: 'declined'`), and the Dean or any
-      // Research Coordinator, who sit ex officio on EVERY thesis
+      // Research Coordinator, who sit ex officio on every thesis
       // (`conformeStatus: 'exOfficio'`) and were never asked. Both were
       // proven able to advance. The caller's own seat must now be one that
       // was genuinely asked for a Conforme and has not refused.
       //
-      // LIMITATION — this pins the seat, not the answer. The intended check
+      // LIMITATION: this pins the seat, not the answer. The intended check
       // is `== 'accepted'`, and it cannot be expressed while the client
       // advances atomically. `respondToNomination` writes the acceptance and
       // the status flip in ONE transaction, and rules evaluate every write
-      // in a transaction against the state BEFORE it: the caller's own
+      // in a transaction against the state before it: the caller's own
       // nomination still reads `pending` at evaluation time, so `==
       // 'accepted'` denies the legitimate flow outright. Verified against
       // the emulator (probe: transaction accept+advance under an
@@ -732,7 +732,7 @@ service cloud.firestore {
       // lost. `'pending'` is therefore accepted here and the residual gap is
       // narrow: the caller must still hold a real, asked, unrefused seat on
       // THIS thesis. Rules cannot check the OTHER nominees' answers under any
-      // formulation (no array/collection iteration) — that quorum check lives
+      // formulation (no array/collection iteration): that quorum check lives
       // in `respondToNomination`'s transaction and is not expressible here.
       allow update: if verified()
                     && hasNomination(thesisId, request.auth.uid)
@@ -794,7 +794,7 @@ service cloud.firestore {
                        .conformeStatus == 'accepted';
 
       // ---------------------------------------------------------------
-      // M1b — the title defence.
+      // the title defence.
       // ---------------------------------------------------------------
 
       // The leader submits the candidate titles: this is the write that moves
@@ -810,7 +810,7 @@ service cloud.firestore {
       // `FieldValue.serverTimestamp()`, so pinning costs nothing and makes
       // the date unforgeable.
       //
-      // `titleRound` is NOT constrained. It is written by the same batch that
+      // `titleRound` is not constrained. It is written by the same batch that
       // creates the candidates, and rules cannot count the candidates that
       // batch creates; it is a history field the client derives, not a
       // privilege one. See the limitation note in the report.
@@ -829,7 +829,7 @@ service cloud.firestore {
                     // same write that opens the new one. Without this the
                     // three fields survived the resubmission, `titleDecided()`
                     // stayed true forever, and from round 2 onward the leader
-                    // read the panel's remarks live, mid-defence — the one
+                    // read the panel's remarks live, mid-defence: the one
                     // guarantee this milestone exists to keep. Pinned to null
                     // rather than merely permitted: widening `onlyChanged`
                     // alone would let a leader FORGE a decision (set
@@ -860,7 +860,7 @@ service cloud.firestore {
                                        'titleDecidedAt', 'titleDecidedBy'])
                        // The rules cannot iterate the candidate collection, so
                        // the approved candidate is checked for existence on
-                       // this thesis but its `round` is not verified — see the
+                       // this thesis but its `round` is not verified: see the
                        // limitation in the report.
                        && candidateTitleExists(thesisId,
                             request.resource.data.approvedTitleId)
@@ -884,8 +884,8 @@ service cloud.firestore {
 
       // The other half of the Dean's change-request approval batch (spec
       // 2026-09-25 §7). The dean may set the new adviser or the new title on
-      // a titleApproved thesis, but ONLY while a matching request sits at
-      // `pendingDean` naming this exact value — so the change cannot be made
+      // a titleApproved thesis, but only while a matching request sits at
+      // `pendingDean` naming this exact value, so the change cannot be made
       // except by approving a request that ran the whole chain.
       allow update: if verified()
                     && isDean()
@@ -897,7 +897,7 @@ service cloud.firestore {
                        && changeRequestAt(thesisId, 'adviser').newAdviserUid
                           == request.resource.data.adviserUid
                        // Pins this write to the same commit as the request's
-                       // dean sign-off -- see changeRequestAfter().
+                       // dean sign-off: see changeRequestAfter().
                        && changeRequestAfter(thesisId, 'adviser').stage
                           == 'approved'
                        && changeRequestAfter(thesisId, 'adviser')
@@ -921,7 +921,7 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // Change of adviser / title (spec 2026-09-25). One document per kind,
+      // Change of adviser / title. One document per kind,
       // id == the type, so a thesis holds at most one of each. The leader
       // creates it; the named advisers, then the coordinator, then the dean
       // sign off; the dean's approval batch also changes the thesis.
@@ -932,7 +932,7 @@ service cloud.firestore {
 
         // Post-commit view of the thesis, symmetric with the thesis-side
         // `changeRequestAfter`: pins the dean's accept-to-`approved` write to
-        // the SAME atomic commit that also lands the thesis-field change, so
+        // the same atomic commit that also lands the thesis-field change, so
         // a request-only "approve" (no thesis write) is denied while the
         // real batch (both documents) still passes.
         function thesisAfter() {
@@ -941,11 +941,11 @@ service cloud.firestore {
 
         // Every reader who has business seeing the request. The
         // `awaitingUids` arm authorises the faculty inbox's collection-group
-        // `arrayContains` query (spec 2026-09-25 fix round 2, Fix 1): in a
+        // `arrayContains` query: in a
         // collection-group list the {thesisId} wildcard is unbound, so
         // `t().adviserUid` can't be evaluated to filter that query the way
         // the nominations collection-group rule leans on a document-id
-        // wildcard -- awaitingUids is denormalized onto the request itself
+        // wildcard: awaitingUids is denormalized onto the request itself
         // for exactly that reason. It is READ authorization only; who may
         // WRITE a sign-off is still gated below by exact uid / role, never
         // by this field.
@@ -959,7 +959,7 @@ service cloud.firestore {
                               request.auth.uid in req().get('awaitingUids', [])));
 
         // The leader writes a fresh first-pending request: the first create
-        // (no document — the create rule), or a reset of a returned/approved
+        // (no document: the create rule), or a reset of a returned/approved
         // one (an update). Both are the same shape, so both arms share it.
         function isFreshRequest() {
           let d = incoming();
@@ -1013,7 +1013,7 @@ service cloud.firestore {
         // `isCoordinator()`, `isDean()`).
 
         // Every role OTHER than `role` must be untouched, so a signer cannot
-        // pre-set a later approver's sign-off in the same write -- and, per
+        // pre-set a later approver's sign-off in the same write, and, per
         // Fix 3, cannot scribble that role's `reason` or `respondedAt`
         // either. Rules cannot iterate the map, so each role is named. A
         // role `r` is "kept" when it is not `role` and its incoming sub-map
@@ -1095,8 +1095,8 @@ service cloud.firestore {
           ||
           // --- dean: half of the approval batch, or a return ---
           // The accept-to-`approved` path additionally requires (via
-          // thesisAfter(), i.e. getAfter() on the thesis) that THIS SAME
-          // commit also lands the matching thesis-field change -- otherwise
+          // thesisAfter(), i.e. getAfter() on the thesis) that THIS same
+          // commit also lands the matching thesis-field change, otherwise
           // the dean could approve the request while leaving the thesis
           // stale. The decline/return path carries no such requirement.
           (req().stage == 'pendingDean' && isDean()
@@ -1120,7 +1120,7 @@ service cloud.firestore {
         // one predicate; the thesis document and the nominee's role are each
         // bound once with `let`, so the whole check costs two reads.
         //
-        // Critical 1 — `exOfficio` was student-controlled. The old rule
+        // Critical 1: `exOfficio` was student-controlled. The old rule
         // pinned `true` + `'exOfficio'` as a legal PAIR but never asked
         // whether the nominee holds an office, so a leader could write any
         // faculty member as `exOfficio: true` and that adviser or panelist
@@ -1133,13 +1133,13 @@ service cloud.firestore {
         // The role is read from `users/{nomineeUid}` rather than from
         // `facultyDirectory/{nomineeUid}`: the directory is a client-written
         // mirror maintained by its own subject at sign-in (see below), so
-        // trusting it here would make ex-officio status self-declarable —
+        // trusting it here would make ex-officio status self-declarable,
         // exactly the amplification finding (g) describes. `users.role` is
         // the single source of truth, is writable only via the invite flow,
         // and exists for every account, whereas a directory entry only
         // appears after that faculty member's first sign-in.
         //
-        // Critical 2 — nothing required the nominee to be anyone other than
+        // Critical 2: nothing required the nominee to be anyone other than
         // the leader themselves. A student nominated their OWN uid as
         // ex officio, flipped the thesis to nominationPendingConforme, then
         // satisfied the advance rule with their own nomination doc and
@@ -1152,13 +1152,13 @@ service cloud.firestore {
         // the collection-group read rule authorises on the id; if they could
         // disagree, one nominee's seat could be filed under another's query.
         //
-        // Designation — a coordinator marks, per account, whether it may be
+        // Designation: a coordinator marks, per account, whether it may be
         // nominated as adviser and/or as panelist. Like the role above, this
         // is read from `users/{nomineeUid}` rather than `facultyDirectory`:
         // the directory is that same client-written, self-maintained mirror,
         // so trusting it would make designation self-declarable too. The
         // field defaults to `true` on absence because every account that
-        // predates this milestone has neither field set — reading absence as
+        // predates this milestone has neither field set: reading absence as
         // "not nominable" would silently lock out the entire existing
         // faculty. This is confined to the non-ex-officio branch: an
         // ex-officio seat is conferred by office, not by a coordinator's
@@ -1177,7 +1177,7 @@ service cloud.firestore {
           return signedIn()
                  && isActive()
                  && t.leaderUid == request.auth.uid
-                 // Critical 3 — see the `delete` rule below.
+                 // Critical 3: see the `delete` rule below.
                  && t.status == 'draft'
                  && nomineeUid != request.auth.uid
                  && role in ['faculty', 'coordinator', 'dean']
@@ -1192,13 +1192,13 @@ service cloud.firestore {
                     );
         }
 
-        // C1 — the Conforme stage was denied for every real faculty user.
+        // C1: the Conforme stage was denied for every real faculty user.
         //
         // A nominee must be able to read their CO-nominees, not only their own
         // seat. `ThesisRepository.respondToNomination` cannot decide whether
         // the acceptance it is about to write is the LAST outstanding one
         // without seeing every sibling nomination on this thesis, and that
-        // quorum check is not expressible in rules (no collection iteration —
+        // quorum check is not expressible in rules (no collection iteration,
         // see the LIMITATION note on the advance rule above). So the client
         // lists `theses/{id}/nominations` and then `tx.get`s each document.
         //
@@ -1211,22 +1211,22 @@ service cloud.firestore {
         // Accept, saw "Could not record your response.", and no thesis could
         // ever leave `nominationPendingConforme`.
         //
-        // SCOPE — this cannot be used to enumerate other theses.
+        // SCOPE: this cannot be used to enumerate other theses.
         // `hasNomination()` is evaluated against `thesisId`, the wildcard of
         // the ENCLOSING `match /theses/{thesisId}`, which is bound for every
         // `get`/`list` addressed at `theses/{thesisId}/nominations`. The
         // caller therefore reaches exactly the nominations of a thesis they
         // themselves hold a seat on, and holding that seat is not something
-        // they can grant themselves — only the leader creates nominations, and
+        // they can grant themselves, only the leader creates nominations, and
         // only while the thesis is still `draft` (`mayCreateNomination()`).
         // Cross-thesis reads are a different match block entirely
         // (`/{path=**}/nominations/{nomineeUid}` at the bottom of this file),
         // which is untouched and still admits only
-        // `resource.data.nomineeUid == request.auth.uid` — so the faculty
+        // `resource.data.nomineeUid == request.auth.uid`, so the faculty
         // inbox's collection-group query is still one nominee's own seats, and
         // an unfiltered scan of every nomination is still denied.
         //
-        // NOT gated on the caller's own seat being non-`declined`, deliberately:
+        // not gated on the caller's own seat being non-`declined`, deliberately:
         // - It would protect nothing. The roster is fixed the moment the
         //   thesis leaves `draft` (create and delete are both pinned to
         //   `draft`), so a nominee who declines has already lawfully read
@@ -1235,7 +1235,7 @@ service cloud.firestore {
         // - It would re-create C1 in miniature. The nomination `update` rule
         //   below accepts `conformeStatus in ['accepted', 'declined']` with no
         //   pin on the prior value, so a nominee who declined and then wants to
-        //   accept after all is permitted to WRITE that reversal — and the only
+        //   accept after all is permitted to WRITE that reversal, and the only
         //   client path to it, `respondToNomination`, opens with exactly this
         //   list. Denying the read while permitting the write is the precise
         //   shape of the defect this arm exists to close.
@@ -1262,7 +1262,7 @@ service cloud.firestore {
         //
         // Finding (f): `respondedAt` was unpinned and a probe backdated it.
         // It must now be either left exactly as it stands or set to
-        // `request.time` — which is what the client's
+        // `request.time`, which is what the client's
         // `FieldValue.serverTimestamp()` produces. The "unchanged" arm keeps
         // a caller that writes only `conformeStatus` working; it cannot be
         // used to plant a date, because the stored value it must match could
@@ -1277,25 +1277,25 @@ service cloud.firestore {
                       && (request.resource.data.respondedAt == request.time
                           || request.resource.data.respondedAt ==
                              resource.data.respondedAt)
-                      // Null on accept, a reason on decline — bound it either
+                      // Null on accept, a reason on decline: bound it either
                       // way so a decline cannot carry a megabyte.
                       && (request.resource.data.declineReason == null
                           || request.resource.data.declineReason.size() < 2000);
 
-        // Critical 3 — decline laundering. The leader correctly could not
+        // Critical 3: decline laundering. The leader correctly could not
         // UPDATE a declined nomination, but could delete it and re-create
         // the same uid as `exOfficio: true`, erasing the refusal; the same
         // move reset any `pending` seat that was taking too long to answer.
         // Both `create` (above) and `delete` are therefore confined to a
-        // thesis that is still `draft` — once nominations have gone out, the
+        // thesis that is still `draft`: once nominations have gone out, the
         // roster is fixed and only the nominees themselves can write to it.
         //
         // INTENTIONAL: this makes the `declined` arm below unreachable in
         // practice, because declines only happen at
         // nominationPendingConforme. That is deliberate. A re-nomination
-        // flow is planned and will need this reopened — but it must be
+        // flow is planned and will need this reopened, but it must be
         // reopened with its own guard (an audit record, a status the leader
-        // cannot reach unilaterally, or coordinator approval), NOT by simply
+        // cannot reach unilaterally, or coordinator approval), not by simply
         // dropping the `draft` pin, which is what made laundering possible.
         allow delete: if isThesisLeader(thesisId)
                       && thesisData(thesisId).status == 'draft'
@@ -1315,8 +1315,8 @@ service cloud.firestore {
       // beside the official form, which the app still builds from the
       // request. One document per form, written in the same batch as the
       // request it goes with:
-      //   form1  -- the nomination; written while the thesis is a draft.
-      //   form4a -- a change of adviser, form4b -- a change of title;
+      //   form1: the nomination; written while the thesis is a draft.
+      //   form4a (a change of adviser, form4b) a change of title;
       //             written while the thesis is titleApproved, alongside a
       //             pending changeRequests/adviser (or /title) in that batch.
       match /attachments/{attachmentId} {
@@ -1378,7 +1378,7 @@ service cloud.firestore {
       }
 
       // A panel member on this thesis: the adviser, anyone on panelistUids,
-      // or anyone holding an accepted/ex-officio nomination — which covers
+      // or anyone holding an accepted/ex-officio nomination, which covers
       // the ex officio Coordinator and Dean, who never appear in
       // panelistUids and whose `conformeStatus` is permanently `exOfficio`
       // because they are never asked to accept.
@@ -1386,7 +1386,7 @@ service cloud.firestore {
       // Gated on `conformeStatus`: a nomination document can outlive a
       // decline (it cannot be deleted once the thesis leaves `draft`), so
       // checking mere existence via `hasNomination()` let a nominee who
-      // explicitly declined keep panel access — reading titleComments,
+      // explicitly declined keep panel access: reading titleComments,
       // reading titleComposing, and posting comments into the official
       // record. `nominationData()` is reused here (rather than a second
       // `get()`) because each `get()` counts against the per-evaluation
@@ -1404,7 +1404,7 @@ service cloud.firestore {
 
       // `.get(key, default)` rather than a bare read: a thesis that has never
       // reached a decision has no `titleDecidedAt` key at all, and a bare
-      // read of a missing key errors, which denies — including for the panel
+      // read of a missing key errors, which denies: including for the panel
       // arms that never needed this check.
       function titleDecided() {
         return thesisData(thesisId).get('titleDecidedAt', null) != null;
@@ -1415,15 +1415,15 @@ service cloud.firestore {
                          || isCoordinator() || isDean();
 
         // Only while the thesis is at a status that permits a submission.
-        // Batched writes are evaluated against the state BEFORE the batch, so
+        // Batched writes are evaluated against the state before the batch, so
         // the thesis is still `nominationApproved` (or `titleRejected`) here
         // even though the same batch moves it to `titlePendingDefence`.
-        // Probed against the emulator rather than assumed — see the two-sided
+        // Probed against the emulator rather than assumed: see the two-sided
         // "batch evaluation order" test in rules.test.js, which shows the
         // batched form allowed and the same two writes issued SEQUENTIALLY
         // denied, because by then the status has already moved.
         //
-        // `round` is deliberately NOT validated: for the same reason, it
+        // `round` is deliberately not validated: for the same reason, it
         // would be compared against the previous round. It is a history
         // field, not a security one.
         allow create: if verified()
@@ -1449,7 +1449,7 @@ service cloud.firestore {
 
       match /titleComments/{commentId} {
         // The panel reads at any time. The leader reads only once the Dean
-        // has recorded a decision — during the defence the students are in
+        // has recorded a decision: during the defence the students are in
         // the room presenting, and the remarks are not theirs to watch.
         allow get, list: if isOnPanel() || isCoordinator() || isDean()
                          || (isThesisLeader(thesisId) && titleDecided());
@@ -1458,8 +1458,14 @@ service cloud.firestore {
         // the `authorUid` pin a panelist could file a comment under the
         // Dean's uid, and the student reads the author on every remark after
         // the decision.
+        //
+        // And only until the Dean decides: once a title is approved (or the
+        // set is returned) the thread is a record and nobody may add to it.
+        // The decision clears again when the group submits a new round, so
+        // the next round's remarks are open.
         allow create: if verified()
                       && isOnPanel()
+                      && !titleDecided()
                       && request.resource.data.authorUid == request.auth.uid
                       && request.resource.data.keys().hasOnly(
                            ['candidateTitleId', 'authorUid', 'authorName',
@@ -1475,17 +1481,20 @@ service cloud.firestore {
       }
 
       match /titleComposing/{uid} {
-        // Faculty only. The leader must NEVER see who is typing — not before
+        // Faculty only. The leader must never see who is typing, not before
         // the decision and not after it. The comments themselves are hidden
         // from them until the decision, and an indicator would leak both that
         // remarks exist and who is writing them.
         allow get, list: if isOnPanel() || isCoordinator() || isDean();
 
         // Your own marker only, so nobody can plant an indicator for someone
-        // else or clear one they do not own. The document id IS the uid, which
+        // else or clear one they do not own. The document id is the uid, which
         // is what makes that check possible.
+        // Not after the decision either: nobody is writing a remark that
+        // can no longer be posted.
         allow create, update: if verified()
                               && isOnPanel()
+                              && !titleDecided()
                               && uid == request.auth.uid
                               && request.resource.data.keys().hasOnly(
                                    ['name', 'role', 'candidateTitleId',
@@ -1503,15 +1512,22 @@ service cloud.firestore {
         return signedIn() && isActive() && thesisData(thesisId).adviserUid == request.auth.uid;
       }
 
+      // A group uploads ONE manuscript: Chapters I-III before its pre-oral
+      // (`manuscriptProposal`), the whole of I-V after it
+      // (`manuscriptFinal`). The five per-chapter ids are what groups
+      // uploaded before manuscripts existed; they stay writable so a thesis
+      // part-way through is not stranded, and every record under them still
+      // reads.
       function chapterIds() {
         return ['chapterI', 'chapterII', 'chapterIII', 'chapterIV',
-                'chapterV'];
+                'chapterV', 'manuscriptProposal', 'manuscriptFinal'];
       }
 
-      // Chapters IV and V (results, conclusions) are written after the
-      // panel passes the group's pre-oral. Their record names that defence
-      // (`preOralDefenceId`); it must be this thesis's pre-oral, re-defence
-      // or not, with a Pass verdict. Chapters I-III need nothing of the kind.
+      // The full manuscript (and the old Chapters IV and V: results,
+      // conclusions) is written after the panel passes the group's
+      // pre-oral. Its record names that defence (`preOralDefenceId`); it
+      // must be this thesis's pre-oral, re-defence or not, with a Pass
+      // verdict. The Chapters I-III manuscript needs nothing of the kind.
       function passedPreOral(defenceId) {
         let d = get(/databases/$(database)/documents/defenses/$(defenceId)).data;
         return d.thesisId == thesisId
@@ -1519,7 +1535,7 @@ service cloud.firestore {
             && d.get('panelVerdict', null) == 'pass';
       }
       function chapterGateOpen(chapterId) {
-        return !(chapterId in ['chapterIV', 'chapterV'])
+        return !(chapterId in ['chapterIV', 'chapterV', 'manuscriptFinal'])
             || (request.resource.data.get('preOralDefenceId', null) is string
                 && passedPreOral(request.resource.data.preOralDefenceId));
       }
@@ -1549,7 +1565,7 @@ service cloud.firestore {
         // perform the other's half, which is what makes the status
         // trustworthy without a server.
 
-        // Student: a new version. Blocked once approved -- only the adviser
+        // Student: a new version. Blocked once approved, only the adviser
         // reopens, so a group cannot swap an approved chapter unseen.
         allow update: if verified()
                       && isThesisLeader(thesisId)
@@ -1584,19 +1600,19 @@ service cloud.firestore {
 
         match /versions/{versionNo} {
           // The dean reads chapter files like the coordinator: they sit on
-          // defences and read the manuscript there (spec 2026-09-26 §8.1).
+          // defences and read the manuscript there.
           allow get, list: if isThesisLeader(thesisId) || isAdviser(thesisId)
                            || isOnPanel() || isCoordinator() || isDean();
 
-          // Written in the SAME batch as the parent's version bump, and a
-          // batch is evaluated against the state BEFORE it -- so the parent
+          // Written in the same batch as the parent's version bump, and a
+          // batch is evaluated against the state before it, so the parent
           // still reads its old currentVersion here. The rule is therefore
           // written as "+ 1", never "==". Probed in rules.test.js with a
           // two-sided test, not assumed.
           //
           // On a group's FIRST upload the chapter document does not exist
-          // yet at the time this rule evaluates (it is created in the SAME
-          // batch) -- get() on a nonexistent document returns a snapshot
+          // yet at the time this rule evaluates (it is created in the same
+          // batch): get() on a nonexistent document returns a snapshot
           // whose .data() is null, and `.data.currentVersion` on that
           // throws, denying the write outright. The existence branch below
           // is required, not optional: without it every group's first
@@ -1649,19 +1665,19 @@ service cloud.firestore {
       }
     }
 
-    // ---- M5a: the published archive ----
+    // ---- the published archive ----
     //
-    // A SEPARATE collection, not a view over `theses` (D48). `theses` has
-    // the tightest read rules in the app -- a thesis is visible to its
+    // A SEPARATE collection, not a view over `theses`. `theses` has
+    // the tightest read rules in the app: a thesis is visible to its
     // group, its adviser, its panel, the coordinator and the dean. Serving
     // the archive from there would mean widening that rule and running
     // every student's archive query as a `list` over every unarchived
     // thesis in the college. This collection cannot leak an unarchived
     // thesis, because unarchived theses are not in it.
     //
-    // Nothing pending lives here either (D53): a manuscript awaiting
+    // Nothing pending lives here either: a manuscript awaiting
     // publication sits on its own thesis. That is what lets the read rule
-    // below be a bare `signedIn()` -- a `list` evaluates its rule against
+    // below be a bare `signedIn()`: a `list` evaluates its rule against
     // every document returned, so one pending entry would fail a student's
     // whole query.
     match /archive/{thesisId} {
@@ -1701,22 +1717,22 @@ service cloud.firestore {
                     // write cannot guarantee it for this one.
                     && thesis().status == 'titleApproved'
                     // The published file must be the one the STUDENT
-                    // uploaded -- a coordinator cannot publish a
+                    // uploaded: a coordinator cannot publish a
                     // substitute.
                     && incoming().manuscriptUrl == thesis().manuscriptUrl
                     && incoming().manuscriptPath == thesis().manuscriptPath
-                    // D52. Rules cannot query, so the entry names the
+                    // Rules cannot query, so the entry names the
                     // defence and this verifies it is the right one: a
                     // FINAL defence, on THIS thesis, with a Pass.
                     && finalDefence().thesisId == thesisId
                     && finalDefence().type == 'final'
                     && finalDefence().panelVerdict == 'pass';
 
-      // D57. Display metadata only -- never the manuscript, never the
+      // Display metadata only, never the manuscript, never the
       // stamps. What "manage the archive" means when a permanent public
       // title has a typo in it.
       //
-      // NOT verified here: the title text and the names are copied by the
+      // not verified here: the title text and the names are copied by the
       // client and checked by nobody. Verifying them would need a get into
       // the titles subcollection and another into the directory, to defend
       // against a mistyped display string. These rules stop the wrong
@@ -1728,8 +1744,8 @@ service cloud.firestore {
                                  'adviserName', 'panelNames']);
 
       // A publication, not an audit record. If the wrong thesis is
-      // published -- someone else's work, made readable to the whole
-      // college -- it must be retractable. The honest cost is that a
+      // published: someone else's work, made readable to the whole
+      // college: it must be retractable. The honest cost is that a
       // retraction leaves no trace: `auditLogs` is named in the original
       // design and built nowhere.
       allow delete: if verified() && isCoordinator();
@@ -1745,7 +1761,7 @@ service cloud.firestore {
       // live cross-document read: `onThisDefence()` and the leader arm of
       // `allow list` would otherwise call `thesisOf()` once per document
       // evaluated, and Firestore caps the number of document accesses a
-      // single rule evaluation may make -- a `list` over many defences
+      // single rule evaluation may make: a `list` over many defences
       // would blow that budget.
       function defence() {
         return resource.data;
@@ -1753,11 +1769,17 @@ service cloud.firestore {
       function incoming() {
         return request.resource.data;
       }
+      // Who has recorded a submitted grade so far. Presence, never a
+      // sentinel: a defence that predates the field has no
+      // `submittedUids` at all, and must read as nobody having submitted.
+      function submittedBefore() {
+        return 'submittedUids' in defence() ? defence().submittedUids : [];
+      }
       function thesisOf(thesisId) {
         return get(/databases/$(database)/documents/theses/$(thesisId)).data;
       }
 
-      // A re-defence (spec 2026-09-25 §5): the same stage of the same thesis
+      // A re-defence: the same stage of the same thesis
       // again, after the panel's verdict on it was Fail. Stored at an id
       // derived from the failed defence, so a second one is an update, which
       // no update arm allows. `!('redefenceOf' in failed)` is the
@@ -1814,7 +1836,7 @@ service cloud.firestore {
                     && incoming().leaderUid
                        == thesisOf(incoming().thesisId).leaderUid;
 
-      // Coordinator arm 1 -- OPEN. Forward only, and not before the window.
+      // Coordinator arm 1: OPEN. Forward only, and not before the window.
       //
       // The 30 minutes is the same number as `defenceOpenGrace` in
       // lib/data/models/defence.dart, which cannot be imported here. If the
@@ -1833,7 +1855,7 @@ service cloud.firestore {
                     && request.time >= defence().scheduledAt
                                        - duration.value(30, 'm');
 
-      // Coordinator arm 2 -- CLOSE. No window: a defence ends when it ends.
+      // Coordinator arm 2: CLOSE. No window: a defence ends when it ends.
       allow update: if verified()
                     && isCoordinator()
                     && incoming().diff(defence()).affectedKeys()
@@ -1841,7 +1863,7 @@ service cloud.firestore {
                     && defence().status == 'inProgress'
                     && incoming().status == 'completed';
 
-      // Coordinator arm 3 -- CANCEL, for a defence created by mistake.
+      // Coordinator arm 3: CANCEL, for a defence created by mistake.
       // Only while it is still scheduled: one under way is closed instead,
       // so its log stays a record of what was said. Cancelled rather than
       // deleted, because the record is evidence.
@@ -1852,11 +1874,11 @@ service cloud.firestore {
                     && defence().status == 'scheduled'
                     && incoming().status == 'cancelled';
 
-      // Coordinator arm 4 -- EDIT the date, time or venue.
+      // Coordinator arm 4: EDIT the date, time or venue.
       //
       // Without this the schedule was frozen at creation: a coordinator who
       // picked the wrong day could neither fix it nor remove the defence,
-      // and the only way forward was opening it anyway. The status is NOT
+      // and the only way forward was opening it anyway. The status is not
       // in the key set, so an edit can never double as a transition.
       allow update: if verified()
                     && isCoordinator()
@@ -1877,31 +1899,72 @@ service cloud.firestore {
                        .hasOnly(['consolidatedAt'])
                     && incoming().consolidatedAt == request.time;
 
-      // Adviser arm 2 -- RELEASE the evaluations to the panel.
+      // Grader arm: RECORD that this grader has submitted their sheet.
+      //
+      // Firestore rules cannot count the documents in a collection, so
+      // "has everyone graded" cannot be asked of the evaluations
+      // themselves. Instead each grader's submit also adds their own uid
+      // to `submittedUids` on this document, in the same batch as their
+      // sheet, and the release arm below reads that list.
+      //
+      // The list cannot be forged, because this arm only lets a grader
+      // add THEIR OWN uid: the list grows by exactly one, that one is
+      // the caller, nothing already there is removed, and only when
+      // their evaluation exists once the batch lands (`existsAfter`). So
+      // a uid in the list always means a real, well-formed sheet by that
+      // person. The affectedKeys guard stops this doubling as a status
+      // change or a release, the discipline every arm here follows.
+      //
+      // The adviser never grades, so is refused here whatever else they
+      // hold. Closed once released, like the sheets themselves.
+      allow update: if verified()
+                    && request.auth.uid != defence().adviserUid
+                    && ((activeUser()
+                         && request.auth.uid in defence().panelUids)
+                        || isCoordinator() || isDean())
+                    && defence().status in ['inProgress', 'completed']
+                    && !('evaluationsReleasedAt' in defence())
+                    && incoming().diff(defence()).affectedKeys()
+                       .hasOnly(['submittedUids'])
+                    && incoming().submittedUids is list
+                    && !(request.auth.uid in submittedBefore())
+                    && request.auth.uid in incoming().submittedUids
+                    && incoming().submittedUids.hasAll(submittedBefore())
+                    && incoming().submittedUids.size()
+                       == submittedBefore().size() + 1
+                    && existsAfter(/databases/$(database)/documents/defenses/$(defenseId)/evaluations/$(request.auth.uid));
+
+      // Adviser arm 2: RELEASE the evaluations to the panel.
       //
       // §8b has the panel deliberate over the final grades, so they must
       // be able to see them: this is what opens the set. It is the same
-      // shape as the consolidation arm above, deliberately -- one pattern
+      // shape as the consolidation arm above, deliberately: one pattern
       // to learn rather than two.
       //
-      // NOT conditioned on "everyone has submitted": Firestore rules
-      // cannot count the documents in a collection, so that sentence is
-      // not expressible here. The adviser can release at 2 of 3. The
-      // grades screen therefore prints the count on the button itself, so
-      // an early release is a visible choice rather than an accident.
+      // Conditioned on "everyone has submitted", through `submittedUids`
+      // (see the grader arm above): every panelist is in the list, and
+      // the list holds the panel plus the Coordinator and the Dean. The
+      // `hasAll` is what a bare count could not say: two office holders
+      // and a stranger could reach the number with a panelist missing.
+      // A defence with no `submittedUids` has nobody recorded, so it
+      // cannot be released until its graders have saved their sheets.
       allow update: if verified()
                     && defence().adviserUid == request.auth.uid
                     && defence().status == 'completed'
                     && !('evaluationsReleasedAt' in defence())
+                    && 'submittedUids' in defence()
+                    && defence().submittedUids.hasAll(defence().panelUids)
+                    && defence().submittedUids.size()
+                       >= defence().panelUids.size() + 2
                     && incoming().diff(defence()).affectedKeys()
                        .hasOnly(['evaluationsReleasedAt'])
                     && incoming().evaluationsReleasedAt == request.time;
 
-      // Adviser arm 3 -- RECORD the §8b verdict.
+      // Adviser arm 3: RECORD the §8b verdict.
       //
       // Only after release (the panel must see the grades to deliberate),
       // and only once: a recorded verdict is the panel's decision, not a
-      // draft. `verdictRecordedBy` must be the adviser themselves --
+      // draft. `verdictRecordedBy` must be the adviser themselves,
       // someone barred from scoring at all has to be visibly the scribe,
       // and a field that could name anyone would record nothing.
       allow update: if verified()
@@ -1931,10 +1994,10 @@ service cloud.firestore {
         }
 
         // The panel reads throughout. The group reads only once the adviser
-        // has released the consolidation -- Guidelines §4d. The leader
+        // has released the consolidation. Guidelines §4d. The leader
         // check uses `leaderUid`, the snapshot field on the defence itself
         // (see the note above `defence()`), not a second read of the
-        // thesis -- one `get` on `parent()` covers both `mayComment()` and
+        // thesis: one `get` on `parent()` covers both `mayComment()` and
         // this arm.
         allow get, list: if mayComment() || isCoordinator() || isDean()
                          || (signedIn()
@@ -1954,12 +2017,12 @@ service cloud.firestore {
                       && request.resource.data.body.size() < 4000
                       && request.resource.data.createdAt == request.time;
 
-        // Append-only, per D10: the defence record is evidence, and
+        // Append-only: the defence record is evidence, and
         // editable remarks make consolidated feedback worthless.
         allow update, delete: if false;
       }
 
-      // ---- Manuscript highlights (spec 2026-09-26 §8.1) ----
+      // ---- Manuscript highlights ----
       //
       // A box on one page of an approved chapter, with a comment. Read like
       // the room comments: the panel throughout, the group once the adviser
@@ -2006,7 +2069,8 @@ service cloud.firestore {
                       && request.resource.data.authorUid == request.auth.uid
                       && request.resource.data.chapter in
                            ['chapterI', 'chapterII', 'chapterIII',
-                            'chapterIV', 'chapterV']
+                            'chapterIV', 'chapterV', 'manuscriptProposal',
+                            'manuscriptFinal']
                       && request.resource.data.version is int
                       && request.resource.data.version >= 1
                       && request.resource.data.page is int
@@ -2027,7 +2091,7 @@ service cloud.firestore {
         allow update: if false;
       }
 
-      // ---- "Is typing" markers for the room (spec 2026-09-26 §4.2) ----
+      // ---- "Is typing" markers for the room ----
       //
       // The title defence's titleComposing, for a defence. Never the group:
       // an indicator would tell them remarks are being written about them.
@@ -2061,7 +2125,7 @@ service cloud.firestore {
         allow delete: if signedIn() && uid == request.auth.uid;
       }
 
-      // ---- M4: Form 5c evaluations ----
+      // ---- Form 5c evaluations ----
       //
       // One document per panelist, keyed by their uid so nobody files two.
       // Guidelines §8a: the panel rates Pass or Fail AND completes Form 5c
@@ -2070,9 +2134,9 @@ service cloud.firestore {
         function parent() {
           return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
         }
-        // The adviser is deliberately NOT here. They advised this thesis
-        // for months and cannot mark it at arm's length, so the rule --
-        // not merely a hidden button -- refuses them. They comment in the
+        // The adviser is deliberately not here. They advised this thesis
+        // for months and cannot mark it at arm's length, so the rule,
+        // not merely a hidden button: refuses them. They comment in the
         // room like everyone else, and they hold the two acts below.
         function isPanelistHere() {
           return activeUser() && request.auth.uid in parent().panelUids;
@@ -2097,7 +2161,7 @@ service cloud.firestore {
         // THESE ELEVEN NUMBERS EXIST TWICE. The other copy is
         // `evaluationCriteria` in lib/data/models/evaluation_criteria.dart,
         // which this cannot import. If they drift, the form accepts a
-        // score this denies -- so rules.test.js walks every boundary at
+        // score this denies, so rules.test.js walks every boundary at
         // weight and weight+1.
         function bounded() {
           let s = scores();
@@ -2141,7 +2205,7 @@ service cloud.firestore {
               && d.keys().hasOnly(['evaluatorName', 'scores', 'comments',
                                    'total', 'rating',
                                    'submittedAt', 'updatedAt'])
-              // The evaluator's name as it stood when they submitted --
+              // The evaluator's name as it stood when they submitted,
               // the same denormalization, for the same reason, as
               // authorName on a defence comment: a grade sheet naming a
               // uid names nobody, and this record outlives the account.
@@ -2155,9 +2219,12 @@ service cloud.firestore {
                           + s.conclusion + s.recommendation + s.references
                           + s.preciseness + s.alertness + s.personality
               && d.rating in ['pass', 'fail']
-              // Pass needs a total of at least 75, the passing mark (the same
-              // number as `passingMark` in lib/data/models/evaluation.dart).
-              && (d.rating == 'fail' || d.total >= 75)
+              // The rating follows the total: Pass needs at least 75, the
+              // passing mark (the same number as `passingMark` in
+              // lib/data/models/evaluation.dart), and a total at or above it
+              // can only be Pass. So Pass if and only if the total is 75 or
+              // more.
+              && (d.rating == 'pass') == (d.total >= 75)
               // Section B carries no comment lines on the printed form,
               // so its three keys are not accepted here.
               && d.comments.keys().hasOnly(['title', 'introduction',
@@ -2165,20 +2232,20 @@ service cloud.firestore {
                     'conclusion', 'recommendation', 'references']);
         }
 
-        // Your own always; everyone else's only once released (D39). The
+        // Your own always; everyone else's only once released. The
         // adviser is the one exception to that seal: they cannot score at
         // all, so an early read anchors no score that exists, and they
-        // need the submitted COUNT before release -- printed on the
-        // release button so releasing at 2 of 3 is a visible choice -- and
-        // a Firestore `list` returns documents, so there is no query
+        // see who has submitted before release: the release itself is
+        // locked until everyone has, by `submittedUids` on the defence,
+        // and a Firestore `list` returns documents, so there is no query
         // yielding "how many" without "what". The seal's real purpose is
         // anti-anchoring between panelists, which the adviser cannot do.
         // The first arm authorises on the {evaluatorUid} wildcard, which
         // is sound because a panelist reading their own knows its id.
         //
-        // `parent()` costs one get per document evaluated. Safe here --
+        // `parent()` costs one get per document evaluated. Safe here,
         // an evaluations subcollection holds at most one document per
-        // panelist -- unlike the `list` over `defenses` above, which is
+        // panelist: unlike the `list` over `defenses` above, which is
         // why that one snapshots leaderUid rather than reading the thesis.
         allow get, list: if (activeUser()
                              && ((request.auth.uid == evaluatorUid
@@ -2199,7 +2266,7 @@ service cloud.firestore {
                       && request.resource.data.submittedAt == request.time
                       && request.resource.data.updatedAt == request.time;
 
-        // Editable until the seal, then frozen (D44). Freezing on first
+        // Editable until the seal, then frozen. Freezing on first
         // submit would make a mistyped 2-instead-of-20 permanent in a
         // record that has no delete.
         //
@@ -2211,7 +2278,7 @@ service cloud.firestore {
         // actually true is that the drift test's negative cases ran as
         // UPDATES against a document its own positive case had just
         // created, and `evalDoc()` regenerates `submittedAt` on every
-        // call -- so they were denied by the `submittedAt` mismatch
+        // call, so they were denied by the `submittedAt` mismatch
         // below no matter what `bounded()` said, and the test passed
         // unchanged with `title <= 50`. That is fixed in the test, which
         // now deletes the document before all three assertions so every
@@ -2232,13 +2299,65 @@ service cloud.firestore {
         // that §8b's deliberation would need to explain.
         allow delete: if false;
       }
+
+      // ---- Remarks: the written half of a Form 5c, for the group ----
+      //
+      // Rules are per document, so a student cannot be shown the comments
+      // on a sheet without being shown its scores. The remarks therefore
+      // live in their own document, written by the grader in the same batch
+      // as their sheet, and it is this one (never `evaluations`) that
+      // the group's leader may read, once the adviser has released. The
+      // leader (the one account a group has, and the snapshot `leaderUid`
+      // on the defence, not a second read of the thesis) sees what the
+      // panel wrote and not a single number.
+      match /remarks/{evaluatorUid} {
+        function parent() {
+          return get(/databases/$(database)/documents/defenses/$(defenseId)).data;
+        }
+        function isGraderHere() {
+          return ((activeUser() && request.auth.uid in parent().panelUids)
+                  || isCoordinator() || isDean())
+              && parent().adviserUid != request.auth.uid;
+        }
+        function released() {
+          return 'evaluationsReleasedAt' in parent();
+        }
+
+        allow get, list: if released()
+                         && activeUser()
+                         && parent().leaderUid == request.auth.uid;
+
+        // Your own, until the seal: the same window as the sheet itself.
+        // The keys of `comments` are the eight Content criteria: Section B
+        // carries no comment lines on the printed form.
+        allow create, update: if verified()
+                              && isGraderHere()
+                              && request.auth.uid == evaluatorUid
+                              && parent().status in ['inProgress', 'completed']
+                              && !released()
+                              && request.resource.data.keys().hasAll(
+                                   ['evaluatorName', 'comments', 'updatedAt'])
+                              && request.resource.data.keys().hasOnly(
+                                   ['evaluatorName', 'comments', 'updatedAt'])
+                              && request.resource.data.evaluatorName is string
+                              && request.resource.data.comments is map
+                              && request.resource.data.comments.keys().hasOnly(
+                                   ['title', 'introduction',
+                                    'materialsAndMethods', 'result',
+                                    'discussion', 'conclusion',
+                                    'recommendation', 'references'])
+                              && request.resource.data.updatedAt
+                                 == request.time;
+
+        allow delete: if false;
+      }
     }
 
     // The faculty inbox queries nominations across all theses.
     //
     // This authorises on the `nomineeUid` FIELD, not on the {nomineeUid}
     // document-id wildcard, and it has to: in a collection-group LIST the
-    // path wildcards are not bound — they evaluate to null, because the
+    // path wildcards are not bound: they evaluate to null, because the
     // query spans every parent path and no single binding exists. The
     // previous form (`request.auth.uid == nomineeUid`) therefore compared
     // against null and denied the faculty inbox outright, on top of the
@@ -2258,18 +2377,18 @@ service cloud.firestore {
     }
 
     // The faculty inbox also queries change requests across all theses, by
-    // their denormalized `awaitingUids` (spec 2026-09-25 fix round 2, Fix
-    // 1). Same reasoning as the nominations collection-group rule just
+    // their denormalized `awaitingUids`.
+    // Same reasoning as the nominations collection-group rule just
     // above: the nested per-thesis rule at
     // `theses/{thesisId}/changeRequests/{crId}` reads `t()` (a `get()` on
     // `theses/{thesisId}`), and in a collection-group LIST the {thesisId}
-    // wildcard is unbound -- that `get()` errors rather than filtering, so
+    // wildcard is unbound: that `get()` errors rather than filtering, so
     // the nested rule cannot authorise this query at all. awaitingUids is
     // denormalized onto the request precisely so a single resource-level
     // check, with no path wildcard, can. Read authorization only: who may
     // WRITE a sign-off is still gated by the nested rule's per-role arms.
     // Collection-group reads of change requests. A collection-group query
-    // is authorized ONLY by this rule, never by the nested
+    // is authorized only by this rule, never by the nested
     // `theses/{thesisId}/changeRequests` one, so every role that queries
     // across theses needs its own arm here:
     // - a faculty member, for the requests awaiting their sign-off (the
@@ -2286,16 +2405,16 @@ service cloud.firestore {
     match /facultyDirectory/{uid} {
       // Finding (g): the entry is written by its own subject (no Cloud
       // Functions on Spark), and the old rule checked only that the caller
-      // was not a student — the document's CONTENT was unconstrained, so a
+      // was not a student: the document's CONTENT was unconstrained, so a
       // faculty member could self-declare `role: 'dean'`. That fed the
       // ex-officio picker and, before Critical 1 was fixed, the ex-officio
       // nomination path itself. The written role must now equal the caller's
       // real role from `users/{uid}`, and only the four keys
       // `upsertOwnEntry` actually writes are accepted.
       //
-      // D27 (coordinator admin): the directory now also mirrors
+      // Coordinator admin: the directory now also mirrors
       // `nominableAsAdviser`/`nominableAsPanelist` from `users/{uid}` so the
-      // student-facing nomination picker — which cannot read `users` — can
+      // student-facing nomination picker (which cannot read `users`) can
       // filter on them. `upsertOwnEntry` writes with `SetOptions(merge:
       // true)`, under which `request.resource.data` is the merged *result*,
       // not the written subset (see the comment at
@@ -2304,24 +2423,24 @@ service cloud.firestore {
       // becomes a six-key document, and `hasOnly` must accept six keys or
       // every subsequent sign-in for a designated account is refused. That
       // widening, by itself, would also let the subject set their own
-      // designation through the same merge — making it self-declarable,
+      // designation through the same merge: making it self-declarable,
       // which is exactly what living on `users` (not `facultyDirectory`) is
       // meant to prevent. So the widening is fenced: `subjectDesignationUntouched`
       // below requires that this write does not affect either designation
       // key at all, on every write this function allows, and only
-      // `mayCoordinatorSetDesignation` — a separate arm, update-only,
-      // touching only those two keys — may actually change them.
+      // `mayCoordinatorSetDesignation`: a separate arm, update-only,
+      // touching only those two keys: may actually change them.
       //
       // This is a presence check, not a value check, and deliberately so:
       // an earlier version compared `request.resource.data.get(field,
       // <sentinel>)` against a sentinel default to make "absent" compare
-      // equal to "absent" — first with `true` as the sentinel, then with
+      // equal to "absent": first with `true` as the sentinel, then with
       // `null`. Both were wrong the same way: whatever sentinel is chosen
       // is *also* a value a subject can write, so a subject writing that
       // exact value collides with "absent" and is wrongly admitted (`true`
       // via a `create` carrying `nominableAsAdviser: true`; `null` via a
       // `create` or merge-`update` carrying `nominableAsAdviser: null`).
-      // There is no sentinel immune to this — any fixed value is itself a
+      // There is no sentinel immune to this: any fixed value is itself a
       // legal write. So the check below never inspects values at all: on
       // create it asks whether either key is present in the incoming
       // document; on update it asks whether either key is among the keys
@@ -2370,7 +2489,7 @@ service cloud.firestore {
       // A designation set before the subject has ever signed in.
       //
       // The entry is written by its own subject at sign-in, so an invited
-      // account that has never logged in has none — and the arm above is
+      // account that has never logged in has none, and the arm above is
       // update-only. A coordinator designating such an account therefore
       // wrote the authoritative flags to `users` and had nowhere to mirror
       // them, and since the student-facing picker reads only this
@@ -2382,7 +2501,7 @@ service cloud.firestore {
       // no name and show as a blank row in the picker. That is answered by
       // pinning rather than by refusing: `fullName` and `role` must equal
       // what `users/{uid}` already says, which the coordinator can read.
-      // Nothing becomes self-declarable — the caller is not the subject, and
+      // Nothing becomes self-declarable: the caller is not the subject, and
       // the role is taken from `users`, never from the request. A student is
       // excluded here exactly as `mayWriteOwnDirectoryEntry` excludes one.
       //
@@ -2411,19 +2530,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Self-authored only (D70): every write here is a reader's own client
+    // Self-authored only: every write here is a reader's own client
     // reporting an event to itself, never one user notifying another. No
-    // get() lookup into any other collection is needed -- there is no
+    // get() lookup into any other collection is needed: there is no
     // cross-user fact for a rule to verify.
     match /notifications/{uid}/items/{itemId} {
-      // A reader's own feed (D70): every write is the owner's client
+      // A reader's own feed: every write is the owner's client
       // reporting to itself, never one user notifying another. This was the
-      // one unbounded write left — `write: if own` accepted any shape, from
+      // one unbounded write left: `write: if own` accepted any shape, from
       // any signed-in account, verified or not.
       //
       // Read stays open to the signed-in owner even before verification (a
       // notice is harmless to read). Writing requires an active, verified
-      // account — verified() covers both — and create is bounded: the keys
+      // account (verified() covers both) and create is bounded: the keys
       // the client writes, a fresh notification is unread, and the message
       // is a bounded string. Marking read is the only update, and only ever
       // to true.

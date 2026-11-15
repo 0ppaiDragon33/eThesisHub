@@ -17,7 +17,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// A declined Conforme is terminal on its own: the nominee cannot
 /// un-decline, `respondToNomination` counts them outstanding forever, and
 /// the rules freeze the leader out of their own thesis the moment it leaves
-/// `draft` — so the group cannot replace the person who declined either.
+/// `draft`, so the group cannot replace the person who declined either.
 /// Returning the thesis to `draft` hands it back to them.
 ///
 /// Only theses that are genuinely stuck appear here (see
@@ -73,8 +73,7 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
       // and the stream has not caught up.
       if (mounted) {
         setState(() => _error =
-            'This thesis has already moved on — someone else acted on it '
-            'first.');
+            'Someone else has already acted on this thesis.');
       }
     } on FirebaseException catch (_) {
       // Checked before the catch-all: FirebaseAuthException is itself a
@@ -89,7 +88,7 @@ class _StalledThesesScreenState extends ConsumerState<StalledThesesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watched, not read lazily inside the tap handler — reading it there for
+    // Watched, not read lazily inside the tap handler: reading it there for
     // the first time can see a stale null before the auth stream's first
     // event has landed.
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;

@@ -15,7 +15,7 @@ enum UserRole {
   }
 }
 
-/// The name a role is shown under. Display only — what the app does with a
+/// The name a role is shown under. Display only: what the app does with a
 /// role is decided elsewhere and never defaulted from this.
 String roleLabel(UserRole role) => switch (role) {
       UserRole.student => 'Student researcher',

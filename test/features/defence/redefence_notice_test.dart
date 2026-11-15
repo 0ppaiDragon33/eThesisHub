@@ -50,26 +50,26 @@ Future<void> pump(WidgetTester tester, Defence d,
 }
 
 void main() {
-  testWidgets('the Coordinator is offered the re-defence of a Fail',
+  testWidgets('the Coordinator is offered the redefense of a Fail',
       (tester) async {
     await pump(tester, failed());
     expect(find.byKey(const Key('scheduleRedefence')), findsOneWidget);
   });
 
-  testWidgets('the adviser is told a re-defence is to be scheduled',
+  testWidgets('the adviser is told a redefense is to be scheduled',
       (tester) async {
     await pump(tester, failed(), uid: 'a1', role: 'faculty');
     expect(find.byKey(const Key('scheduleRedefence')), findsNothing);
     expect(find.byKey(const Key('redefencePending')), findsOneWidget);
   });
 
-  testWidgets('nothing once the re-defence exists', (tester) async {
+  testWidgets('nothing once the redefense exists', (tester) async {
     await pump(tester, failed(), alreadyRedefended: true);
     expect(find.byKey(const Key('scheduleRedefence')), findsNothing);
     expect(find.byKey(const Key('redefencePending')), findsNothing);
   });
 
-  testWidgets('nothing for a pass, no verdict, or a failed re-defence',
+  testWidgets('nothing for a pass, no verdict, or a failed redefense',
       (tester) async {
     for (final d in [
       failed(verdict: PassFail.pass),

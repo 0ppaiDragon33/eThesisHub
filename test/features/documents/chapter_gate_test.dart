@@ -52,55 +52,74 @@ FilledButton uploadButton(WidgetTester tester) =>
     tester.widget<FilledButton>(find.byKey(const Key('uploadVersion')));
 
 void main() {
+  // The full manuscript, Chapters I-V, is the gated one: it waits for a
+  // passed pre-oral.
   for (final verdict in [null, 'fail']) {
     testWidgets(
-        'Chapter IV cannot be uploaded while the pre-oral has '
-        '${verdict == null ? 'no verdict' : 'failed'}', (tester) async {
+        'the Chapters I–V manuscript cannot be uploaded while the pre-oral '
+        'has ${verdict == null ? 'no verdict' : 'failed'}', (tester) async {
       await tester.pumpWidget(wrap(await seed(verdict: verdict),
           const ChapterDetailScreen(
-              thesisId: 't1', chapter: ChapterId.chapterIV)));
+              thesisId: 't1', chapter: ChapterId.manuscriptFinal)));
       await tester.pumpAndSettle();
 
       expect(uploadButton(tester).onPressed, isNull);
       expect(
-          find.text('Chapters IV and V open once the panel has passed your '
-              'pre-oral defence.'),
+          find.text('The Chapters I–V manuscript opens once the panel has '
+              'passed your pre-oral defense.'),
           findsOneWidget);
     });
   }
 
-  testWidgets('Chapter IV can be uploaded once the pre-oral passed',
-      (tester) async {
+  testWidgets('the Chapters I–V manuscript can be uploaded once the pre-oral '
+      'passed', (tester) async {
     await tester.pumpWidget(wrap(await seed(verdict: 'pass'),
+        const ChapterDetailScreen(
+            thesisId: 't1', chapter: ChapterId.manuscriptFinal)));
+    await tester.pumpAndSettle();
+
+    expect(uploadButton(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('the Chapters I–III manuscript is never held back by the '
+      'pre-oral', (tester) async {
+    await tester.pumpWidget(wrap(await seed(),
+        const ChapterDetailScreen(
+            thesisId: 't1', chapter: ChapterId.manuscriptProposal)));
+    await tester.pumpAndSettle();
+
+    expect(uploadButton(tester).onPressed, isNotNull);
+  });
+
+  // Chapters IV and V, from before manuscripts, stay gated the same way.
+  testWidgets('an old Chapter IV record is still held back by the pre-oral',
+      (tester) async {
+    await tester.pumpWidget(wrap(await seed(),
         const ChapterDetailScreen(
             thesisId: 't1', chapter: ChapterId.chapterIV)));
     await tester.pumpAndSettle();
 
-    expect(uploadButton(tester).onPressed, isNotNull);
+    expect(uploadButton(tester).onPressed, isNull);
   });
 
-  testWidgets('Chapter III is never held back by the pre-oral',
-      (tester) async {
-    await tester.pumpWidget(wrap(await seed(),
-        const ChapterDetailScreen(
-            thesisId: 't1', chapter: ChapterId.chapterIII)));
-    await tester.pumpAndSettle();
-
-    expect(uploadButton(tester).onPressed, isNotNull);
-  });
-
-  testWidgets('the chapters list marks IV and V locked until the pass',
-      (tester) async {
+  testWidgets('the screen offers the Chapters I–III manuscript until the '
+      'pass, then the Chapters I–V one', (tester) async {
     await tester
         .pumpWidget(wrap(await seed(), const ChaptersScreen(thesisId: 't1')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('chapterLocked-chapterIV')), findsOneWidget);
-    expect(find.byKey(const Key('chapterLocked-chapterV')), findsOneWidget);
-    expect(find.byKey(const Key('chapterLocked-chapterIII')), findsNothing);
+    expect(find.byKey(const Key('chapterRow-manuscriptProposal')),
+        findsOneWidget);
+    expect(find.byKey(const Key('chapterRow-manuscriptFinal')), findsNothing);
 
     await tester.pumpWidget(wrap(
         await seed(verdict: 'pass'), const ChaptersScreen(thesisId: 't1')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('chapterLocked-chapterIV')), findsNothing);
+    expect(
+        find.byKey(const Key('chapterRow-manuscriptFinal')), findsOneWidget);
+    // The five chapters are never listed as rows of their own.
+    for (final id in ['chapterI', 'chapterII', 'chapterIII', 'chapterIV',
+                      'chapterV']) {
+      expect(find.byKey(Key('chapterRow-$id')), findsNothing, reason: id);
+    }
   });
 }

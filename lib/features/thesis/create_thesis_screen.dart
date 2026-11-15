@@ -20,7 +20,7 @@ const kSemesters = ['First', 'Second'];
 const kAcademicYears = ['2026-2027', '2027-2028'];
 
 /// Lets a student leader create their thesis group: a working title, member
-/// names typed by the leader (they are not accounts — this text is what
+/// names typed by the leader (they are not accounts: this text is what
 /// later prints on Form 1 under "Very truly yours,"), and the fixed-set
 /// college/program/semester/academic year. Calls
 /// `ThesisRepository.createThesis`, which builds the exact key-whitelisted,
@@ -112,7 +112,7 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
       // The success confirmation is navigation, not an in-place message:
       // once this thesis exists, the leader's next stop is the status
       // screen that tracks it. Navigating away also closes off a second
-      // tap creating a second thesis — nothing in the security rules stops
+      // tap creating a second thesis: nothing in the security rules stops
       // one leader owning several theses, so leaving this screen is what
       // makes a repeat submit unreachable, not a `_created` flag.
       if (mounted) context.go('/thesis');
@@ -152,7 +152,7 @@ class _CreateThesisScreenState extends ConsumerState<CreateThesisScreen> {
   @override
   Widget build(BuildContext context) {
     // Watched (not just read) so the provider is already primed with a
-    // settled value by the time the user can tap submit — reading it lazily
+    // settled value by the time the user can tap submit: reading it lazily
     // for the first time inside _submit would race the stream's first
     // event and see a stale `null`.
     final signedIn = ref.watch(authStateProvider).valueOrNull != null;

@@ -90,7 +90,7 @@ void main() {
 
       final saved = await db.doc('theses/t1/changeRequests/adviser').get();
       expect(saved.data()!['signoffs']['newAdviser']['status'], 'accepted');
-      // Only one of the two advisers has accepted so far -- the stage
+      // Only one of the two advisers has accepted so far: the stage
       // stays at pendingAdvisers until both have.
       expect(saved.data()!['stage'], 'pendingAdvisers');
       // The accepting adviser drops out of awaitingUids; the former
@@ -169,7 +169,7 @@ void main() {
       final db = FakeFirebaseFirestore();
       // t1 awaits 'me'; t2 awaits someone else. mySignoffRequestsProvider
       // now filters server-side by awaitingUids (Fix 1), so t2's row never
-      // comes back for 'me' -- no client-side cross-filter needed.
+      // comes back for 'me', no client-side cross-filter needed.
       await seedThesis(db, 't1', adviserUid: 'me', title: 'My Advisee');
       await seedThesis(
         db,

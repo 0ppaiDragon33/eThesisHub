@@ -76,7 +76,7 @@ final FormTemplate form5cTemplate = FormTemplate(
     ...fieldBlocks('presentedTime', 'Time of Presentation'),
     ...fieldBlocks('venue', 'Venue'),
     ...fieldBlocks('studyTitle', 'Title of the Study'),
-    ...fieldBlocks('defence', 'Defence'),
+    ...fieldBlocks('defence', 'Defense'),
     ...fieldBlocks('evaluator', 'Evaluator'),
     ...fieldBlocks('rank', 'Academic Rank'),
     ...fieldBlocks('specialization', 'Field of Specialization'),
@@ -298,7 +298,7 @@ List<pw.Widget> _page(FormText t, {Form5cData? data}) {
       t.of('summaryB.label'),
       valueOr(data?.sectionBTotal.toString(), t, 'summaryB'),
     ),
-    // The app does not compute an average (D62); a labelled blank says so.
+    // The app does not compute an average; a labelled blank says so.
     formField(t.of('average.label'), valueOr(null, t, 'average')),
     _summaryRow(
       t.of('finalGrade.label'),
@@ -312,7 +312,7 @@ List<pw.Widget> _page(FormText t, {Form5cData? data}) {
   ];
 }
 
-/// Generates Form 5c — Evaluation Guide — one panelist's completed scoring
+/// Generates Form 5c (Evaluation Guide) one panelist's completed scoring
 /// sheet, as a PDF. MultiPage: eleven criteria with prompts and comments do
 /// not fit one sheet (see form1_pdf.dart for why Page silently clips).
 Future<Uint8List> buildForm5cPdf(Form5cData data) async {

@@ -20,7 +20,7 @@ import '../../support/confirm_dialog.dart';
 /// Rejects every submission with `permission-denied`, as the real security
 /// rules would when a nominee's `users/{uid}` designation disagrees with
 /// the (client-written, self-maintained) `facultyDirectory` mirror the
-/// picker actually reads — the sync window spec §4.2.1 describes.
+/// picker actually reads: the sync window describes.
 class PermissionDeniedThesisRepository extends ThesisRepository {
   PermissionDeniedThesisRepository(super.db);
 
@@ -90,7 +90,7 @@ Widget wrap(FakeFirebaseFirestore db,
       // A router rather than a bare home, because a successful submission
       // navigates to the thesis status screen. Staying put used to leave the
       // leader looking at "Nominations can only be submitted while this
-      // thesis is still a draft" — a refusal message, immediately after the
+      // thesis is still a draft": a refusal message, immediately after the
       // submission succeeded.
       child: MaterialApp.router(
         routerConfig: GoRouter(
@@ -155,7 +155,7 @@ void main() {
     // 4 plain faculty + the coordinator + the dean = 6 selectable nominees.
     // Coordinators and the dean are never chosen for their automatic
     // ex-officio seat, but the project owner ruled they may still be
-    // nominated by name "for the sake of records" — so they must appear
+    // nominated by name "for the sake of records", so they must appear
     // here too, not be excluded the way selectableFacultyProvider excludes
     // them from the ex-officio-seat calculation.
     final values = await openDropdownValues(tester, const Key('adviser'));
@@ -172,7 +172,7 @@ void main() {
     //
     // The screen watched `myThesisProvider`, which reads
     // `authStateProvider.value?.uid` and returns `Stream.value(null)` when
-    // that is null — so while auth was still settling it resolved to
+    // that is null, so while auth was still settling it resolved to
     // `data(null)`, not loading, and the screen read a missing thesis as a
     // thesis that had left draft. A refresh "fixed" it only because auth
     // was warm the second time.
@@ -188,7 +188,7 @@ void main() {
     ]));
     await tester.pump();
 
-    // Auth has not emitted. The thesis is a draft, so the form must show —
+    // Auth has not emitted. The thesis is a draft, so the form must show,
     // the screen was handed a thesis id and does not need to know who is
     // signed in to render it.
     expect(find.byKey(const Key('notDraft')), findsNothing,
@@ -205,7 +205,7 @@ void main() {
   testWidgets('a person chosen in one slot is not offered in the others',
       (tester) async {
     // The nomination documents are keyed by uid, so picking the same person
-    // twice is not two seats — the second write overwrites the first. Left
+    // twice is not two seats: the second write overwrites the first. Left
     // unfiltered, the same name could fill the adviser slot and every panel
     // slot, and the only complaint came at submit: "Choose at least three
     // panel members" while three dropdowns visibly held names, because
@@ -222,7 +222,7 @@ void main() {
     // `openDropdownValues` sees every DropdownMenuItem mounted at the time,
     // which is the opened menu PLUS the item each other picker renders to
     // display its own current selection. So a chosen person still appears
-    // once — as that chip — and the question is whether they appear a SECOND
+    // once (as that chip) and the question is whether they appear a SECOND
     // time as an entry in this menu. Counting occurrences says exactly that;
     // `isNot(contains(...))` would be testing the chip, not the filter.
     final panel0 = await openDropdownValues(tester, const Key('panel0'));
@@ -236,7 +236,7 @@ void main() {
     await tester.tap(find.text('Dr. Diamante — CICT').last);
     await tester.pumpAndSettle();
 
-    // A second panel slot now excludes both the adviser and panel 1 — two
+    // A second panel slot now excludes both the adviser and panel 1: two
     // chips, no menu entries.
     final panel1 = await openDropdownValues(tester, const Key('panel1'));
     expect(panel1.where((v) => v == 'Armada'), hasLength(1));
@@ -253,8 +253,8 @@ void main() {
   testWidgets('an option with no college shows no dangling separator',
       (tester) async {
     // Nothing in the app fills college or specialization, so for a real
-    // faculty account `subtitle` is empty and a hardcoded ' — ' rendered
-    // every option as "Dr. Armada — ".
+    // faculty account `subtitle` is empty and a hardcoded ': ' rendered
+    // every option as "Dr. Armada: ".
     useTallSurface(tester);
     final db = FakeFirebaseFirestore();
     await db.collection('facultyDirectory').doc('bare').set(
@@ -282,8 +282,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert the picker's FULL label, college included. The "Also on your
-    // panel" card below renders '<name> — <role>' too, so the shorter string
-    // matches whether or not the picker labels anything — this test passed
+    // panel" card below renders '<name>: <role>' too, so the shorter string
+    // matches whether or not the picker labels anything: this test passed
     // with the role suffix deleted until the college was added to it.
     // `findsWidgets`, not `findsOneWidget`: a closed DropdownButtonFormField
     // still builds its items offstage to size itself, so each picker on
@@ -411,7 +411,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The chosen adviser vanishes from the directory after selection but
-    // before submit — e.g. removed between the picker loading and the tap.
+    // before submit: e.g. removed between the picker loading and the tap.
     await db.collection('facultyDirectory').doc('Armada').delete();
     await tester.pumpAndSettle();
 
@@ -438,7 +438,7 @@ void main() {
     // the choice and then refuse it at submit; it no longer offers it.
     //
     // The adviser slot must still offer them. A coordinator or the dean can
-    // genuinely advise a thesis — that position carries exOfficio: false,
+    // genuinely advise a thesis: that position carries exOfficio: false,
     // needs their Conforme, and prints on Form 1 as Thesis Adviser.
     useTallSurface(tester);
     await tester.pumpWidget(wrap(await seeded()));
@@ -460,8 +460,8 @@ void main() {
   testWidgets('accepts three panel picks that survive the ex-officio collapse',
       (tester) async {
     // Falsifiability control for the deny above: the same screen, the same
-    // taps, the same submit — with a third pick who is NOT an office holder
-    // — must go through. Otherwise the refusal above could be any unrelated
+    // taps, the same submit: with a third pick who is not an office holder
+    // must go through. Otherwise the refusal above could be any unrelated
     // validation failing.
     useTallSurface(tester);
     final db = await seeded();
@@ -487,9 +487,9 @@ void main() {
 
     // Unlike the deny case above, this one actually reaches
     // `submitNominations`, whose batch commit is not driven by
-    // `testWidgets`' fake clock — `pumpAndSettle` alone returns with `_busy`
+    // `testWidgets`' fake clock: `pumpAndSettle` alone returns with `_busy`
     // still true and neither message rendered. `runAsync` gives the real
-    // event loop a turn so the commit lands. Same pattern as the Task 11
+    // event loop a turn so the commit lands. Same pattern as the
     // review-queue tests.
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('submitNomination')));
@@ -504,7 +504,7 @@ void main() {
     // the leader watches each Conforme arrive. Before this, the screen
     // stayed put and its own status stream replaced the form with
     // "Nominations can only be submitted while this thesis is still a
-    // draft" — a refusal message shown immediately after success.
+    // draft": a refusal message shown immediately after success.
     expect(find.byKey(const Key('landedOnStatus')), findsOneWidget);
     expect(find.byKey(const Key('submitNomination')), findsNothing);
     expect(find.byKey(const Key('notDraft')), findsNothing,
@@ -618,7 +618,7 @@ void main() {
       'panel picker', (tester) async {
     useTallSurface(tester);
     final db = await seeded();
-    // Designated for adviser only — a coordinator ticked one box and left
+    // Designated for adviser only: a coordinator ticked one box and left
     // the other unticked on the Users screen.
     await db.collection('facultyDirectory').doc('Armada').update({
       'nominableAsAdviser': true,
@@ -642,7 +642,7 @@ void main() {
       'adviser picker', (tester) async {
     useTallSurface(tester);
     final db = await seeded();
-    // Designated for panel only — the reverse of the case above.
+    // Designated for panel only: the reverse of the case above.
     await db.collection('facultyDirectory').doc('Armada').update({
       'nominableAsAdviser': false,
       'nominableAsPanelist': true,
@@ -682,12 +682,12 @@ void main() {
   testWidgets(
       'an office holder narrowed out of adviser is absent from the adviser '
       'picker, and their panel-seat exemption is untouched', (tester) async {
-    // D32 exempts the ex-officio SEAT, not the adviser slot. An office
+    // The rules exempt the ex-officio SEAT, not the adviser slot. An office
     // holder chosen as ADVISER is written `exOfficio: false,
     // position: 'adviser'`, so `mayCreateNomination` checks their
-    // `nominableAsAdviser` like anyone else's — offering them here would
-    // hand the student a name the rules then refuse, which is D29's
-    // "cannot disagree forwards" broken. D31's own motivating case: a
+    // `nominableAsAdviser` like anyone else's: offering them here would
+    // hand the student a name the rules then refuse, which is the
+    // "cannot disagree forwards" rule broken. The spec's own motivating case: a
     // college coordinator who holds no advisees, narrowed by unticking
     // Adviser.
     useTallSurface(tester);
@@ -710,7 +710,7 @@ void main() {
             'nomination rule checks nominableAsAdviser and refuses');
     expect(adviser, isNot(contains('dean')));
 
-    // Absent from the panel slot too, same as always — but that exclusion
+    // Absent from the panel slot too, same as always, but that exclusion
     // is the pre-existing ex-officio-seat rule, not the designation
     // filter, which the next test proves by leaving designation alone.
     final panel = await openDropdownValues(tester, const Key('panel0'));
@@ -722,7 +722,7 @@ void main() {
       'an office holder still designated as an adviser is offered on the '
       'adviser slot', (tester) async {
     // The control for the test above: office holders are not excluded from
-    // the adviser slot as a class — a Research Coordinator or Dean who
+    // the adviser slot as a class: a Research Coordinator or Dean who
     // genuinely advises still appears. Without this, hiding every office
     // holder from the adviser picker would pass the test above too.
     useTallSurface(tester);
@@ -739,7 +739,7 @@ void main() {
     expect(adviser, contains('coord'));
 
     // And the panel slot still excludes them by office, regardless of the
-    // panelist designation just written — D32's seat exemption intact.
+    // panelist designation just written. The seat exemption intact.
     final panel = await openDropdownValues(tester, const Key('panel0'));
     expect(panel, isNot(contains('coord')));
   });
@@ -747,7 +747,7 @@ void main() {
   testWidgets(
       'the refusal message names an office holder picked as adviser',
       (tester) async {
-    // The other half of the same defect: when an office holder IS the
+    // The other half of the same defect: when an office holder is the
     // cause of the refusal, excluding them from the candidate list named
     // the three innocent panelists and told the student to replace the
     // wrong people. The adviser is always a candidate.
@@ -794,7 +794,7 @@ void main() {
       'after a reopen the surviving roster is pre-selected and the declined '
       'seat is left empty', (tester) async {
     // Reported from the running app: a coordinator reopens a stalled thesis,
-    // the leader opens this form, and it is blank — the accepted adviser and
+    // the leader opens this form, and it is blank: the accepted adviser and
     // panellists look as though every answer were lost, and dropping one of
     // them (because the leader cannot see they accepted) is then refused with
     // a confusing error. The surviving roster must be pre-selected; only the
@@ -841,10 +841,10 @@ void main() {
   testWidgets(
       'a permission-denied on submit names the person and the position, '
       'not a bare Firestore code', (tester) async {
-    // Reproduces spec §4.2.1's sync window: the picker offers a nominee
+    // Reproduces 's sync window: the picker offers a nominee
     // because their directory entry carries no designation key (absence
-    // reads as nominable), but `users/{uid}` — which the student cannot
-    // read — says otherwise, and `firestore.rules` refuses the write. A
+    // reads as nominable), but `users/{uid}`, which the student cannot
+    // read: says otherwise, and `firestore.rules` refuses the write. A
     // student who picked a name off a list this screen showed them must
     // not be handed a bare permission code and left to guess.
     useTallSurface(tester);
@@ -884,7 +884,7 @@ void main() {
     // document a security rule refused, and a full submission always
     // carries an adviser plus at least three real panelists (the panel
     // picker never offers an ex-officio office holder in the first
-    // place), so every one of those four is a named candidate here —
+    // place), so every one of those four is a named candidate here,
     // naming all of them, in plain language, is what the screen can
     // honestly say without guessing at a single culprit it cannot know.
     expect(find.byKey(const Key('error')), findsOneWidget);
@@ -900,7 +900,7 @@ void main() {
     expect(error.message, contains('panelist'));
     expect(error.message, contains('this semester'));
 
-    // And the Firestore code must still be visible underneath — it helps
+    // And the Firestore code must still be visible underneath: it helps
     // whoever debugs this next, same as `ErrorState`.
     expect(find.byKey(const Key('errorCode')), findsOneWidget);
     final code = tester.widget<SelectableText>(find.byKey(const Key('errorCode')));

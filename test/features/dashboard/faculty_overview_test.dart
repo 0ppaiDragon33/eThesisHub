@@ -17,7 +17,7 @@ import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-/// Same shape as `thesis()` in navigation_test.dart -- every field
+/// Same shape as `thesis()` in navigation_test.dart: every field
 /// `Thesis.fromMap` requires, so a seeded document reads back cleanly.
 Map<String, dynamic> thesis({
   String leaderUid = 'l1',
@@ -40,8 +40,8 @@ Map<String, dynamic> thesis({
 /// Drives the REAL router, wide enough for the shell's rail to render.
 ///
 /// Two of the cases below are about the shell rather than the overview
-/// body — that Overview is the first destination, and that the mode switch
-/// swaps the tiles — and neither lives inside [FacultyOverview] any more.
+/// body: that Overview is the first destination, and that the mode switch
+/// swaps the tiles, and neither lives inside [FacultyOverview] any more.
 /// The destinations moved to the one shell around every signed-in route,
 /// and the Adviser/Panelist switch moved into that shell's trailing slot
 /// from the deleted faculty dashboard's app bar. Pumping the body alone
@@ -118,9 +118,9 @@ Future<Widget> wrap(
 void main() {
   testWidgets('a Conforme request shows in the queue while in ADVISER mode',
       (tester) async {
-    // Spec D17. Testing only the mode a given item "belongs" to would pass
+    // Testing only the mode a given item "belongs" to would pass
     // with a mode filter left in the provider, and the person who needs to
-    // see the request would never find it -- they have no reason to think
+    // see the request would never find it: they have no reason to think
     // of looking in the other mode.
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(adviserUid: 'f1'));
@@ -187,7 +187,7 @@ void main() {
   testWidgets('the overview is the first destination', (tester) async {
     // Through the router now: the destinations live in the shell, not in
     // a dashboard, so a bare widget pump can no longer see them. The
-    // property is unchanged — a faculty member LANDS on the overview, and
+    // property is unchanged: a faculty member LANDS on the overview, and
     // Overview is the first thing the sidebar offers. Landing on a work
     // queue was the complaint the previous milestone existed to answer.
     final db = FakeFirebaseFirestore();
@@ -237,7 +237,7 @@ void main() {
     await pumpRouted(tester, c);
 
     // f3 holds both positions. The stored preference is unset, which
-    // defaults to adviser mode -- so the tile row shows the adviser's
+    // defaults to adviser mode, so the tile row shows the adviser's
     // figures, including its own "Advisees" tile (in addition to the nav
     // destination of the same name).
     expect(find.text('Advisees'), findsWidgets);
@@ -247,7 +247,7 @@ void main() {
     await tester.tap(find.text('Panelist'));
     await tester.pumpAndSettle();
 
-    // Switching modes swaps the tile row entirely -- the queue underneath
+    // Switching modes swaps the tile row entirely: the queue underneath
     // is untouched by this (covered by the two tests above), but the tiles
     // must change.
     expect(find.text('Panels'), findsWidgets);
@@ -281,11 +281,11 @@ void main() {
     // Deliberately a single pump, never pumpAndSettle: this must catch the
     // loading branch before the (never-emitting) stream's first snapshot,
     // not the empty-list branch that a collapsed `data(const [])` would be
-    // indistinguishable from -- the single most repeated bug in this
+    // indistinguishable from: the single most repeated bug in this
     // codebase.
     await tester.pump();
 
     expect(find.text('Checking what needs you…'), findsOneWidget);
-    expect(find.text('All caught up'), findsNothing);
+    expect(find.text('No pending items'), findsNothing);
   });
 }

@@ -41,7 +41,7 @@ class ChapterDetailScreen extends ConsumerStatefulWidget {
   /// Injectable so a widget test can reach the upload path without a
   /// platform file dialog, matching [SubmitTitlesScreen.pickDocument].
   /// Accepted and stored here; wiring it to an actual upload is the next
-  /// task -- this screen only needs somewhere to keep it so that task does
+  /// task: this screen only needs somewhere to keep it so that task does
   /// not have to touch this constructor again.
   final DocumentPicker? pickDocument;
 
@@ -61,14 +61,33 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   bool _statusBusy = false;
   String? _statusError;
 
+  /// Mints a fresh ID token before a write.
+  ///
+  /// The security rules read `email_verified` and the account's standing from
+  /// the token the browser holds, and that token goes stale: a tab left open,
+  /// a laptop that slept, an email verified on another device. The first
+  /// write is then refused with `permission-denied` until a page refresh
+  /// signs the token again. Doing that here removes the need to refresh.
+  Future<void> _freshIdToken() async {
+    try {
+      await ref.read(authServiceProvider).refreshIdToken();
+    } catch (_) {
+      // A refresh that cannot happen (offline, no Firebase in a test) must
+      // not block the upload: the write below reports its own failure.
+    }
+  }
+
   Future<void> _upload() async {
     if (_busy) return;
     final pick = widget.pickDocument ?? realPicker;
     final file = await pick(allowed: kChapterTypes);
     if (file == null) return;
 
-    final invalid = validateDocument(file,
-        allowed: kChapterTypes, maxBytes: kChapterMaxBytes);
+    final invalid = validateDocument(
+      file,
+      allowed: kChapterTypes,
+      maxBytes: kChapterMaxBytes,
+    );
     if (invalid != null) {
       if (mounted) setState(() => _error = invalid);
       return;
@@ -77,12 +96,14 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     final uid = ref.read(authStateProvider).valueOrNull?.uid;
     if (uid == null) {
       // The user has already picked a file by this point. A silent return
-      // here means they choose a file and nothing happens at all -- no
-      // spinner, no message -- and on a project with no server-side logs
+      // here means they choose a file and nothing happens at all, no
+      // spinner, no message, and on a project with no server-side logs
       // this screen is the only place the cause could ever surface.
       if (mounted) {
-        setState(() =>
-            _error = 'You appear to be signed out. Sign in again and retry.');
+        setState(
+          () =>
+              _error = 'You appear to be signed out. Sign in again and retry.',
+        );
       }
       return;
     }
@@ -91,7 +112,8 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Submit this file?',
-      message: '"${file.name}" goes to your adviser for review as the '
+      message:
+          '"${file.name}" goes to your adviser for review as the '
           "chapter's newest version.",
       confirmLabel: 'Submit',
       confirmKey: const Key('confirmUploadVersion'),
@@ -102,24 +124,39 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
       _error = null;
     });
 
+    await _freshIdToken();
+
     final storage = ref.read(storageServiceProvider);
+    final repository = ref.read(documentRepositoryProvider);
     StoredFile? stored;
     try {
-      stored = await uploadDocument(
+      final saved = await uploadDocument(
         storage: storage,
         file: file,
         thesisId: widget.thesisId,
         documentId: widget.chapter.value,
       );
-      await ref.read(documentRepositoryProvider).addVersion(
-            thesisId: widget.thesisId,
-            chapter: widget.chapter,
-            storagePath: stored.path,
-            fileUrl: stored.url,
-            mimeType: file.contentType,
-            sizeBytes: file.bytes.length,
-            uploadedBy: uid,
-          );
+      stored = saved;
+      Future<void> record() => repository.addVersion(
+        thesisId: widget.thesisId,
+        chapter: widget.chapter,
+        storagePath: saved.path,
+        fileUrl: saved.url,
+        mimeType: file.contentType,
+        sizeBytes: file.bytes.length,
+        uploadedBy: uid,
+      );
+      try {
+        await record();
+      } on FirebaseException catch (e) {
+        if (e.code != 'permission-denied') rethrow;
+        // A refused batch writes nothing, so trying again is safe, and the
+        // file is already in storage. Retry once with a fresh token: if the
+        // refusal was a stale token this succeeds; if it is a real one, the
+        // same error surfaces below.
+        await _freshIdToken();
+        await record();
+      }
     } on StorageFailure catch (e) {
       if (mounted) setState(() => _error = '${e.message} [${e.code}]');
     } on FirebaseException catch (e) {
@@ -131,9 +168,11 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         } catch (_) {}
       }
       if (mounted) {
-        setState(() => _error = e.code == 'permission-denied'
-            ? 'You do not have permission to upload to this chapter.'
-            : 'Could not upload this version.');
+        setState(
+          () => _error = e.code == 'permission-denied'
+              ? 'You do not have permission to upload to this chapter.'
+              : 'Could not upload this version.',
+        );
       }
     } catch (e) {
       // The file is already in the bucket but the record that would
@@ -145,8 +184,11 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         } catch (_) {}
       }
       if (mounted) {
-        setState(() => _error =
-            e is StateError ? e.message : 'Could not upload this version.');
+        setState(
+          () => _error = e is StateError
+              ? e.message
+              : 'Could not upload this version.',
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -156,7 +198,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   /// Posts one remark against the version the adviser is looking at right
   /// now. `currentVersion` is passed in by the caller rather than read off
   /// `_upload`'s state, because the reviewer and the uploader are different
-  /// people acting at different times -- the version to attach a remark to
+  /// people acting at different times: the version to attach a remark to
   /// is whatever the chapter's stream says is current at the moment of
   /// posting, not anything this screen instance remembers.
   Future<void> _postFeedback({
@@ -173,7 +215,9 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     });
 
     try {
-      await ref.read(documentRepositoryProvider).addFeedback(
+      await ref
+          .read(documentRepositoryProvider)
+          .addFeedback(
             thesisId: thesisId,
             chapter: chapter,
             version: currentVersion,
@@ -191,13 +235,16 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
       if (mounted) setState(() => _feedbackError = e.message.toString());
     } on FirebaseException catch (e) {
       if (mounted) {
-        setState(() => _feedbackError = e.code == 'permission-denied'
-            ? 'You do not have permission to leave feedback on this '
-                'chapter.'
-            : 'Could not post this feedback.');
+        setState(
+          () => _feedbackError = e.code == 'permission-denied'
+              ? 'You do not have permission to leave feedback on this '
+                    'chapter.'
+              : 'Could not post this feedback.',
+        );
       }
     } catch (_) {
-      if (mounted) setState(() => _feedbackError = 'Could not post this feedback.');
+      if (mounted)
+        setState(() => _feedbackError = 'Could not post this feedback.');
     } finally {
       if (mounted) setState(() => _feedbackBusy = false);
     }
@@ -205,7 +252,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
 
   /// The adviser's half of chapter status: `revise` sends it back, `approved`
   /// locks it. Both go through [DocumentRepository.setChapterStatus], which
-  /// itself refuses `submitted` -- that value can only be written by an
+  /// itself refuses `submitted`: that value can only be written by an
   /// upload.
   Future<void> _setStatus({
     required String thesisId,
@@ -232,7 +279,9 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     });
 
     try {
-      await ref.read(documentRepositoryProvider).setChapterStatus(
+      await ref
+          .read(documentRepositoryProvider)
+          .setChapterStatus(
             thesisId: thesisId,
             chapter: chapter,
             status: status,
@@ -240,22 +289,29 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-            content: Text(approve
-                ? '${chapter.label} approved.'
-                : '${chapter.label} sent back for revision.'),
-          ));
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                approve
+                    ? '${chapter.label} approved.'
+                    : '${chapter.label} sent back for revision.',
+              ),
+            ),
+          );
       }
     } on FirebaseException catch (e) {
       if (mounted) {
-        setState(() => _statusError = e.code == 'permission-denied'
-            ? 'You do not have permission to change this chapter\'s status.'
-            : 'Could not update this chapter\'s status.');
+        setState(
+          () => _statusError = e.code == 'permission-denied'
+              ? 'You do not have permission to change this chapter\'s status.'
+              : 'Could not update this chapter\'s status.',
+        );
       }
     } catch (_) {
       if (mounted) {
         setState(
-            () => _statusError = 'Could not update this chapter\'s status.');
+          () => _statusError = 'Could not update this chapter\'s status.',
+        );
       }
     } finally {
       if (mounted) setState(() => _statusBusy = false);
@@ -274,8 +330,18 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   String _formatDate(DateTime? dt) {
     if (dt == null) return 'Just now';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final minute = dt.minute.toString().padLeft(2, '0');
@@ -287,19 +353,19 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
   /// Every state renders inside this frame.
   ///
   /// No Scaffold and no AppBar of its own: the app shell supplies both,
-  /// and names the bar for this chapter too — `shellTitleFor` reads the
+  /// and names the bar for this chapter too: `shellTitleFor` reads the
   /// same [ChapterId] out of the path, so the title survives the move.
   /// Keyed the same as the loaded screen, so a test (and a reader) can tell
   /// this screen apart from the router's own "No such chapter" refusal
   /// whichever state it is in.
   Widget _framed(List<Widget> children) => KeyedSubtree(
-        key: const Key('chapterDetailScreen'),
-        child: PageShell(
-          maxWidth: AppTokens.measureWide,
-          title: widget.chapter.label,
-          children: children,
-        ),
-      );
+    key: const Key('chapterDetailScreen'),
+    child: PageShell(
+      maxWidth: AppTokens.measureWide,
+      title: widget.chapter.label,
+      children: children,
+    ),
+  );
 
   Widget _uploadControl({required bool disabled, String? disabledReason}) {
     return Column(
@@ -320,7 +386,8 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
-            'Upload chapters as PDF. From Word: File → Save As → PDF.',
+            'Upload chapters as PDF or Word. In the defence room a PDF is shown page '
+            'by page; a Word file is opened separately.',
             key: const Key('chapterPdfHint'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -338,10 +405,9 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               _error!,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
           ),
       ],
@@ -377,12 +443,12 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
           onPressed: _feedbackBusy
               ? null
               : () => _postFeedback(
-                    thesisId: thesisId,
-                    chapter: chapter,
-                    currentVersion: currentVersion,
-                    reviewerUid: reviewerUid,
-                    reviewerName: reviewerName,
-                  ),
+                  thesisId: thesisId,
+                  chapter: chapter,
+                  currentVersion: currentVersion,
+                  reviewerUid: reviewerUid,
+                  reviewerName: reviewerName,
+                ),
           child: Text(_feedbackBusy ? 'Posting…' : 'Post feedback'),
         ),
         if (_feedbackError != null)
@@ -390,15 +456,16 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               _feedbackError!,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
           ),
         const Gap.lg(),
-        Text('Decision on version $currentVersion',
-            style: Theme.of(context).textTheme.labelMedium),
+        Text(
+          'Decision on version $currentVersion',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
         const Gap.sm(),
         // Where the chapter stands, so a decision shows once it is made.
         if (status != ChapterStatus.submitted) ...[
@@ -421,53 +488,55 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
           Text(
             status == ChapterStatus.approved
                 ? 'You approved version $currentVersion. Send it back to '
-                    'reopen it for revision.'
+                      'reopen it for revision.'
                 : 'Waiting for the group to upload a new version.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const Gap.sm(),
         ],
         if (status != ChapterStatus.approved) ...[
-        FilledButton.icon(
-          key: const Key('markApproved'),
-          style: FilledButton.styleFrom(
-            backgroundColor: Tone.endorsed.color(context),
-          ),
-          onPressed: _statusBusy
-              ? null
-              : () => _setStatus(
+          FilledButton.icon(
+            key: const Key('markApproved'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Tone.endorsed.color(context),
+            ),
+            onPressed: _statusBusy
+                ? null
+                : () => _setStatus(
                     thesisId: thesisId,
                     chapter: chapter,
                     status: ChapterStatus.approved,
                   ),
-          icon: const Icon(Icons.task_alt_rounded, size: 18),
-          label: const Text('Approve this chapter'),
-        ),
-        const Gap.sm(),
+            icon: const Icon(Icons.task_alt_rounded, size: 18),
+            label: const Text('Approve this chapter'),
+          ),
+          const Gap.sm(),
         ],
         if (status != ChapterStatus.revise)
-        OutlinedButton.icon(
-          key: const Key('markRevise'),
-          onPressed: _statusBusy
-              ? null
-              : () => _setStatus(
+          OutlinedButton.icon(
+            key: const Key('markRevise'),
+            onPressed: _statusBusy
+                ? null
+                : () => _setStatus(
                     thesisId: thesisId,
                     chapter: chapter,
                     status: ChapterStatus.revise,
                   ),
-          icon: Icon(Icons.undo_rounded,
-              size: 18, color: Tone.returned.color(context)),
-          label: const Text('Send back for revision'),
-        ),
+            icon: Icon(
+              Icons.undo_rounded,
+              size: 18,
+              color: Tone.returned.color(context),
+            ),
+            label: const Text('Send back for revision'),
+          ),
         if (_statusError != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               _statusError!,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
           ),
       ],
@@ -476,11 +545,10 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chapterRef =
-        (thesisId: widget.thesisId, chapter: widget.chapter);
+    final chapterRef = (thesisId: widget.thesisId, chapter: widget.chapter);
 
     // Read only to decide whether the review section renders, and to supply
-    // `reviewerName` on a posted remark -- NOT gated on with a full-page
+    // `reviewerName` on a posted remark: Not gated on with a full-page
     // loading/error branch the way the three streams below are. Those three
     // are this screen's primary content: collapsing their loading state into
     // absence has shipped real bugs here before. The adviser section is
@@ -498,12 +566,12 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     // Same fail-closed reasoning as `isAdviser` above, applied to the
     // upload control: an adviser, coordinator or dean who is shown "Upload
     // new version" will tap it, have the write denied by the rules, and
-    // watch the orphaned file get deleted again -- a control that is
+    // watch the orphaned file get deleted again: a control that is
     // visible and always fails is worse than no control at all.
     //
-    // The uid from auth, NOT from currentUserProvider. That provider chains
+    // The uid from auth, not from currentUserProvider. That provider chains
     // into a second Firestore stream on users/{uid}, and a missing profile
-    // document resolves to null forever rather than erroring -- which would
+    // document resolves to null forever rather than erroring, which would
     // silently and permanently hide the upload control from the one person
     // who must have it. leaderUid is a plain uid, so the profile read buys
     // nothing here.
@@ -515,20 +583,23 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
     // Watched only for the leader of a gated chapter; locked while the
     // group's defences are still loading, so Upload never flashes on.
     final gated = isLeader && widget.chapter.needsPassedPreOral;
-    final preOralPassed = !gated ||
+    final preOralPassed =
+        !gated ||
         passedPreOral(
-                ref.watch(myDefencesProvider).valueOrNull ?? const [],
-                widget.thesisId) !=
+              ref.watch(myDefencesProvider).valueOrNull ?? const [],
+              widget.thesisId,
+            ) !=
             null;
-    const lockedReason = 'Chapters IV and V open once the panel has passed '
-        'your pre-oral defence.';
+    const lockedReason =
+        'The Chapters I–V manuscript opens once the panel '
+        'has passed your pre-oral defense.';
 
     final chaptersAsync = ref.watch(chaptersProvider(widget.thesisId));
 
     // Each of the three streams below is checked on its own for loading and
     // error, rather than folded into `valueOrNull ?? []`. Collapsing a
     // still-loading stream into an empty list reads as "nothing here" and is
-    // indistinguishable from a chapter that genuinely has no versions yet --
+    // indistinguishable from a chapter that genuinely has no versions yet,
     // exactly the bug chapters_screen.dart's review caught.
     if (chaptersAsync.isLoading) {
       return _framed(const [LoadingState(label: 'Loading this chapter…')]);
@@ -579,11 +650,13 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
 
     if (thisChapter == null) {
       return _framed([
-        const EmptyState(
-          key: Key('notStarted'),
+        EmptyState(
+          key: const Key('notStarted'),
           icon: Icons.upload_file,
-          title: 'Not started',
-          message: 'Upload your first version to begin.',
+          title: isAdviser ? 'Nothing uploaded yet' : 'Not started',
+          message: isAdviser
+              ? 'The group has not uploaded a version.'
+              : 'Upload your first version to begin.',
         ),
         const Gap.lg(),
         // Leader-only, mirroring `isAdviser` below: only the thesis's own
@@ -619,8 +692,12 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                 for (final v in versions)
                   Container(
                     key: Key('versionRow-${v.version}'),
-                    padding: const EdgeInsets.fromLTRB(AppTokens.lg - 4,
-                        AppTokens.sm + 2, AppTokens.sm, AppTokens.sm + 2),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppTokens.lg - 4,
+                      AppTokens.sm + 2,
+                      AppTokens.sm,
+                      AppTokens.sm + 2,
+                    ),
                     decoration: BoxDecoration(
                       border: Border(bottom: BorderSide(color: pal.rule)),
                     ),
@@ -656,8 +733,10 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                                     : 'Version ${v.version}',
                                 style: text.labelLarge,
                               ),
-                              Text('Uploaded ${_formatDate(v.uploadedAt)}',
-                                  style: text.bodySmall),
+                              Text(
+                                'Uploaded ${_formatDate(v.uploadedAt)}',
+                                style: text.bodySmall,
+                              ),
                             ],
                           ),
                         ),
@@ -672,8 +751,9 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                             v.storagePath,
                             label: 'version ${v.version}',
                           ),
-                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                          label: const Text('Open'),
+                          // Previewed first, downloaded from the preview.
+                          icon: const Icon(Icons.visibility_outlined, size: 16),
+                          label: const Text('View'),
                         ),
                       ],
                     ),
@@ -684,14 +764,21 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
 
     final feedbackPanel = Panel(
       title: 'Feedback',
-      subtitle: 'From your adviser, newest last',
+      subtitle: isAdviser
+          ? 'Your remarks, newest last'
+          : 'From your adviser, newest last',
       icon: Icons.rate_review_outlined,
       flush: true,
       child: feedback.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(AppTokens.lg - 4),
-              child: Text('No feedback yet. Your adviser has not left a '
-                  'remark.', style: text.bodySmall),
+              child: Text(
+                isAdviser
+                    ? 'No feedback yet. You have not left a remark.'
+                    : 'No feedback yet. Your adviser has not left a '
+                          'remark.',
+                style: text.bodySmall,
+              ),
             )
           : Column(
               children: [
@@ -715,10 +802,14 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                                 spacing: AppTokens.sm,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  Text('${f.reviewerName}, ${f.reviewerRole}',
-                                      style: text.labelMedium),
-                                  Text('on version ${f.version}',
-                                      style: text.bodySmall),
+                                  Text(
+                                    '${f.reviewerName}, ${f.reviewerRole}',
+                                    style: text.labelMedium,
+                                  ),
+                                  Text(
+                                    'on version ${f.version}',
+                                    style: text.bodySmall,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 4),
@@ -739,17 +830,21 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
         maxWidth: AppTokens.measureWide,
         kicker: thesis?.workingTitle,
         title: widget.chapter.label,
-        subtitle: ChapterStatusWords.detailFor(status),
+        subtitle: ChapterStatusWords.detailFor(status, adviser: isAdviser),
         actions: [
           ToneBadge(
-            label: ChapterStatusWords.labelFor(status),
-            tone: ChapterStatusWords.toneFor(status),
-            icon: ChapterStatusWords.iconFor(status),
+            label: ChapterStatusWords.labelFor(status, adviser: isAdviser),
+            tone: ChapterStatusWords.toneFor(status, adviser: isAdviser),
+            icon: ChapterStatusWords.iconFor(status, adviser: isAdviser),
           ),
         ],
         children: [
           SplitColumns(
-            primary: [feedbackPanel, versionsPanel],
+            // The group acts on the feedback, so it comes first. The
+            // adviser reviews the file, so the versions do.
+            primary: isAdviser
+                ? [versionsPanel, feedbackPanel]
+                : [feedbackPanel, versionsPanel],
             secondary: [
               // Leader-only: only the leader can write a version.
               if (isLeader)
@@ -762,7 +857,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                         status == ChapterStatus.approved || !preOralPassed,
                     disabledReason: status == ChapterStatus.approved
                         ? 'This chapter is approved. Ask your adviser to '
-                            'reopen it before uploading again.'
+                              'reopen it before uploading again.'
                         : lockedReason,
                   ),
                 ),
@@ -782,12 +877,7 @@ class _ChapterDetailScreenState extends ConsumerState<ChapterDetailScreen> {
                   ),
                 ),
               if (!isLeader && !isAdviser)
-                Panel(
-                  child: Text(
-                    'Read-only.',
-                    style: text.bodySmall,
-                  ),
-                ),
+                Panel(child: Text('Read-only.', style: text.bodySmall)),
             ],
           ),
         ],

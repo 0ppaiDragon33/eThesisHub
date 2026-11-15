@@ -14,7 +14,7 @@ class RegistrationController {
   ///
   /// If the profile write fails after creating the auth account, the account
   /// is deleted to free the email for retry and prevent the UI from hanging.
-  /// Sending the verification email is NOT part of that rollback: it is
+  /// Sending the verification email is not part of that rollback: it is
   /// routine for it to fail transiently (e.g. `too-many-requests`), and once
   /// the profile document exists it can never be deleted (`firestore.rules`
   /// sets `allow delete: if false` on `users`), so destroying the auth

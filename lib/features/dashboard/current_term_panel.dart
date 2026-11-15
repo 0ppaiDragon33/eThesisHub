@@ -25,7 +25,7 @@ class CurrentTermPanel extends ConsumerWidget {
     } else if (termAsync.hasError) {
       line = 'Could not load the current term.';
     } else if (term == null) {
-      line = 'Not set yet. Set it so theses show their current year level.';
+      line = 'Not set yet.';
     } else {
       line = '${term.semester} semester, AY ${term.academicYear}';
     }

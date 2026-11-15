@@ -110,10 +110,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 controller: _password,
                 autofillHints: const [AutofillHints.newPassword],
                 // Rebuilds the meter as they type. The meter is guidance
-                // only — nothing here blocks a submission.
+                // only: nothing here blocks a submission.
                 onChanged: (_) => setState(() {}),
-                helperText: 'At least 8 characters. A phrase of a few '
-                    'words works well.',
+                helperText: 'At least 8 characters.',
               ),
               PasswordStrengthMeter(_password.text),
             ],

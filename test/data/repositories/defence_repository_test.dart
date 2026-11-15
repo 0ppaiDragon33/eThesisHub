@@ -23,7 +23,7 @@ Future<String> scheduleOne(DefenceRepository repo,
     type: type,
     // An hour ago, so the open window is already past. Fixing an absolute
     // date here would make every lifecycle test start failing once that date
-    // arrived -- or never pass before it.
+    // arrived, or never pass before it.
     scheduledAt: DateTime.now().subtract(const Duration(hours: 1)),
     venue: 'CICT AVR',
     panelUids: const ['p1', 'p2', 'p3'],
@@ -34,7 +34,7 @@ Future<String> scheduleOne(DefenceRepository repo,
 }
 
 void main() {
-  test('a scheduled defence starts at scheduled and unreleased', () async {
+  test('a scheduled defense starts at scheduled and unreleased', () async {
     final db = await seed();
     final repo = DefenceRepository(db);
 
@@ -64,7 +64,7 @@ void main() {
       repo.setStatus(defenceId: id, status: DefenceStatus.scheduled),
       throwsStateError,
     );
-    // `returnsNormally` matches a `Function`, not a `Future` — passing the
+    // `returnsNormally` matches a `Function`, not a `Future`: passing the
     // pending future to expectLater always fails with a type mismatch
     // regardless of outcome, so this asserts success by awaiting directly:
     // an unhandled throw here fails the test on its own.
@@ -82,7 +82,7 @@ void main() {
     );
   });
 
-  test('a comment is refused unless the defence is in progress', () async {
+  test('a comment is refused unless the defense is in progress', () async {
     final db = await seed();
     final repo = DefenceRepository(db);
     final id = await scheduleOne(repo);
@@ -141,7 +141,7 @@ void main() {
     expect(got.map((c) => c.body), ['First.', 'Second.']);
   });
 
-  test('release is refused until the defence is completed', () async {
+  test('release is refused until the defense is completed', () async {
     final db = await seed();
     final repo = DefenceRepository(db);
     final id = await scheduleOne(repo);
@@ -157,7 +157,7 @@ void main() {
     await expectLater(repo.release(id), throwsStateError);
   });
 
-  test('each role query returns only its own defences', () async {
+  test('each role query returns only its own defenses', () async {
     final db = await seed();
     await db.collection('theses').doc('t2').set({
       'leaderUid': 'l2', 'adviserUid': 'other',
@@ -181,7 +181,7 @@ void main() {
     expect(await repo.watchAll().first, hasLength(2));
   });
 
-  test('a defence cannot be opened before its window', () async {
+  test('a defense cannot be opened before its window', () async {
     // The accident this prevents: opening early and closing freezes an empty
     // log permanently, because the lifecycle is forward-only.
     final db = await seed();
@@ -203,7 +203,7 @@ void main() {
     );
   });
 
-  test('a defence opens inside the grace window, before its scheduled time',
+  test('a defense opens inside the grace window, before its scheduled time',
       () async {
     // Panels gather early and rooms run late, so the gate is a window rather
     // than an exact moment. 29 minutes out is inside the 30-minute grace.
@@ -225,7 +225,7 @@ void main() {
         DefenceStatus.inProgress);
   });
 
-  test('a scheduled defence can be cancelled, an open one cannot', () async {
+  test('a scheduled defense can be cancelled, an open one cannot', () async {
     final db = await seed();
     final repo = DefenceRepository(db);
     final id = await scheduleOne(repo);
@@ -234,7 +234,7 @@ void main() {
     expect((await repo.watchDefence(id).first)!.status,
         DefenceStatus.cancelled);
 
-    // Cancelling is for mistakes, not for abandoning a defence under way --
+    // Cancelling is for mistakes, not for abandoning a defence under way,
     // that one is closed, so the log stays a record of what was said.
     final other = await scheduleOne(repo);
     await repo.setStatus(defenceId: other, status: DefenceStatus.inProgress);
@@ -259,7 +259,7 @@ void main() {
     expect(after!.venue, 'Board Room');
     expect(after.scheduledAt!.difference(moved).inSeconds.abs(), lessThan(2));
 
-    // Move it back inside the open window before starting it -- the point
+    // Move it back inside the open window before starting it: the point
     // being tested here is that rescheduling stops once it starts, not the
     // window, which has its own tests above.
     await repo.reschedule(
@@ -299,7 +299,7 @@ void main() {
       return (await repo.watchDefence(id).first)!;
     }
 
-    test('writes the re-defence at the derived id, copying the failed one',
+    test('writes the redefense at the derived id, copying the failed one',
         () async {
       final db = await seed();
       final repo = DefenceRepository(db);
@@ -326,7 +326,7 @@ void main() {
       expect(again.panelVerdict, isNull);
     });
 
-    test('refuses a defence that did not fail', () async {
+    test('refuses a defense that did not fail', () async {
       final db = await seed();
       final repo = DefenceRepository(db);
       final passed = await failed(repo, db, verdict: 'pass');
@@ -337,7 +337,7 @@ void main() {
       );
     });
 
-    test('refuses to re-defend a re-defence', () async {
+    test('refuses to re-defend a redefense', () async {
       final db = await seed();
       final repo = DefenceRepository(db);
       final second = await failed(repo, db, redefenceOf: 'earlier');
@@ -348,7 +348,7 @@ void main() {
       );
     });
 
-    test('refuses a second re-defence of the same Fail', () async {
+    test('refuses a second redefense of the same Fail', () async {
       final db = await seed();
       final repo = DefenceRepository(db);
       final f = await failed(repo, db);

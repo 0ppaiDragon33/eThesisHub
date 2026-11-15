@@ -6,7 +6,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 /// Shared record primitives for the rebuilt interface.
 ///
 /// Lists are registers of rows with hover and focus states, grouped under a
-/// section heading — not stacks of individual cards.
+/// section heading, not stacks of individual cards.
 
 /// Opens a section: a sentence-case heading, an optional count or control,
 /// and a short accent under the heading rather than a full-width rule.
@@ -62,7 +62,7 @@ class RecordRow extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
 
-  /// When null the row is plain content with no ink response — a row that
+  /// When null the row is plain content with no ink response: a row that
   /// looks interactive but does nothing is worse than one that plainly is
   /// not.
   final VoidCallback? onTap;

@@ -85,20 +85,26 @@ export function mayReadThesis(
 /// coordinator, matching the `versions` rule in firestore.rules.
 ///
 /// [isArchived] is the repository case. Once a thesis is published to the
-/// `archive` collection its manuscript is browsable by any active reader —
-/// `firestore.rules` makes `archive/{id}` itself readable by `activeUser()`,
-/// and a published manuscript with no way to open it is not a repository.
-/// This applies ONLY to the manuscript, and ONLY once archived: a chapter
-/// draft never becomes public this way, and an in-progress manuscript stays
-/// members-only. "Completed" does not make every file public — it makes the
-/// one published file readable.
+/// `archive` collection its manuscript is readable by faculty-side roles
+/// (faculty, coordinator, dean) — matching `archive/{id}` in
+/// `firestore.rules`, which only the owner and faculty-side roles may read.
+/// A STUDENT who is not on the thesis gets nothing: students cannot see each
+/// other's archived work. The owner (the leader) already passes
+/// [mayReadThesis]. This applies ONLY to the manuscript, and ONLY once
+/// archived: a chapter draft never becomes readable this way.
 export function mayReadDocument(
   caller: CallerFacts,
   thesis: ThesisFacts,
   documentId: string,
   { isArchived = false }: { isArchived?: boolean } = {},
 ): boolean {
-  if (isArchived && documentId === "manuscript" && caller.active) return true;
+  if (
+    isArchived &&
+    documentId === "manuscript" &&
+    caller.active &&
+    caller.role !== null &&
+    caller.role !== "student"
+  ) return true;
   if (!mayReadThesis(caller, thesis)) return false;
   return true;
 }

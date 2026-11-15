@@ -10,17 +10,17 @@ import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/needs_you_item.dart';
 
 Tone toneOf(NeedsYouTone tone) => switch (tone) {
-      NeedsYouTone.act => Tone.act,
-      NeedsYouTone.waiting => Tone.awaiting,
-      NeedsYouTone.returned => Tone.returned,
-    };
+  NeedsYouTone.act => Tone.act,
+  NeedsYouTone.waiting => Tone.awaiting,
+  NeedsYouTone.returned => Tone.returned,
+};
 
 /// Opens a queue row: destinations are gone to, screens below one are
 /// pushed (see `NeedsYouItem.deep`).
 void openNeedsYou(BuildContext context, NeedsYouItem item) =>
     item.deep ? context.push(item.route) : context.go(item.route);
 
-/// "3 things need you" — the count is the length of the very list rendered
+/// "3 things need you": the count is the length of the very list rendered
 /// with it, so the two can never disagree. Says nothing while loading.
 class NeedsYouHeadline extends StatelessWidget {
   const NeedsYouHeadline({
@@ -33,11 +33,11 @@ class NeedsYouHeadline extends StatelessWidget {
   final String suffix;
 
   static String? leadFor(int? count) => switch (count) {
-        null => null,
-        0 => 'Nothing needs you today',
-        1 => '1 thing needs you today',
-        _ => '$count things need you today',
-      };
+    null => null,
+    0 => 'Nothing needs you today',
+    1 => '1 thing needs you today',
+    _ => '$count things need you today',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -45,14 +45,16 @@ class NeedsYouHeadline extends StatelessWidget {
     final lead = leadFor(items.valueOrNull?.length);
     final text = Theme.of(context).textTheme;
     return Text.rich(
-      TextSpan(children: [
-        if (lead != null)
-          TextSpan(
-            text: '$lead · ',
-            style: TextStyle(color: p.text, fontWeight: FontWeight.w600),
-          ),
-        TextSpan(text: suffix),
-      ]),
+      TextSpan(
+        children: [
+          if (lead != null)
+            TextSpan(
+              text: '$lead · ',
+              style: TextStyle(color: p.text, fontWeight: FontWeight.w600),
+            ),
+          TextSpan(text: suffix),
+        ],
+      ),
       style: text.bodyMedium?.copyWith(color: p.muted),
     );
   }
@@ -69,7 +71,7 @@ class NeedsYouQueue extends StatelessWidget {
     required this.items,
     required this.emptyTitle,
     required this.emptyMessage,
-    this.title = 'Waiting on you',
+    this.title = 'To do',
     this.featureFirst = true,
   });
 
@@ -80,6 +82,13 @@ class NeedsYouQueue extends StatelessWidget {
 
   /// Whether the first item is drawn as a prominent next step.
   final bool featureFirst;
+
+  /// A key that is unique among the rows even when two items share a
+  /// route (for example the same defence room reached as adviser and as
+  /// panel member). The position makes it unique; the route keeps it
+  /// readable and still findable in tests.
+  static Key _entryKey(int index, NeedsYouItem item) =>
+      Key('needsYouEntry-$index-${item.route}');
 
   @override
   Widget build(BuildContext context) {
@@ -109,22 +118,25 @@ class NeedsYouQueue extends StatelessWidget {
         }
         final first = featureFirst ? list.first : null;
         final rest = featureFirst ? list.skip(1).toList() : list;
-        return FadeIn(child: Panel(
-          title: title,
-          icon: Icons.inbox_outlined,
-          flush: true,
-          emphasis: featureFirst,
-          trailing: _CountPill(count: list.length),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (first != null)
-                _NextStep(key: Key('needsYouEntry-${first.route}'), item: first),
-              for (final item in rest)
-                _QueueRow(key: Key('needsYouEntry-${item.route}'), item: item),
-            ],
+        final offset = featureFirst ? 1 : 0;
+        return FadeIn(
+          child: Panel(
+            title: title,
+            icon: Icons.inbox_outlined,
+            flush: true,
+            emphasis: featureFirst,
+            trailing: list.length > 1 ? _CountPill(count: list.length) : null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (first != null)
+                  _NextStep(key: _entryKey(0, first), item: first),
+                for (var i = 0; i < rest.length; i++)
+                  _QueueRow(key: _entryKey(i + offset, rest[i]), item: rest[i]),
+              ],
+            ),
           ),
-        ));
+        );
       },
     );
   }
@@ -146,10 +158,9 @@ class _CountPill extends StatelessWidget {
       ),
       child: Text(
         '$count',
-        style: Theme.of(context)
-            .textTheme
-            .labelMedium
-            ?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onPrimary,
+        ),
       ),
     );
   }
@@ -170,51 +181,62 @@ class _NextStep extends StatelessWidget {
         color: p.seal.withValues(alpha: 0.05),
         border: Border(bottom: BorderSide(color: p.rule)),
       ),
-      child: LayoutBuilder(builder: (context, c) {
-        final narrow = c.maxWidth < 520;
-        final words = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Text('Next step',
-                    style: text.labelMedium?.copyWith(color: p.seal)),
-                const SizedBox(width: AppTokens.sm),
-                Flexible(
-                  child: ToneBadge(
-                    label: item.chipLabel,
-                    tone: toneOf(item.tone),
-                    dense: true,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppTokens.sm),
-            Text(item.title, style: text.titleLarge),
-            const SizedBox(height: AppTokens.xs),
-            Text(item.detail, style: text.bodyMedium?.copyWith(color: p.muted)),
-          ],
-        );
-        final button = FilledButton.icon(
-          onPressed: () => openNeedsYou(context, item),
-          icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-          label: const Text('Open'),
-        );
-        if (narrow) {
-          return Column(
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final narrow = c.maxWidth < 520;
+          final words = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [words, const SizedBox(height: AppTokens.md), button],
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Do first',
+                    style: text.labelMedium?.copyWith(color: p.seal),
+                  ),
+                  const SizedBox(width: AppTokens.sm),
+                  Flexible(
+                    child: ToneBadge(
+                      label: item.chipLabel,
+                      tone: toneOf(item.tone),
+                      dense: true,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppTokens.sm),
+              Text(item.title, style: text.titleLarge),
+              const SizedBox(height: AppTokens.xs),
+              Text(
+                item.detail,
+                style: text.bodyMedium?.copyWith(color: p.muted),
+              ),
+            ],
           );
-        }
-        return Row(
-          children: [
-            Expanded(child: words),
-            const SizedBox(width: AppTokens.lg),
-            button,
-          ],
-        );
-      }),
+          final button = FilledButton.icon(
+            onPressed: () => openNeedsYou(context, item),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: const Text('Open'),
+          );
+          if (narrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                words,
+                const SizedBox(height: AppTokens.md),
+                button,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: words),
+              const SizedBox(width: AppTokens.lg),
+              button,
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -235,56 +257,68 @@ class _QueueRow extends StatelessWidget {
         onTap: () => openNeedsYou(context, item),
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.lg - 4, vertical: AppTokens.md - 2),
+            horizontal: AppTokens.lg - 4,
+            vertical: AppTokens.md - 2,
+          ),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: p.rule)),
           ),
-          child: LayoutBuilder(builder: (context, c) {
-            final narrow = c.maxWidth < 520;
-            final badge = ToneBadge(
-                label: item.chipLabel, tone: tone, dense: true);
-            return Row(
-              children: [
-                Icon(tone.icon, size: 20, color: tone.color(context)),
-                const SizedBox(width: AppTokens.md - 2),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.title,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final narrow = c.maxWidth < 520;
+              final badge = ToneBadge(
+                label: item.chipLabel,
+                tone: tone,
+                dense: true,
+              );
+              return Row(
+                children: [
+                  Icon(tone.icon, size: 20, color: tone.color(context)),
+                  const SizedBox(width: AppTokens.md - 2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: text.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(item.detail,
+                          style: text.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item.detail,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall),
-                      if (narrow) ...[
-                        const SizedBox(height: AppTokens.xs + 2),
-                        badge,
+                          style: text.bodySmall,
+                        ),
+                        if (narrow) ...[
+                          const SizedBox(height: AppTokens.xs + 2),
+                          badge,
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                if (narrow)
-                  Icon(Icons.chevron_right_rounded, color: p.muted)
-                else ...[
-                  const SizedBox(width: AppTokens.sm),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 170),
-                    child: badge,
-                  ),
-                  const SizedBox(width: AppTokens.sm),
-                  TextButton(
-                    onPressed: () => openNeedsYou(context, item),
-                    child: const Text('Open'),
-                  ),
+                  if (narrow)
+                    Icon(Icons.chevron_right_rounded, color: p.muted)
+                  else ...[
+                    const SizedBox(width: AppTokens.sm),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 170),
+                      child: badge,
+                    ),
+                    const SizedBox(width: AppTokens.sm),
+                    TextButton(
+                      onPressed: () => openNeedsYou(context, item),
+                      child: const Text('Open'),
+                    ),
+                  ],
                 ],
-              ],
-            );
-          }),
+              );
+            },
+          ),
         ),
       ),
     );

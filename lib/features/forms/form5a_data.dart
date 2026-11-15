@@ -1,7 +1,7 @@
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 
-/// Everything Form 5a prints — the student's letter requesting the final
+/// Everything Form 5a prints: the student's letter requesting the final
 /// oral defence. See `Form3Data`'s doc comment for why the coordinator
 /// and dean lines carry no data even when the letter is otherwise filled:
 /// this app tracks no digital sign-off for a defence request.

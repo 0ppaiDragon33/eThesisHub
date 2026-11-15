@@ -3,22 +3,88 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 
 void main() {
-  test('there are exactly five chapters, in order', () {
+  test('there are the five old chapters, then the two manuscripts', () {
+    // The old ids come first and keep their order: records written before
+    // manuscripts existed still read as they did.
     expect(ChapterId.values.map((c) => c.value), [
       'chapterI', 'chapterII', 'chapterIII', 'chapterIV', 'chapterV',
+      'manuscriptProposal', 'manuscriptFinal',
     ]);
+    expect(ChapterId.legacyChapters.length, 5);
+    expect(ChapterId.manuscripts,
+        [ChapterId.manuscriptProposal, ChapterId.manuscriptFinal]);
   });
 
-  test('the proposal gate is I-III and the final gate is all five', () {
-    // Pre-oral covers the proposal; the final defence adds Results and
-    // Conclusions. Two readiness signals from the same five documents.
+  test('the manuscripts are named for the chapters they cover', () {
+    expect(ChapterId.manuscriptProposal.label, 'Manuscript — Chapters I–III');
+    expect(ChapterId.manuscriptFinal.label, 'Manuscript — Chapters I–V');
+    expect(ChapterId.manuscriptProposal.mark, 'I–III');
+    expect(ChapterId.manuscriptFinal.mark, 'I–V');
+    expect(ChapterId.chapterII.mark, 'II');
+    expect(ChapterId.chapterII.heading, 'Related Literature');
+    expect(ChapterId.manuscriptFinal.heading, 'Manuscript — Chapters I–V');
+  });
+
+  test('only the full manuscript, and old IV and V, wait for the pre-oral',
+      () {
+    for (final id in ChapterId.values) {
+      expect(
+          id.needsPassedPreOral,
+          const [ChapterId.chapterIV, ChapterId.chapterV,
+                 ChapterId.manuscriptFinal].contains(id),
+          reason: id.name);
+    }
+  });
+
+  test('the legacy proposal gate is I-III and the final gate is all five',
+      () {
+    // For a thesis that uploaded chapter by chapter, before manuscripts.
     expect(ChapterId.proposalChapters,
         [ChapterId.chapterI, ChapterId.chapterII, ChapterId.chapterIII]);
-    expect(ChapterId.finalChapters, ChapterId.values);
+    expect(ChapterId.finalChapters, ChapterId.legacyChapters);
+  });
+
+  group('manuscriptShelf: one manuscript at a time', () {
+    test('before the pre-oral it is the Chapters I-III manuscript', () {
+      final shelf = manuscriptShelf(preOralPassed: false);
+      expect(shelf.current, ChapterId.manuscriptProposal);
+      expect(shelf.earlier, isNull);
+      expect(shelf.legacy, isEmpty);
+    });
+
+    test('after the pre-oral it is the Chapters I-V manuscript, and the '
+        'proposal one is kept as earlier only if it was uploaded', () {
+      expect(manuscriptShelf(preOralPassed: true).current,
+          ChapterId.manuscriptFinal);
+      expect(manuscriptShelf(preOralPassed: true).earlier, isNull);
+      expect(
+          manuscriptShelf(
+              preOralPassed: true,
+              uploaded: [ChapterId.manuscriptProposal]).earlier,
+          ChapterId.manuscriptProposal);
+    });
+
+    test('a full manuscript already on file is current whatever the '
+        'defenses say', () {
+      expect(
+          manuscriptShelf(
+              preOralPassed: false,
+              uploaded: [ChapterId.manuscriptFinal]).current,
+          ChapterId.manuscriptFinal);
+    });
+
+    test('old per-chapter records are listed, in order, and only those '
+        'that exist', () {
+      final shelf = manuscriptShelf(
+          preOralPassed: false,
+          uploaded: [ChapterId.chapterIII, ChapterId.chapterI]);
+      expect(shelf.legacy, [ChapterId.chapterI, ChapterId.chapterIII]);
+      expect(shelf.current, ChapterId.manuscriptProposal);
+    });
   });
 
   test('an unknown chapter id is null, not a silent default', () {
-    // fromString must NOT fall back to chapterI: a typo would then write
+    // fromString must not fall back to chapterI: a typo would then write
     // Chapter III's file over Chapter I's record.
     expect(ChapterId.fromString('chapterVI'), isNull);
     expect(ChapterId.fromString(null), isNull);

@@ -32,7 +32,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 ///   between the Dean (approve) and the Coordinator (recommend).
 ///
 /// A route with no entry falls back to the app's name rather than to an
-/// empty bar — a bar with no words in it still leaves the reader unsure
+/// empty bar: a bar with no words in it still leaves the reader unsure
 /// where they are, which is the complaint this milestone answers.
 String shellTitleFor(
   String location,
@@ -54,17 +54,17 @@ String shellTitleFor(
   }
 
   // The defence routes carry a path parameter, so `matchedLocation` is the
-  // resolved path, never the registered pattern — these cannot be looked up
+  // resolved path, never the registered pattern: these cannot be looked up
   // in the table below. Ordered most specific first, and '/defence/schedule'
   // is settled before the ':thesisId' catch-all for the same reason the
   // router registers it first: 'schedule' would otherwise read as a thesis
   // id.
   if (location.startsWith('/defence/room/')) {
     if (location.endsWith('/manuscript')) return 'Manuscript';
-    return 'Defence room';
+    return 'Defense room';
   }
   if (location != '/defence/schedule' && location.startsWith('/defence/')) {
-    return 'Title defence';
+    return 'Title defense';
   }
 
   if (location != '/archive/queue' && location.startsWith('/archive/')) {
@@ -84,14 +84,14 @@ String shellTitleFor(
 
 /// Static route -> title lookup for [shellTitleFor].
 ///
-/// '/overview' names itself, not the app: spec §5.4 says the bar names the
+/// '/overview' names itself, not the app: says the bar names the
 /// screen you are on, and 'eThesisHub' on the one destination every role
-/// lands on first said the opposite -- the sidebar's own label for it is
+/// lands on first said the opposite: the sidebar's own label for it is
 /// 'Dashboard' (see `shell_destination.dart`), so the two must agree about
 /// what to call the same screen.
 const _staticTitles = {
   '/overview': 'Dashboard',
-  '/defences': 'Defences',
+  '/defences': 'Defenses',
   '/calendar': 'Calendar',
   '/advisees': 'Advisees',
   '/panels': 'Panels',
@@ -104,7 +104,7 @@ const _staticTitles = {
   '/thesis/nominate': 'Nominate adviser and panel',
   '/thesis/titles': 'Candidate titles',
   '/thesis/chapters': 'Chapters',
-  '/defence/schedule': 'Schedule a defence',
+  '/defence/schedule': 'Schedule a defense',
   '/nominations': 'Nomination inbox',
   '/invites': 'Invites',
   '/users': 'Users',
@@ -164,7 +164,7 @@ class AppShellHost extends ConsumerWidget {
             if (role == UserRole.faculty) FacultyModeSwitch(location: location),
           ],
         ),
-        // Name, role and sign-out at the foot of the sidebar (spec §5.3),
+        // Name, role and sign-out at the foot of the sidebar,
         // where it used to be a bare `SignOutButton` repeated in four
         // dashboards' app bars with no identity shown anywhere but the
         // '/overview' greeting.
@@ -172,7 +172,7 @@ class AppShellHost extends ConsumerWidget {
         // '/no-profile' is this milestone's designated dead end: no
         // destination owns it (the sidebar is empty for an unknown role, by
         // design), so `isDeeperThanDestination` always answers true there
-        // and a back control would render -- but `_back` below always falls
+        // and a back control would render, but `_back` below always falls
         // through to the same '/overview' redirect that immediately bounces
         // back to '/no-profile', so tapping it does nothing. A control that
         // does nothing on the app's own dead-end screen is exactly what this
@@ -186,10 +186,10 @@ class AppShellHost extends ConsumerWidget {
   }
 
   /// Back, for an app whose navigation is a mix of `context.go` (onto a
-  /// destination) and `context.push` (onto a screen below one, per D23).
+  /// destination) and `context.push` (onto a screen below one).
   ///
   /// A pushed screen has a real Navigator entry beneath it, so `canPop`
-  /// answers true and a plain pop is correct and sufficient -- see below.
+  /// answers true and a plain pop is correct and sufficient: see below.
   /// This structural fallback exists for what a pop cannot handle: a deep
   /// screen reached directly by URL (a bookmark, a refresh, a shared link)
   /// has nothing beneath it in THIS Navigator to pop to, so it rises to
@@ -216,7 +216,7 @@ class AppShellHost extends ConsumerWidget {
 ///
 /// Watches [currentUserProvider] itself: the one account this footer must
 /// still serve is the one whose profile is missing, so a missing or failed
-/// profile degrades to the two controls alone — never a blank footer and
+/// profile degrades to the two controls alone, never a blank footer and
 /// never a thrown error.
 class AccountFooter extends ConsumerWidget {
   const AccountFooter({super.key});

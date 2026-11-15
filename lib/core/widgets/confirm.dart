@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 /// A yes/no confirmation before an action that is hard to take back.
 ///
 /// Returns true only when the reader picks the confirming button. Kept in one
-/// place so every "are you sure?" reads and behaves the same — the same
-/// button order, the same dismissal-is-no default — rather than each screen
+/// place so every "are you sure?" reads and behaves the same: the same
+/// button order, the same dismissal-is-no default, rather than each screen
 /// rolling its own `showDialog<bool>`.
 ///
 /// [confirmKey] lets a test drive the confirming button; [cancelLabel]

@@ -11,7 +11,7 @@ import 'package:ethesishub/data/models/user_role.dart';
 /// the defence room and tells the reader they are somewhere they are
 /// not. Ownership is therefore declared, never inferred.
 /// The sidebar's section headings, in the order they appear. Grouping the
-/// destinations under these — rather than one flat list — is what lets a
+/// destinations under these (rather than one flat list) is what lets a
 /// reader see at a glance what each area is for: where you are (Overview),
 /// the work in front of you (Workflow), the accounts you administer
 /// (Management), and the reference material open to everyone (Resources).
@@ -49,7 +49,7 @@ class ShellDestination {
 
   /// True when [location] is this destination or sits beneath it.
   ///
-  /// A nested match requires the separator — '/thesis/chapters' owns
+  /// A nested match requires the separator: '/thesis/chapters' owns
   /// '/thesis/chapters/chapterIII' but must never own a hypothetical
   /// '/thesis/chaptersArchive', which is a different screen that merely
   /// starts with the same characters.
@@ -74,7 +74,7 @@ List<ShellDestination> destinationsFor({
   required UserRole role,
   bool chaptersUnlocked = false,
   // Nullable: `null` means the member currently holds neither designation
-  // nor a position for either mode, and (spec §6) gets neither the Advisees
+  // nor a position for either mode, and gets neither the Advisees
   // nor the Panels destination at all rather than one that leads to an
   // empty screen.
   FacultyMode? facultyMode = FacultyMode.adviser,
@@ -86,7 +86,7 @@ List<ShellDestination> destinationsFor({
     section: ShellSection.overview,
   );
   const defences = ShellDestination(
-    label: 'Defences',
+    label: 'Defenses',
     icon: Icons.event_note_outlined,
     route: '/defences',
     section: ShellSection.workflow,
@@ -109,9 +109,13 @@ List<ShellDestination> destinationsFor({
     route: '/archive',
     section: ShellSection.resources,
   );
-  // Blank templates for all three forms are reachable with no data at all
-  // (see forms_screen.dart's own doc comment) — unlike everything else on
-  // this list, nothing gates this destination for any role.
+  // Blank templates for the forms are reachable with no data at all (see
+  // forms_screen.dart's own doc comment): unlike everything else on this
+  // list, nothing gates this destination for a student. It is a student's
+  // destination only: faculty, the Research Coordinator and the Dean reach
+  // the forms they fill in from the screen that asks for them (the
+  // nomination inbox, the evaluation screen, the review queue), and their
+  // own copies from My files, so none of them is offered the library.
   const forms = ShellDestination(
     label: 'Forms',
     icon: Icons.description_outlined,
@@ -126,7 +130,7 @@ List<ShellDestination> destinationsFor({
     route: '/files',
     section: ShellSection.resources,
   );
-  // The activity log — coordinator and dean only, the two roles the rules
+  // The activity log: coordinator and dean only, the two roles the rules
   // let read auditLogs.
   const audit = ShellDestination(
     label: 'Activity log',
@@ -163,7 +167,7 @@ List<ShellDestination> destinationsFor({
         // One or the other, never both: the mode is the primary axis and
         // each mode is its own clean list (design decision D5). `null`
         // (neither designated nor holding a position for either mode)
-        // declares NEITHER destination — not an empty one (spec §6).
+        // declares NEITHER destination, not an empty one.
         if (facultyMode == FacultyMode.adviser)
           const ShellDestination(
             label: 'Advisees',
@@ -184,7 +188,6 @@ List<ShellDestination> destinationsFor({
           route: '/nominations',
         ),
         archive,
-        forms,
         myFiles,
       ],
     UserRole.dean => [
@@ -203,7 +206,6 @@ List<ShellDestination> destinationsFor({
         ),
         audit,
         archive,
-        forms,
         myFiles,
       ],
     UserRole.coordinator => [
@@ -213,12 +215,26 @@ List<ShellDestination> destinationsFor({
           icon: Icons.fact_check_outlined,
           route: '/recommendations',
         ),
+        // Theses stuck on a declined nominee, for the Coordinator to reopen.
+        const ShellDestination(
+          label: 'Stalled nominations',
+          icon: Icons.report_outlined,
+          route: '/stalled',
+        ),
         defences,
         calendar,
         const ShellDestination(
           label: 'Readiness',
           icon: Icons.checklist_outlined,
           route: '/readiness',
+        ),
+        // Theses that passed their final defense and wait to be published.
+        // Longer than '/archive', so on this screen it is the one that is
+        // highlighted, not Archive.
+        const ShellDestination(
+          label: 'Publish queue',
+          icon: Icons.upload_outlined,
+          route: '/archive/queue',
         ),
         const ShellDestination(
           label: 'Users',
@@ -229,7 +245,6 @@ List<ShellDestination> destinationsFor({
         ),
         audit,
         archive,
-        forms,
         myFiles,
       ],
   };
@@ -241,7 +256,7 @@ List<ShellDestination> destinationsFor({
 /// than highlighting the wrong thing.
 ///
 /// When multiple destinations own a location, returns the most specific
-/// one -- the one whose matched root (its [ShellDestination.route] or one
+/// one: the one whose matched root (its [ShellDestination.route] or one
 /// of its [ShellDestination.alsoOwns] entries) is longest, since nested
 /// roots like '/thesis/chapters' should be preferred over '/thesis'.
 ///
@@ -277,9 +292,9 @@ ShellDestination? destinationForLocation(
 /// destination owns at all. In both the sidebar alone cannot return the
 /// reader where they came from.
 ///
-/// An `alsoOwns` root is NOT one of those cases. `alsoOwns` names a route
-/// the destination owns as a PEER of its own -- the Users destination owns
-/// '/users' and '/invites' as its two tabs -- not a screen nested beneath
+/// An `alsoOwns` root is not one of those cases. `alsoOwns` names a route
+/// the destination owns as a PEER of its own: the Users destination owns
+/// '/users' and '/invites' as its two tabs, not a screen nested beneath
 /// it. Comparing against `owner.route` alone made '/invites' answer `true`
 /// and drew a back control on a top-level tab, which says "you are one
 /// level down" about a place you are not, and points at whatever route the
@@ -298,7 +313,7 @@ bool isDeeperThanDestination(
   return location != owner.route && !owner.alsoOwns.contains(location);
 }
 
-/// Whether [route] is a screen below a destination for [role] -- the exact
+/// Whether [route] is a screen below a destination for [role]: the exact
 /// ownership test the shell itself runs to decide the back control (see
 /// [isDeeperThanDestination]), applied ahead of time so anything that hands
 /// out a route (a needs-you queue, a card's "Open" button) can decide
@@ -306,11 +321,11 @@ bool isDeeperThanDestination(
 ///
 /// This is deliberately role-dependent, not a fixed list of "deep routes":
 /// '/thesis/chapters' is the Chapters destination itself for a student
-/// once chapters are unlocked, so it is NOT deep for one, but no faculty,
+/// once chapters are unlocked, so it is not deep for one, but no faculty,
 /// dean or coordinator destination owns it at all, so the very same route
-/// IS deep for those roles. Callers reading a route on behalf of a role
-/// that is not its own -- an adviser opening a student's chapters, a
-/// coordinator opening one from the readiness list -- always get `true`,
+/// is deep for those roles. Callers reading a route on behalf of a role
+/// that is not its own: an adviser opening a student's chapters, a
+/// coordinator opening one from the readiness list: always get `true`,
 /// which is correct: that reader has no destination to return them to
 /// there, so the screen must be pushed to leave a real back stop.
 ///
@@ -319,7 +334,7 @@ bool isDeeperThanDestination(
 ///
 /// [chaptersUnlocked] and [facultyMode] only change the answer for a
 /// student or faculty role respectively, and only for routes under
-/// '/thesis' or the Advisees/Panels pair -- they default to the most
+/// '/thesis' or the Advisees/Panels pair: they default to the most
 /// permissive values because a caller checking a route it just built
 /// (inside the branch that proves the gate is already open) knows its own
 /// answer is right either way.

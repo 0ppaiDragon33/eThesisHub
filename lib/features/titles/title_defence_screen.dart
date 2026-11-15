@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ethesishub/core/components/document.dart';
 import 'package:ethesishub/core/design/panel.dart';
@@ -11,6 +10,7 @@ import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/app_user.dart';
@@ -19,22 +19,16 @@ import 'package:ethesishub/data/models/composing_indicator.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/title_comment.dart';
 import 'package:ethesishub/data/models/user_role.dart';
-import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
-import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
-/// Opens an uploaded document. Injectable so a widget test can assert the
-/// panel really can reach a justification without a platform browser.
+/// Hands an uploaded document to the platform, for the Download on a file
+/// the viewer cannot preview (a PPTX). Injectable so a widget test can
+/// assert the panel really reaches the right file without a platform
+/// browser. The default, in `open_document.dart`, is `url_launcher` rather
+/// than `dart:io`: this app ships to Web as well as Android.
 typedef UrlOpener = Future<bool> Function(Uri url);
-
-/// `url_launcher` rather than `dart:io`: this app ships to Web as well as
-/// Android, and `dart:io` does not exist there. `externalApplication` opens
-/// a new tab on Web and the system viewer on Android, so a PDF or a PPTX
-/// is handed to something that can actually display it.
-Future<bool> _realOpener(Uri url) =>
-    launchUrl(url, mode: LaunchMode.externalApplication);
 
 /// The position this person holds on THIS thesis, which is what a comment
 /// records. Not their account role: a coordinator sitting as a nominated
@@ -51,7 +45,7 @@ String _roleOnThisThesis(Thesis thesis, AppUser me) {
 
 /// The room the title defence actually runs in.
 ///
-/// One screen for the whole panel — every panel member watches the same
+/// One screen for the whole panel: every panel member watches the same
 /// candidates, posts remarks that appear live for everyone else, and sees who
 /// else is currently composing. The Dean, who is also a panel member, gets an
 /// addition rather than a separate screen: buttons to approve one candidate
@@ -116,7 +110,7 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
   /// outright to anyone not on the panel: `titleComposing` allows create
   /// only for `isOnPanel()`, while get/list also allows the Coordinator and
   /// the Dean. So a Coordinator or Dean reading this screen is shown a
-  /// comment box, focuses it, and the write is denied — once on focus and
+  /// comment box, focuses it, and the write is denied: once on focus and
   /// then again on every heartbeat.
   ///
   /// Nothing awaits these writes, so each refusal escaped to the browser as
@@ -166,8 +160,13 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
   ///
   /// Takes the storage PATH, not a URL. The bucket is private, so the link
   /// is minted per-open by the `document-url` function, which checks that
-  /// this panel member is on this thesis before it signs — a stored public
+  /// this panel member is on this thesis before it signs: a stored public
   /// URL would have opened for anyone who ever saw it.
+  ///
+  /// Opens in the document viewer, like every other stored document: a
+  /// justification (a PDF) is previewed there and downloaded from the
+  /// preview; the presentation, which cannot be drawn here, offers its
+  /// Download straight away.
   Future<void> _open(String? path, String what) async {
     if (path == null || path.isEmpty) {
       setState(() => _error = 'No $what was uploaded for this thesis.');
@@ -175,22 +174,16 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     }
     setState(() => _error = null);
     try {
-      final url = await ref.read(storageServiceProvider).signedUrl(path);
-      final uri = Uri.tryParse(url);
-      if (uri == null) {
-        if (mounted) setState(() => _error = 'That $what link is not valid.');
-        return;
-      }
-      final opened = await (widget.openUrl ?? _realOpener)(uri);
-      if (!opened && mounted) {
-        setState(() => _error = 'Could not open the $what.');
-      }
-    } on StorageFailure catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      await openStoredDocument(context, ref, path,
+          label: 'The $what', externalOpener: widget.openUrl);
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not open the $what.');
     }
   }
+
+  static const _commentsClosedMessage =
+      'Comments are closed: the Dean has recorded a decision on this '
+      'title defense.';
 
   Future<void> _postComment(
     String candidateId,
@@ -198,6 +191,12 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     Thesis thesis,
   ) async {
     if (_busyComment != null) return;
+    // The Dean may decide while a remark is being typed. Say so, rather
+    // than let the write be refused and read as a permissions problem.
+    if (thesis.status.value != 'titlePendingDefence') {
+      setState(() => _error = _commentsClosedMessage);
+      return;
+    }
     final controller = _controllerFor(candidateId);
     final text = controller.text.trim();
     if (text.isEmpty) {
@@ -225,7 +224,9 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     } on FirebaseException catch (e) {
       if (mounted) {
         setState(() => _error = e.code == 'permission-denied'
-            ? 'You do not have permission to comment on this thesis.'
+            ? (thesis.status.value != 'titlePendingDefence'
+                ? _commentsClosedMessage
+                : 'You do not have permission to comment on this thesis.')
             : 'Could not post the comment. Please try again.');
       }
     } catch (_) {
@@ -329,7 +330,7 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
   @override
   void dispose() {
     // A periodic timer that outlives this screen would keep writing to
-    // Firestore forever — Spark allows only 20,000 writes a day.
+    // Firestore forever. Spark allows only 20,000 writes a day.
     _heartbeat?.cancel();
     for (final c in _controllers.values) {
       c.dispose();
@@ -362,7 +363,7 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
     if (meAsync.isLoading || thesisAsync.isLoading) {
       return const PageShell(
         maxWidth: 900,
-        children: [LoadingState.page(label: 'Loading the title defence…')],
+        children: [LoadingState.page(label: 'Loading the title defense…')],
       );
     }
     if (meAsync.hasError) {
@@ -403,7 +404,7 @@ class _TitleDefenceScreenState extends ConsumerState<TitleDefenceScreen> {
       key: const Key('titleDefenceScreen'),
       child: PageShell(
         maxWidth: 900,
-        kicker: 'Title defence, round ${thesis.titleRound}',
+        kicker: 'Title defense, round ${thesis.titleRound}',
         title: thesis.workingTitle,
         subtitle: isDean
             ? 'Approve one title or return the set.'
@@ -721,31 +722,52 @@ class _CandidateCard extends StatelessWidget {
                       ),
                     ),
                 const SizedBox(height: AppTokens.xs),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        key: Key('commentBox-${candidate.id}'),
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: const InputDecoration(
-                          hintText: 'Add a remark on this candidate',
+                // Remarks end with the decision. Once the Dean has approved
+                // a title (or returned the set) the thread is a record: no
+                // box to type in, no Post button. The rules refuse the write
+                // as well, so this is not the only thing holding it shut.
+                if (canDecide)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: Key('commentBox-${candidate.id}'),
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            hintText: 'Add a remark on this candidate',
+                          ),
+                          minLines: 1,
+                          maxLines: 4,
                         ),
-                        minLines: 1,
-                        maxLines: 4,
                       ),
-                    ),
-                    const SizedBox(width: AppTokens.sm),
-                    FilledButton(
-                      key: Key('postComment-${candidate.id}'),
-                      style: FilledButton.styleFrom(
-                          minimumSize: const Size(64, 52)),
-                      onPressed: busy ? null : onPost,
-                      child: Text(busy ? 'Posting…' : 'Post'),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: AppTokens.sm),
+                      FilledButton(
+                        key: Key('postComment-${candidate.id}'),
+                        style: FilledButton.styleFrom(
+                            minimumSize: const Size(64, 52)),
+                        onPressed: busy ? null : onPost,
+                        child: Text(busy ? 'Posting…' : 'Post'),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    key: Key('commentsClosed-${candidate.id}'),
+                    children: [
+                      Icon(Icons.lock_outline_rounded,
+                          size: 16, color: p.muted),
+                      const SizedBox(width: AppTokens.xs + 2),
+                      Expanded(
+                        child: Text(
+                          'Comments are closed. The Dean has recorded a '
+                          'decision.',
+                          style: text.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

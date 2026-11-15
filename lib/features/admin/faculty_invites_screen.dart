@@ -20,9 +20,9 @@ import 'package:ethesishub/providers/service_providers.dart';
 /// Lets a Research Coordinator promote someone to faculty, coordinator or
 /// dean without opening the Firebase Console.
 ///
-/// The coordinator is this system's administrator — the project owner
+/// The coordinator is this system's administrator: the project owner
 /// collapsed six roles into five precisely so the coordinator absorbs that
-/// job — and issuing invites is the clearest thing that makes them one.
+/// job, and issuing invites is the clearest thing that makes them one.
 /// Until this screen existed the whole promotion path lived outside the app.
 ///
 /// An invite is not a role grant. It records that an address *may* claim a
@@ -31,7 +31,7 @@ import 'package:ethesishub/providers/service_providers.dart';
 /// is deliberate: it means no coordinator ever writes another account's
 /// `role` field, and the security rules enforce exactly that.
 ///
-/// A coordinator can never invite themselves — `firestore.rules` refuses it —
+/// A coordinator can never invite themselves: `firestore.rules` refuses it,
 /// which is what closes the self-elevation path found and fixed earlier on
 /// this project.
 class FacultyInvitesScreen extends ConsumerStatefulWidget {
@@ -54,7 +54,7 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
   bool _busy = false;
 
   /// The three roles the rules accept on an invite. `student` is absent by
-  /// design — an account starts as a student and is only ever promoted.
+  /// design: an account starts as a student and is only ever promoted.
   static const _invitableRoles = [
     UserRole.faculty,
     UserRole.coordinator,
@@ -76,7 +76,7 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
       setState(() => _error = 'Enter the institutional email address.');
       return;
     }
-    // Refused by the rules too — this is the client half of the same guard,
+    // Refused by the rules too: this is the client half of the same guard,
     // here only so the coordinator gets a reason rather than a denial.
     if (email == myEmail.toLowerCase()) {
       setState(() => _error =
@@ -275,8 +275,6 @@ class _FacultyInvitesScreenState extends ConsumerState<FacultyInvitesScreen> {
             secondary: [
               Panel(
                 title: 'Invites',
-                subtitle: 'Open invites can be retracted; claimed ones are '
-                    'the record of a promotion',
                 icon: Icons.mail_outline_rounded,
                 flush: true,
                 child: invitesAsync.when(

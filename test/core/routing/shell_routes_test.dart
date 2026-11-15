@@ -10,12 +10,12 @@ import 'package:ethesishub/core/routing/app_router.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-// Task 6: each of the eight sidebar destinations gets its own registered
+// Each of the eight sidebar destinations gets its own registered
 // path, but the old dashboard routes ('/dean', '/faculty', etc.) still
-// work too -- this task only adds routes, it does not switch anything
+// work too: this task only adds routes, it does not switch anything
 // over. Every test below drives a real GoRouter (never pumps a screen
-// directly), because only a router-level test can see a route collision --
-// this project has already lost a screen to exactly that failure once
+// directly), because only a router-level test can see a route collision,
+// we have already lost a screen to exactly that failure once
 // ('/faculty' registered twice left the invites screen unreachable, see
 // app_router.dart's own comment above '/invites').
 Future<ProviderContainer> containerForRole(
@@ -203,8 +203,8 @@ void main() {
     await tester.pumpAndSettle();
     // At this test's 1000px width the switch now fits its short labels
     // without scrolling (Task: the stage switch fits by its own width), so
-    // every segment -- Re-defence included -- is already hittable.
-    await tester.tap(find.text('Re-defence'));
+    // every segment (Re-defence included) is already hittable.
+    await tester.tap(find.text('Redefense'));
     await tester.pumpAndSettle();
     expect(locationOf(c), '/defences?stage=redefence');
   });
@@ -215,7 +215,7 @@ void main() {
     final db = FakeFirebaseFirestore();
     final c = await containerForRole('faculty', db, uid: 'u1');
     // At least one defence, or the calendar collapses to its own
-    // 'noDefences' EmptyState instead of the grid -- the same shape
+    // 'noDefences' EmptyState instead of the grid: the same shape
     // DefencesList uses.
     await db.collection('defenses').doc('d1').set({
       'thesisId': 't1', 'type': 'preOral',
@@ -244,7 +244,7 @@ void main() {
         '/calendar');
   });
 
-  // Not '/titles' -- '/thesis/titles' already exists for submitting a
+  // Not '/titles': '/thesis/titles' already exists for submitting a
   // candidate title set. Two routes a character apart meaning different
   // things is exactly how '/faculty' came to be registered twice, leaving
   // the invites screen permanently unreachable. This confirms the two
@@ -281,7 +281,7 @@ void main() {
   });
 
   // The collision guard. '/faculty' was once registered twice, leaving the
-  // invites screen permanently unreachable -- caught only because a
+  // invites screen permanently unreachable: caught only because a
   // router-level test walked the registered routes rather than pumping a
   // screen directly. `configuration.routes` is public on GoRouter but
   // annotated `@internal` in this project's pinned go_router version, so
@@ -321,12 +321,12 @@ void main() {
     }
   });
 
-  // --- Task 7: one shell around every signed-in route ---
+  // --- One shell around every signed-in route ---
 
   testWidgets('the sidebar is present on an inner screen', (tester) async {
     // The field report this milestone answers: "I don't see any back menu
-    // while navigating on screens." Assert on a screen that is NOT a
-    // destination, or the test proves only what already worked -- the four
+    // while navigating on screens." Assert on a screen that is not a
+    // destination, or the test proves only what already worked: the four
     // dashboards always had navigation of their own, and every screen you
     // reached FROM one had none.
     final db = FakeFirebaseFirestore();
@@ -350,9 +350,9 @@ void main() {
             of: find.byKey(const Key('shellSidebar')), matching: find.text('Dashboard')),
         findsOneWidget);
     // No back control here on purpose: for a student whose title is
-    // approved, Chapters IS a destination, and the shell offers back only
+    // approved, Chapters is a destination, and the shell offers back only
     // where the sidebar alone cannot return the reader (see
-    // isDeeperThanDestination). The nested case -- one chapter's detail --
+    // isDeeperThanDestination). The nested case: one chapter's detail,
     // is covered in test/features/dashboard/navigation_test.dart.
     expect(find.byKey(const Key('shellBack')), findsNothing);
   });
@@ -388,7 +388,7 @@ void main() {
     expect(find.byKey(const Key('chaptersScreen')), findsOneWidget);
     expect(find.byKey(const Key('shellMenu')), findsOneWidget);
     // No rail at this width, and no bottom bar either: on narrow the
-    // destinations live behind this hamburger, which is present on EVERY
+    // destinations live behind this hamburger, which is present on every
     // screen rather than only on the four that used to be dashboards.
     expect(find.byKey(const Key('shellSidebar')), findsNothing);
   });
@@ -429,7 +429,7 @@ void main() {
 
   testWidgets('a signed-in account with no profile reaches /no-profile',
       (tester) async {
-    // Spec D25 at the router level, not just the widget level. This account
+    // Checks this at the router level, not just the widget level. This account
     // was previously bounced to /login, which reads as being signed out
     // when they are not.
     final db = FakeFirebaseFirestore();
@@ -446,7 +446,7 @@ void main() {
     expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
   });
 
-  // --- Task 8: role guards for the eight destination routes ---
+  // --- Role guards for the eight destination routes ---
   //
   // Both directions for every row of the permission table: a permitted role
   // reaches the route, and an excluded role is redirected home. A
@@ -641,7 +641,7 @@ void main() {
     }
   });
 
-  testWidgets('every role reaching /title-defences lands on the Title stage',
+  testWidgets('every role reaching /title-defenses lands on the Title stage',
       (tester) async {
     for (final role in ['student', 'faculty', 'coordinator', 'dean']) {
       final db = FakeFirebaseFirestore();
@@ -705,7 +705,7 @@ void main() {
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
   });
 
-  // --- Task 6: the Users destination owns two routes ---
+  // --- The Users destination owns two routes ---
 
   testWidgets('both /users and /invites highlight the Users destination',
       (tester) async {
@@ -724,7 +724,7 @@ void main() {
     // The sidebar marks its selected destination with a `Semantics(selected:)`
     // wrapping the `nav-<route>` item (the rebuild dropped
     // `NavigationRail.selectedIndex`). Read the flag off that Semantics
-    // widget — the property that both paints the highlight and is announced.
+    // widget: the property that both paints the highlight and is announced.
     bool usersSelected() => tester
         .widgetList<Semantics>(find.ancestor(
           of: find.byKey(const Key('nav-/users')),
@@ -745,10 +745,10 @@ void main() {
   testWidgets(
       'both tabs carry the Accounts/Invites strip and each navigates to '
       'the other', (tester) async {
-    // Spec §5 promises a destination "with two tabs". The strip lived only
+    // promises a destination "with two tabs". The strip lived only
     // on the Accounts screen, so /invites rendered with the rail
     // highlighting "Users", the app bar reading "Invites", and no
-    // Accounts/Invites control anywhere on the screen -- a tab you could
+    // Accounts/Invites control anywhere on the screen: a tab you could
     // enter and not leave.
     final db = FakeFirebaseFirestore();
     final c = await containerForRole('coordinator', db);
@@ -770,7 +770,7 @@ void main() {
     expect(find.byKey(const Key('usersTabAccounts')), findsOneWidget);
     expect(find.byKey(const Key('usersTabInvites')), findsOneWidget);
     // The tabs are underlined InkWells now, not ChoiceChips. The selected
-    // tab is the one whose tap is disabled — selecting the section you are
+    // tab is the one whose tap is disabled: selecting the section you are
     // already on is a no-op.
     expect(
         tester
@@ -785,17 +785,8 @@ void main() {
     expect(find.byKey(const Key('usersScreen')), findsOneWidget);
   });
 
-  testWidgets(
-      'the Publish queue link on Users reaches /archive/queue, not just '
-      'destinationsFor()', (tester) async {
-    // Task 11 review, Finding 2: the archiveQueueLink button on UsersScreen
-    // had a key but nothing tapped it. '/archive/queue' is deliberately
-    // NOT a shell destination for anyone (see archive_routes_test.dart and
-    // shell_destination_test.dart's "the archive queue is not a
-    // destination for anyone"), so this button is the ONLY door into it --
-    // a screen nothing links to is exactly the failure Task 11 exists to
-    // close, and that applies to this link itself just as much as it did
-    // to the three screens the task registered routes for.
+  testWidgets('the Users screen no longer carries the queue or stalled links',
+      (tester) async {
     final db = FakeFirebaseFirestore();
     final c = await containerForRole('coordinator', db);
     addTearDown(c.dispose);
@@ -803,9 +794,19 @@ void main() {
 
     c.read(goRouterProvider).go('/users');
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('archiveQueueLink')), findsOneWidget);
+    expect(find.byKey(const Key('archiveQueueLink')), findsNothing);
+    expect(find.byKey(const Key('stalledLink')), findsNothing);
+  });
 
-    await tester.tap(find.byKey(const Key('archiveQueueLink')));
+  testWidgets(
+      'the sidebar\'s Publish queue reaches /archive/queue', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final c = await containerForRole('coordinator', db);
+    addTearDown(c.dispose);
+    await pumpRouted(tester, c);
+
+    await tester.ensureVisible(find.byKey(const Key('nav-/archive/queue')));
+    await tester.tap(find.byKey(const Key('nav-/archive/queue')));
     await tester.pumpAndSettle();
 
     expect(locationOf(c), '/archive/queue');
@@ -852,8 +853,8 @@ void main() {
 
   testWidgets('a profile deleted AFTER the shell mounts reaches /no-profile',
       (tester) async {
-    // The redirect does re-fire on a profile change -- app_router.dart's
-    // ref.listen(currentUserProvider) drives the refresh notifier -- but
+    // The redirect does re-fire on a profile change: app_router.dart's
+    // ref.listen(currentUserProvider) drives the refresh notifier, but
     // nothing tested it, so nothing would have noticed if that listen were
     // dropped. A profile can genuinely vanish under a live session: a
     // coordinator deactivating an account, or a half-finished registration

@@ -171,18 +171,21 @@ List<pw.Widget> _layout(FormText t) => [
       _indented(t.of('panelParagraph')),
       pw.SizedBox(height: 6),
       _indented(t.of('closing')),
-      pw.SizedBox(height: 12),
+      // Close under the closing line, as on the filled form.
+      pw.SizedBox(height: 3),
+      // Left, level with the faculty signature slots below: the same edge
+      // as the filled form.
       pw.Align(
-        alignment: pw.Alignment.centerRight,
+        alignment: pw.Alignment.centerLeft,
         child: pw.Text(t.of('valediction'), style: _body),
       ),
       for (var i = 1; i <= kForm1ResearcherSlots; i++)
         pw.Align(
-          alignment: pw.Alignment.centerRight,
+          alignment: pw.Alignment.centerLeft,
           child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.SizedBox(height: 18),
+              pw.SizedBox(height: i == 1 ? 6 : 18),
               blankOr(t, 'researcher.$i', width: 200, style: _name),
               pw.Text(t.of('researcher.$i.role'), style: _role),
             ],

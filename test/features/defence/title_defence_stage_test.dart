@@ -55,7 +55,7 @@ Future<Widget> wrap(FakeFirebaseFirestore db, String uid, String role) async {
 }
 
 void main() {
-  testWidgets('an adviser opens their advisee\'s title defence', (
+  testWidgets('an adviser opens their advisee\'s title defense', (
     tester,
   ) async {
     final db = FakeFirebaseFirestore();
@@ -63,10 +63,10 @@ void main() {
     await tester.pumpWidget(await wrap(db, 'f1', 'faculty'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget);
-    expect(find.text('Open title defence'), findsOneWidget);
+    expect(find.text('Open title defense'), findsOneWidget);
   });
 
-  testWidgets('a panelist opens a title defence they sit on', (tester) async {
+  testWidgets('a panelist opens a title defense they sit on', (tester) async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t2').set(thesis(adviserUid: 'a9'));
     await db.doc('theses/t2/nominations/f1').set({
@@ -78,7 +78,7 @@ void main() {
     expect(find.byKey(const Key('goToDefence-t2')), findsOneWidget);
   });
 
-  testWidgets('the Dean sees every title defence', (tester) async {
+  testWidgets('the Dean sees every title defense', (tester) async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis());
     await db.collection('theses').doc('t2').set(thesis());

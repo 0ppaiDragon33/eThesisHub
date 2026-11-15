@@ -4,7 +4,7 @@ import 'package:ethesishub/data/models/title_comment.dart';
 /// One commenter's remarks on one candidate, as a single bracketed block:
 ///
 /// ```
-/// [Dr. Noel A. Armada — Adviser]
+/// [Dr. Noel A. Armada. Adviser]
 ///   Scope is too broad for one semester.
 ///   Narrow the respondents to one college.
 /// ```
@@ -37,11 +37,11 @@ class ConsolidatedCandidate {
   final List<CommentBlock> blocks;
 }
 
-/// Groups comments per commenter under each candidate — parent design §5.3.
+/// Groups comments per commenter under each candidate: parent design §5.3.
 ///
 /// This is what a student reads after the Dean records the decision, and what
 /// automates Guidelines §4d, where the adviser consolidates defence comments
-/// for the Research Coordinator. Built here; M3 reuses it for the pre-oral
+/// for the Research Coordinator. Built here; defence reuses it for the pre-oral
 /// and final defences.
 ///
 /// Ordering is the record: candidates in the order given, authors in the
@@ -79,7 +79,7 @@ List<ConsolidatedCandidate> consolidate({
 }
 
 /// One remark, reduced to what grouping and printing need. A record rather
-/// than an interface so both M1b's `TitleComment` and M3's `DefenceComment`
+/// than an interface so both title defence's `TitleComment` and defence's `DefenceComment`
 /// can be mapped into it without either model knowing about the other.
 typedef Remark = ({
   String authorUid,
@@ -89,7 +89,7 @@ typedef Remark = ({
   DateTime? createdAt,
 });
 
-/// Groups remarks per commenter — parent design §5.3, Guidelines §4d.
+/// Groups remarks per commenter: parent design §5.3, Guidelines §4d.
 ///
 /// Ordering is the record: authors in the order they first commented, and
 /// each author's remarks in the order made. Alphabetising anything here

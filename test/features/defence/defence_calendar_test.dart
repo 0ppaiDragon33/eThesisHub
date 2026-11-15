@@ -76,7 +76,7 @@ Widget _wrap(
 
 void main() {
   // Fixed "today" region: seed dates well inside a specific month so the
-  // grid always lands on it regardless of when the suite runs -- the widget
+  // grid always lands on it regardless of when the suite runs: the widget
   // opens on the CURRENT month, so tests navigate to September 2026 with the
   // next/prev arrows rather than assuming it is already shown.
   Future<void> gotoSeptember2026(WidgetTester tester) async {
@@ -94,7 +94,7 @@ void main() {
     }
   }
 
-  testWidgets('a defence appears on its scheduled day, not adjacent days',
+  testWidgets('a defense appears on its scheduled day, not adjacent days',
       (tester) async {
     final db = await _seedUser('f1');
     await _seedDefence(
@@ -123,7 +123,7 @@ void main() {
   });
 
   testWidgets(
-      'a defence with no confirmed date appears in the awaiting-a-date '
+      'a defense with no confirmed date appears in the awaiting-a-date '
       'line and on no day cell', (tester) async {
     final db = await _seedUser('f1');
     await _seedDefence(db, id: 'noDate', adviserUid: 'f1');
@@ -141,12 +141,12 @@ void main() {
 
     // Present in the awaiting line, un-conditionally (not behind a tap on
     // any particular day).
-    expect(find.text('1 defence awaiting a date'), findsOneWidget);
+    expect(find.text('1 defense awaiting a date'), findsOneWidget);
     expect(find.byKey(const Key('defenceRow-noDate')), findsOneWidget);
 
     // Not on any day cell: every day in the grid, tapped, must not surface
     // it. Checked against the one day it could plausibly leak onto if a
-    // null date fell back to the epoch or "day 1" -- the trap the spec
+    // null date fell back to the epoch or "day 1": the trap the spec
     // calls out explicitly.
     await tester.tap(find.byKey(const Key('calendarCell-2026-09-01')));
     await tester.pumpAndSettle();
@@ -157,7 +157,7 @@ void main() {
     expect(panelNoDate, findsNothing);
   });
 
-  testWidgets('a cancelled defence is shown muted, not hidden',
+  testWidgets('a cancelled defense is shown muted, not hidden',
       (tester) async {
     final db = await _seedUser('f1');
     await _seedDefence(
@@ -231,7 +231,7 @@ void main() {
     }
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not load your defences.'), findsNothing);
+    expect(find.text('Could not load your defenses.'), findsNothing);
     expect(find.byKey(const Key('defenceCalendar')), findsOneWidget);
   });
 
@@ -248,18 +248,18 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not load your defences.'), findsOneWidget);
+    expect(find.text('Could not load your defenses.'), findsOneWidget);
     expect(find.byKey(const Key('calendarCell-2026-09-15')), findsNothing);
   });
 
   testWidgets(
-      'no defences at all shows the empty state, not an empty grid, and '
+      'no defenses at all shows the empty state, not an empty grid, and '
       'not loading or error text', (tester) async {
     // Distinct from "an empty month is distinguishable from a failed
     // read" above: that test seeds a real defence and merely navigates to
     // a month with nothing in it, so the underlying dataset is non-empty
     // and the calendar chrome (legend, grid) renders. This is the OTHER
-    // branch -- the account has no defences at all -- which
+    // branch (the account has no defences at all) which
     // defence_calendar.dart handles with its own EmptyState, separate
     // from both the loading and the error branch.
     final db = await _seedUser('f1');
@@ -268,10 +268,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('noDefences')), findsOneWidget);
-    expect(find.text('No defences scheduled'), findsOneWidget);
+    expect(find.text('No defenses scheduled'), findsOneWidget);
     expect(find.byKey(const Key('defenceCalendar')), findsNothing);
-    expect(find.text('Loading your defences…'), findsNothing);
-    expect(find.text('Could not load your defences.'), findsNothing);
+    expect(find.text('Loading your defenses…'), findsNothing);
+    expect(find.text('Could not load your defenses.'), findsNothing);
   });
 
   testWidgets('a loading month is not shown as empty', (tester) async {
@@ -288,7 +288,7 @@ void main() {
     ));
     await tester.pump();
 
-    expect(find.text('Loading your defences…'), findsOneWidget);
+    expect(find.text('Loading your defenses…'), findsOneWidget);
     expect(find.byKey(const Key('defenceCalendar')), findsNothing);
   });
 

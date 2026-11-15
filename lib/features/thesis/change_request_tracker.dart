@@ -14,8 +14,8 @@ import 'package:ethesishub/features/forms/editable/editor_services.dart';
 import 'package:ethesishub/providers/change_request_providers.dart';
 
 /// Shows a leader where each open change-of-adviser/title request stands:
-/// the current stage, each sign-off's state, and — once returned — the
-/// decline reason and a way to edit and resubmit (spec 2026-09-25).
+/// the current stage, each sign-off's state, and (once returned) the
+/// decline reason and a way to edit and resubmit.
 ///
 /// Modelled on `thesis_status_screen.dart`'s nomination-progress panel.
 /// Renders nothing at all when there is no open or returned request, the
@@ -127,7 +127,7 @@ class _RequestCard extends ConsumerWidget {
   final Thesis thesis;
   final ChangeRequest request;
 
-  /// The reason on the sign-off that returned this request, if any -- the
+  /// The reason on the sign-off that returned this request, if any: the
   /// one role in [signoffRolesFor] whose status is `declined`. Requests are
   /// returned by exactly one decline, so at most one exists.
   String? _declineReason() {

@@ -13,14 +13,16 @@ import 'package:ethesishub/data/models/archive_entry.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/forms/form8_data.dart';
 import 'package:ethesishub/features/forms/form8_pdf.dart';
+import 'package:ethesishub/features/repository/designated_members.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// A single published thesis, in full.
 ///
 /// The screen a reader lands on from [ArchiveScreen]'s card: everything a
 /// card summarises, plus the full abstract and the panel, and the one
-/// action a browse list cannot offer -- opening the manuscript itself.
+/// action a browse list cannot offer: opening the manuscript itself.
 class ArchiveEntryScreen extends ConsumerWidget {
   const ArchiveEntryScreen({super.key, required this.thesisId});
 
@@ -53,10 +55,10 @@ class ArchiveEntryScreen extends ConsumerWidget {
       ]);
     }
 
-    // Resolved-but-null is NOT an error: the coordinator can retract an
+    // Resolved-but-null is not an error: the coordinator can retract an
     // archive entry, which deletes the doc, and a reader following a stale
     // link (a bookmark, a share) lands exactly here. Conflating this with a
-    // failed read has shipped four bugs on this project already -- keep the
+    // failed read has shipped four bugs on this project already: keep the
     // two paths separate.
     final entry = entryAsync.valueOrNull;
     if (entry == null) {
@@ -72,13 +74,13 @@ class ArchiveEntryScreen extends ConsumerWidget {
 
     // The archive entry screen is the one screen in this app any signed-in
     // reader can open. Form 8 certifies that bound copies reached the Dean,
-    // the Library and R&D — issuing it is the coordinator's act (§10b, the
+    // the Library and R&D: issuing it is the coordinator's act (§10b, the
     // role table), so the control is gated on the READER's role, not on the
     // entry: nothing about the data changes who may see the button.
     //
     // The profile is passed down whole, not flattened to a bool. `?.role ==
-    // coordinator` collapses three different states — still loading, the
-    // read failed, you are not a coordinator — into one silent absence, the
+    // coordinator` collapses three different states, still loading, the
+    // read failed, you are not a coordinator: into one silent absence, the
     // very conflation the comment above the entry branch says has already
     // shipped four bugs here. A coordinator whose profile read was denied
     // must not be told, by omission, that they are not a coordinator.
@@ -87,6 +89,10 @@ class ArchiveEntryScreen extends ConsumerWidget {
     return _framed([_EntryView(entry: entry, profile: profile)]);
   }
 }
+
+/// A designated member kept on the panel list as "Name (Role)".
+final _designatedName =
+    RegExp(r'^(.*) \((Research Coordinator|Dean)\)$');
 
 class _EntryView extends ConsumerStatefulWidget {
   const _EntryView({required this.entry, required this.profile});
@@ -102,13 +108,73 @@ class _EntryView extends ConsumerStatefulWidget {
 }
 
 class _EntryViewState extends ConsumerState<_EntryView> {
+  /// Brings an entry's names up to date: the group leader first among the
+  /// authors, and the Research Coordinator and Dean as designated members.
+  /// For entries published before those were recorded. The published panel
+  /// names are kept as they are.
+  Future<void> _updateNames(ArchiveEntry entry) async {
+    try {
+      final theses = ref.read(thesisRepositoryProvider);
+      final thesis = await theses.fetchThesis(entry.thesisId);
+      if (thesis == null) throw StateError('This thesis no longer exists.');
+      final nominations = await theses.watchNominations(entry.thesisId).first;
+
+      var leader = thesis.leaderName?.trim() ?? '';
+      if (leader.isEmpty) {
+        final user =
+            await ref.read(userRepositoryProvider).fetchUser(thesis.leaderUid);
+        leader = user?.fullName.trim() ?? '';
+      }
+      bool same(String a, String b) =>
+          a.trim().toLowerCase() == b.trim().toLowerCase();
+      final members = [
+        if (leader.isNotEmpty && !thesis.memberNames.any((n) => same(n, leader)))
+          leader,
+        ...thesis.memberNames,
+      ];
+
+      final directory = await ref.read(allDirectoryProvider.future);
+      final designated = designatedMembers(
+        thesis: thesis,
+        nominations: nominations,
+        directory: directory,
+      );
+      final panel = [
+        ...entry.panelNames.where((n) => !_designatedName.hasMatch(n)),
+        ...designated,
+      ];
+
+      await ref.read(archiveRepositoryProvider).updateNames(
+            thesisId: entry.thesisId,
+            memberNames: members,
+            panelNames: panel,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Names updated.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update the names: $e')),
+      );
+    }
+  }
+
+  /// A panel row; a designated member shows their role instead.
+  Widget _panelLine(String name) {
+    final m = _designatedName.firstMatch(name);
+    return m == null
+        ? PersonLine(name: name, role: 'Panel member')
+        : PersonLine(name: m.group(1)!, role: '${m.group(2)}, designated member');
+  }
+
   /// Builds and shares Form 8 straight from the [ArchiveEntry] already on
   /// screen. No further read: a second fetch would be a chance for the
   /// certificate to disagree with what the reader is looking at.
   Future<void> _downloadForm8(ArchiveEntry entry) async {
     try {
-      // Refuse BEFORE assembling (§6). The gate that shipped is structural
-      // only — this button is unreachable unless the thesis is archived —
+      // Refuse before assembling. The gate that shipped is structural
+      // only: this button is unreachable unless the thesis is archived,
       // and an archived entry can still hold no members and no title, which
       // would render a letterheaded, signature-ruled CERTIFICATION that
       // "  has submitted bound copies of his/her undergraduate thesis". The
@@ -135,7 +201,7 @@ class _EntryViewState extends ConsumerState<_EntryView> {
   ///
   /// Three states, kept apart: the profile is still loading, the profile
   /// read failed, or it resolved and the reader is not a coordinator. Only
-  /// the last is silence — a coordinator has no business being told about
+  /// the last is silence: a coordinator has no business being told about
   /// the other roles' absent button. A FAILED read is never allowed to look
   /// like "you are not a coordinator": that is a transient fault dressed up
   /// as an authorization answer, and the reader would go looking for a
@@ -172,6 +238,12 @@ class _EntryViewState extends ConsumerState<_EntryView> {
                 onPressed: () => _downloadForm8(entry),
                 child: const Text('Download Form 8'),
               ),
+              const Gap.sm(),
+              OutlinedButton(
+                key: const Key('updateArchiveNames'),
+                onPressed: () => _updateNames(entry),
+                child: const Text('Update names'),
+              ),
             ]
           : const [],
     );
@@ -183,7 +255,7 @@ class _EntryViewState extends ConsumerState<_EntryView> {
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     // An entry with no members recorded still needs a line here rather than
-    // a blank one -- matches the card on ArchiveScreen, so the two screens
+    // a blank one: matches the card on ArchiveScreen, so the two screens
     // do not disagree about the same entry.
     final authors =
         entry.authorsLabel.isNotEmpty ? entry.authorsLabel : 'Unknown authors';
@@ -196,7 +268,7 @@ class _EntryViewState extends ConsumerState<_EntryView> {
             // Leaves the app: there is no in-app PDF viewer. The bucket is
             // private, so this asks the `document-url` function for a
             // short-lived link. An archived manuscript opens for any active
-            // reader — the repository is meant to be browsed — while the
+            // reader (the repository is meant to be browsed) while the
             // function still refuses in-progress theses to non-members.
             onPressed: () => openStoredDocument(
               context,
@@ -234,7 +306,7 @@ class _EntryViewState extends ConsumerState<_EntryView> {
           secondary: [
             Panel(
               title: 'Manuscript',
-              icon: Icons.picture_as_pdf_outlined,
+              icon: Icons.description_outlined,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [manuscript, ..._form8Control(entry, text, muted)],
@@ -261,8 +333,7 @@ class _EntryViewState extends ConsumerState<_EntryView> {
                   if (entry.panelNames.isEmpty)
                     const PersonLine(name: 'Unknown panel', role: 'Panel')
                   else
-                    for (final n in entry.panelNames)
-                      PersonLine(name: n, role: 'Panel member'),
+                    for (final n in entry.panelNames) _panelLine(n),
                 ],
               ),
             ),

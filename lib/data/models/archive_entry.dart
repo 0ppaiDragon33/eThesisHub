@@ -1,9 +1,9 @@
 /// One published thesis, frozen at the moment the coordinator archived it.
 ///
 /// Every field here is a SNAPSHOT, resolved once and never consulted again
-/// (D49). If a member's name is corrected next semester, or the panel is
-/// reshuffled, this record still says who actually did the work — the same
-/// reasoning behind M3 snapshotting `panelUids` onto a defence and M4
+/// . If a member's name is corrected next semester, or the panel is
+/// reshuffled, this record still says who actually did the work: the same
+/// reasoning behind defence snapshotting `panelUids` onto a defence and evaluation
 /// denormalizing `evaluatorName` onto an evaluation. A publication should
 /// be fixed.
 class ArchiveEntry {
@@ -26,12 +26,12 @@ class ArchiveEntry {
     this.archivedAt,
   });
 
-  /// The document id IS the thesis id, so a thesis is archived at most once
+  /// The document id is the thesis id, so a thesis is archived at most once
   /// and duplication is impossible by construction.
   final String thesisId;
 
   /// The approved title's text, resolved from the thesis's
-  /// `approvedTitleId` at archive time — not the working title.
+  /// `approvedTitleId` at archive time, not the working title.
   final String title;
 
   final List<String> memberNames;
@@ -46,7 +46,7 @@ class ArchiveEntry {
 
   /// The defence whose Pass authorised this. Carried because Firestore
   /// rules cannot query: without the id there is no way for a rule to find
-  /// "the final defence for this thesis" (D52).
+  /// "the final defence for this thesis".
   final String finalDefenceId;
 
   final String uploadedBy;
@@ -57,12 +57,12 @@ class ArchiveEntry {
   /// Authors as one line, for a card.
   String get authorsLabel => memberNames.join(', ');
 
-  /// Title and authors only (D55), matched anywhere in the string.
+  /// Title and authors only, matched anywhere in the string.
   ///
   /// Mid-string is the whole point: Firestore can only match a prefix, so
   /// `where('title', isGreaterThanOrEqualTo: 'fisheries')` would never find
   /// "A Study of Coastal Fisheries". That is why search runs here instead
-  /// (D54).
+  /// .
   bool matches(String query) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return true;

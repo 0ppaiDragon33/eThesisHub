@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
 /// How long the app sits untouched before it signs the reader out. Long
-/// enough not to interrupt real work — reading a manuscript, deliberating a
-/// grade — short enough that a thesis desk left open on a shared machine does
+/// enough not to interrupt real work: reading a manuscript, deliberating a
+/// grade: short enough that a thesis desk left open on a shared machine does
 /// not stay open all afternoon.
 const Duration kIdleTimeout = Duration(minutes: 20);
 

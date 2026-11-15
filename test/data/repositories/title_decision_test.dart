@@ -78,7 +78,7 @@ void main() {
   });
 
   test('a decision cannot be replayed once made', () async {
-    // Same defect class M1a found in respondToNomination, where a stale tab
+    // Same defect class nomination found in respondToNomination, where a stale tab
     // could walk an approved thesis backwards.
     final db = await pending();
     final repo = TitleDefenceRepository(db);
@@ -92,9 +92,9 @@ void main() {
   });
 
   test('both decisions leave an audit entry naming the Dean', () async {
-    // Spec §9.2: the rules cannot verify that the approved candidate belongs
+    // the rules cannot verify that the approved candidate belongs
     // to the current round, so a Dean could approve one from a superseded
-    // set. The audit log is the stated mitigation — if nothing writes it,
+    // set. The audit log is the stated mitigation, if nothing writes it,
     // the limitation has no mitigation at all.
     final db = await pending();
     await TitleDefenceRepository(db)
@@ -110,7 +110,7 @@ void main() {
   });
 
   test('a failed audit write does not block the decision', () async {
-    // Same posture as M1a's sign-in path: the decision is the point, the log
+    // Same posture as nomination's sign-in path: the decision is the point, the log
     // is best-effort. A thesis must not be left undecided because a log
     // write failed.
     final db = await pending();

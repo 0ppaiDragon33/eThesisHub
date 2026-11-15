@@ -7,6 +7,9 @@ import 'package:printing/printing.dart';
 
 import 'package:ethesishub/core/design/layout.dart';
 import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/features/defence/defence_mode_gate.dart';
+import 'package:ethesishub/features/dashboard/switch_mode_notice.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
@@ -25,12 +28,12 @@ import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
-/// Research Form 5c — one panelist's own score sheet for a defence.
+/// Research Form 5c: one panelist's own score sheet for a defence.
 ///
 /// The adviser branch is decided from [defenceProvider] alone, before
-/// [myEvaluationProvider] is even consulted — the same discipline
+/// [myEvaluationProvider] is even consulted: the same discipline
 /// `defence_room_screen.dart` uses for its leader branch. An adviser is
-/// never in `panelUids` (D37: they cannot mark at arm's length after months
+/// never in `panelUids` (they cannot mark at arm's length after months
 /// on the thesis), so their evaluation stream would simply error on a
 /// permission-denied read once real security rules are in force; waiting on
 /// it here would show "Could not load your evaluation." in place of the
@@ -58,8 +61,8 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   PassFail? _rating;
 
   /// Guards the one-time seed from [myEvaluationProvider]. Without it, every
-  /// later snapshot of the panelist's own sheet -- including the echo of the
-  /// write this screen itself just made -- would overwrite whatever they are
+  /// later snapshot of the panelist's own sheet: including the echo of the
+  /// write this screen itself just made: would overwrite whatever they are
   /// currently typing.
   bool _seeded = false;
 
@@ -177,7 +180,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
   /// The title this sheet prints: the approved candidate's text, not
   /// `thesis.workingTitle`. Mirrors `_ArchiveQueueRowState._approvedTitle`
   /// in `archive_queue_screen.dart` rather than inventing a second
-  /// resolution of the same fact — the working title is what the group
+  /// resolution of the same fact: the working title is what the group
   /// typed at creation, the approved one is what the panel and the dean
   /// actually signed off, and only the latter belongs on a signed record.
   String? _approvedTitle(Thesis thesis, List<CandidateTitle> candidates) {
@@ -195,8 +198,8 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
 
   /// Builds and shares this panelist's own Form 5c.
   ///
-  /// Reachable both before and after release (D59: a panelist scores their
-  /// own sheet under M4's unconditional access to it — release changes
+  /// Reachable both before and after release (a panelist scores their
+  /// own sheet under evaluation's unconditional access to it: release changes
   /// nothing about who may read it, only whether it may still be edited).
   /// Every read here is a one-shot `ref.read(...).future`/`fetch`, not a
   /// watch: this runs once, on tap, exactly like `ThesisStatusScreen`'s
@@ -214,7 +217,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
           await ref.read(candidateTitlesProvider(thesis.id).future);
       final title = _approvedTitle(thesis, candidates) ?? thesis.workingTitle;
 
-      // Empty when the directory has no entry for this panelist —
+      // Empty when the directory has no entry for this panelist,
       // `Form5cData` and its renderer both treat that as honest, not an
       // error, so no placeholder is invented here either.
       final entry =
@@ -260,19 +263,19 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     final meAsync = ref.watch(currentUserProvider);
 
     // Each async source gets its own isLoading/hasError branch, checked
-    // apart from the other -- collapsing them would tell a panelist whose
+    // apart from the other: collapsing them would tell a panelist whose
     // own sheet is merely still connecting that the defence itself does not
     // exist, or vice versa.
     if (defenceAsync.isLoading) {
       return _framed(
-        const [LoadingState(key: Key('evaluationLoading'), label: 'Loading defence…')],
+        const [LoadingState(key: Key('evaluationLoading'), label: 'Loading defense…')],
       );
     }
     if (defenceAsync.hasError) {
       return _framed([
         ErrorState(
           error: defenceAsync.error,
-          message: 'Could not load this defence.',
+          message: 'Could not load this defense.',
         ),
       ]);
     }
@@ -299,24 +302,40 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
       return _framed(const [
         EmptyState(
           icon: Icons.search_off,
-          title: 'Defence not found',
-          message: 'This defence no longer exists.',
+          title: 'Defense not found',
+          message: 'This defense no longer exists.',
         ),
       ]);
     }
 
+    // A faculty member who holds both capabilities must be in the mode that
+    // matches their seat on THIS defense: adviser mode for the adviser,
+    // panelist mode for a panelist. Anything else is turned away here, before
+    // a single highlight, grade or evaluation is read.
+    final modeGate = checkDefenceModeGate(ref, defence, uid);
+    if (modeGate.gate == DefenceModeGate.loading) {
+      return _framed(const [LoadingState(label: 'Checking your mode…')]);
+    }
+    if (modeGate.gate == DefenceModeGate.blocked) {
+      return _framed([DefenceModeBlock(needed: modeGate.needed!)]);
+    }
+
     // Decided from `defence` alone, before `myEvaluationProvider` is even
     // watched. An adviser advises one group across months and is barred
-    // from scoring it at arm's length (D37) -- they are never in
+    // from scoring it at arm's length: they are never in
     // `panelUids`, so consulting their evaluation stream first would only
     // add a permission error to a page that has nothing to score anyway.
     final isAdviser = uid != null && uid == defence.adviserUid;
     if (isAdviser) {
       return _framed([
+        const SwitchModeNotice(
+          needed: FacultyMode.adviser,
+          message: 'Switch to Adviser mode to see the grades.',
+        ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'Advisers do not score defences.',
+            'Advisers do not score defenses.',
             key: Key('adviserRefusal'),
           ),
         ),
@@ -362,7 +381,7 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
         Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'You are not on the panel for this defence.',
+            'You are not on the panel for this defense.',
             key: Key('notPanelist'),
           ),
         ),
@@ -372,8 +391,8 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     final existing = evaluationAsync.valueOrNull;
     _seedFrom(existing);
 
-    // A sheet already on file. D44: it stays editable right up to the
-    // seal, so the control has to say "Update", not "Submit" -- a
+    // A sheet already on file: it stays editable right up to the
+    // seal, so the control has to say "Update", not "Submit": a
     // panelist who has already filed one and sees "Submit evaluation"
     // has no way to tell whether they are about to add a second.
     final hasSheet = existing != null;
@@ -383,9 +402,18 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
     // Pass needs the passing mark, as the adviser's verdict does. A Pass
     // chosen earlier falls away the moment the total drops below it, so
     // the sheet can never be submitted that way.
-    final passLocked = totalOf(_scores) < passingMark;
-    final rating =
-        passLocked && _rating == PassFail.pass ? null : _rating;
+    //
+    // And the other way round: at or above the mark the sheet can only be
+    // rated Pass, so Fail is locked. A rating that contradicts the scores
+    // beside it is never one the panelist meant, and the two locks are
+    // exclusive: exactly one of the buttons is ever open.
+    final total = totalOf(_scores);
+    final passLocked = total < passingMark;
+    final failLocked = !passLocked;
+    final rating = (passLocked && _rating == PassFail.pass) ||
+            (failLocked && _rating == PassFail.fail)
+        ? null
+        : _rating;
 
     final text = Theme.of(context).textTheme;
     final pal = Palette.of(context);
@@ -421,8 +449,19 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                 ),
                 const SizedBox(width: AppTokens.sm),
                 // Typed, not stepped: a 25-point criterion took 25 taps.
+                //
+                // Wide enough for the longest thing it ever holds: a
+                // two-digit score AND the two-digit maximum after it ("25/25"),
+                // on every row, not just the ones that happen to fit. A
+                // fixed 64 left the text area under half of that once the
+                // "/25" suffix took its share, so the second digit was cut
+                // off. Scaled with the text size, so a larger system font
+                // does not bring it back.
                 SizedBox(
-                  width: 64,
+                  width: 96 *
+                      MediaQuery.textScalerOf(context)
+                          .scale(1.0)
+                          .clamp(1.0, 1.6),
                   child: TextField(
                     key: Key('score_${c.key}'),
                     controller: _scoreText[c.key],
@@ -437,6 +476,9 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                     style: text.titleMedium,
                     decoration: InputDecoration(
                       isDense: true,
+                      // No side padding to eat into the digits.
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 2, vertical: AppTokens.sm),
                       hintText: '–',
                       suffixText: '/${c.weight}',
                       suffixStyle: text.bodySmall,
@@ -540,10 +582,11 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
                   label: const Text('Pass'),
                   icon: const Icon(Icons.check_rounded),
                   enabled: !passLocked),
-              const ButtonSegment(
+              ButtonSegment(
                   value: PassFail.fail,
-                  label: Text('Fail'),
-                  icon: Icon(Icons.close_rounded)),
+                  label: const Text('Fail'),
+                  icon: const Icon(Icons.close_rounded),
+                  enabled: !failLocked),
             ],
             selected: {?rating},
             emptySelectionAllowed: true,
@@ -559,6 +602,14 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
               key: const Key('passLocked'),
               style: text.bodySmall
                   ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+          if (failLocked && !released) ...[
+            const Gap.sm(),
+            Text(
+              'A total of $passingMark or more can only be rated Pass.',
+              key: const Key('failLocked'),
+              style: text.bodySmall,
             ),
           ],
           const Gap.sm(),
@@ -622,6 +673,11 @@ class _EvaluationScreenState extends ConsumerState<EvaluationScreen> {
         title: defence.label,
         subtitle: 'Score each criterion, then give your own rating.',
         children: [
+          if (isPanelist)
+            const SwitchModeNotice(
+              needed: FacultyMode.panelist,
+              message: 'Switch to Panelist mode to score.',
+            ),
           SplitColumns(
             primary: sections,
             secondary: [summary],

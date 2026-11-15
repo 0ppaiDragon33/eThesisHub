@@ -114,7 +114,7 @@ void main() {
       'exactly as approveTitle/rejectTitles write them', () async {
     // Reproduces the shape production actually writes: real Firestore
     // Timestamp values (not DateTime, which is what the earlier version of
-    // this test file — and Thesis.fromMap's bare `as DateTime?` cast — could
+    // this test file (and Thesis.fromMap's bare `as DateTime?` cast) could
     // both pass without ever exercising the conversion). Distinct values on
     // both fields so a helper that reads the wrong key (e.g. assigning
     // titlesSubmittedAt's value to titleDecidedAt) cannot hide behind a

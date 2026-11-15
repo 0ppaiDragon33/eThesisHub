@@ -25,12 +25,12 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// The coordinator's screen for scheduling a pre-oral or final defence.
 ///
 /// Reads the thesis to snapshot `panelUids`, `adviserUid` and `leaderUid` at
-/// the moment of scheduling -- see [Defence]'s own doc comment for why these
+/// the moment of scheduling: see [Defence]'s own doc comment for why these
 /// are snapshots rather than a live reference. `panelUids` and `leaderUid`
 /// are passed straight through below, never sorted, de-duplicated or
 /// rebuilt: the security rule validating the create is an array-equality
-/// check that includes ORDER --
-/// `incoming().panelUids == thesisOf(incoming().thesisId).panelistUids` --
+/// check that includes ORDER,
+/// `incoming().panelUids == thesisOf(incoming().thesisId).panelistUids`,
 /// so any reordering here passes every Dart test (fake_cloud_firestore
 /// enforces no rules) and is denied in production. `adviserUid` gets one
 /// exception: a null value is refused client-side before the write (see
@@ -86,7 +86,7 @@ class _ScheduleDefenceScreenState
     final adviserUid = thesis.adviserUid;
     // Unreachable through the app: a thesis only reaches titleApproved after
     // nomination completes, and that write sets adviserUid atomically. But if
-    // it ever IS null, the create rule compares '' against null, denies the
+    // it ever is null, the create rule compares '' against null, denies the
     // write, and the screen would blame the coordinator's permissions for a
     // data problem they cannot act on.
     if (adviserUid == null || adviserUid.isEmpty) {
@@ -99,9 +99,8 @@ class _ScheduleDefenceScreenState
 
     final confirmed = await confirmAction(
       context,
-      title: 'Schedule this defence?',
-      message: 'The group, the adviser and the panel are notified of the '
-          'date and venue.',
+      title: 'Schedule this defense?',
+      message: 'The group, adviser and panel are notified.',
       confirmLabel: 'Schedule',
       confirmKey: const Key('confirmSchedule'),
     );
@@ -118,14 +117,14 @@ class _ScheduleDefenceScreenState
             type: _type,
             scheduledAt: _scheduledAt,
             venue: _venueController.text,
-            // Snapshots, verbatim -- see the class doc comment above.
+            // Snapshots, verbatim: see the class doc comment above.
             panelUids: thesis.panelistUids,
             adviserUid: adviserUid,
             leaderUid: thesis.leaderUid,
             createdBy: coordinatorUid,
           );
-      // '/defence/room/:defenceId' is the path Task 11 registers for the
-      // defence room (Task 8). Matching it exactly here, before either
+      // '/defence/room/:defenceId' is the path registered for the
+      // defence room. Matching it exactly here, before either
       // exists, means the moment they land this link is live rather than a
       // 404 nobody's test would have caught.
       if (mounted) context.push('/defence/room/$id');
@@ -142,14 +141,14 @@ class _ScheduleDefenceScreenState
       // will ever see.
       if (mounted) {
         setState(() => _error = e.code == 'permission-denied'
-            ? 'You do not have permission to schedule this defence '
+            ? 'You do not have permission to schedule this defense '
                 '[permission-denied].'
-            : 'Could not schedule this defence. Please try again.');
+            : 'Could not schedule this defense. Please try again.');
       }
     } catch (_) {
       if (mounted) {
         setState(
-            () => _error = 'Could not schedule this defence. Please try again.');
+            () => _error = 'Could not schedule this defense. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -159,7 +158,7 @@ class _ScheduleDefenceScreenState
   /// Wraps every non-form state in the same frame the form uses.
   ///
   /// The Scaffold and AppBar that used to be here belong to the app shell
-  /// now, which supplies them to every state of every signed-in route —
+  /// now, which supplies them to every state of every signed-in route,
   /// so a screen still loading its thesis or its chapters is still never a
   /// bare, unnavigable page.
   Widget _framed(List<Widget> children) => PageShell(children: children);
@@ -204,7 +203,7 @@ class _ScheduleDefenceScreenState
       key: const Key('scheduleDefenceScreen'),
       child: PageShell(
         kicker: 'Research office',
-        title: 'Schedule a defence',
+        title: 'Schedule a defense',
         subtitle: thesis.workingTitle,
         children: [
           Panel(
@@ -214,17 +213,17 @@ class _ScheduleDefenceScreenState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 FormRow(
-                  label: 'Kind of defence',
+                  label: 'Kind of defense',
                   child: SegmentedButton<DefenceType>(
                     key: const Key('defenceType'),
                     segments: const [
                       ButtonSegment(
                         value: DefenceType.preOral,
-                        label: Text('Pre-oral defence'),
+                        label: Text('Pre-oral defense'),
                       ),
                       ButtonSegment(
                         value: DefenceType.final_,
-                        label: Text('Final defence'),
+                        label: Text('Final defense'),
                       ),
                     ],
                     selected: {_type},
@@ -263,7 +262,7 @@ class _ScheduleDefenceScreenState
           ),
           const Gap.md(),
           // A plain defence of a kind this group already failed is almost
-          // always meant to be the re-defence (spec 2026-09-25 §6.4). The
+          // always meant to be the re-defence. The
           // rules cannot refuse it, so the screen points the way instead.
           ...() {
             final failed = awaitingRedefence(
@@ -281,14 +280,14 @@ class _ScheduleDefenceScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(at == null
-                        ? 'Schedule a re-defence instead.'
+                        ? 'Schedule a redefense instead.'
                         : 'Held ${DefencesList.formatDateTime(at)}. '
-                            'Schedule a re-defence instead.'),
+                            'Schedule a redefense instead.'),
                     const Gap.sm(),
                     FilledButton.tonal(
                       onPressed: () => context.push(
                           '/defence/schedule?redefenceOf=${failed.id}'),
-                      child: const Text('Schedule re-defence'),
+                      child: const Text('Schedule redefense'),
                     ),
                   ],
                 ),
@@ -299,7 +298,7 @@ class _ScheduleDefenceScreenState
           // Its own loading/error branch: chapters still connecting must
           // not read as "0 approved, not ready".
           Panel(
-            title: 'Chapter readiness',
+            title: 'Manuscript readiness',
             icon: Icons.menu_book_outlined,
             child: chaptersAsync.when(
               loading: () => const LoadingState(label: 'Loading chapters…'),
@@ -313,9 +312,6 @@ class _ScheduleDefenceScreenState
                 final gateMet = _type == DefenceType.preOral
                     ? readiness != DefenceReadiness.notReady
                     : readiness == DefenceReadiness.finalReady;
-                final approved = chapters
-                    .where((c) => c.status == ChapterStatus.approved)
-                    .length;
                 if (gateMet) {
                   return Row(
                     children: [
@@ -323,17 +319,17 @@ class _ScheduleDefenceScreenState
                           color: Tone.endorsed.color(context)),
                       const SizedBox(width: AppTokens.sm),
                       Expanded(
-                        child: Text('$approved of 5 chapters approved. '
-                            'Ready for this defence.'),
+                        child: Text('${manuscriptSummary(chapters)}. '
+                            'Ready for this defense.'),
                       ),
                     ],
                   );
                 }
                 final message = _type == DefenceType.preOral
-                    ? 'Chapters I–III are not all approved yet. You can '
-                        'still schedule this defence.'
-                    : 'Chapters I–V are not all approved yet. You can '
-                        'still schedule this defence.';
+                    ? 'The Chapters I–III manuscript is not approved yet. '
+                        'You can still schedule this defense.'
+                    : 'The Chapters I–V manuscript is not approved yet. '
+                        'You can still schedule this defense.';
                 return ErrorState(
                   key: const Key('readinessWarning'),
                   message: message,
@@ -357,11 +353,11 @@ class _ScheduleDefenceScreenState
                     ? null
                     : () => _schedule(thesis: thesis, coordinatorUid: uid),
                 icon: const Icon(Icons.event_available_outlined, size: 18),
-                label: Text(_busy ? 'Scheduling…' : 'Schedule defence'),
+                label: Text(_busy ? 'Scheduling…' : 'Schedule defense'),
               ),
             )
           else
-            Text('Only the Research Coordinator can schedule defences.',
+            Text('Only the Research Coordinator can schedule defenses.',
                 style: Theme.of(context).textTheme.bodySmall),
         ],
       ),

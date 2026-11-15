@@ -5,9 +5,9 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 
 /// The app's mark: a mortarboard inside a rounded square.
 ///
-/// Drawn in code rather than shipped as an image (D81) so it stays sharp at
-/// every size it appears — 56px on the entry brand pane, 28px in the phone
-/// brand band — and so it can take the dark-mode seal without a second asset.
+/// Drawn in code rather than shipped as an image so it stays sharp at
+/// every size it appears: 56px on the entry brand pane, 28px in the phone
+/// brand band, and so it can take the dark-mode seal without a second asset.
 ///
 /// Seal blue, not the purple of the reference image: every primary button,
 /// link and active destination in this app keys off `seal`, and a mark in a
@@ -47,8 +47,8 @@ class BrandEmblem extends StatelessWidget {
 /// The shared layout for every entry screen: login, register, verify-email,
 /// no-profile and deactivated.
 ///
-/// Wide surfaces split into a seal-blue route panel — the desks a thesis
-/// passes through, drawn as the stamped route it is — and the form on the
+/// Wide surfaces split into a seal-blue route panel: the desks a thesis
+/// passes through, drawn as the stamped route it is, and the form on the
 /// canvas beside it. Narrow surfaces get a short seal header that scrolls
 /// away with the form, so the keyboard never fights a fixed band.
 class AuthScaffold extends StatelessWidget {
@@ -64,7 +64,7 @@ class AuthScaffold extends StatelessWidget {
   final List<Widget> children;
 
   static const String brandSentence =
-      'Nomination, defence and the thesis record in one place.';
+      'Manage your Capstone journey, from proposal to final approval.';
 
   /// Above this width the route panel sits beside the form.
   static const double wideBreakpoint = 900;
@@ -180,16 +180,16 @@ class AuthScaffold extends StatelessWidget {
 }
 
 /// The wide entry panel: the institution's mark, the product sentence, and
-/// the route a thesis takes — five desks, each stamped in turn.
+/// the route a thesis takes: five desks, each stamped in turn.
 class _RoutePanel extends StatelessWidget {
   const _RoutePanel();
 
   static const _desks = [
-    (Icons.groups_outlined, 'Researchers', 'Form the group, name the working title'),
-    (Icons.school_outlined, 'Adviser and panel', 'Accept the nomination, judge the titles'),
-    (Icons.inventory_2_outlined, 'Research Coordinator', 'Recommend and schedule'),
-    (Icons.gavel_outlined, 'Dean', 'Approve and close each defence'),
-    (Icons.local_library_outlined, 'College archive', 'The finished manuscript, on record'),
+    (Icons.groups_outlined, 'Researchers', 'Create you research group and supmit your proposed capstone title'),
+    (Icons.school_outlined, 'Adviser and panel', 'Review propose titles, evaluate submessions, and provide feedback'),
+    (Icons.inventory_2_outlined, 'Research Coordinator', 'Review recommendations and arrange defense schedule'),
+    (Icons.gavel_outlined, 'Dean', 'Review and approve the result of each defense'),
+    (Icons.local_library_outlined, 'College archive', 'Keep approved manuscripts organized and accessible for future reference'),
   ];
 
   @override
@@ -217,10 +217,27 @@ class _RoutePanel extends StatelessWidget {
           const Spacer(),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 460),
-            child: Text(
-              brandSentenceDisplay,
-              style: text.headlineLarge?.copyWith(color: white),
-            ),
+           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                brandSentenceDisplay,
+                style: text.headlineLarge?.copyWith(
+                  color: white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'A platform for managing thesis proposals, '
+                'evaluations, defenses, approvals, and final submissions.',
+                style: text.bodyMedium?.copyWith(
+                  color: soft,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
           ),
           const SizedBox(height: AppTokens.xl),
           for (var i = 0; i < _desks.length; i++)
@@ -242,7 +259,7 @@ class _RoutePanel extends StatelessWidget {
   }
 
   static const brandSentenceDisplay =
-      'Every thesis, from nomination to the archive.';
+      'Manage your thesis from proposal to final submission.';
 }
 
 class _DeskStep extends StatelessWidget {

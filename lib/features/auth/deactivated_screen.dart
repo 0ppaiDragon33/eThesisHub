@@ -5,7 +5,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/sign_out_button.dart';
 
 /// Shown to a signed-in, verified account whose `users/{uid}.active` is
-/// `false` — a coordinator has switched off its access.
+/// `false`: a coordinator has switched off its access.
 ///
 /// It sits OUTSIDE the app shell, next to the sign-in and verify-email
 /// screens rather than beside `/no-profile`, for the reason those screens

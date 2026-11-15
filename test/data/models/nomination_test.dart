@@ -55,7 +55,7 @@ void main() {
   test('needsConforme reads exOfficio, not conformeStatus', () {
     // Deliberately decorrelated: an accepted nominated member and a pending
     // ex officio seat. If needsConforme wrongly read conformeStatus, the
-    // first assertion would fail — which is the point of this test.
+    // first assertion would fail, which is the point of this test.
     final acceptedMember = Nomination.fromMap('uid-a', {
       'nomineeName': 'Dr. Armada',
       'position': 'adviser',

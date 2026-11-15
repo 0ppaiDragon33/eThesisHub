@@ -61,7 +61,7 @@ void main() {
 
   // The lifecycle in the design doc has always ended `-> archived`, and the
   // enum has never had it. Adding it makes thesisStage()'s exhaustive
-  // switch fail to compile until handled -- which is the safety net that
+  // switch fail to compile until handled, which is the safety net that
   // function's own comment describes.
   test('archived is a real status and buckets to its own stage', () {
     expect(ThesisStatus.fromString('archived'), ThesisStatus.archived);

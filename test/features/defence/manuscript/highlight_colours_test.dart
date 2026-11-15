@@ -53,7 +53,7 @@ void main() {
     expect(colours['c1'], kHighlightPalette[4]);
   });
 
-  test('the same defence gives everyone the same colours', () {
+  test('the same defense gives everyone the same colours', () {
     final list = [note('h1', 'c1'), note('h2', 'p1')];
     expect(highlightColours(defence: defence(), annotations: list),
         highlightColours(defence: defence(), annotations: list));

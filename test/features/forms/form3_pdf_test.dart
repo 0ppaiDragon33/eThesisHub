@@ -66,7 +66,7 @@ void main() {
 
   test('the coordinator and dean lines stay blank even when filled',
       () async {
-    // No digital sign-off is tracked for a defence request -- neither
+    // No digital sign-off is tracked for a defence request: neither
     // name should ever leak into the letter.
     final data = Form3Data.assemble(
       thesis: _thesis(),

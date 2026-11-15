@@ -131,14 +131,14 @@ void main() {
     // archived" from the `archive` collection), refused by publish() as
     // already archived, refused by the rules' archive arm which pins
     // `titleApproved`, and with the leader's manuscript replacement dead
-    // for the same reason. D57's "retractable" has to mean this.
+    // for the same reason. The "retractable" has to mean this.
     final thesis = await ThesisRepository(db).watchThesis('t1').first;
     expect(thesis!.status, ThesisStatus.titleApproved);
   });
 
   // The whole round trip, end to end: published, retracted, published
   // again. This is the assertion that fails outright against a retract()
-  // that only deletes the entry -- publish() throws
+  // that only deletes the entry: publish() throws
   // StateError('This thesis is already in the archive.') on the status it
   // left behind.
   test('a retracted thesis can be published again', () async {
@@ -175,14 +175,14 @@ void main() {
   });
 
   // RULING: the brief's original version of this test wrote three entries
-  // through publish() and asserted only hasLength(3) -- which an unsorted
+  // through publish() and asserted only hasLength(3), which an unsorted
   // implementation also satisfies, and which cannot be fixed by varying
   // publish order because archivedAt comes from FieldValue.serverTimestamp()
   // and so is indistinguishable across three publishes in one test.
   //
   // This version writes directly into the `archive` collection, bypassing
   // publish() entirely, with distinct explicit archivedAt values, inserted
-  // in an order that is NOT the expected output order. fake_cloud_firestore
+  // in an order that is not the expected output order. fake_cloud_firestore
   // returns documents in INSERTION order, so if this test's insertion order
   // already matched "newest first" it would pass against an implementation
   // that never sorts at all. It does not: t-old is inserted before t-new.
@@ -200,7 +200,7 @@ void main() {
           'archivedAt': Timestamp.fromDate(archivedAt),
         };
 
-    // Insertion order: middle, oldest, newest -- deliberately not the
+    // Insertion order: middle, oldest, newest: deliberately not the
     // expected newest-first output order (newest, middle, oldest).
     await db
         .collection('archive')

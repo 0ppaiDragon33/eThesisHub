@@ -16,13 +16,13 @@ import 'package:ethesishub/providers/service_providers.dart';
 
 /// A thesis `t1` led by `l1`, with a completed FINAL defence `d1`.
 ///
-/// [verdict] is the only signal that the defence passed — the thesis
-/// status stays `titleApproved` throughout, because nothing in M2–M4 ever
+/// [verdict] is the only signal that the defence passed: the thesis
+/// status stays `titleApproved` throughout, because nothing in chapters–evaluation ever
 /// advances it. Pass `null` for a defence that finished without a verdict
 /// recorded yet.
 ///
-/// Shared in shape with Task 9's `manuscript_upload_test.dart` `seed()`,
-/// copied verbatim per the brief rather than shared across files — the two
+/// Shared in shape with the `manuscript_upload_test.dart` `seed()`,
+/// copied verbatim per the brief rather than shared across files: the two
 /// suites must not share a file.
 Future<FakeFirebaseFirestore> seed({
   String? verdict = 'pass',
@@ -32,10 +32,10 @@ Future<FakeFirebaseFirestore> seed({
 }) async {
   final db = FakeFirebaseFirestore();
   // The brief's given fixture carries no `users` collection at all, and
-  // `ArchiveQueueScreen` is a coordinator's screen -- a coordinator with no
+  // `ArchiveQueueScreen` is a coordinator's screen: a coordinator with no
   // `users/c1` profile does not resolve as a coordinator anywhere that
   // branches on `currentUserProvider`. Folded into `seed()` itself, in the
-  // SAME awaited chain as every other document below, rather than as a
+  // same awaited chain as every other document below, rather than as a
   // separate await inside `app()`: `app()` stays a plain synchronous
   // function this way, matching the codebase's own idiom in
   // `defences_list_test.dart`'s `_seedUser` (one seeding function, fully
@@ -124,7 +124,7 @@ Future<FakeFirebaseFirestore> seed({
 }
 
 /// A bare db carrying only the `users/c1` coordinator profile, for the
-/// empty-queue case -- `seed()` is the only place that writes it for every
+/// empty-queue case: `seed()` is the only place that writes it for every
 /// other test, but the empty-queue test deliberately does not go through
 /// `seed()` at all.
 Future<FakeFirebaseFirestore> emptyCoordinatorDb() async {
@@ -142,12 +142,12 @@ Future<FakeFirebaseFirestore> emptyCoordinatorDb() async {
 /// resolves the signed-in user's role through `currentUserProvider`
 /// (indirectly, via anything that branches on it). The `users/c1` profile
 /// this needs is written by [seed] (or [emptyCoordinatorDb]) and fully
-/// awaited by the caller before `app(db)` ever runs -- exactly
+/// awaited by the caller before `app(db)` ever runs: exactly
 /// `defences_list_test.dart`'s `_seedUser`/`_wrap` split, one seeding
 /// function the caller awaits, then a plain synchronous wrapper.
 ///
 /// [overrides] lets a test add its own provider overrides on top of the
-/// fake Firestore/auth ones below -- the loading-state test uses it to
+/// fake Firestore/auth ones below: the loading-state test uses it to
 /// hold one of [archiveQueueProvider]'s three sources open on a
 /// `StreamController` that never emits, so the queue is DELIBERATELY, not
 /// incidentally, still loading at the point of its assertion.
@@ -192,7 +192,7 @@ void main() {
   });
 
   // The row used to be labelled `thesis.workingTitle` while publish()
-  // writes the APPROVED candidate title -- so a coordinator approved a row
+  // writes the APPROVED candidate title, so a coordinator approved a row
   // saying one thing and published another into a permanent public record.
   testWidgets('the row shows the title that will actually be published',
       (tester) async {
@@ -232,7 +232,7 @@ void main() {
     expect(find.byKey(const Key('queueRow-t1')), findsNothing);
   });
 
-  testWidgets('omits a thesis that failed its defence', (tester) async {
+  testWidgets('omits a thesis that failed its defense', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seed(
         verdict: 'fail', withManuscript: true)));
@@ -258,7 +258,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('publish-t1')));
     await tester.pumpAndSettle();
-    // Publishing confirms first — it makes the manuscript public.
+    // Publishing confirms first: it makes the manuscript public.
     await tester.tap(find.byKey(const Key('confirmPublish-t1')));
     await tester.pumpAndSettle();
 
@@ -312,7 +312,7 @@ void main() {
   // A failed read must never render as "nothing to publish": the queue is
   // empty most of the time, so a coordinator who cannot tell the two apart
   // simply believes there is no work. The error is driven in through
-  // [archiveProvider], one of the fan-in's three sources -- which also
+  // [archiveProvider], one of the fan-in's three sources, which also
   // proves the gate PROPAGATES a source error rather than swallowing it
   // into an empty list.
   testWidgets('a failed read surfaces, and is not an empty queue',
@@ -341,7 +341,7 @@ void main() {
   // Deliberately, not incidentally: [archiveProvider] is overridden with a
   // StreamController this test owns and never adds to, so the gate inside
   // [archiveQueueProvider] genuinely has no value from that source at the
-  // point of the single `pump()` below -- not a race against how fast
+  // point of the single `pump()` below, not a race against how fast
   // FakeFirebaseFirestore or MockFirebaseAuth happen to settle. `theses`
   // and `defences` are free to resolve from the real seeded data; the gate
   // must still refuse to emit while `archive` never has.

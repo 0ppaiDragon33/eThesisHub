@@ -18,7 +18,7 @@ import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// The Coordinator's screen for the one re-defence of a failed defence
-/// (spec 2026-09-25 §6.4), at '/defence/schedule?redefenceOf=<id>'.
+/// , at '/defence/schedule?redefenceOf=<id>'.
 ///
 /// The kind, thesis and panel come from the failed defence; only the date,
 /// time and venue are asked.
@@ -56,9 +56,8 @@ class _ScheduleRedefenceScreenState
     if (_busy) return;
     final confirmed = await confirmAction(
       context,
-      title: 'Schedule this re-defence?',
-      message: 'The group, the adviser and the same panel are notified of '
-          'the date and venue.',
+      title: 'Schedule this redefense?',
+      message: 'The group, adviser and panel are notified.',
       confirmLabel: 'Schedule',
       confirmKey: const Key('confirmScheduleRedefence'),
     );
@@ -87,16 +86,16 @@ class _ScheduleRedefenceScreenState
       if (mounted) {
         setState(
           () => _error = e.code == 'permission-denied'
-              ? 'You do not have permission to schedule this re-defence. The '
+              ? 'You do not have permission to schedule this redefense. The '
                   'panel may have changed [permission-denied].'
-              : 'Could not schedule this re-defence. Please try again.',
+              : 'Could not schedule this redefense. Please try again.',
         );
       }
     } catch (_) {
       if (mounted) {
         setState(
           () =>
-              _error = 'Could not schedule this re-defence. Please try again.',
+              _error = 'Could not schedule this redefense. Please try again.',
         );
       }
     } finally {
@@ -108,7 +107,7 @@ class _ScheduleRedefenceScreenState
     key: const Key('scheduleRedefenceScreen'),
     child: PageShell(
       kicker: 'Research office',
-      title: 'Schedule a re-defence',
+      title: 'Schedule a redefense',
       children: children,
     ),
   );
@@ -121,13 +120,13 @@ class _ScheduleRedefenceScreenState
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
 
     if (failedAsync.isLoading || allAsync.isLoading) {
-      return _framed(const [LoadingState(label: 'Loading the defence…')]);
+      return _framed(const [LoadingState(label: 'Loading the defense…')]);
     }
     if (failedAsync.hasError || allAsync.hasError) {
       return _framed([
         ErrorState(
           error: failedAsync.error ?? allAsync.error,
-          message: 'Could not load this defence.',
+          message: 'Could not load this defense.',
         ),
       ]);
     }
@@ -136,25 +135,25 @@ class _ScheduleRedefenceScreenState
       return _framed(const [
         EmptyState(
           icon: Icons.search_off,
-          title: 'Defence not found',
-          message: 'This defence no longer exists.',
+          title: 'Defense not found',
+          message: 'This defense no longer exists.',
         ),
       ]);
     }
 
     final String? refusal = failed.panelVerdict != PassFail.fail
-        ? 'Only a defence the panel failed can be re-defended.'
+        ? 'Only a defense the panel failed can be re-defended.'
         : failed.isRedefence
-        ? 'This was already the group\'s re-defence of this stage.'
+        ? 'This was already the group\'s redefense of this stage.'
         : hasRedefence(failed, allAsync.value ?? const [])
-        ? 'This defence already has its re-defence.'
+        ? 'This defense already has its redefense.'
         : null;
     if (refusal != null) {
       return _framed([
         EmptyState(
           key: const Key('cannotRedefend'),
           icon: Icons.block_outlined,
-          title: 'This defence cannot be re-defended',
+          title: 'This defense cannot be re-defended',
           message: refusal,
         ),
       ]);
@@ -179,7 +178,7 @@ class _ScheduleRedefenceScreenState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Re-defence of the ${failed.type.label.toLowerCase()} held '
+              'Redefense of the ${failed.type.label.toLowerCase()} held '
               '${at == null ? 'on a date not recorded' : DefencesList.formatDateTime(at)}',
               key: const Key('redefenceOfSummary'),
             ),
@@ -235,12 +234,12 @@ class _ScheduleRedefenceScreenState
                 ? null
                 : () => _schedule(failed, uid),
             icon: const Icon(Icons.replay_outlined, size: 18),
-            label: Text(_busy ? 'Scheduling…' : 'Schedule re-defence'),
+            label: Text(_busy ? 'Scheduling…' : 'Schedule redefense'),
           ),
         )
       else
         Text(
-          'Only the Research Coordinator can schedule defences.',
+          'Only the Research Coordinator can schedule defenses.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
     ]);

@@ -137,7 +137,7 @@ void main() {
     // leader move the thesis itself back to `draft` from
     // `nominationPendingConforme`. Shipping a re-nominate action here would
     // therefore fail with permission-denied for every real user, so the
-    // screen must not offer one — it must only explain the gap.
+    // screen must not offer one: it must only explain the gap.
     expect(find.byKey(const Key('nominateAction')), findsNothing);
     expect(find.byKey(const Key('reNominationGap')), findsOneWidget);
     expect(find.textContaining('Research Coordinator'), findsOneWidget);
@@ -162,7 +162,7 @@ void main() {
     expect(remark, findsOneWidget);
 
     // The remark must read above the resubmit action in the same scrolling
-    // list — a lower y-position means it appears first.
+    // list: a lower y-position means it appears first.
     final remarkY = tester.getTopLeft(remark).dy;
     final resubmitY = tester.getTopLeft(resubmit).dy;
     expect(remarkY, lessThan(resubmitY));
@@ -180,7 +180,7 @@ void main() {
     });
 
     final theses = db.collection('theses').doc('t1');
-    // Round 1 (superseded) candidate + comment — must not appear.
+    // Round 1 (superseded) candidate + comment: must not appear.
     await theses.collection('candidateTitles').doc('ct-round1').set({
       'titleText': 'Old round title',
       'justificationPath': 'p1',
@@ -233,7 +233,7 @@ void main() {
       findsOneWidget,
     );
     // Each commenter block now shows an avatar, the name and a role badge
-    // rather than a bracketed '[Name — Role]' line. Assert name and role,
+    // rather than a bracketed '[Name. Role]' line. Assert name and role,
     // scoped to the comments block.
     final block = find.byKey(const Key('consolidatedComments'));
     expect(
@@ -280,7 +280,7 @@ void main() {
     final banner = find.byKey(const Key('approvedTitle'));
     expect(banner, findsOneWidget);
     // The winner's own text inside the banner, not merely somewhere on the
-    // screen — the consolidated comments below list every candidate.
+    // screen: the consolidated comments below list every candidate.
     expect(
       find.descendant(
           of: banner, matching: find.text('The one the panel chose')),
@@ -330,7 +330,7 @@ void main() {
     );
   });
 
-  testWidgets('a thesis still at defence names no approved title',
+  testWidgets('a thesis still at defense names no approved title',
       (tester) async {
     // The control for the test above, same screen, one status apart: nothing
     // may announce a winner before the Dean has picked one.

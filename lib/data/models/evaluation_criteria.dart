@@ -28,14 +28,14 @@ class EvaluationCriterion {
     required this.prompt,
   });
 
-  /// The Firestore map key. Stable forever — it is stored in every
+  /// The Firestore map key. Stable forever: it is stored in every
   /// evaluation document ever written, and named in `firestore.rules`.
   final String key;
 
   final String label;
 
-  /// Points available. A score is 0..weight, NOT a 1-5 rating that gets
-  /// multiplied (D34), so the eleven scores sum straight to the grade
+  /// Points available. A score is 0..weight, not a 1-5 rating that gets
+  /// multiplied, so the eleven scores sum straight to the grade
   /// with no conversion anywhere in the app.
   final int weight;
 
@@ -52,7 +52,7 @@ class EvaluationCriterion {
 /// THESE ELEVEN WEIGHTS EXIST TWICE. `firestore.rules` carries the same
 /// numbers as literals in `match /evaluations/{evaluatorUid}`, because
 /// rules cannot import Dart. If the two ever disagree the form accepts a
-/// score the rules deny, so the rules suite pins every boundary — see the
+/// score the rules deny, so the rules suite pins every boundary: see the
 /// "bounded per criterion" tests in `rules-test/rules.test.js`.
 ///
 /// Order is the order Form 5c prints, and the screens render them in list
@@ -63,7 +63,7 @@ const evaluationCriteria = <EvaluationCriterion>[
     label: 'Title',
     // The form prints 50%, which would put Section A at 95 against its
     // own stated 50% and the whole form at 145. Every other criterion is
-    // internally consistent, so this is a typo in the manual (D35) and is
+    // internally consistent, so this is a typo in the manual and is
     // treated as one. Raised with the Research Coordinator; see the spec.
     weight: 5,
     section: EvaluationSection.content,

@@ -55,7 +55,7 @@ class DefenceRepository {
     required String leaderUid,
     required String createdBy,
   }) async {
-    if (venue.trim().isEmpty) throw ArgumentError('Give the defence a venue.');
+    if (venue.trim().isEmpty) throw ArgumentError('Give the defense a venue.');
 
     final ref = await _defences.add({
       'thesisId': thesisId,
@@ -76,7 +76,7 @@ class DefenceRepository {
     return ref.id;
   }
 
-  /// Schedules the one re-defence of [failed] (spec 2026-09-25 §4.2).
+  /// Schedules the one re-defence of [failed].
   ///
   /// Written at [Defence.redefenceIdFor] with `set`, so the rules can refuse
   /// a second one. The thesis, kind, panel, adviser and leader are copied
@@ -90,20 +90,20 @@ class DefenceRepository {
     required String createdBy,
   }) async {
     if (venue.trim().isEmpty) {
-      throw ArgumentError('Give the re-defence a venue.');
+      throw ArgumentError('Give the redefense a venue.');
     }
     if (failed.panelVerdict != PassFail.fail) {
-      throw ArgumentError('Only a defence the panel failed can be re-defended.');
+      throw ArgumentError('Only a defense the panel failed can be re-defended.');
     }
     if (failed.isRedefence) {
-      throw ArgumentError('A re-defence cannot itself be re-defended.');
+      throw ArgumentError('A redefense cannot itself be re-defended.');
     }
     final ref = _defence(Defence.redefenceIdFor(failed.id));
     // The rules refuse this too; checked here as well because
     // fake_cloud_firestore enforces no rules, and `set` on an existing
     // document would otherwise quietly overwrite it in every Dart test.
     if ((await ref.get()).exists) {
-      throw StateError('This defence already has a re-defence.');
+      throw StateError('This defense already has a redefense.');
     }
     await ref.set({
       'thesisId': failed.thesisId,
@@ -148,7 +148,13 @@ class DefenceRepository {
 
   Stream<List<Defence>> watchAll() => _defences.snapshots().map(_map);
 
-  /// Oldest first — the log reads as a transcript.
+  /// Every defence of one thesis, cancelled ones included, read once. Only
+  /// the Coordinator and the Dean may list defences this widely (see the
+  /// list rule), which is exactly who asks.
+  Future<List<Defence>> forThesis(String thesisId) async =>
+      _map(await _defences.where('thesisId', isEqualTo: thesisId).get());
+
+  /// Oldest first: the log reads as a transcript.
   Stream<List<DefenceComment>> watchComments(String defenceId) {
     return _defence(defenceId).collection('comments').snapshots().map((s) {
       final list = s.docs
@@ -171,6 +177,23 @@ class DefenceRepository {
   CollectionReference<Map<String, dynamic>> _evaluations(String defenceId) =>
       _defence(defenceId).collection('evaluations');
 
+  CollectionReference<Map<String, dynamic>> _remarks(String defenceId) =>
+      _defence(defenceId).collection('remarks');
+
+  /// The written remarks on a defence, with no scores: the half of the
+  /// evaluations the group's leader may read once the adviser releases.
+  /// Before release the rules refuse everyone but the author, so this is
+  /// opened by the group's leader after release only.
+  Stream<List<EvaluationRemarks>> watchRemarks(String defenceId) {
+    return _remarks(defenceId).snapshots().map((s) {
+      final list = s.docs
+          .map((d) => EvaluationRemarks.fromMap(d.id, d.data()))
+          .toList();
+      list.sort((a, b) => a.evaluatorUid.compareTo(b.evaluatorUid));
+      return list;
+    });
+  }
+
   Evaluation _toEvaluation(String id, Map<String, dynamic> raw) {
     return Evaluation.fromMap(id, {
       ...raw,
@@ -181,7 +204,7 @@ class DefenceRepository {
 
   /// Every submitted sheet for a defence, ordered by evaluator uid.
   ///
-  /// Sorted in Dart rather than with `orderBy`: the document id IS the
+  /// Sorted in Dart rather than with `orderBy`: the document id is the
   /// evaluator uid, so there is no field to order on, and a stable order
   /// is what stops the grades table reshuffling its columns between
   /// snapshots.
@@ -211,7 +234,7 @@ class DefenceRepository {
   ///
   /// Every check below is ALSO a rule. They are repeated here because
   /// `fake_cloud_firestore` enforces none of them, so without these the
-  /// whole Dart suite would pass against writes production denies -- and
+  /// whole Dart suite would pass against writes production denies, and
   /// because a client-side refusal can say WHY, which a
   /// `permission-denied` cannot.
   Future<void> submitEvaluation({
@@ -227,10 +250,15 @@ class DefenceRepository {
     bool officeHolder = false,
   }) async {
     // The passing mark, as on the Grades screen: a sheet under it can only
-    // read Fail. The same number is in firestore.rules.
+    // read Fail, and a sheet at or above it can only read Pass. The same
+    // number is in firestore.rules.
     if (rating == PassFail.pass && totalOf(scores) < passingMark) {
       throw ArgumentError(
           'A total under $passingMark can only be rated Fail.');
+    }
+    if (rating == PassFail.fail && totalOf(scores) >= passingMark) {
+      throw ArgumentError(
+          'A total of $passingMark or more can only be rated Pass.');
     }
     for (final c in evaluationCriteria) {
       final v = scores[c.key];
@@ -253,13 +281,13 @@ class DefenceRepository {
     }
 
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final data = snap.data()!;
 
     // Mirrors the rules' isPanelistHere(): request.auth.uid in
     // parent().panelUids. Duplicated here because fake_cloud_firestore
     // enforces no rules, and this is the check the milestone's headline
-    // decision rests on -- the adviser is deliberately never in panelUids,
+    // decision rests on: the adviser is deliberately never in panelUids,
     // because they cannot mark at arm's length after months on the thesis.
     // Without this the whole Dart suite would prove nothing about it.
     final panelUids = (data['panelUids'] as List?)?.cast<String>() ?? const [];
@@ -270,14 +298,14 @@ class DefenceRepository {
     }
     if (!panelUids.contains(evaluatorUid) && !officeHolder) {
       throw StateError('Only the panel, the Coordinator or the Dean can score '
-          'this defence.');
+          'this defense.');
     }
 
     final status = DefenceStatus.fromString(data['status'] as String?);
     if (status != DefenceStatus.inProgress &&
         status != DefenceStatus.completed) {
       throw StateError(
-          'A defence can only be scored once it is under way.');
+          'A defense can only be scored once it is under way.');
     }
     if (data['evaluationsReleasedAt'] != null) {
       throw StateError(
@@ -296,7 +324,16 @@ class DefenceRepository {
 
     final existing = await _evaluations(defenceId).doc(evaluatorUid).get();
 
-    await _evaluations(defenceId).doc(evaluatorUid).set({
+    // The sheet and the record that it exists go in ONE batch. The rules
+    // cannot count evaluations, so release is locked on `submittedUids`
+    // instead, and they accept a uid into that list only when the same
+    // batch also lands this grader's sheet. The uid is added once: a
+    // re-save of an edited sheet leaves the list alone (a second add of the
+    // same uid would change nothing, and the rules insist the list grows).
+    final alreadyRecorded =
+        ((data['submittedUids'] as List?) ?? const []).contains(evaluatorUid);
+    final batch = _db.batch();
+    batch.set(_evaluations(defenceId).doc(evaluatorUid), {
       // Denormalized at the moment of the act, exactly as addComment
       // stores authorName: a grade sheet naming a uid names nobody, and
       // resolving the name on read would let a later rename rewrite who
@@ -306,7 +343,7 @@ class DefenceRepository {
       'comments': cleaned,
       'total': totalOf(scores),
       'rating': rating.value,
-      // On an edit, submittedAt must survive unchanged -- the rules pin
+      // On an edit, submittedAt must survive unchanged: the rules pin
       // it to its stored value, so re-stamping it here would be denied in
       // production while passing against the fake.
       'submittedAt': existing.exists
@@ -314,6 +351,20 @@ class DefenceRepository {
           : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    // The written half, on its own document so the group can read it
+    // without ever being able to read a score. Replaced wholesale on an
+    // edit, so a remark deleted from the sheet is deleted here too.
+    batch.set(_remarks(defenceId).doc(evaluatorUid), {
+      'evaluatorName': evaluatorName,
+      'comments': cleaned,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    if (!alreadyRecorded) {
+      batch.update(_defence(defenceId), {
+        'submittedUids': FieldValue.arrayUnion([evaluatorUid]),
+      });
+    }
+    await batch.commit();
   }
 
   /// Forward one step only.
@@ -326,7 +377,7 @@ class DefenceRepository {
     required DefenceStatus status,
   }) async {
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final current = DefenceStatus.fromString(snap.data()!['status'] as String?);
 
     final legal = (current == DefenceStatus.scheduled &&
@@ -337,13 +388,13 @@ class DefenceRepository {
             status == DefenceStatus.cancelled);
     if (!legal) {
       throw StateError(
-          'A defence goes scheduled, then in progress, then completed, and '
+          'A defense goes scheduled, then in progress, then completed, and '
           'can only be cancelled while it is still scheduled. It cannot '
           'skip a step or go back.');
     }
 
     // Opening early is what this guards. A defence opened by accident and
-    // closed cannot be reopened -- the lifecycle is forward-only -- so the
+    // closed cannot be reopened (the lifecycle is forward-only) so the
     // log would be frozen empty and the record permanent. The rules carry
     // the same window; this check exists because fake_cloud_firestore
     // enforces no rules, so without it every test would pass against a
@@ -351,12 +402,12 @@ class DefenceRepository {
     if (status == DefenceStatus.inProgress) {
       final scheduledAt = (snap.data()!['scheduledAt'] as Timestamp?)?.toDate();
       if (scheduledAt == null) {
-        throw StateError('This defence has no scheduled time.');
+        throw StateError('This defense has no scheduled time.');
       }
       final opensAt = scheduledAt.subtract(defenceOpenGrace);
       if (DateTime.now().isBefore(opensAt)) {
         throw StateError(
-            'This defence cannot be opened yet. It opens 30 minutes before '
+            'This defense cannot be opened yet. It opens 30 minutes before '
             'its scheduled time.');
       }
     }
@@ -374,14 +425,14 @@ class DefenceRepository {
     required DateTime scheduledAt,
     required String venue,
   }) async {
-    if (venue.trim().isEmpty) throw ArgumentError('Give the defence a venue.');
+    if (venue.trim().isEmpty) throw ArgumentError('Give the defense a venue.');
 
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final current = DefenceStatus.fromString(snap.data()!['status'] as String?);
     if (!current.isEditable) {
       throw StateError(
-          'Only a defence that has not started can be rescheduled.');
+          'Only a defense that has not started can be rescheduled.');
     }
 
     await _defence(defenceId).update({
@@ -401,12 +452,12 @@ class DefenceRepository {
     if (text.isEmpty) throw ArgumentError('Write something first.');
 
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final status =
         DefenceStatus.fromString(snap.data()!['status'] as String?);
     if (!status.acceptsComments) {
       throw StateError(
-          'Comments can only be added while the defence is under way.');
+          'Comments can only be added while the defense is under way.');
     }
 
     await _defence(defenceId).collection('comments').add({
@@ -478,11 +529,11 @@ class DefenceRepository {
     }
 
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final status = DefenceStatus.fromString(snap.data()!['status'] as String?);
     if (!status.acceptsComments) {
       throw StateError(
-          'Highlights can only be added while the defence is under way.');
+          'Highlights can only be added while the defense is under way.');
     }
 
     await _annotations(defenceId).add({
@@ -507,11 +558,11 @@ class DefenceRepository {
     required String uid,
   }) async {
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final status = DefenceStatus.fromString(snap.data()!['status'] as String?);
     if (status != DefenceStatus.inProgress) {
       throw StateError(
-          'Highlights can only be removed while the defence is under way.');
+          'Highlights can only be removed while the defense is under way.');
     }
     final ref = _annotations(defenceId).doc(annotationId);
     final existing = await ref.get();
@@ -564,12 +615,12 @@ class DefenceRepository {
   /// The adviser's release, which is what opens the log to the group.
   Future<void> release(String defenceId) async {
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final data = snap.data()!;
     if (DefenceStatus.fromString(data['status'] as String?) !=
         DefenceStatus.completed) {
       throw StateError(
-          'Consolidate once the defence is closed, so the log is complete.');
+          'Consolidate once the defense is closed, so the log is complete.');
     }
     if (data['consolidatedAt'] != null) {
       throw StateError('These comments have already been released.');
@@ -578,7 +629,9 @@ class DefenceRepository {
         .update({'consolidatedAt': FieldValue.serverTimestamp()});
   }
 
-  /// The adviser's release of the panel's evaluations to each other.
+  /// The adviser's release of the evaluations: the scores and remarks to
+  /// the panel, the Coordinator and the Dean, and the written remarks
+  /// alone to the group's leader.
   ///
   /// Waits for every grader (the panel, the Coordinator and the Dean): it
   /// refuses while fewer sheets are in, and the grades screen keeps the
@@ -590,7 +643,7 @@ class DefenceRepository {
     required String adviserUid,
   }) async {
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final data = snap.data()!;
 
     // Mirrors firestore.rules: defence().adviserUid == request.auth.uid.
@@ -599,25 +652,32 @@ class DefenceRepository {
     // every Dart test while production denies them.
     if (data['adviserUid'] != adviserUid) {
       throw StateError(
-          'Only the adviser for this defence releases its evaluations.');
+          'Only the adviser for this defense releases its evaluations.');
     }
 
     if (DefenceStatus.fromString(data['status'] as String?) !=
         DefenceStatus.completed) {
       throw StateError(
-          'Release the evaluations once the defence is closed.');
+          'Release the evaluations once the defense is closed.');
     }
     if (data['evaluationsReleasedAt'] != null) {
       throw StateError('These evaluations have already been released.');
     }
 
-    // Every grader first: the panel, the Coordinator and the Dean.
-    final panel = (data['panelUids'] as List?)?.length ?? 0;
-    final required = panel + 2;
-    final submitted = (await _evaluations(defenceId).get()).docs.length;
-    if (submitted < required) {
-      throw StateError('Every grader must submit first: $submitted of '
-          '$required are in.');
+    // Every grader first: each panelist, the Coordinator and the Dean.
+    // Judged on `submittedUids`, the list the rules read, so this refuses
+    // exactly what the rules would: with a reason, not a bare
+    // permission-denied.
+    final outstanding = evaluationsOutstandingFor(
+      panelUids:
+          ((data['panelUids'] as List?) ?? const []).cast<String>(),
+      submittedUids:
+          ((data['submittedUids'] as List?) ?? const []).cast<String>(),
+    );
+    if (outstanding > 0) {
+      throw StateError('Every grader must submit first: $outstanding '
+          'still outstanding. A grader who submitted before this check '
+          'existed needs to open their sheet and save it once more.');
     }
 
     await _defence(defenceId)
@@ -626,30 +686,52 @@ class DefenceRepository {
 
   /// Records the verdict the panel deliberated under Guidelines §8b.
   ///
-  /// The adviser is the scribe, not the decider -- they are barred from
+  /// The adviser is the scribe, not the decider: they are barred from
   /// scoring at all. Nothing here derives the verdict from the panelists'
   /// ratings, and nothing should: §8b hands the decision to a
-  /// conversation between people.
+  /// conversation between people. It only refuses a verdict that contradicts
+  /// the mean: Pass under the passing mark, or Fail at or above it.
   Future<void> recordVerdict({
     required String defenceId,
     required String adviserUid,
     required PassFail verdict,
   }) async {
     final snap = await _defence(defenceId).get();
-    if (!snap.exists) throw StateError('That defence no longer exists.');
+    if (!snap.exists) throw StateError('That defense no longer exists.');
     final data = snap.data()!;
 
     if (data['adviserUid'] != adviserUid) {
       throw StateError(
-          'Only the adviser for this defence records the verdict.');
+          'Only the adviser for this defense records the verdict.');
     }
     if (data['evaluationsReleasedAt'] == null) {
       throw StateError(
-          'Release the evaluations first — the panel deliberates over the '
+          'Release the evaluations first. The panel deliberates over the '
           'grades.');
     }
     if (data['panelVerdict'] != null) {
       throw StateError('A verdict has already been recorded.');
+    }
+
+    // The mean of the submitted sheets decides which verdict is open: Pass
+    // needs the passing mark, and at or above it only Pass is allowed.
+    // The screen locks the other button; this refuses it for anything that
+    // gets past the screen. Judged on the sheets' totals, never their
+    // ratings: the panel still decides, the system only refuses a verdict
+    // the numbers cannot carry. No sheets, nothing to judge on.
+    final sheets = (await _evaluations(defenceId).get()).docs;
+    if (sheets.isNotEmpty) {
+      final total = sheets.fold<num>(
+          0, (sum, d) => sum + ((d.data()['total'] as num?) ?? 0));
+      final mean = total / sheets.length;
+      if (verdict == PassFail.pass && mean < passingMark) {
+        throw StateError('The mean ${mean.toStringAsFixed(2)} is under '
+            '$passingMark, so only Fail can be recorded.');
+      }
+      if (verdict == PassFail.fail && mean >= passingMark) {
+        throw StateError('The mean ${mean.toStringAsFixed(2)} is '
+            '$passingMark or more, so only Pass can be recorded.');
+      }
     }
 
     await _defence(defenceId).update({

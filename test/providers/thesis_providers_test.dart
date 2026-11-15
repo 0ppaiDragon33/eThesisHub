@@ -9,7 +9,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 void main() {
   // Was `selectableFacultyProvider exposes only faculty`. That provider was
-  // removed as dead — nothing in `lib/` watched it, and its faculty-only
+  // removed as dead: nothing in `lib/` watched it, and its faculty-only
   // filter contradicts the owner's ruling that coordinators and the dean stay
   // nominable. `allDirectoryProvider` is what the nominate screen actually
   // watches, so the provider-level coverage moves onto it.

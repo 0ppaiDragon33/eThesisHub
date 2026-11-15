@@ -149,7 +149,7 @@ pw.Widget _page(FormText t) {
   );
 }
 
-/// Form 4a — Change of Undergraduate Thesis Adviser. Blank template only;
+/// Form 4a. Change of Undergraduate Thesis Adviser. Blank template only;
 /// see [_page] for why there is no filled version.
 Future<Uint8List> buildForm4aBlank() async {
   final doc = pw.Document(compress: false, theme: await formTheme());

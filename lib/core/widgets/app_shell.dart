@@ -36,9 +36,9 @@ class ShellPlacement extends InheritedWidget {
 
 /// The chrome every signed-in route sits inside.
 ///
-/// - Wide (≥ [railBreakpoint]): an ink sidebar on the left — full width at
+/// - Wide (≥ [railBreakpoint]): an ink sidebar on the left: full width at
 ///   ≥ [fullSidebarFrom] unless the reader collapsed it, icons only below
-///   that — and a paper top bar over the working area.
+///   that, and a paper top bar over the working area.
 /// - Narrow: a top bar carrying a hamburger, with the same ink sidebar
 ///   behind a drawer. A bottom bar was tried and withdrawn: it left inner
 ///   screens with no navigation at all, and the coordinator's destination
@@ -123,8 +123,8 @@ class AppShell extends ConsumerWidget {
 
     // A native mobile app hides the visible back arrow: the OS back gesture
     // (Android's edge-swipe or button) does the same job, routed to the same
-    // rise-to-parent by the BackButtonListener below. Web — including mobile
-    // web, which has no in-app system back — and desktop keep the arrow.
+    // rise-to-parent by the BackButtonListener below. Web: including mobile
+    // web, which has no in-app system back, and desktop keep the arrow.
     //
     // isNativeMobile (dart:io Platform), not defaultTargetPlatform: the latter
     // reports android under `flutter test`, which would hide the arrow in
@@ -134,7 +134,7 @@ class AppShell extends ConsumerWidget {
 
     // The mobile OS back gesture is owned in native code (MainActivity), which
     // pops a pushed screen through go_router and otherwise double-backs to
-    // exit — go_router's ShellRoute reports "nothing to pop" to Android at a
+    // exit: go_router's ShellRoute reports "nothing to pop" to Android at a
     // top-level destination, so no Dart-side guard is ever consulted there.
 
     return LayoutBuilder(
@@ -167,7 +167,7 @@ class AppShell extends ConsumerWidget {
         //
         // The bar is a hard 60px and a Column hands its non-flex children an
         // unbounded main axis, so the bar asks for 60 however little there
-        // is — and any viewport shorter than that overflows and stripes the
+        // is, and any viewport shorter than that overflows and stripes the
         // screen. Flutter web hands the app a near-zero canvas for a frame
         // or two before the browser settles its size, and a desktop window
         // can be dragged shorter at any time.
@@ -176,7 +176,7 @@ class AppShell extends ConsumerWidget {
         // never lays out against an impossible constraint and pushes the
         // overflow inside itself; the SizedBox caps what the Column is asked
         // for, and the ClipRect throws away what does not fit. Nothing
-        // readable fits in a viewport this small — the point is only that
+        // readable fits in a viewport this small: the point is only that
         // the shell yields quietly instead of raising.
         Widget barAndBody() {
           final barHeight = math.min(_TopBar.height, constraints.maxHeight);
@@ -247,7 +247,7 @@ class AppShell extends ConsumerWidget {
 
         // Narrow with navigation: the same ink sidebar the wide layout
         // uses, behind the drawer. Selecting closes the drawer before
-        // navigating — one left open over the page you just asked for is
+        // navigating: one left open over the page you just asked for is
         // the bug this guards against.
         return narrowScaffold(
           _Sidebar(
@@ -411,7 +411,7 @@ class _Sidebar extends StatelessWidget {
     return AnimatedContainer(
       // The shell's one navigation surface, at every width: the wide
       // layout's rail and the narrow layout's drawer contents are this same
-      // widget. Keyed so a test can find the sidebar and measure it —
+      // widget. Keyed so a test can find the sidebar and measure it,
       // collapsed and expanded differ by width, which is what "collapsed"
       // visually means now that there is no `NavigationRail.extended` flag.
       key: const Key('shellSidebar'),
@@ -444,8 +444,8 @@ class _Sidebar extends StatelessWidget {
                   // rather than just the 8px edge strip. Translucent, and an
                   // ancestor of the destinations' own InkWells: for a simple
                   // tap the descendant recognizer wins the gesture arena, so
-                  // tapping a destination navigates and does NOT also
-                  // toggle. Only offered where collapsing means something —
+                  // tapping a destination navigates and does not also
+                  // toggle. Only offered where collapsing means something,
                   // in the narrow drawer the sidebar is always expanded.
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,

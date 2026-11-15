@@ -118,6 +118,19 @@ void main() {
     expect(find.byKey(const Key('titleText2')), findsOneWidget);
   });
 
+  // One presentation serves the whole set, so it must carry every title.
+  testWidgets('the presentation section says it must include the titles',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('presentationNote')), findsOneWidget);
+    expect(
+        find.textContaining('must include all the candidate titles'),
+        findsOneWidget);
+  });
+
   testWidgets('refuses to submit with a blank title', (tester) async {
     useTallSurface(tester);
     final db = await seeded();
@@ -160,7 +173,7 @@ void main() {
 
   testWidgets('caps the candidates and says why', (tester) async {
     // Ten is a rules constraint, not a preference: each candidate costs a
-    // get() and M1a measured that a batch of 20 is denied.
+    // get() and nomination measured that a batch of 20 is denied.
     useTallSurface(tester);
     await tester.pumpWidget(wrap(await seeded()));
     await tester.pumpAndSettle();
@@ -230,7 +243,7 @@ void main() {
     // The point of this test: a successful submission must navigate away,
     // not leave the leader on this screen where its own thesis stream would
     // eventually re-render "not ready" over a submission that just
-    // succeeded — the defect this project has shipped twice already.
+    // succeeded: the defect we have shipped twice already.
     expect(find.byKey(const Key('landedOnStatus')), findsOneWidget);
     expect(find.byKey(const Key('submitTitlesScreen')), findsNothing);
 
@@ -261,7 +274,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The pick button is an OutlinedButton.icon now, so its child is an
-    // icon+label wrapper, not a bare Text — assert the label by finding it
+    // icon+label wrapper, not a bare Text: assert the label by finding it
     // inside the button.
     expect(
         find.descendant(
@@ -297,7 +310,7 @@ void main() {
     final error = tester.widget<ErrorState>(find.byKey(const Key('error')));
     expect(error.message, contains('MB'));
     // The pick button is an OutlinedButton.icon now, so its child is an
-    // icon+label wrapper, not a bare Text — assert the label by finding it
+    // icon+label wrapper, not a bare Text: assert the label by finding it
     // inside the button.
     expect(
         find.descendant(
@@ -312,7 +325,7 @@ void main() {
       (tester) async {
     // This happened for real: the Supabase project's hostname stopped
     // resolving, the browser threw an XMLHttpRequest error, and the generic
-    // handler told the student to retry — for a condition retrying could
+    // handler told the student to retry: for a condition retrying could
     // never fix. The failure now names storage and carries its code, since
     // there are no server-side logs for anyone to consult instead.
     useTallSurface(tester);
@@ -351,7 +364,7 @@ void main() {
         isEmpty);
     final thesis = (await db.collection('theses').doc('t1').get()).data()!;
     expect(thesis['status'], 'nominationApproved',
-        reason: 'the thesis must not move into the defence');
+        reason: 'the thesis must not move into the defense');
   });
 }
 

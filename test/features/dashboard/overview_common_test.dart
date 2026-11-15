@@ -34,7 +34,7 @@ void main() {
     // and completed defences as defences THIS WEEK, while the student's own
     // "next defence" filtered `!d.status.isTerminal` correctly all along.
     // A defence called off on Monday still showed on three dashboards.
-    test('excludes a cancelled defence inside the window', () {
+    test('excludes a cancelled defense inside the window', () {
       final result = defencesThisWeek(
         [
           defence(
@@ -48,7 +48,7 @@ void main() {
       expect(result, isEmpty);
     });
 
-    test('excludes a completed defence inside the window', () {
+    test('excludes a completed defense inside the window', () {
       final result = defencesThisWeek(
         [
           defence(
@@ -62,7 +62,7 @@ void main() {
       expect(result, isEmpty);
     });
 
-    test('keeps scheduled and in-progress defences inside the window', () {
+    test('keeps scheduled and in-progress defenses inside the window', () {
       final result = defencesThisWeek(
         [
           defence(id: 'today', scheduledAt: _monday),
@@ -77,7 +77,7 @@ void main() {
       expect(result.map((d) => d.id), ['today', 'inProgress']);
     });
 
-    test('excludes defences outside the window and those with no date', () {
+    test('excludes defenses outside the window and those with no date', () {
       final result = defencesThisWeek(
         [
           defence(
@@ -97,7 +97,7 @@ void main() {
   });
 
   group('OverviewGreeting', () {
-    // Spec §6: nothing on an overview may depend on `users/{uid}` existing.
+    // nothing on an overview may depend on `users/{uid}` existing.
     testWidgets('falls back to a plain greeting with no profile document',
         (tester) async {
       await tester.pumpWidget(ProviderScope(

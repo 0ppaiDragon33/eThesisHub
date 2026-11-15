@@ -81,7 +81,7 @@ Widget _wrapCalendar(FakeFirebaseFirestore db, {required String uid}) =>
 
 /// PageShell scrolls, but the default 800x600 test surface still leaves
 /// calendar cells (below the grid AND the day panel) below the fold, so a
-/// plain tap misses them -- see `tester.view.physicalSize` used the same
+/// plain tap misses them: see `tester.view.physicalSize` used the same
 /// way in `page_shell_test.dart` and `title_defence_screen_test.dart`.
 void _useTallSurface(WidgetTester tester) {
   tester.view.physicalSize = const Size(800, 2000);
@@ -126,7 +126,7 @@ void main() {
       'across days and stages, a cancelled one, and one with no date',
       (tester) async {
     final db = await _seedUser('f1');
-    // Two on the same day (one of them cancelled -- must stay visible, not
+    // Two on the same day (one of them cancelled: must stay visible, not
     // filtered out), a final defence on a different day (the Calendar page
     // shows every stage together), and one with a null scheduledAt, which
     // a bucketing bug could drop from the calendar instead of routing it to
@@ -164,14 +164,14 @@ void main() {
     // d4 (no confirmed date) is reachable via the awaiting-a-date line,
     // without tapping into any day at all.
     expect(find.byKey(const Key('defenceRow-d4')), findsOneWidget,
-        reason: 'the dateless defence must sit in the awaiting-a-date line');
+        reason: 'the dateless defense must sit in the awaiting-a-date line');
 
     // Day 15 carries both d1 and the cancelled d2.
     await tester.tap(find.byKey(const Key('calendarCell-2026-09-15')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('defenceRow-d1')), findsOneWidget);
     expect(find.byKey(const Key('defenceRow-d2')), findsOneWidget,
-        reason: 'a cancelled defence must stay visible in the day panel');
+        reason: 'a cancelled defense must stay visible in the day panel');
     expect(find.byKey(const Key('defenceRow-d3')), findsNothing);
 
     // Day 20 carries the final defence d3: every stage, one calendar.
@@ -185,7 +185,7 @@ void main() {
 
   testWidgets('the stage switch offers the four stages', (tester) async {
     // Wide enough that the switch (Task: the stage switch fits by its own
-    // width) chooses full labels over short ones -- the default test
+    // width) chooses full labels over short ones: the default test
     // surface is narrower than that and would otherwise show 'Title'
     // rather than 'Title defence'.
     tester.view.physicalSize = const Size(1000, 800);
@@ -196,13 +196,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defenceStageSwitch')), findsOneWidget);
-    for (final label in ['Title defence', 'Pre-oral', 'Final defence',
-        'Re-defence']) {
+    for (final label in ['Title defense', 'Pre-oral', 'Final defense',
+        'Redefense']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
   });
 
-  testWidgets('each stage lists only its own defences', (tester) async {
+  testWidgets('each stage lists only its own defenses', (tester) async {
     final db = await _seedUser('a1');
     await _seedDefence(db, id: 'p', adviserUid: 'a1',
         status: 'completed', panelVerdict: 'fail',
@@ -238,8 +238,8 @@ void main() {
     expect(find.text('Pre-oral (1)'), findsOneWidget);
   });
 
-  testWidgets('the coordinator is offered the re-defence of a failed '
-      'defence; others are told it is coming', (tester) async {
+  testWidgets('the coordinator is offered the redefense of a failed '
+      'defense; others are told it is coming', (tester) async {
     final coordDb = await _seedUser('c1', role: 'coordinator');
     await _seedDefence(coordDb, id: 'p', adviserUid: 'a1',
         status: 'completed', panelVerdict: 'fail',
@@ -260,7 +260,7 @@ void main() {
     expect(find.byKey(const Key('awaitingRedefenceNote-p')), findsOneWidget);
   });
 
-  testWidgets('an empty re-defence stage says what a re-defence is',
+  testWidgets('an empty redefense stage says what a redefense is',
       (tester) async {
     final db = await _seedUser('a1');
     await tester.pumpWidget(
@@ -287,12 +287,12 @@ void main() {
 
   testWidgets(
       'at a medium width the switch fits by its own width, not the window '
-      'Breakpoint -- every segment, Re-defence included, is directly '
+      'Breakpoint -- every segment, Redefense included, is directly '
       'hittable', (tester) async {
     // 720-1050px is exactly the band the bug lived in: wide enough to read
     // as the window's "medium" Breakpoint (full labels, by the old logic),
     // too narrow for four full labels with icons and counts to actually
-    // fit -- so the last segment clipped inside a horizontal scroll view a
+    // fit, so the last segment clipped inside a horizontal scroll view a
     // mouse cannot drag. `tester.tap` fails with a "hit test" warning if
     // the widget is not actually the topmost hittable thing at its
     // location, so a bare tap (no `ensureVisible`) proves the segment is
@@ -307,10 +307,10 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final label in [
-      'Title defence',
+      'Title defense',
       'Pre-oral (1)',
-      'Final defence',
-      'Re-defence',
+      'Final defense',
+      'Redefense',
     ]) {
       await tester.tap(find.text(label));
       await tester.pumpAndSettle();

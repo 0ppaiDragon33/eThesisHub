@@ -76,7 +76,7 @@ void main() {
       () async {
     // These two fields have no other source. Registration collects a program
     // but never a college, createStudentProfile hardcodes specialization to
-    // null, and the promotion used to write only `role` — so a freshly
+    // null, and the promotion used to write only `role`, so a freshly
     // promoted faculty member reached facultyDirectory with both blank and
     // showed as a bare name in the nomination pickers. The coordinator
     // issuing the invite knows both, so the invite carries them.
@@ -107,7 +107,7 @@ void main() {
   test('an invite without college leaves the existing profile values alone',
       () async {
     // The two fields are optional on the invite. Writing them unconditionally
-    // would null out whatever the account already had — the same overwrite
+    // would null out whatever the account already had: the same overwrite
     // bug that upsertOwnEntry had against the Console.
     await repo.createStudentProfile(
       uid: 'uid-10',

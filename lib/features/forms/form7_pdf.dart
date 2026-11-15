@@ -264,7 +264,7 @@ pw.Widget _page(FormText t, {Form7Data? data}) {
   );
 }
 
-/// Generates Form 7 — Certificate of Review — as a PDF. `compress: false`
+/// Generates Form 7 (Certificate of Review) as a PDF. `compress: false`
 /// keeps the content streams text-greppable.
 Future<Uint8List> buildForm7Pdf(Form7Data data) async {
   final doc = pw.Document(compress: false, theme: await formTheme());

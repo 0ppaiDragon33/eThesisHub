@@ -13,7 +13,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Refuses every designation and activation write with `permission-denied`,
 /// the way the rules do when a coordinator reaches the self-edit ban through
-/// a path the UI did not anticipate -- or when the `users` write lands and
+/// a path the UI did not anticipate, or when the `users` write lands and
 /// the `facultyDirectory` mirror is refused, which
 /// [UserRepository.setDesignation] rethrows.
 class RefusingUserRepository extends UserRepository {
@@ -131,7 +131,7 @@ void main() {
     expect(roleText.data, 'Faculty');
 
     // The only two DropdownButtons on the whole screen are the role and
-    // active FILTERS -- never one per row.
+    // active FILTERS, never one per row.
     expect(find.byWidgetPredicate((w) => w is DropdownButton),
         findsNWidgets(2));
   });
@@ -291,7 +291,7 @@ void main() {
     // No designation control for a role that can never be nominated.
     expect(find.byKey(const Key('adviserCheckbox-s1')), findsNothing);
     expect(find.byKey(const Key('panelistCheckbox-s1')), findsNothing);
-    // But the active control IS present -- deactivation must still work.
+    // But the active control is present: deactivation must still work.
     expect(find.byKey(const Key('activeSwitch-s1')), findsOneWidget);
   });
 
@@ -300,8 +300,8 @@ void main() {
       (tester) async {
     useWideSurface(tester);
     final db = FakeFirebaseFirestore();
-    // u1 has never signed in -- invited and designated, but no
-    // facultyDirectory entry exists yet (spec §4.2.1).
+    // u1 has never signed in: invited and designated, but no
+    // facultyDirectory entry exists yet.
     await db.collection('users').doc('u1').set(userDoc('Never Signed In'));
     // u2 has signed in at least once.
     await db.collection('users').doc('u2').set(userDoc('Has Signed In'));
@@ -322,8 +322,8 @@ void main() {
       'reason, not only the active switch', (tester) async {
     // The `users` coordinator arm carries `request.auth.uid != uid` for ALL
     // seven writable fields, not only `active`, so tapping your own Adviser
-    // or Panelist box is always refused. Spec §5.2 asks for "controls
-    // disabled and the reason stated" -- plural.
+    // or Panelist box is always refused. asks for "controls
+    // disabled and the reason stated": plural.
     useWideSurface(tester);
     final db = FakeFirebaseFirestore();
     await db
@@ -346,7 +346,7 @@ void main() {
     expect(find.byKey(const Key('ownRowDesignationReason-coord-1')),
         findsOneWidget);
 
-    // Another account's controls are still live -- the ban is about the
+    // Another account's controls are still live: the ban is about the
     // reader's own row, not about designation generally.
     expect(
         tester
@@ -357,9 +357,9 @@ void main() {
 
   testWidgets('a refused designation write is shown, with its Firestore code',
       (tester) async {
-    // Spec §7: a refused write says WHICH write was refused. The write was
+    // a refused write says WHICH write was refused. The write was
     // neither awaited nor caught, so a refusal became an unhandled Future
-    // error and the checkbox silently snapped back -- which also hid the
+    // error and the checkbox silently snapped back, which also hid the
     // real case where the `users` write succeeds and the facultyDirectory
     // mirror is refused, leaving authority and mirror divergent with
     // nothing on screen saying so.
@@ -409,8 +409,8 @@ void main() {
 
   testWidgets('the Positions column counts advisees and panel seats apart',
       (tester) async {
-    // The one column the spec argues for on its own merits (§5.1, because
-    // of D30) and the only row element that can silently show a wrong
+    // The one column the spec argues for on its own merits
+    // and the only row element that can silently show a wrong
     // number. The two counts differ (2 vs 3) precisely so a fold that read
     // the wrong field, or added the two together, fails here rather than
     // agreeing by coincidence.
@@ -449,7 +449,7 @@ void main() {
 
     expect(tester.widget<Text>(find.byKey(const Key('positions-adv'))).data,
         '2 advising, 3 on panels');
-    // Advises nothing, but sits on three panels -- exactly the D30 case
+    // Advises nothing, but sits on three panels: exactly the case
     // the column exists to put in front of the coordinator.
     expect(tester.widget<Text>(find.byKey(const Key('positions-pan'))).data,
         '0 advising, 3 on panels');
@@ -460,9 +460,9 @@ void main() {
   testWidgets(
       'a failed theses query says so instead of rendering as "holds '
       'nothing"', (tester) async {
-    // Spec §7: "the row shows what it knows and says what it could not
-    // load". Rendering "—" for every row would be indistinguishable from
-    // holding nothing -- the exact misreading §5.1 built this column to
+    // "the row shows what it knows and says what it could not
+    // load". Rendering ": " for every row would be indistinguishable from
+    // holding nothing: the exact misreading §5.1 built this column to
     // prevent.
     useWideSurface(tester);
     final db = FakeFirebaseFirestore();
@@ -476,7 +476,7 @@ void main() {
     ]));
     await tester.pumpAndSettle();
 
-    // The account list itself still renders -- a failed positions query
+    // The account list itself still renders: a failed positions query
     // must not blank it.
     expect(find.text('Alma Cruz'), findsOneWidget);
     expect(find.byKey(const Key('positionsUnavailable')), findsOneWidget);
@@ -504,7 +504,7 @@ void main() {
 
     expect(find.text('Alma Cruz'), findsOneWidget);
     expect(find.byKey(const Key('directoryUnavailable')), findsOneWidget);
-    // And the marker is NOT claimed either way, since nothing is known.
+    // And the marker is not claimed either way, since nothing is known.
     expect(find.byKey(const Key('notSignedIn-u1')), findsNothing);
   });
 }

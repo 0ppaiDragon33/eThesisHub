@@ -32,15 +32,59 @@ DefenceAnnotation note(ChapterId c, int v) => DefenceAnnotation(
     );
 
 void main() {
-  test('a pre-oral shows Chapters I to III, a final I to V', () {
+  // One manuscript per defense: Chapters I-III for a pre-oral, I-V for a
+  // final, not three, or five, chapters to page through.
+  test('a pre-oral shows the Chapters I-III manuscript, a final the I-V one',
+      () {
     expect(manuscriptChapters(DefenceType.preOral),
+        [ChapterId.manuscriptProposal]);
+    expect(manuscriptChapters(DefenceType.final_),
+        [ChapterId.manuscriptFinal]);
+  });
+
+  test('a thesis from before manuscripts still shows its chapters as they '
+      'were', () {
+    expect(
+        manuscriptChapters(DefenceType.preOral,
+            uploaded: [ChapterId.chapterI, ChapterId.chapterII]),
         [ChapterId.chapterI, ChapterId.chapterII, ChapterId.chapterIII]);
-    expect(manuscriptChapters(DefenceType.final_), ChapterId.values);
+    expect(
+        manuscriptChapters(DefenceType.final_, uploaded: [ChapterId.chapterI]),
+        ChapterId.legacyChapters);
+  });
+
+  test('a manuscript on file wins over old chapter records', () {
+    expect(
+        manuscriptChapters(DefenceType.preOral, uploaded: [
+          ChapterId.chapterI,
+          ChapterId.manuscriptProposal,
+        ]),
+        [ChapterId.manuscriptProposal]);
+  });
+
+  test('the proposal manuscript is planned as one part', () {
+    final parts = planManuscript(
+      type: DefenceType.preOral,
+      chapters: [chapter(ChapterId.manuscriptProposal, ChapterStatus.approved)],
+      approvedVersions: {ChapterId.manuscriptProposal: version(1)},
+    );
+    expect(parts.length, 1);
+    expect(parts.single.chapter, ChapterId.manuscriptProposal);
+    expect(parts.single.kind, ManuscriptPartKind.pdf);
+  });
+
+  test('a manuscript never uploaded is one missing part', () {
+    final parts = planManuscript(
+      type: DefenceType.preOral,
+      chapters: const [],
+      approvedVersions: const {},
+    );
+    expect(parts.map((p) => p.kind), [ManuscriptPartKind.missing]);
   });
 
   test('numerals', () {
     expect(ChapterId.values.map(chapterNumeral),
-        ['I', 'II', 'III', 'IV', 'V']);
+        ['I', 'II', 'III', 'IV', 'V', 'I–III', 'I–V']);
   });
 
   test('each chapter shows its pages or says why not', () {
@@ -71,7 +115,7 @@ void main() {
     expect(parts[2].version, isNotNull);
   });
 
-  group('a chapter reopened after the defence', () {
+  group('a chapter reopened after the defense', () {
     test('with highlights shows the highest marked PDF version, flagged',
         () {
       final parts = planManuscript(

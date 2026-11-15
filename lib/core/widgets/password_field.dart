@@ -20,8 +20,8 @@ class PasswordField extends StatefulWidget {
     this.helperText,
   });
 
-  /// Applied to the inner [TextField] so existing finders — `Key('password')`,
-  /// `Key('confirmPassword')` — keep resolving to a text field.
+  /// Applied to the inner [TextField] so existing finders: `Key('password')`,
+  /// `Key('confirmPassword')`: keep resolving to a text field.
   final Key fieldKey;
   final TextEditingController controller;
   final TextInputAction? textInputAction;

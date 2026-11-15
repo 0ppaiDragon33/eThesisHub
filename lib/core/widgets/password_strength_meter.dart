@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:ethesishub/core/config/password_policy.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 
-/// Live feedback on a password's strength — guidance, never a gate.
+/// Live feedback on a password's strength: guidance, never a gate.
 ///
 /// The bar rewards length rather than punctuation, because that is what
 /// actually makes a password hard to guess, and the line beneath it says

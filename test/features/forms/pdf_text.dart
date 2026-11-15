@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-/// The `pdf` package is a generator, not a parser — there is no
+/// The `pdf` package is a generator, not a parser: there is no
 /// `PdfDocument.load`/text-extraction API in `pdf` or `printing`. What makes
 /// text assertions possible at all is that every `buildFormNPdf` builds its
 /// `pw.Document` with `compress: false`, so the content stream's `Tj`/`TJ`
@@ -10,12 +10,12 @@ import 'dart:typed_data';
 /// The contract is "what the page shows". Two encodings have to be handled
 /// to keep that promise:
 ///
-/// * **Built-in fonts** (Helvetica) show text as parenthesized literals —
-///   `(Hi Vargas)Tj` — whose bytes are the characters themselves. PDF string
+/// * **Built-in fonts** (Helvetica) show text as parenthesized literals,
+///   `(Hi Vargas)Tj`: whose bytes are the characters themselves. PDF string
 ///   syntax backslash-escapes `(`, `)` and `\`, so a raw capture is
 ///   unescaped before it is returned.
 /// * **Embedded TrueType fonts** show text as hex-encoded glyph ids under
-///   `Identity-H` — `[<00010002>]TJ` — which are indices into a subset, not
+///   `Identity-H` (`[<00010002>]TJ`) which are indices into a subset, not
 ///   characters. `0001` is 'H' only because the font's `/ToUnicode` CMap
 ///   says so. Those are decoded through that CMap.
 ///
@@ -24,8 +24,8 @@ import 'dart:typed_data';
 /// silently vanishing), a naive parenthesized-literal grep returned the
 /// CMap's own `(Adobe)` / `(UCS)` strings instead of the page's words.
 ///
-/// Glyph ids are per-font — `0001` means something different in each subset
-/// — so the active font is tracked through `/F5 12 Tf` operators and each
+/// Glyph ids are per-font: `0001` means something different in each subset
+/// so the active font is tracked through `/F5 12 Tf` operators and each
 /// run is decoded with that font's own CMap. Merging the CMaps would decode
 /// most documents into plausible nonsense.
 ///
@@ -68,7 +68,7 @@ String extractPdfText(Uint8List bytes) {
   return buffer.toString();
 }
 
-/// Font selection (`/F5 12 Tf`), a hex-encoded run, or a literal run — in
+/// Font selection (`/F5 12 Tf`), a hex-encoded run, or a literal run: in
 /// document order, so the active font is always the one most recently
 /// selected. Hex and literal runs are matched wherever they appear inside a
 /// content stream rather than only when glued to `Tj`, because `TJ` takes an
@@ -79,7 +79,7 @@ final _showText = RegExp(
   r'|\(((?:\\.|[^()\\])*)\)',
 );
 
-/// Unescape in one pass — `\\`, `\(`, `\)` all collapse to their single
+/// Unescape in one pass: `\\`, `\(`, `\)` all collapse to their single
 /// literal character. A two-pass replace (fix `\(` then fix `\\`) would turn
 /// a genuine `\\(` into `((`; matching `\` plus any one character and always
 /// taking that character avoids the ordering trap entirely.
@@ -169,7 +169,7 @@ Map<int, String> _parseCMap(String cmap) {
   return map;
 }
 
-/// A CMap destination is UTF-16BE, so it can be more than one code unit —
+/// A CMap destination is UTF-16BE, so it can be more than one code unit,
 /// a character outside the BMP maps to a surrogate pair.
 String _fromUtf16(String digits) {
   final units = <int>[];

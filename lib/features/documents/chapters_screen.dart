@@ -11,11 +11,13 @@ import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// Chapters I–V for one thesis, whether or not any have been uploaded.
+/// The manuscript for one thesis, whether or not it has been uploaded:
+/// Chapters I–III before the pre-oral, Chapters I–V after.
 class ChaptersScreen extends ConsumerWidget {
   const ChaptersScreen({
     super.key,
@@ -28,7 +30,7 @@ class ChaptersScreen extends ConsumerWidget {
   ///
   /// No Scaffold and no AppBar of its own any more: the app shell supplies
   /// both for every signed-in route, so a refusal here still has an app
-  /// bar, a sidebar and a way back — which is what the old `embedded` flag
+  /// bar, a sidebar and a way back, which is what the old `embedded` flag
   /// existed to arrange when a dashboard was hosting this screen, and what
   /// nothing arranged when the router was.
   Widget _framed(List<Widget> children) => PageShell(children: children);
@@ -37,6 +39,7 @@ class ChaptersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final thesisAsync = ref.watch(thesisByIdProvider(thesisId));
     final chaptersAsync = ref.watch(chaptersProvider(thesisId));
+    final me = ref.watch(currentUserProvider).valueOrNull;
 
     if (thesisAsync.isLoading) {
       return _framed(const [LoadingState(label: 'Loading your thesis…')]);
@@ -60,14 +63,19 @@ class ChaptersScreen extends ConsumerWidget {
         ),
       ]);
     }
+    // The adviser of this thesis sees it from their own seat. Fail closed:
+    // anyone not proven to be the adviser gets the group's view.
+    final isAdviser = me != null && thesis.adviserUid == me.uid;
     if (thesis.status != ThesisStatus.titleApproved) {
-      return _framed(const [
+      return _framed([
         EmptyState(
-          key: Key('notUnlocked'),
+          key: const Key('notUnlocked'),
           icon: Icons.lock_outline,
           title: 'Chapters are not open yet',
-          message: 'Chapters can be uploaded once the Dean has approved '
-              'your title.',
+          message: isAdviser
+              ? 'The group can upload once the Dean approves their title.'
+              : 'Chapters can be uploaded once the Dean has approved '
+                  'your title.',
         ),
       ]);
     }
@@ -76,7 +84,7 @@ class ChaptersScreen extends ConsumerWidget {
     // loading, `valueOrNull ?? []` used to read as "nothing uploaded yet",
     // which is indistinguishable from a group that genuinely has not
     // started. On error, the same fallback drew all five rows "Not started"
-    // directly beneath a banner saying the chapters could not be loaded —
+    // directly beneath a banner saying the chapters could not be loaded,
     // two contradictory claims on screen at once.
     if (chaptersAsync.isLoading) {
       return _framed(const [LoadingState(label: 'Loading your chapters…')]);
@@ -94,75 +102,105 @@ class ChaptersScreen extends ConsumerWidget {
       for (final c in chaptersAsync.valueOrNull ?? const <ThesisChapter>[])
         c.id: c,
     };
-    final approved =
-        uploaded.values.where((c) => c.status == ChapterStatus.approved).length;
-    final waiting =
-        uploaded.values.where((c) => c.status == ChapterStatus.submitted).length;
-    // Chapters IV and V open once this thesis's pre-oral is passed. Taken
-    // as not yet passed while the defences are still loading.
+    // The full manuscript replaces the proposal one once this thesis's
+    // pre-oral is passed. Taken as not yet passed while the defenses are
+    // still loading.
     final preOralPassed = passedPreOral(
             ref.watch(myDefencesProvider).valueOrNull ?? const [],
             thesisId) !=
         null;
+    // ONE manuscript at a time: Chapters I-III first, then I-V, never five
+    // separate rows.
+    final shelf =
+        manuscriptShelf(preOralPassed: preOralPassed, uploaded: uploaded.keys);
     final text = Theme.of(context).textTheme;
+
+    Widget entry(ChapterId id) => _ChapterEntry(
+          key: Key('chapterRow-${id.value}'),
+          id: id,
+          chapter: uploaded[id],
+          adviser: isAdviser,
+          onTap: () =>
+              context.push('/thesis/chapters/${id.value}?id=$thesisId'),
+        );
+
+    final range =
+        shelf.current == ChapterId.manuscriptFinal ? 'I to V' : 'I to III';
+    final authors = [
+      if ((thesis.leaderName ?? '').trim().isNotEmpty) thesis.leaderName!.trim(),
+      ...thesis.memberNames,
+    ];
+    final waiting = uploaded[shelf.current];
+    final waitingOnAdviser =
+        isAdviser && waiting?.status == ChapterStatus.submitted;
 
     return PageShell(
       key: const Key('chaptersScreen'),
       kicker: thesis.workingTitle,
-      title: 'Chapters',
-      subtitle: 'Every upload is kept for your adviser to review.',
+      title: isAdviser ? 'Review manuscript' : 'Manuscript',
+      subtitle: isAdviser
+          ? (authors.isEmpty ? 'Chapters $range' : authors.join(', '))
+          : 'Upload Chapters $range as one file.',
       children: [
-        Panel(
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('$approved of 5 approved', style: text.titleMedium),
-                    const SizedBox(height: AppTokens.sm),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: approved / 5,
-                        minHeight: 8,
-                        color: Tone.endorsed.color(context),
-                      ),
-                    ),
-                  ],
+        // The adviser's cue: a version is waiting on them.
+        if (waitingOnAdviser) ...[
+          Panel(
+            key: const Key('reviewWaiting'),
+            emphasis: true,
+            icon: Icons.rate_review_outlined,
+            title: 'Waiting for your review',
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Version ${waiting!.currentVersion} is with you.',
+                      style: text.bodyMedium),
                 ),
-              ),
-              const SizedBox(width: AppTokens.lg),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('$waiting', style: text.headlineSmall),
-                  Text('with the adviser', style: text.bodySmall),
-                ],
-              ),
-            ],
+                const SizedBox(width: AppTokens.md),
+                FilledButton(
+                  key: const Key('reviewNow'),
+                  onPressed: () => context.push(
+                      '/thesis/chapters/${shelf.current.value}?id=$thesisId'),
+                  child: const Text('Review now'),
+                ),
+              ],
+            ),
           ),
-        ),
-        const Gap.md(),
+          const Gap.md(),
+        ],
         Panel(
           flush: true,
-          child: Column(
-            children: [
-              for (var i = 0; i < ChapterId.values.length; i++)
-                _ChapterEntry(
-                  key: Key('chapterRow-${ChapterId.values[i].value}'),
-                  number: i + 1,
-                  id: ChapterId.values[i],
-                  chapter: uploaded[ChapterId.values[i]],
-                  locked: ChapterId.values[i].needsPassedPreOral &&
-                      !preOralPassed,
-                  onTap: () => context.push(
-                      '/thesis/chapters/${ChapterId.values[i].value}'
-                      '?id=$thesisId'),
-                ),
-            ],
-          ),
+          child: Column(children: [entry(shelf.current)]),
         ),
+        if (!isAdviser &&
+            !preOralPassed &&
+            shelf.current == ChapterId.manuscriptProposal) ...[
+          const Gap.sm(),
+          Text(
+            'After the pre-oral defense, this becomes Chapters I to V.',
+            key: const Key('manuscriptNextNote'),
+            style: text.bodySmall,
+          ),
+        ],
+        // The proposal manuscript stays on record once the full one takes
+        // over: its versions and the adviser's feedback are history.
+        if (shelf.earlier != null) ...[
+          const Gap.lg(),
+          Text(isAdviser ? 'Before the pre-oral' : 'Before your pre-oral',
+              style: text.titleSmall),
+          const Gap.sm(),
+          Panel(flush: true, child: Column(children: [entry(shelf.earlier!)])),
+        ],
+        // Uploaded chapter by chapter, from before manuscripts: still on
+        // file and still counted, so still reachable.
+        if (shelf.legacy.isNotEmpty) ...[
+          const Gap.lg(),
+          Text('Earlier chapter uploads', style: text.titleSmall),
+          const Gap.sm(),
+          Panel(
+            flush: true,
+            child: Column(children: [for (final id in shelf.legacy) entry(id)]),
+          ),
+        ],
       ],
     );
   }
@@ -171,28 +209,27 @@ class ChaptersScreen extends ConsumerWidget {
 class _ChapterEntry extends StatelessWidget {
   const _ChapterEntry({
     super.key,
-    required this.number,
     required this.id,
     required this.chapter,
     required this.onTap,
-    this.locked = false,
+    this.adviser = false,
   });
 
-  final int number;
   final ChapterId id;
   final ThesisChapter? chapter;
   final VoidCallback onTap;
 
-  /// Not open for uploads yet: Chapters IV and V wait for a passed pre-oral.
-  final bool locked;
+  /// Worded and coloured for the adviser rather than the group.
+  final bool adviser;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     final c = chapter;
-    final parts = id.label.split(' — ');
-    final tone = c == null ? Tone.neutral : ChapterStatusWords.toneFor(c.status);
+    final tone = c == null
+        ? Tone.neutral
+        : ChapterStatusWords.toneFor(c.status, adviser: adviser);
 
     return InkWell(
       onTap: onTap,
@@ -205,7 +242,9 @@ class _ChapterEntry extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 40,
+              // Wide enough for "I–III" and "I–V" as well as a single
+              // numeral.
+              width: id.isManuscript ? 56 : 40,
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
@@ -213,7 +252,7 @@ class _ChapterEntry extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                parts.first.replaceFirst('Chapter ', ''),
+                id.mark,
                 style: text.titleMedium?.copyWith(color: tone.color(context)),
               ),
             ),
@@ -222,41 +261,24 @@ class _ChapterEntry extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(parts.length > 1 ? parts.last : id.label,
-                      style: text.titleMedium),
+                  Text(id.heading, style: text.titleMedium),
                   const SizedBox(height: 2),
-                  if (c == null && locked)
-                    Row(
-                      key: Key('chapterLocked-${id.value}'),
-                      children: [
-                        Icon(Icons.lock_outline_rounded,
-                            size: 14, color: p.muted),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            'Opens once the pre-oral defence is passed',
-                            style: text.bodySmall,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    Text(
-                      c == null
-                          ? 'Not started'
-                          : '${ChapterStatusWords.detailFor(c.status)} '
-                              'Version ${c.currentVersion}.',
-                      style: text.bodySmall,
-                    ),
+                  Text(
+                    c == null
+                        ? (adviser ? 'Not uploaded yet' : 'Not started')
+                        : '${ChapterStatusWords.detailFor(c.status, adviser: adviser)} '
+                            'Version ${c.currentVersion}.',
+                    style: text.bodySmall,
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: AppTokens.sm),
             if (c != null)
               ToneBadge(
-                label: ChapterStatusWords.labelFor(c.status),
+                label: ChapterStatusWords.labelFor(c.status, adviser: adviser),
                 tone: tone,
-                icon: ChapterStatusWords.iconFor(c.status),
+                icon: ChapterStatusWords.iconFor(c.status, adviser: adviser),
                 dense: true,
               ),
             Icon(Icons.chevron_right_rounded, color: p.muted),

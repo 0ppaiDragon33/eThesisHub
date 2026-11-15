@@ -79,7 +79,7 @@ void main() {
     expect(parts.first.version!.storagePath, 'theses/t1/chapterI/v2.pdf');
   });
 
-  test('a chapter reopened after the defence shows the version it marked',
+  test('a chapter reopened after the defense shows the version it marked',
       () async {
     final db = FakeFirebaseFirestore();
     await db.collection('defenses').doc('d1').set({

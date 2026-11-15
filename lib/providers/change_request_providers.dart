@@ -1,30 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/data/models/change_request.dart';
-import 'package:ethesishub/data/models/defence.dart';
-import 'package:ethesishub/data/models/evaluation.dart';
-import 'package:ethesishub/data/models/thesis.dart';
-import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/data/repositories/change_request_repository.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+
+// The eligibility rules live with the models so the repository can ask them
+// again at sign-off; re-exported so existing imports keep working.
+export 'package:ethesishub/data/models/change_request_eligibility.dart';
 
 final changeRequestRepositoryProvider = Provider<ChangeRequestRepository>(
   (ref) => ChangeRequestRepository(ref.watch(firestoreProvider)),
 );
-
-/// A change of adviser is allowed while the thesis is at titleApproved and
-/// chapter writing is still on — no defence of any kind has been scheduled
-/// (a cancelled one does not count; spec §5).
-bool canRequestAdviserChange(Thesis thesis, List<Defence> defences) =>
-    thesis.status == ThesisStatus.titleApproved &&
-    !defences.any((d) => d.status != DefenceStatus.cancelled);
-
-/// A change of title is allowed while the thesis is at titleApproved and no
-/// final defence has passed (spec §5).
-bool canRequestTitleChange(Thesis thesis, List<Defence> defences) =>
-    thesis.status == ThesisStatus.titleApproved &&
-    !defences.any((d) =>
-        d.type == DefenceType.final_ && d.panelVerdict == PassFail.pass);
 
 final changeRequestsForThesisProvider =
     StreamProvider.family<List<ChangeRequest>, String>((ref, thesisId) {
@@ -33,9 +19,9 @@ final changeRequestsForThesisProvider =
 });
 
 /// Requests awaiting a role the signed-in faculty member holds. A collection-
-/// group query filtered server-side by `awaitingUids arrayContains uid` --
-/// the denormalized set of faculty currently awaited on each request (spec
-/// 2026-09-25 fix round 2, Fix 1). An UNFILTERED collection-group `list`
+/// group query filtered server-side by `awaitingUids arrayContains uid`,
+/// the denormalized set of faculty currently awaited on each request.
+/// An UNFILTERED collection-group `list`
 /// would be denied wholesale by the per-document read rule (Firestore rules
 /// are not a filter: any document the rule would reject on a `list` sinks
 /// the whole query), so this can no longer scan every open request and

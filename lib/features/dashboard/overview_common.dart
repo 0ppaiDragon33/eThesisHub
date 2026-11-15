@@ -15,21 +15,21 @@ import 'package:ethesishub/providers/auth_providers.dart';
 ///
 /// It was copied verbatim into `student_overview.dart`,
 /// `faculty_overview.dart`, `dean_overview.dart` and
-/// `coordinator_overview.dart` -- four places for a future edit to miss on
-/// the one element spec §6 says must never regress.
+/// `coordinator_overview.dart`: four places for a future edit to miss on
+/// the one element says must never regress.
 ///
 /// **Nothing here blocks on the profile document.** `currentUserProvider` is
 /// read with `valueOrNull`, so a missing or still-loading `users/{uid}`
 /// yields a plain "Good day" and the overview renders anyway. Gating a
 /// control on that document existing is exactly what locked a leader out of
-/// uploads in M2, and spec §6 names it.
+/// uploads in chapters, and names it.
 ///
 /// There is no separate given-name field and no honorific, so the first
 /// whitespace-separated token of `fullName` is the whole of it.
 ///
 /// The greeting itself follows the time of day: "Good morning" before
 /// 12:00, "Good afternoon" from 12:00 up to (not including) 18:00, and
-/// "Good evening" from 18:00 on. "Good evening" rather than "Good night" --
+/// "Good evening" from 18:00 on. "Good evening" rather than "Good night",
 /// "Good night" is a farewell in English, not a greeting, and this greets
 /// someone arriving at the app. [now] defaults to [DateTime.now] and is
 /// only ever overridden by a test, which pins the clock instead of racing
@@ -182,7 +182,7 @@ String? peekOf<T>(AsyncValue<T> value, String Function(T) format) {
 
 /// "No defences", "1 defence", "3 defences".
 String defencesPeek(int n) =>
-    n == 0 ? 'No defences' : '$n defence${n == 1 ? '' : 's'}';
+    n == 0 ? 'No defenses' : '$n defense${n == 1 ? '' : 's'}';
 
 /// Below this width the dashboard is one column (the same point
 /// [SplitColumns] stacks at), and [CollapseOnPhone] folds its panels.
@@ -240,8 +240,8 @@ class CollapseOnPhone extends StatelessWidget {
 /// Defences scheduled within the next 7 days, today included.
 ///
 /// One definition, for the faculty, dean and coordinator "Defences this
-/// week" tiles. It existed three times -- a `FutureProvider` in
-/// `faculty_overview.dart` and two byte-identical static methods -- and all
+/// week" tiles. It existed three times: a `FutureProvider` in
+/// `faculty_overview.dart` and two byte-identical static methods, and all
 /// three carried the same bug: they counted **cancelled** and **completed**
 /// defences as defences this week, so a defence called off on Monday still
 /// showed on three dashboards on Tuesday. The student's own "next defence"
@@ -276,7 +276,7 @@ List<Defence> defencesThisWeek(List<Defence> defences, {DateTime? now}) {
 /// broke `titleRejected` out into its own "Returned" bucket, so a reader
 /// could see one number claim a thesis was active and the chart imply it was
 /// not. The definition chosen here is **every thesis on file**, returned
-/// ones included, because no `ThesisStatus` in this system is terminal --
+/// ones included, because no `ThesisStatus` in this system is terminal,
 /// `titleRejected` means "resubmit a new title set", which is a thesis
 /// needing work, not a closed one. With this definition the donut's five
 /// buckets sum to exactly the tile's figure, which is the property that

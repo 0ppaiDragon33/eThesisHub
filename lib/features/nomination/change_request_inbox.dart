@@ -20,11 +20,11 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 ///
 /// `mySignoffRequestsProvider` already scopes its query to the signed-in
 /// uid's own `awaitingUids` entries server-side, so every row here is
-/// correctly targeted -- no client-side cross-filter needed.
+/// correctly targeted, no client-side cross-filter needed.
 ///
 /// `respond` throws `StateError` when the request has moved on since this
 /// widget last read it (a stale tab, or a co-signer's answer already
-/// resolved the step) -- surfaced here as a plain human message, the same
+/// resolved the step): surfaced here as a plain human message, the same
 /// pattern as `NominationInboxScreen._respond`.
 class ChangeRequestInbox extends ConsumerStatefulWidget {
   const ChangeRequestInbox({super.key});

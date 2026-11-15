@@ -42,8 +42,8 @@ void main() {
     expect(entry().authorsLabel, 'Santos, J., Bautista, M.');
   });
 
-  // THE test for D54. Firestore matches prefixes only, which is why search
-  // runs in Dart at all -- so mid-string must work, or the whole decision
+  // The key test here. Firestore matches prefixes only, which is why search
+  // runs in Dart at all, so mid-string must work, or the whole decision
   // was pointless.
   test('search matches mid-string, not just the start', () {
     expect(entry().matches('fisheries'), isTrue);
@@ -60,7 +60,7 @@ void main() {
         reason: 'D55 narrows search to title and AUTHOR, not adviser');
   });
 
-  // D55: the abstract is displayed but not searched.
+  // The abstract is displayed but not searched.
   test('search does not reach the abstract', () {
     expect(entry().matches('counted'), isFalse);
   });

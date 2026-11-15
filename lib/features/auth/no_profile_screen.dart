@@ -9,7 +9,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 /// Shown to a signed-in account whose `users/{uid}` profile could not be
 /// used to route it to a dashboard.
 ///
-/// This project has twice treated "profile missing" as "this person has no
+/// We have twice treated "profile missing" as "this person has no
 /// rights" and degraded quietly: once it permanently hid a group leader's
 /// upload button, once it silently routed a dean down the faculty code
 /// path. Both looked like working software. So where the role is unknown,

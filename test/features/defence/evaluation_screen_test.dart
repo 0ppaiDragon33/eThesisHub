@@ -49,7 +49,7 @@ Future<FakeFirebaseFirestore> seed({
   return db;
 }
 
-/// Eleven criteria, each with its own score box and helper text, exceed the default 800x600 test surface -- the same
+/// Eleven criteria, each with its own score box and helper text, exceed the default 800x600 test surface: the same
 /// reason this helper exists verbatim in `submit_titles_screen_test.dart`
 /// and `title_defence_screen_test.dart`. Grown here rather than the widget
 /// shrunk to fit, so a tap on a criterion below the fold (e.g.
@@ -86,6 +86,41 @@ void main() {
     }
   });
 
+  // A two-digit score beside its two-digit maximum ("25/25") must show in
+  // full on every row. The box was a fixed 64 wide, which cut the second
+  // digit once the "/25" suffix took its share.
+  testWidgets('every score box is wide enough for a two-digit score and '
+      'maximum', (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    for (final c in evaluationCriteria) {
+      final box = find.byKey(Key('score_${c.key}'));
+      expect(tester.getSize(box).width, greaterThanOrEqualTo(90),
+          reason: c.key);
+      // The widest case, typed in: the full maximum is kept and shown.
+      await tester.enterText(box, '${c.weight}');
+      await tester.pump();
+      expect(find.text('${c.weight}'), findsWidgets, reason: c.key);
+    }
+  });
+
+  testWidgets('the score box keeps its room under a larger system font',
+      (tester) async {
+    useTallSurface(tester);
+    // MaterialApp builds its own MediaQuery from the view, so the scale is
+    // set on the test platform rather than by wrapping the app.
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    expect(
+        tester.getSize(find.byKey(const Key('score_title'))).width,
+        greaterThanOrEqualTo(120));
+  });
+
   testWidgets('only Content criteria carry a comment field',
       (tester) async {
     useTallSurface(tester);
@@ -117,7 +152,7 @@ void main() {
         tester.widget<Text>(find.byKey(const Key('finalGrade'))).data, '13');
   });
 
-  // D34's mitigation: eleven different maximums, so the box refuses
+  // The mitigation: eleven different maximums, so the box refuses
   // out-of-range rather than accepting then rejecting it.
   testWidgets('a typed score is kept within its own weight', (tester) async {
     useTallSurface(tester);
@@ -208,7 +243,7 @@ void main() {
   });
 
   // Pins the OTHER half of the gate: every criterion scored is necessary
-  // but not sufficient -- the rating is a separate, required field, and the
+  // but not sufficient: the rating is a separate, required field, and the
   // button must not light up on scores alone.
   testWidgets(
       'submit stays disabled with every criterion scored but no rating, '
@@ -297,7 +332,7 @@ void main() {
   });
 
   // The adviser's only way off this screen. It pointed at '/grades',
-  // which is not a route -- GoRouter answered with its error page and the
+  // which is not a route. GoRouter answered with its error page and the
   // shell went with it.
   testWidgets('the adviser grades link reaches the grades screen',
       (tester) async {
@@ -340,7 +375,7 @@ void main() {
   });
 
   // §6 renders names, not uids, and the name has to reach the document at
-  // the moment of the act -- resolved on read, a later rename would
+  // the moment of the act: resolved on read, a later rename would
   // rewrite who marked a defence already in the record.
   testWidgets('submitting stores the panelist name, not just their uid',
       (tester) async {
@@ -374,7 +409,7 @@ void main() {
     expect(stored.data()!['total'], 100);
   });
 
-  // The distinction D41 depends on staying visible.
+  // The panelist's own rating must stay visibly distinct from the panel's.
   testWidgets('the panelist rating is labelled as their own, not the panel\'s',
       (tester) async {
     useTallSurface(tester);
@@ -384,9 +419,9 @@ void main() {
     expect(find.byKey(const Key('ratingIsYours')), findsOneWidget);
   });
 
-  // pump() once, NOT pumpAndSettle -- settling resolves the stream and
+  // pump() once, not pumpAndSettle: settling resolves the stream and
   // the assertion becomes vacuous.
-  testWidgets('shows a loading state before the defence resolves',
+  testWidgets('shows a loading state before the defense resolves',
       (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seed(), 'p1'));
@@ -395,8 +430,8 @@ void main() {
     expect(find.byKey(const Key('evaluationLoading')), findsOneWidget);
   });
 
-  // D59: a panelist generates their OWN sheet. This needs no new access
-  // rule — M4 grants a panelist their own evaluation unconditionally — so
+  // A panelist generates their OWN sheet. This needs no new access
+  // rule (evaluation grants a panelist their own evaluation unconditionally) so
   // the seal is untouched.
   testWidgets('a submitted sheet offers the Form 5c download',
       (tester) async {
@@ -424,6 +459,56 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('downloadForm5c')), findsNothing);
+  });
+
+  // The lock runs both ways: at or above the mark the sheet can only be
+  // rated Pass, so Fail is the locked one.
+  testWidgets('Fail is locked once the total reaches 75, and Pass opens',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seed(), 'p1'));
+    await tester.pumpAndSettle();
+
+    bool enabled(PassFail v) => tester
+        .widget<SegmentedButton<PassFail>>(
+            find.byKey(const Key('ratingSelector')))
+        .segments
+        .firstWhere((s) => s.value == v)
+        .enabled;
+
+    // Nothing scored: under 75, so Fail is the open one.
+    expect(enabled(PassFail.fail), isTrue);
+    expect(enabled(PassFail.pass), isFalse);
+    expect(find.byKey(const Key('failLocked')), findsNothing);
+
+    // Choose Fail, then score everything in full: the Fail choice falls
+    // away rather than being submitted against a perfect score.
+    await tester.tap(find.text('Fail'));
+    await tester.pump();
+    for (final c in evaluationCriteria) {
+      await tester.ensureVisible(find.byKey(Key('full_${c.key}')));
+      await tester.tap(find.byKey(Key('full_${c.key}')));
+      await tester.pump();
+    }
+    expect(enabled(PassFail.fail), isFalse);
+    expect(enabled(PassFail.pass), isTrue);
+    expect(find.byKey(const Key('failLocked')), findsOneWidget);
+    expect(
+        tester
+            .widget<SegmentedButton<PassFail>>(
+                find.byKey(const Key('ratingSelector')))
+            .selected,
+        isEmpty);
+
+    // Tapping the locked Fail does nothing.
+    await tester.tap(find.text('Fail'));
+    await tester.pump();
+    expect(
+        tester
+            .widget<SegmentedButton<PassFail>>(
+                find.byKey(const Key('ratingSelector')))
+            .selected,
+        isEmpty);
   });
 
   // A total under the passing mark can only be rated Fail (2026-10-01).

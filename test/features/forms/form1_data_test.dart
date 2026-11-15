@@ -56,7 +56,7 @@ void main() {
     // The Coordinator who recommends and the Dean who approves each get
     // their own signature block. Printing them again as "Ex officio member"
     // in the Conforme list repeated what those blocks already say, and cost
-    // four lines — which is what pushed a six-researcher form off the sheet.
+    // four lines, which is what pushed a six-researcher form off the sheet.
     final data = Form1Data.assemble(
       thesis: thesis, nominations: nominations,
       leaderName: 'Karl Joshua P. Vargas', directoryNames: const {},
@@ -75,7 +75,7 @@ void main() {
   test('an ex officio member who signs nowhere is still listed', () {
     // A college can have more than one coordinator and only one of them
     // recommends. The others sign nowhere on the form, so this row is the
-    // only record that they sit on the panel — dropping every ex officio
+    // only record that they sit on the panel: dropping every ex officio
     // row wholesale would erase them.
     final data = Form1Data.assemble(
       thesis: thesis,
@@ -89,8 +89,8 @@ void main() {
 
     final zamora =
         data.conformeRows.firstWhere((r) => r.name == 'Dr. Zamora');
-    expect(zamora.status, 'Ex officio member');
-    expect(zamora.role, contains('ex officio'));
+    expect(zamora.status, 'Designated member');
+    expect(zamora.role, contains('designated member'));
   });
 
   test('all researchers are listed with the leader first', () {
@@ -142,7 +142,7 @@ void main() {
     final adviserRow =
         data.conformeRows.firstWhere((r) => r.name == 'Dean Reyes');
     expect(adviserRow.status, contains('Accepted'));
-    expect(adviserRow.status, isNot('Ex officio member'));
+    expect(adviserRow.status, isNot('Designated member'));
   });
 
   test('submittedOn is the nomination submission date, not the creation date',
@@ -203,8 +203,8 @@ void main() {
   test('a coordinator who holds NO ex-officio seat on this thesis prints '
       'blank without the directory, and correctly with it', () {
     // The case the wiring exists for: a coordinator promoted (or first signed
-    // in) AFTER this thesis's roster was fixed has no seat on it, and the
-    // roster can never be amended — creates are pinned to `draft`.
+    // in) after this thesis's roster was fixed has no seat on it, and the
+    // roster can never be amended: creates are pinned to `draft`.
     final recommendedByOutsider = Thesis(
       id: 't5', leaderUid: 'l1', memberNames: const [],
       workingTitle: 'X', college: 'CICT', program: 'BSIT',

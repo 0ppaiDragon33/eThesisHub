@@ -3,8 +3,8 @@ import 'package:ethesishub/data/models/archive_entry.dart';
 /// Thrown instead of building a certificate that would certify nothing.
 ///
 /// §6: *"A certificate with a blank name is worse than no certificate,
-/// because it looks official."* The structural gate — the button is not
-/// reachable unless the thesis is archived — does not cover an archived
+/// because it looks official."* The structural gate: the button is not
+/// reachable unless the thesis is archived: does not cover an archived
 /// entry whose fields are empty: `ArchiveEntry.fromMap` defaults both
 /// `title` and `memberNames` to empty on a malformed document, and the
 /// entry screen already prints 'Unknown authors' precisely because an entry
@@ -42,12 +42,12 @@ class Form8Unissuable implements Exception {
 /// The three variable fields on Form 8. The rest of the form is fixed text
 /// and a signature rule.
 ///
-/// Read from the ARCHIVE ENTRY rather than the thesis (D64). M5 made
+/// Read from the ARCHIVE ENTRY rather than the thesis. Archive made
 /// archiving the coordinator's assertion that Form 8 was issued and three
-/// bound copies reached the Dean, the Library and R&D — which is exactly
+/// bound copies reached the Dean, the Library and R&D, which is exactly
 /// what this certificate says. Generating from the entry means the paper
 /// cannot claim something the record does not show, and the fields are
-/// already frozen (M5's D49).
+/// already frozen.
 class Form8Data {
   const Form8Data({
     required this.studentNames,
@@ -55,7 +55,7 @@ class Form8Data {
     required this.issuedOn,
   });
 
-  /// Every member, on one certificate (D65). The printed form reads
+  /// Every member, on one certificate. The printed form reads
   /// "his/her", singular, but a thesis here belongs to a group and the
   /// deposit was joint.
   final List<String> studentNames;

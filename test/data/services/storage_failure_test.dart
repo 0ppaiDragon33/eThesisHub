@@ -14,7 +14,7 @@ class _Thrown implements Exception {
 void main() {
   test('an unreachable host says retrying will not help', () {
     // What a browser throws when the Supabase project's hostname stops
-    // resolving — a paused or deleted project. This is the case that
+    // resolving: a paused or deleted project. This is the case that
     // actually happened: the generic handler told a student to "try again"
     // for a condition no amount of retrying could fix.
     final web = classifyStorageError(

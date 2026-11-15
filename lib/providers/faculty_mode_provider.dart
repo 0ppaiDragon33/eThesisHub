@@ -31,14 +31,14 @@ final facultyModeProvider =
 /// Theses where the signed-in faculty member is the adviser.
 ///
 /// This shipped as `Provider<int>((ref) => 0)` with a comment promising that
-/// M1 would replace it. M1a and M1b came and went and it stayed zero, so the
+/// a later stage would replace it. Nomination and title defence shipped and it stayed zero, so the
 /// dashboard's `if (holdsAdviserPositions)` was false for every user and the
 /// Adviser/Panelist switch never rendered once. No test overrode it either,
 /// so nothing caught it. `myAdviseesProvider` is the query that comment
-/// asked for; M2 built it.
+/// asked for; chapters built it.
 final adviserPositionCountProvider = FutureProvider<int>((ref) async {
-  // Settle auth first. `myAdviseesProvider` yields an empty list — data, not
-  // loading — while the uid is unresolved, because `signedInUidProvider`
+  // Settle auth first. `myAdviseesProvider` yields an empty list: data, not
+  // loading, while the uid is unresolved, because `signedInUidProvider`
   // cannot tell "still loading" from "signed out". Reading it before auth
   // lands therefore reports zero advisees, which would clamp an adviser into
   // panelist mode for as long as the query takes.
@@ -54,7 +54,7 @@ final adviserPositionCountProvider = FutureProvider<int>((ref) async {
 /// is denied: `allow list` on `theses` has arms for the leader, the adviser,
 /// the coordinator and the dean, and none for a panelist. The nomination
 /// collection-group query is permitted and already indexed, and it returns a
-/// row for the adviser too — hence the subtraction.
+/// row for the adviser too: hence the subtraction.
 final panelPositionCountProvider = FutureProvider<int>((ref) async {
   await ref.watch(authStateProvider.future);
   final all = await ref.watch(myThesisIdsProvider.future);
@@ -70,11 +70,11 @@ final panelPositionCountProvider = FutureProvider<int>((ref) async {
 /// the underlying Firestore reads happen once regardless of how many callers
 /// watch this.
 ///
-/// Capability is the union of designation and positions actually held —
+/// Capability is the union of designation and positions actually held,
 /// neither subtracts. Designation adds what a member MAY become; a position
 /// they already hold always grants access, because a coordinator narrowing
 /// someone's designation must never make a live, approved responsibility
-/// vanish from that member's own screen (spec D30). This project has
+/// vanish from that member's own screen. We have
 /// shipped that failure twice already: once permanently hiding a group
 /// leader's upload button, once routing a profile-less dean down the
 /// faculty code path.
@@ -124,7 +124,7 @@ Future<({FacultyMode? mode, bool bothCapable})> _deriveFacultyMode(
 /// The mode actually in force, or `null` when the member may reach neither
 /// Advisees nor Panels.
 ///
-/// `null` is a real, durable answer here — not a stand-in for "still
+/// `null` is a real, durable answer here, not a stand-in for "still
 /// loading". A [FacultyMode] enum value cannot express "neither": it is
 /// persisted by [facultyModeProvider], whose `fromString` defaults a
 /// missing/unparseable stored value to adviser, so a third enum member would
@@ -134,10 +134,10 @@ Future<({FacultyMode? mode, bool bothCapable})> _deriveFacultyMode(
 /// answers "which can you reach" (can genuinely be neither). Different
 /// questions get different types.
 ///
-/// Every consumer must handle `null` — that is the point. `null` is exactly
+/// Every consumer must handle `null`: that is the point. `null` is exactly
 /// what suppresses the Advisees/Panels destination in `destinationsFor`
-/// (spec §6): a destination leading to an empty screen reads as a broken
-/// app, so "neither" declares no destination at all.
+/// (a destination leading to an empty screen reads as a broken
+/// app, so "neither" declares no destination at all).
 ///
 /// Async on purpose. Collapsing the unresolved state into a default would
 /// flip the mode visibly on every launch, and would tell an adviser-only
@@ -146,7 +146,20 @@ final effectiveFacultyModeProvider = FutureProvider<FacultyMode?>((ref) async {
   return (await _deriveFacultyMode(ref)).mode;
 });
 
-/// Whether the member currently holds BOTH capabilities — the gate for
+/// Whether work requiring [mode] may be opened in the currently selected
+/// faculty mode. Wait for the mode to resolve before enabling mode-specific
+/// actions; if resolution fails, leave the UI boundary open as defence
+/// screens do, with backend rules remaining authoritative.
+final modeAllowsProvider = Provider.family<bool, FacultyMode>((ref, mode) {
+  final modeAsync = ref.watch(effectiveFacultyModeProvider);
+  if (modeAsync.isLoading) return false;
+  if (modeAsync.hasError) return true;
+
+  final currentMode = modeAsync.valueOrNull;
+  return currentMode == null || currentMode == mode;
+});
+
+/// Whether the member currently holds BOTH capabilities: the gate for
 /// showing the Adviser/Panelist switch at all. A member with only one
 /// capability has nowhere the switch could move them, and one that could
 /// only ever lead to an empty list is a control that does nothing.
@@ -159,7 +172,7 @@ final facultyHoldsBothCapabilitiesProvider = FutureProvider<bool>((ref) async {
   return (await _deriveFacultyMode(ref)).bothCapable;
 });
 
-/// Work waiting in whichever mode is NOT in force, for the switch's badge.
+/// Work waiting in whichever mode is not in force, for the switch's badge.
 ///
 /// In adviser mode it counts theses whose candidate titles are with the
 /// panel; in panelist mode it counts chapters a group has submitted and the

@@ -94,7 +94,7 @@ pw.Widget _page(FormText t, {Form5bData? data}) {
   );
 }
 
-/// Generates Form 5b — Presenter and Evaluator Profile — as a PDF.
+/// Generates Form 5b (Presenter and Evaluator Profile) as a PDF.
 /// `compress: false` keeps the content streams text-greppable.
 Future<Uint8List> buildForm5bPdf(Form5bData data) async {
   final doc = pw.Document(compress: false, theme: await formTheme());

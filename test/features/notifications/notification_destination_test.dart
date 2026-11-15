@@ -7,7 +7,7 @@ AppNotification released({String? defenceId}) => AppNotification(
       id: 'n1',
       type: NotificationType.highlightsReleased,
       thesisId: 't1',
-      message: "The panel's highlights on your pre-oral defence are ready "
+      message: "The panel's highlights on your pre-oral defense are ready "
           'to read.',
       read: false,
       createdAt: DateTime(2026, 10, 1),
@@ -20,7 +20,7 @@ void main() {
         '/defence/room/d1/manuscript');
   });
 
-  test('without a defence id they fall back to the defences list', () {
+  test('without a defense id they fall back to the defenses list', () {
     expect(notificationDestination(released()).route,
         '/defences?stage=preOral');
   });

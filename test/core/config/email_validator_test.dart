@@ -63,7 +63,7 @@ void main() {
   });
 
   // Domain-adjacent spoofs. The check is exact equality after lowercasing,
-  // so these already fail -- but self-registration restricted to the
+  // so these already fail, but self-registration restricted to the
   // institutional domain is a claim the manuscript makes, and a claim with
   // no test behind it is a claim that quietly breaks the day someone
   // "improves" this into an endsWith or a contains.
@@ -101,7 +101,7 @@ void main() {
       );
     });
 
-    // A subdomain is NOT the institution's domain. Strict by design: if
+    // A subdomain is not the institution's domain. Strict by design: if
     // ISUFST ever issues mail.isufst.edu.ph addresses this test is the
     // place that says so out loud rather than a silent behaviour change.
     test('a subdomain of the institutional domain', () {

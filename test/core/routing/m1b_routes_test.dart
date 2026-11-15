@@ -58,13 +58,13 @@ void main() {
     await tester.tap(find.byKey(const Key('goToSubmitTitles')));
     await tester.pumpAndSettle();
 
-    // The destination's own Key, never a heading the origin button shares —
-    // that is what made four M1a navigation tests pass without navigating.
+    // The destination's own Key, never a heading the origin button shares,
+    // that is what made four nomination navigation tests pass without navigating.
     expect(find.byKey(const Key('submitTitlesScreen')), findsOneWidget);
     expect(find.byKey(const Key('goToSubmitTitles')), findsNothing);
   });
 
-  testWidgets('a faculty member reaches a defence from their dashboard',
+  testWidgets('a faculty member reaches a defense from their dashboard',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -85,7 +85,7 @@ void main() {
       'exOfficio': false, 'conformeStatus': 'accepted',
     });
     // Explicitly panelist-only: a missing designation now defaults to fully
-    // nominable (spec §6), so without this the stored preference's default
+    // nominable, so without this the stored preference's default
     // (adviser) would win and Panels would never appear as a destination.
     final c =
         await containerFor('faculty', 'u2', db, nominableAsAdviser: false);
@@ -97,7 +97,7 @@ void main() {
 
     // u2 holds a panel seat, advises nothing, and is designated
     // panelist-only, so the effective mode is clamped to panelist and
-    // 'Panels' is the destination after Overview --
+    // 'Panels' is the destination after Overview,
     // Overview now lands first and is mode-independent, so this still needs
     // one tap, but into Panels rather than Advisees. Before the clamp, a
     // panelist landed in adviser mode on an empty Advisees list and could
@@ -105,7 +105,7 @@ void main() {
     // hold no adviser position.
     // This test's surface is wide (1000px), so the app shell renders its
     // destinations as a NavigationRail rather than hiding them behind the
-    // narrow layout's hamburger -- and the Overview body's own
+    // narrow layout's hamburger, and the Overview body's own
     // panelist-mode tile is ALSO labelled "Panels", so the finder must be
     // scoped to the rail or it would match both.
     final rail = find.byKey(const Key('shellSidebar'));
@@ -152,29 +152,29 @@ void main() {
     // The dean and coordinator dashboards used to stack approvals, the
     // defence queue and readiness on one scrolling page. Each is its own
     // destination now. Title defences are no longer a sidebar entry of
-    // their own (spec 2026-09-25 §6.7): the candidate-title queue this
+    // their own: the candidate-title queue this
     // test wants is the Title stage of 'Defences', which is where that
     // destination opens by default.
     await tester.tap(find.descendant(
         of: find.byKey(const Key('shellSidebar')),
-        matching: find.text('Defences')));
+        matching: find.text('Defenses')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToDefence-t1')), findsOneWidget,
-        reason: 'the $role sidebar must offer a way into the defence');
+        reason: 'the $role sidebar must offer a way into the defense');
     await tester.tap(find.byKey(const Key('goToDefence-t1')));
     await tester.pumpAndSettle();
 
-    // The destination's own Key — never a heading both screens share, which
+    // The destination's own Key, never a heading both screens share, which
     // is how four navigation tests on this project passed without
-    // navigating — plus the origin control being gone.
+    // navigating: plus the origin control being gone.
     expect(find.byKey(const Key('titleDefenceScreen')), findsOneWidget);
     expect(find.byKey(const Key('goToDefence-t1')), findsNothing);
   }
 
-  testWidgets('the Dean reaches a defence from their sidebar',
+  testWidgets('the Dean reaches a defense from their sidebar',
       (tester) => reachesDefence(tester, 'dean'));
 
-  testWidgets('the Coordinator reaches a defence from their sidebar',
+  testWidgets('the Coordinator reaches a defense from their sidebar',
       (tester) => reachesDefence(tester, 'coordinator'));
 }

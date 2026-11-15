@@ -79,7 +79,7 @@ void main() {
     });
 
     testWidgets('the label sits above the field, not inside it', (tester) async {
-      // The label sits ABOVE the input rather than floating inside it —
+      // The label sits ABOVE the input rather than floating inside it,
       // that is the whole point of the treatment, and a labelText would
       // silently reintroduce the old floating-label look.
       await pump(tester, const FormRow(
@@ -88,7 +88,7 @@ void main() {
       ));
 
       // Asserting the caller's own TextField has no labelText would prove
-      // nothing — the test constructed it that way. What has to be true of
+      // nothing: the test constructed it that way. What has to be true of
       // FormRow is that the label it draws sits ABOVE the field.
       final label = tester.getTopLeft(find.text('Password'));
       final field = tester.getTopLeft(find.byKey(const Key('pw')));

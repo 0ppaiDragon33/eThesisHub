@@ -25,7 +25,7 @@ void main() {
     });
 
     test('a destination does NOT own a route that merely shares a prefix', () {
-      // Spec D24. '/defences' and '/defence/room/:id' are one character
+      // '/defences' and '/defence/room/:id' are one character
       // apart and are different screens. Naive `startsWith` would light
       // Defences for the defence room, telling the reader they are
       // somewhere they are not.
@@ -40,7 +40,7 @@ void main() {
       // The separator is the whole point. Without it '/thesis/chapters' would
       // also own '/thesis/chaptersArchive', which is a different screen that
       // happens to start with the same characters. The '/defences' vs
-      // '/defence/room' case above cannot catch this — those differ by a word,
+      // '/defence/room' case above cannot catch this: those differ by a word,
       // so naive startsWith already rejects it and the separator never comes
       // into play.
       const d = ShellDestination(
@@ -61,7 +61,7 @@ void main() {
         () {
       // A destination can own a location only through an `alsoOwns` entry
       // that is deeper (a longer string) than another destination's own
-      // bare route -- exactly the shape Users/'/invites' takes once Users
+      // bare route: exactly the shape Users/'/invites' takes once Users
       // populates alsoOwns for the first time in the app. Sorting by
       // `d.route.length` alone (the bug this fixes) would pick `shallow`
       // here, because '/invites'.length (8) beats '/u'.length (2), even
@@ -116,7 +116,7 @@ void main() {
       }
     });
 
-    test('a student without an approved title gets no Chapters or Defences', () {
+    test('a student without an approved title gets no Chapters or Defenses', () {
       // A destination that leads to "not open yet" reads as a broken app.
       final ds = destinationsFor(role: UserRole.student);
       expect(ds.map((d) => d.route), isNot(contains('/thesis/chapters')));
@@ -132,7 +132,7 @@ void main() {
 
     test('faculty sees Advisees in adviser mode and Panels in panelist mode',
         () {
-      // Spec D5: the mode is the primary axis and each mode is its own
+      // The mode is the primary axis and each mode is its own
       // clean list. Both directions, or a filter left in one branch
       // passes.
       final adviser = destinationsFor(
@@ -151,9 +151,9 @@ void main() {
     });
 
     test('a faculty member designated neither gets no mode destination', () {
-      // Truth-table row 5 (spec D30 / §6). The provider-level test in
+      // Truth-table row 5. The provider-level test in
       // faculty_positions_test.dart proves the mode resolves to null; this
-      // proves what null MEANS at the destination layer -- that neither
+      // proves what null MEANS at the destination layer: that neither
       // Advisees nor Panels is declared at all. A destination leading to an
       // empty screen reads as a broken app, so "neither" must declare
       // nothing rather than an empty something.
@@ -164,7 +164,7 @@ void main() {
 
       expect(routes, isNot(contains('/advisees')));
       expect(routes, isNot(contains('/panels')));
-      // And the rest of the faculty list survives -- this must not become a
+      // And the rest of the faculty list survives: this must not become a
       // test that passes because the whole list is empty.
       expect(routes, contains('/overview'));
       expect(routes, contains('/defences'));
@@ -195,7 +195,7 @@ void main() {
         '/overview', '/thesis', '/thesis/chapters', '/defences', '/calendar',
         '/advisees', '/panels', '/nominations', '/approvals',
         '/recommendations', '/title-defences', '/readiness', '/users',
-        '/audit', '/archive', '/forms', '/files',
+        '/audit', '/archive', '/archive/queue', '/stalled', '/forms', '/files',
       };
       for (final role in UserRole.values) {
         for (final d in destinationsFor(
@@ -219,14 +219,47 @@ void main() {
     });
 
     // A blank template is reachable with no data at all (forms_screen.dart),
-    // so the destination that leads to it must never be gated on anything
-    // either -- every role, unconditionally, the same guarantee Archive
-    // gets.
-    test('every role gets the Forms destination', () {
-      for (final role in UserRole.values) {
+    // so the destination that leads to it is never gated on anything for the
+    // one role it is for: a student.
+    test('a student gets the Forms destination, unconditionally', () {
+      final routes = destinationsFor(role: UserRole.student)
+          .map((d) => d.route)
+          .toList();
+      expect(routes, contains('/forms'));
+    });
+
+    // The library is a student's page. The others reach the forms they fill
+    // in from the screen that asks for them, and their own copies from My
+    // files.
+    test('faculty, the Coordinator and the Dean are not offered Forms', () {
+      for (final role in [
+        UserRole.faculty,
+        UserRole.coordinator,
+        UserRole.dean,
+      ]) {
         final routes =
             destinationsFor(role: role).map((d) => d.route).toList();
-        expect(routes, contains('/forms'), reason: role.name);
+        expect(routes, isNot(contains('/forms')), reason: role.name);
+        // Their files are still one tap away.
+        expect(routes, contains('/files'), reason: role.name);
+      }
+    });
+
+    // A saved copy opens in the editor from My files in every role, so with
+    // no Forms destination to own it, the location is unowned and the shell
+    // draws a back control rather than stranding the reader.
+    test('the form editor still gets a back control without Forms', () {
+      for (final role in [
+        UserRole.faculty,
+        UserRole.coordinator,
+        UserRole.dean,
+      ]) {
+        final destinations = destinationsFor(role: role);
+        expect(
+            isDeeperThanDestination(
+                destinations, '/forms/form1/copies/c1'),
+            isTrue,
+            reason: role.name);
       }
     });
 
@@ -241,16 +274,30 @@ void main() {
       }
     });
 
-    test('the archive queue is not a destination for anyone', () {
+    test('the publish queue and stalled nominations are the Coordinator\'s',
+        () {
       for (final role in UserRole.values) {
         final routes =
             destinationsFor(role: role).map((d) => d.route).toList();
-        expect(routes, isNot(contains('/archive/queue')), reason: role.name);
+        final isCoordinator = role == UserRole.coordinator;
+        expect(routes.contains('/archive/queue'), isCoordinator,
+            reason: role.name);
+        expect(routes.contains('/stalled'), isCoordinator,
+            reason: role.name);
       }
+    });
+
+    test('on the publish queue, Publish queue is highlighted, not Archive',
+        () {
+      final destinations = destinationsFor(role: UserRole.coordinator);
+      expect(destinationForLocation(destinations, '/archive/queue')?.route,
+          '/archive/queue');
+      expect(destinationForLocation(destinations, '/archive/t1')?.route,
+          '/archive');
     });
   });
 
-  test('the Dean and the Coordinator reach title defences through Defences',
+  test('the Dean and the Coordinator reach title defenses through Defenses',
       () {
     for (final role in [UserRole.dean, UserRole.coordinator]) {
       final routes = destinationsFor(role: role).map((d) => d.route);

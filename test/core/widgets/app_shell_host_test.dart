@@ -30,19 +30,19 @@ const _destinations = [
   ),
 ];
 
-/// The name long enough to have caused the overflow the reviewer's
-/// original report described.
+/// The name long enough to have caused the overflow in the
+/// original report.
 const _longName = 'Engr. Maria Cristina Bautista-Villanueva de la Rosa';
 
-/// IMPORTANT 4 (whole-branch review): spec §5.3 -- "Name, role and
-/// sign-out at the foot of the sidebar" -- was implemented nowhere.
+/// "Name, role and
+/// sign-out at the foot of the sidebar": was implemented nowhere.
 /// `app_shell_host.dart` passed a bare `SignOutButton` as the shell's
 /// `accountFooter`, so nothing in the chrome said who was signed in or in
 /// what capacity.
 ///
 /// [AccountFooter] fixes that, and the constraint carried alongside the
 /// finding is load-bearing: nothing may depend on `users/{uid}` existing
-/// for the SHELL to render, and that account -- `/no-profile` -- is
+/// for the SHELL to render, and that account (`/no-profile`) is
 /// exactly the one that most needs a working sign-out. So a missing or
 /// errored profile must degrade to sign-out alone, never a blank footer
 /// and never a thrown exception.
@@ -191,7 +191,7 @@ void main() {
               // width: `NavigationDrawer` lays its children out inside a
               // plain `ListView`, which genuinely bounds their width, so
               // an externally-imposed `SizedBox` is a faithful proxy for
-              // that context. It is NOT a faithful proxy for the rail --
+              // that context. It is not a faithful proxy for the rail,
               // see the two tests below.
               body: SizedBox(width: 360, child: AccountFooter()),
             ),
@@ -203,10 +203,10 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    // FINDING 2 (fix round 1 review), part 1: this used to wrap
+    // This used to wrap
     // `AccountFooter` in an external `SizedBox(width: 220)`, which bounds
     // the width whether or not `AccountFooter`'s own self-bounding logic
-    // works -- and the default test viewport (800x600) is below
+    // works, and the default test viewport (800x600) is below
     // `AppShell.railBreakpoint` (900) regardless, so `AccountFooter`'s
     // `wide` check evaluated false and the rail code path this test is
     // named after was never even entered. This version removes the
@@ -216,12 +216,12 @@ void main() {
     //
     // Caveat, found while falsifying this by neutering the `wide` check:
     // a bare `Scaffold(body: ...)` bounds width to the viewport on its
-    // own, same as before the fix -- `NavigationRail`'s specific hazard
+    // own, same as before the fix: `NavigationRail`'s specific hazard
     // (a genuinely UNBOUNDED trailing constraint) only exists inside a
     // real `NavigationRail`, which this harness doesn't have. Neutering
-    // `wide` here does NOT make this test fail; it only proves the
+    // `wide` here does not make this test fail; it only proves the
     // icons-only collapse path is unreachable at this size, which isn't
-    // the point. The test below -- a real `AppShell` -- is what actually
+    // the point. The test below (a real `AppShell`) is what actually
     // reaches the hazard and is the one that fails when `wide` is
     // neutered. This one stays as a lighter sanity check on the same
     // code path, not as the falsifying test.
@@ -264,7 +264,7 @@ void main() {
     });
 
     // The strongest form the review asked for: the real `AccountFooter`,
-    // with a real profile, sitting inside a real wide `AppShell` --
+    // with a real profile, sitting inside a real wide `AppShell`,
     // i.e. actually inside `NavigationRail.trailing`, not a stand-in for
     // it. This is what a genuine `Expanded`-under-unbounded-width crash
     // (the 83-test regression) would have failed.
@@ -336,11 +336,11 @@ void main() {
   });
 
   group('AppShellHost', () {
-    // Task 10: `AppShellHost.build` now also watches
+    // `AppShellHost.build` now also watches
     // `notificationDetectorsProvider`, which pulls in all five notification
-    // detectors (Tasks 5-9). Those detectors need more than the bare
+    // detectors. Those detectors need more than the bare
     // `currentUserProvider`/`sharedPrefsProvider` overrides the file's
-    // existing `pump()` helper sets up for `AccountFooter` -- they read
+    // existing `pump()` helper sets up for `AccountFooter`: they read
     // `firebaseAuthProvider` and `firestoreProvider` all the way down (see
     // `signedInUidProvider`, `myThesisProvider`, `myDefencesProvider`, etc),
     // so this is a small, separate helper scoped to exactly this one test:
@@ -376,8 +376,8 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light,
             // `AppShellHost.build` never calls `context.go`/`context.pop`
-            // itself -- those only fire from inside the `onBack` callback,
-            // which this test never taps -- so a plain `MaterialApp` (no
+            // itself: those only fire from inside the `onBack` callback,
+            // which this test never taps, so a plain `MaterialApp` (no
             // real `GoRouter`) is enough to render it once.
             home: const AppShellHost(
               location: '/overview',
@@ -393,8 +393,8 @@ void main() {
     testWidgets('watching the shell keeps every notification detector alive',
         (tester) async {
       // Confirms that wiring `notificationDetectorsProvider` into
-      // `AppShellHost.build` (Task 10) does not crash shell rendering for a
-      // signed-in reader -- a regression here would mean one detector's own
+      // `AppShellHost.build` does not crash shell rendering for a
+      // signed-in reader: a regression here would mean one detector's own
       // bug (e.g. a null role read) breaks shell rendering for every
       // signed-in reader, not just the detector itself.
       await pumpAppShellHost(tester, uid: 'student1');

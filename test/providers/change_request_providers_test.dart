@@ -95,7 +95,7 @@ Future<List<({String thesisId, ChangeRequest request, String role})>> settle(
 
 void main() {
   group('canRequestAdviserChange', () {
-    test('titleApproved with no defence is allowed', () {
+    test('titleApproved with no defense is allowed', () {
       expect(canRequestAdviserChange(thesis(), const []), isTrue);
     });
 
@@ -103,7 +103,7 @@ void main() {
       expect(canRequestAdviserChange(thesis(), [defence()]), isFalse);
     });
 
-    test('titleApproved with only a cancelled defence is allowed', () {
+    test('titleApproved with only a cancelled defense is allowed', () {
       expect(
         canRequestAdviserChange(thesis(), [
           defence(status: DefenceStatus.cancelled),
@@ -128,7 +128,7 @@ void main() {
       expect(canRequestTitleChange(thesis(), const []), isTrue);
     });
 
-    test('titleApproved with a passed final defence is refused', () {
+    test('titleApproved with a passed final defense is refused', () {
       expect(
         canRequestTitleChange(thesis(), [
           defence(type: DefenceType.final_, verdict: PassFail.pass),
@@ -138,7 +138,7 @@ void main() {
     });
 
     test(
-      'titleApproved with a final defence and no verdict yet is allowed',
+      'titleApproved with a final defense and no verdict yet is allowed',
       () {
         expect(
           canRequestTitleChange(thesis(), [defence(type: DefenceType.final_)]),
@@ -185,7 +185,7 @@ void main() {
         'reasons': 'Because',
         'leaderUid': 'l2',
         // 'me' is the new adviser here too, but has already answered and
-        // dropped out of awaitingUids -- the field, not the uid match on
+        // dropped out of awaitingUids: the field, not the uid match on
         // newAdviserUid, is what must gate this row out.
         'newAdviserUid': 'me',
         'newAdviserName': 'Dr. Me',
@@ -227,7 +227,7 @@ void main() {
     test('reads a request as the app writes it, server timestamps and all',
         () async {
       // Submitted through the real repository, so createdAt / updatedAt are
-      // Firestore Timestamps, as they are in production -- not the bare maps
+      // Firestore Timestamps, as they are in production, not the bare maps
       // the test above seeds, which never carry a timestamp at all.
       final db = FakeFirebaseFirestore();
       await ChangeRequestRepository(db).submitTitleChange(

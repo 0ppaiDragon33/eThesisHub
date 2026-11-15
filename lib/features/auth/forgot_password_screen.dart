@@ -149,8 +149,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       title: 'Check your email',
       children: [
         Text(
-          'If $email has an account, a reset link is on its way. '
-          'It may take a minute.',
+          'If $email has an account, a reset link is on its way.',
           key: const Key('resetSent'),
           style: text.bodyMedium,
         ),

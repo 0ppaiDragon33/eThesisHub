@@ -87,8 +87,8 @@ Future<ProviderContainer> containerForSignedOut() async {
 
 void main() {
   // Every role lands on '/overview' now rather than on a dashboard of its
-  // own. What each test below asserts is unchanged -- that the signed-in
-  // account is shown ITS role's overview and no other's -- but the
+  // own. What each test below asserts is unchanged: that the signed-in
+  // account is shown ITS role's overview and no other's, but the
   // per-role dashboards that used to answer that are gone, so the
   // assertion is on the overview body's own key.
   testWidgets('student lands on their own overview', (tester) async {
@@ -169,7 +169,7 @@ void main() {
     // '/dean' is a bookmarkable URL that used to be the dean's dashboard.
     // It redirects to '/overview' now, which is itself role-scoped: the
     // guard is no longer "refuse the path" but "the one overview only ever
-    // renders the signed-in account's own role" -- which is the property
+    // renders the signed-in account's own role", which is the property
     // that actually mattered.
     container.read(goRouterProvider).go('/dean');
     await tester.pumpAndSettle();

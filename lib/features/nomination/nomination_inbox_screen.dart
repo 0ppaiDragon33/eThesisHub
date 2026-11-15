@@ -18,13 +18,13 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// Lets a faculty member give (or withhold) their Conforme on nominations
 /// addressed to them. `watchMyPendingNominations` already excludes ex
-/// officio seats — the dean and every research coordinator sit on each
+/// officio seats: the dean and every research coordinator sit on each
 /// panel automatically and are never asked to accept
 /// (`Nomination.needsConforme => !exOfficio`, filtered at the query level
 /// via `conformeStatus == pending`, which an ex-officio seat never is; its
 /// status is always `exOfficio`). The same person may still legitimately
 /// appear here for a *different* nomination if they were nominated by name
-/// as adviser or panelist "for the sake of records" — that nomination is
+/// as adviser or panelist "for the sake of records": that nomination is
 /// not ex officio and does require their acceptance.
 ///
 /// `respondToNomination` throws `StateError` when the thesis has already
@@ -98,7 +98,7 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
     } on NominationBeingRevised catch (_) {
       // The coordinator reopened this thesis for re-nomination: the request
       // here is stale and a fresh one is coming, so this is not the
-      // "already completed" case — telling them that would be a lie.
+      // "already completed" case: telling them that would be a lie.
       if (mounted) {
         setState(() {
           _decliningThesisId = null;
@@ -128,7 +128,7 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watched, not read lazily inside the submit handler — see
+    // Watched, not read lazily inside the submit handler: see
     // nominate_screen.dart / create_thesis_screen.dart for the race this
     // avoids: reading it for the first time inside a tap handler can see a
     // stale null before the auth stream's first event has landed.
@@ -207,8 +207,8 @@ class _NominationInboxScreenState extends ConsumerState<NominationInboxScreen> {
 String _positionWords(NominationPosition p) => switch (p) {
       NominationPosition.adviser => 'adviser',
       NominationPosition.panelist => 'panel member',
-      NominationPosition.coordinator => 'ex officio panel member',
-      NominationPosition.dean => 'ex officio panel member',
+      NominationPosition.coordinator => 'designated panel member',
+      NominationPosition.dean => 'designated panel member',
     };
 
 /// One request, read like the letter it replaces: who asks, for what, and

@@ -27,7 +27,7 @@ final facultyDirectoryRepositoryProvider =
 /// coordinator ticked their designation (which creates the entry itself).
 ///
 /// Watched by `AppShellHost`, so it runs for the whole signed-in session,
-/// every launch -- which also fills in anyone who signed in before this
+/// every launch, which also fills in anyone who signed in before this
 /// existed, with no need to sign out. It writes only name, role, college and
 /// specialization; the designation flags are never touched, so an absent
 /// flag still means "nominable for both" (see `firestore.rules`).
@@ -52,7 +52,7 @@ final ownDirectoryEntrySyncProvider = Provider<void>((ref) {
   );
 });
 
-/// Every nominable directory entry — faculty, coordinators and the dean
+/// Every nominable directory entry: faculty, coordinators and the dean
 /// alike. Backs the nomination pickers, which offer coordinators and the
 /// dean as ordinary nominees "for the sake of records" even though they also
 /// get an automatic ex-officio seat that nobody picks and nobody accepts.
@@ -108,8 +108,8 @@ final leaderNameBackfillProvider = Provider<void>((ref) {
 
 /// One thesis by id.
 ///
-/// For screens that were handed an id — the nominate screen gets one from
-/// its route — rather than asking for "the signed-in leader's thesis" and
+/// For screens that were handed an id: the nominate screen gets one from
+/// its route, rather than asking for "the signed-in leader's thesis" and
 /// hoping the two agree. It also keeps the loading state honest: a screen
 /// watching this is loading until the document actually arrives, whereas
 /// [myThesisProvider] resolves to `data(null)` the moment auth is unsettled.
@@ -132,8 +132,8 @@ final formAttachmentProvider = StreamProvider.family<FormAttachment?,
 
 /// Every thesis currently sitting at one stage of the approval chain.
 ///
-/// Readable only by coordinators and the dean — the rules deny `list` on
-/// `theses` to everyone else except for a leader's own — so this surfaces an
+/// Readable only by coordinators and the dean: the rules deny `list` on
+/// `theses` to everyone else except for a leader's own, so this surfaces an
 /// error rather than an empty list for any other role, and the dashboards
 /// say so instead of implying the queue is empty.
 final thesesByStatusProvider =
@@ -198,7 +198,7 @@ final myAdviseesProvider = StreamProvider<List<Thesis>>((ref) {
 
 /// Every thesis in the college.
 ///
-/// Watched ONLY by the dean and coordinator dashboards. The rules admit an
+/// Watched only by the dean and coordinator dashboards. The rules admit an
 /// unfiltered list for those two roles and deny it to everyone else, so any
 /// other screen watching this surfaces a permission error its reader cannot
 /// act on.
@@ -213,19 +213,19 @@ final allThesesProvider = StreamProvider<List<Thesis>>((ref) {
 /// A decline is terminal on its own: the nominee cannot un-decline,
 /// `respondToNomination` counts them outstanding forever, and the rules
 /// freeze the leader out of their own thesis the moment it leaves `draft`.
-/// Only a coordinator can free it, and only if they can find it — which is
+/// Only a coordinator can free it, and only if they can find it, which is
 /// what this provider exists for.
 ///
-/// "Awaiting Conforme" is NOT the same as "stalled", and the difference is
+/// "Awaiting Conforme" is not the same as "stalled", and the difference is
 /// the whole point: most theses at that status are perfectly healthy, simply
 /// waiting on people who have not answered yet. Surfacing those as work the
 /// coordinator must do would bury the few that are genuinely stuck. So each
 /// candidate's nominations are watched and only a thesis carrying a
 /// `declined` nomination is returned.
 ///
-/// A nested live fan-in — one subscription per candidate thesis, opened and
-/// closed as the candidate list changes — following the shape proven by
-/// `facultyNeedsYouProvider`'s chapter source. Deliberately NOT a one-shot
+/// A nested live fan-in: one subscription per candidate thesis, opened and
+/// closed as the candidate list changes: following the shape proven by
+/// `facultyNeedsYouProvider`'s chapter source. Deliberately not a one-shot
 /// read of each thesis's nominations: the decline that creates the stall
 /// changes a nomination document and nothing else, so a snapshot taken when
 /// the candidate list last moved would never see it.
@@ -243,9 +243,9 @@ final stalledThesesProvider = StreamProvider<List<Thesis>>((ref) {
     final theses = pending.requireValue;
 
     // Wait for every candidate to have reported. Emitting early would show
-    // an empty queue — "nothing is stuck" — while the answer is still
+    // an empty queue ("nothing is stuck") while the answer is still
     // arriving, which is the "0 is indistinguishable from loading" failure
-    // this project has shipped before.
+    // we have shipped before.
     if (theses.any((t) => !hasDeclined.containsKey(t.id))) return;
 
     controller.add([

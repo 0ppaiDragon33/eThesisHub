@@ -25,7 +25,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// selects which `ThesisRepository` method the act button calls
 /// (`recommend` vs `approve`).
 ///
-/// Role separation is not re-checked here — it is enforced by
+/// Role separation is not re-checked here: it is enforced by
 /// `firestore.rules` (`isCoordinator()`/`isDean()` gate both the `list` on
 /// theses and the `update` transitions themselves), which is the only real
 /// authorization boundary. This screen's own scoping (each instance only
@@ -41,7 +41,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// stale list still shows the thesis until its stream catches up). That is
 /// surfaced as a plain human message here, not a raw error, and busy state
 /// is cleared on every path so the button is left tappable again afterward
-/// — matching `nomination_inbox_screen.dart`'s handling of the same class of
+/// matching `nomination_inbox_screen.dart`'s handling of the same class of
 /// race for `respondToNomination`.
 ///
 /// Both roles reach this screen at `/review`, which the router resolves to
@@ -77,8 +77,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Return this nomination to the group?',
-      message: 'The group will see your reason and choose their adviser and '
-          'panel again. Everyone they nominate will be asked to accept again.',
+      message: 'The group will see your reason and nominate again.',
       confirmLabel: 'Return',
       confirmKey: const Key('confirmReturnNomination'),
     );
@@ -123,7 +122,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
   // here: `_act` calls `setState` (busy state, error text) on every tap, and a
   // stream constructed inside `build` would be a NEW object each time, so
   // `StreamBuilder` would cancel its subscription and resubscribe on every
-  // rebuild. Against real Firestore each resubscribe is a fresh listen —
+  // rebuild. Against real Firestore each resubscribe is a fresh listen,
   // billed reads, a dropped snapshot cache, and a visible flash back through
   // `!snap.hasData` to the spinner mid-interaction. One subscription for the
   // widget's lifetime is simply correct, independent of any test setup.
@@ -175,8 +174,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
       // stream simply hasn't caught up yet.
       if (mounted) {
         setState(() => _error =
-            'This thesis has already moved on — someone else acted on it '
-            'first.');
+            'Someone else has already acted on this thesis.');
       }
     } on FirebaseException catch (_) {
       // Checked before the catch-all: FirebaseAuthException is itself a
@@ -192,14 +190,14 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watched, not read lazily inside the tap handler — reading it for the
+    // Watched, not read lazily inside the tap handler: reading it for the
     // first time inside _act can see a stale null before the auth stream's
     // first event has landed.
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
     final label = widget.isDean ? 'Approve' : 'Recommend';
 
     // No Scaffold and no AppBar: the app shell owns both. The bar's title
-    // still differs by role — see `shellTitleFor`, which asks the same
+    // still differs by role: see `shellTitleFor`, which asks the same
     // question ('/review' for a dean approves, for a coordinator
     // recommends) one level up.
     return KeyedSubtree(
@@ -442,7 +440,7 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
               PersonLine(
                 name: n.nomineeName,
                 role: n.exOfficio
-                    ? '${_position(n.position)}, ex officio'
+                    ? '${_position(n.position)}, designated member'
                     : _position(n.position),
                 trailing: switch (n.conformeStatus) {
                   ConformeStatus.accepted => const ToneBadge(
@@ -452,7 +450,7 @@ class _DecisionCardState extends ConsumerState<_DecisionCard> {
                   ConformeStatus.pending => const ToneBadge(
                       label: 'Pending', tone: Tone.awaiting, dense: true),
                   ConformeStatus.exOfficio => const ToneBadge(
-                      label: 'Ex officio', tone: Tone.neutral, dense: true),
+                      label: 'Designated member', tone: Tone.neutral, dense: true),
                 },
               ),
           ],

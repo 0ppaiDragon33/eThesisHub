@@ -60,7 +60,7 @@ Future<List<Thesis>> settle(ProviderContainer c) async {
 }
 
 void main() {
-  test('the coordinator sees every thesis at title defence', () async {
+  test('the coordinator sees every thesis at title defense', () async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis());
     await db.collection('theses').doc('t2').set(thesis());
@@ -69,7 +69,7 @@ void main() {
     expect((await settle(c)).map((t) => t.id).toSet(), {'t1', 't2'});
   });
 
-  test('an adviser sees their advisee at title defence, with no nomination',
+  test('an adviser sees their advisee at title defense, with no nomination',
       () async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(adviserUid: 'f1'));
@@ -106,7 +106,7 @@ void main() {
     expect(await settle(c), isEmpty);
   });
 
-  test('a student sees their own thesis only while it is at title defence',
+  test('a student sees their own thesis only while it is at title defense',
       () async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(leaderUid: 's1'));

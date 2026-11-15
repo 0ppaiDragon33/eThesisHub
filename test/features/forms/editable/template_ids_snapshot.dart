@@ -4,7 +4,7 @@
 /// A saved copy stores overrides keyed by block id (see
 /// `FormTemplate.overridesFrom`). If a block is later renamed, a copy saved
 /// under the old id silently stops finding its text and falls back to the
-/// template's default wording — the user's edit is orphaned, with no error
+/// template's default wording: the user's edit is orphaned, with no error
 /// to signal it. Adding or removing a block is fine; renaming or reordering
 /// an existing id is not something to do casually.
 ///

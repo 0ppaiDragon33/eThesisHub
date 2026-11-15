@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:ethesishub/core/theme/app_tokens.dart';
 
-/// The application theme — version 2.
+/// The application theme: version 2.
 ///
 /// The palette in [AppTokens] is unchanged; everything built on it is new.
 /// The canvas is now the light surface grey and content sits on paper
@@ -115,7 +115,7 @@ class AppTheme {
         // Light: paper-on-paper with a hairline rule is enough separation.
         // Dark: surfaceDark sits only a few points above paperDark, so a
         // very light shadow is added to keep panels from reading as flush
-        // with the canvas behind them. This does not touch the palette —
+        // with the canvas behind them. This does not touch the palette,
         // it is purely a dark-mode elevation cue.
         elevation: light ? 0 : 1,
         shadowColor: light ? null : Colors.black.withValues(alpha: 0.4),

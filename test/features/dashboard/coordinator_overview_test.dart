@@ -17,7 +17,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-// Same shape as dean_overview_test.dart's own copy -- every field
+// Same shape as dean_overview_test.dart's own copy: every field
 // `Thesis.fromMap` requires, so a seeded document reads back cleanly.
 Map<String, dynamic> thesis({
   String workingTitle = 'A Working Title',
@@ -106,7 +106,7 @@ void main() {
       (tester) async {
     // Through the router, and wide: the destinations moved out of the
     // deleted coordinator dashboard into the one app shell, which renders
-    // them as a rail above 900px. What is asserted is unchanged — the
+    // them as a rail above 900px. What is asserted is unchanged: the
     // coordinator LANDS on the overview rather than a work list, and
     // Overview is offered in the navigation.
     tester.view.physicalSize = const Size(1000, 2400);
@@ -164,7 +164,7 @@ void main() {
 
     expect(find.text('Active theses'), findsOneWidget);
     expect(find.text('Awaiting your recommendation'), findsOneWidget);
-    expect(find.text('Defences this week'), findsOneWidget);
+    expect(find.text('Defenses this week'), findsOneWidget);
     expect(find.text('Faculty accounts'), findsOneWidget);
   });
 
@@ -192,7 +192,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Checking what needs you…'), findsOneWidget);
-    expect(find.text('All caught up'), findsNothing);
+    expect(find.text('No pending decisions'), findsNothing);
   });
 
   testWidgets('the greeting survives a missing profile document',
@@ -217,7 +217,7 @@ void main() {
     useDesktopWidth(tester);
     // fake_cloud_firestore returns documents in insertion order, so the
     // fixture is seeded AGAINST the expected order. Seeded alphabetically,
-    // this test would pass with the sort deleted -- exactly how a vacuous
+    // this test would pass with the sort deleted: exactly how a vacuous
     // ordering test slipped through an earlier milestone.
     final db = FakeFirebaseFirestore();
     await db
@@ -277,7 +277,7 @@ void main() {
       'the Users destination still reaches /users after the Overview '
       'shift', (tester) async {
     // Prepending Overview shifted every other coordinator destination's
-    // index by one -- this destination (Faculty, now Users) moved from
+    // index by one: this destination (Faculty, now Users) moved from
     // index 4 to index 5. The dashboard used to jump on a hard-coded
     // `if (i == 4)`, which would have silently routed this exact tap (now
     // index 5) to whatever destination 4 (Readiness) renders instead, with
@@ -286,7 +286,7 @@ void main() {
     // screen and nothing else.
     //
     // Wide on purpose. The destinations live in the app shell now, which
-    // shows them as a rail above 900px and behind a hamburger below it —
+    // shows them as a rail above 900px and behind a hamburger below it,
     // the default 800px test surface would leave the drawer shut and the
     // tap would find nothing.
     tester.view.physicalSize = const Size(1000, 2400);
@@ -304,14 +304,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('usersScreen')), findsOneWidget);
-    expect(find.text('Defence readiness'), findsNothing);
+    expect(find.text('Defense readiness'), findsNothing);
   });
 
   testWidgets(
-      'the Defences this week tile still shows the college-wide count '
+      'the Defenses this week tile still shows the college-wide count '
       'without a profile document', (tester) async {
     // myDefencesProvider awaits currentUserProvider.future and branches on
-    // role -- with no `users/{uid}` document, that branch does not match
+    // role: with no `users/{uid}` document, that branch does not match
     // the dean/coordinator arm, and it silently falls through to the
     // faculty adviser/panel fan-in instead of watchAll(). Nothing hangs,
     // so the earlier "greeting survives a missing profile" test cannot
@@ -333,14 +333,14 @@ void main() {
 
     await tester.pumpWidget(await wrap(const CoordinatorOverview(), db,
         uid: 'c1', role: 'coordinator'));
-    // Remove the profile the helper wrote -- the same missing-document
+    // Remove the profile the helper wrote: the same missing-document
     // window the greeting test exercises, but checked against the tile
     // instead of the greeting.
     await db.collection('users').doc('c1').delete();
     await tester.pumpAndSettle();
 
     final tile = find.ancestor(
-        of: find.text('Defences this week'), matching: find.byWidgetPredicate((w) => w is Metric));
+        of: find.text('Defenses this week'), matching: find.byWidgetPredicate((w) => w is Metric));
     expect(find.descendant(of: tile, matching: find.text('1')),
         findsOneWidget);
     expect(find.descendant(of: tile, matching: find.text('0')),
@@ -375,7 +375,7 @@ void main() {
       expect(find.text('All theses'), findsOneWidget);
       expect(find.text('Alpha'), findsNothing);
       expect(find.textContaining('past 7 months'), findsNothing);
-      expect(find.text('No defences'), findsOneWidget);
+      expect(find.text('No defenses'), findsOneWidget);
       // Stages opens by default.
       expect(find.text('Theses by stage'), findsOneWidget);
 

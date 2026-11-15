@@ -38,7 +38,7 @@ class _CountingThesisRepository implements ThesisRepository {
 void main() {
   // The bug: these are plain StreamProviders, built once and kept for the
   // life of the container. A listener denied under one account stayed in
-  // AsyncError forever -- signing in as somebody else did not rebuild it, so
+  // AsyncError forever: signing in as somebody else did not rebuild it, so
   // a coordinator saw the previous account's refusal and only a full page
   // reload cleared it. Reported in the field as "I have to refresh for it to
   // disappear".

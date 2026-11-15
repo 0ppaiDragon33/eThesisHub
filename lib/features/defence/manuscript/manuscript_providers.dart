@@ -40,7 +40,7 @@ final manuscriptPartsProvider = Provider.autoDispose
       : annotationsAsync.valueOrNull;
   if (annotations == null) return const AsyncValue.loading();
 
-  final wanted = manuscriptChapters(key.type);
+  final wanted = manuscriptChapters(key.type, uploaded: chapters.map((c) => c.id));
   final approved = [
     for (final c in chapters)
       if (wanted.contains(c.id) && c.status == ChapterStatus.approved) c,

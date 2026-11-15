@@ -1,14 +1,14 @@
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 
-/// Everything Form 3 prints — the adviser's letter asking the Dean to
+/// Everything Form 3 prints: the adviser's letter asking the Dean to
 /// convene the panel for a pre-oral defence.
 ///
 /// Takes no repositories: [title] and [panelNames] are resolved by the
 /// screen and passed in, exactly as `Form8Data` and `Form5cData` do.
 ///
 /// The printed form's "Recommending Approval" (coordinator) and "Approved"
-/// (dean) lines carry no data even in a filled letter — this app tracks
+/// (dean) lines carry no data even in a filled letter: this app tracks
 /// no separate digital sign-off for a defence REQUEST the way it tracks
 /// coordinator-recommended/dean-approved on a thesis's nomination. Those
 /// two lines print as ruled blanks for a wet signature on every letter

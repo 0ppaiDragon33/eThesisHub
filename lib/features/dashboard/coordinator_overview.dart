@@ -27,7 +27,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 ///
 /// A command row for the office's recurring jobs, the office's figures,
 /// the work queue beside the pipeline and the week's defences, and the
-/// full college register — which the pipeline bar filters when tapped.
+/// full college register, which the pipeline bar filters when tapped.
 ///
 /// Reads [allThesesProvider], permitted only to the coordinator and dean:
 /// never reuse this for another role.
@@ -91,7 +91,7 @@ class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
             onTap: () => context.go('/recommendations'),
           ),
           Metric<List<Defence>>(
-            label: 'Defences this week',
+            label: 'Defenses this week',
             value: defencesAsync,
             format: (l) => '${defencesThisWeek(l).length}',
             onTap: () => context.go('/defences?stage=preOral'),
@@ -114,8 +114,8 @@ class _CoordinatorOverviewState extends ConsumerState<CoordinatorOverview> {
           primary: [
             NeedsYouQueue(
               items: needsYouAsync,
-              emptyTitle: 'All caught up',
-              emptyMessage: 'Nothing needs your decision right now.',
+              emptyTitle: 'No pending decisions',
+              emptyMessage: 'No item is waiting on the Coordinator.',
             ),
             _StalledNotice(stalled: stalledAsync),
           ],
@@ -167,7 +167,7 @@ class _CommandRow extends StatelessWidget {
     final commands = <({IconData icon, String label, String detail, VoidCallback go})>[
       (
         icon: Icons.event_available_outlined,
-        label: 'Schedule a defence',
+        label: 'Schedule a defense',
         detail: 'Choose a ready thesis',
         go: () => context.go('/readiness'),
       ),
@@ -179,7 +179,7 @@ class _CommandRow extends StatelessWidget {
       ),
       (
         icon: Icons.calendar_month_outlined,
-        label: 'Defence calendar',
+        label: 'Defense calendar',
         detail: 'Every scheduled session',
         go: () => context.go('/calendar'),
       ),

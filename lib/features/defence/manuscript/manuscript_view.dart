@@ -199,8 +199,8 @@ class _ManuscriptViewState extends ConsumerState<ManuscriptView> {
         // The Sliver's own maxScrollExtent is only an estimate until every
         // item between here and there has been laid out once, which a lazy
         // list has not done for a page far below the fold. animateTo clamps
-        // each tick to that stale estimate, so it can never reach — let
-        // alone discover — a target past it. The total is fully known
+        // each tick to that stale estimate, so it can never reach: let
+        // alone discover: a target past it. The total is fully known
         // already from [_items] and [_width], so it is computed directly
         // and jumpTo (which does not clamp) is used instead of an animation.
         final totalExtent = _items.fold(

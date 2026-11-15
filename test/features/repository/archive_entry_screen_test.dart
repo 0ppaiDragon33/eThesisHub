@@ -48,10 +48,10 @@ Future<FakeFirebaseFirestore> seed() async {
 }
 
 /// Seeds `users/{uid}` with [role] and AWAITS that write before returning
-/// the widget — matching `defences_list_test.dart`'s idiom rather than
+/// the widget: matching `defences_list_test.dart`'s idiom rather than
 /// firing it unawaited. Without a profile document, `currentUserProvider`
 /// silently takes the no-profile branch instead of the role it was meant to
-/// exercise (D64's cautionary tale).
+/// exercise (the cautionary tale).
 Future<Widget> app(
   FakeFirebaseFirestore db,
   String uid, {
@@ -165,7 +165,7 @@ void main() {
     expect(find.byKey(const Key('openManuscript')), findsNothing);
   });
 
-  // D64: the coordinator issues it, per §10b and the role table, and the
+  // The coordinator issues it, per §10b and the role table, and the
   // entry is the record it certifies.
   testWidgets('a coordinator is offered Form 8', (tester) async {
     useTallSurface(tester);
@@ -193,7 +193,7 @@ void main() {
   // §6: "A certificate with a blank name is worse than no certificate,
   // because it looks official." The structural gate (you cannot reach this
   // button unless the thesis is archived) does not cover an ARCHIVED entry
-  // with no members -- `ArchiveEntry.fromMap` defaults `memberNames` to
+  // with no members: `ArchiveEntry.fromMap` defaults `memberNames` to
   // empty, which is why this screen renders 'Unknown authors' at all.
   testWidgets('Form 8 refuses for an entry with no members, and says why',
       (tester) async {
@@ -233,7 +233,7 @@ void main() {
   });
 
   // The role gate has three states, not two. A failed profile read must not
-  // be rendered as "you are not a coordinator" -- that is a transient fault
+  // be rendered as "you are not a coordinator": that is a transient fault
   // dressed up as an authorization answer.
   testWidgets('a failed profile read is not silence, and is not a refusal',
       (tester) async {

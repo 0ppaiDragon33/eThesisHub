@@ -37,7 +37,7 @@ class DocumentRepository {
     });
   }
 
-  /// Newest version first — what a reviewer opens is the current draft.
+  /// Newest version first: what a reviewer opens is the current draft.
   Stream<List<ChapterVersion>> watchVersions(
       String thesisId, ChapterId chapter) {
     return _chapter(thesisId, chapter).collection('versions').snapshots().map(
@@ -55,7 +55,7 @@ class DocumentRepository {
     );
   }
 
-  /// Oldest first — feedback reads as a conversation.
+  /// Oldest first: feedback reads as a conversation.
   Stream<List<ChapterFeedback>> watchFeedback(
       String thesisId, ChapterId chapter) {
     return _chapter(thesisId, chapter).collection('feedback').snapshots().map(
@@ -66,10 +66,10 @@ class DocumentRepository {
                   'createdAt': (d.data()['createdAt'] as Timestamp?)?.toDate(),
                 }))
             .toList();
-        // Oldest first, by the server's clock. A tie -- two remarks landing
-        // on the same millisecond -- falls back to the document id, which is
+        // Oldest first, by the server's clock. A tie: two remarks landing
+        // on the same millisecond: falls back to the document id, which is
         // random, so such a pair is ordered arbitrarily. That is acceptable
-        // here and was NOT acceptable for candidate titles: those are written
+        // here and was not acceptable for candidate titles: those are written
         // in one batch and therefore ALL share a timestamp by construction,
         // whereas feedback is appended one remark at a time and a collision
         // needs two posts inside the same millisecond.
@@ -109,7 +109,8 @@ class DocumentRepository {
           'Chapters can be uploaded once the title has been approved.');
     }
 
-    // Chapters IV and V wait for a passed pre-oral, and their record names
+    // The full manuscript (and the old Chapters IV and V) wait for a passed
+    // pre-oral, and the record names
     // it so the rules can check it. Found through the leader's own
     // defences: the rules let a leader list defences filtered on
     // leaderUid, and that snapshot is on every defence.
@@ -132,8 +133,8 @@ class DocumentRepository {
         }
       }
       if (preOralDefenceId == null) {
-        throw StateError('Chapters IV and V open once the panel has passed '
-            'your pre-oral defence.');
+        throw StateError('The Chapters I–V manuscript opens once the panel '
+            'has passed your pre-oral defense.');
       }
     }
 

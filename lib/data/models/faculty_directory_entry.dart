@@ -28,8 +28,8 @@ class FacultyDirectoryEntry {
 
   /// Whether a group may nominate this account onto their panel.
   ///
-  /// An ex-officio seat ignores this entirely — that seat comes from the
-  /// office, not from a coordinator's list (spec D32).
+  /// An ex-officio seat ignores this entirely: that seat comes from the
+  /// office, not from a coordinator's list.
   final bool nominableAsPanelist;
 
   /// How many groups this person holds as adviser (see `myAdviseeCountProvider`),

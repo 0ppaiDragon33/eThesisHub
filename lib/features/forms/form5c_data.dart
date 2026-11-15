@@ -28,7 +28,7 @@ class Form5cData {
   final List<String> presenterNames;
   final String title;
 
-  /// M4 applies Form 5c to BOTH defences (its D36), so one panelist can
+  /// Evaluation applies Form 5c to BOTH defences, so one panelist can
   /// hold two completed sheets for the same thesis. Printed on the page so
   /// the two are distinguishable by more than a date.
   final DefenceType defenceType;
@@ -38,7 +38,7 @@ class Form5cData {
   final String evaluatorName;
 
   /// Empty when the directory has no entry for this evaluator. The form
-  /// prints a ruled line either way, so an empty string is honest — the
+  /// prints a ruled line either way, so an empty string is honest: the
   /// data class does not invent a placeholder.
   final String evaluatorField;
 

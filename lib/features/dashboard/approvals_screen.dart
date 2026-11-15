@@ -18,7 +18,7 @@ class ApprovalsScreen extends ConsumerWidget {
     final queueAsync =
         ref.watch(thesesByStatusProvider(ThesisStatus.nominationPendingDean));
 
-    // '/review' is below every destination, so it is pushed (D23).
+    // '/review' is below every destination, so it is pushed.
     void openReview() => context.push('/review');
 
     return PageShell(

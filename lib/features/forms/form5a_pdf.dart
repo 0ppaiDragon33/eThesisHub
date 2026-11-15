@@ -167,7 +167,7 @@ pw.Widget _page(FormText t, {Form5aData? data}) {
   );
 }
 
-/// Generates Form 5a — Request for Final Oral Defense — as a PDF.
+/// Generates Form 5a (Request for Final Oral Defense) as a PDF.
 Future<Uint8List> buildForm5aPdf(Form5aData data) async {
   final doc = pw.Document(compress: false, theme: await formTheme());
   doc.addPage(

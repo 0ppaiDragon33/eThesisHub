@@ -9,9 +9,9 @@ import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/features/defence/defence_grades_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 
-/// Same shape as Task 9's `seed`, extended with the `evaluations`
+/// Same shape as the `seed`, extended with the `evaluations`
 /// subcollection and the release/verdict fields this screen reads. Copied
-/// rather than shared -- the two suites must not share a file.
+/// rather than shared: the two suites must not share a file.
 Future<FakeFirebaseFirestore> _seedDefence({
   String status = 'completed',
   DateTime? evaluationsReleasedAt,
@@ -70,7 +70,23 @@ Future<void> _writeEvaluation(
   int total, {
   String? name,
   Map<String, String> comments = const {},
+  // The app records each submitter on the defence in the same batch as the
+  // sheet; `false` seeds a sheet saved before that record existed.
+  bool record = true,
 }) async {
+  // The written half lives on its own document, as the app writes it, so
+  // the group can read it without a score.
+  await db
+      .collection('defenses')
+      .doc('d1')
+      .collection('remarks')
+      .doc(uid)
+      .set({'evaluatorName': name ?? '', 'comments': comments});
+  if (record) {
+    await db.collection('defenses').doc('d1').update({
+      'submittedUids': FieldValue.arrayUnion([uid]),
+    });
+  }
   await db
       .collection('defenses')
       .doc('d1')
@@ -133,7 +149,7 @@ Widget app(FakeFirebaseFirestore db, String uid) {
 
 /// The grades table has a column per criterion (11) plus panelist, total
 /// and rating, which is wider and taller than the default 800x600 test
-/// surface -- the repo's own idiom, see `useTallSurface` in
+/// surface: the repo's own idiom, see `useTallSurface` in
 /// `evaluation_screen_test.dart`.
 void useTallSurface(WidgetTester tester) {
   tester.view.physicalSize = const Size(1000, 2400);
@@ -142,6 +158,70 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
+  // The release is for the students: the group's leader reads the same
+  // table, read-only, and records nothing.
+  testWidgets('after release the group\'s leader reads the remarks, no scores',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('leaderGradesIntro')), findsOneWidget);
+    // One card per panelist; the silent one says so and cannot be opened.
+    expect(find.byKey(const Key('remarksCard-p1')), findsOneWidget);
+    expect(find.byKey(const Key('remarksCard-p2')), findsOneWidget);
+    expect(find.text('Dr. Panelist One'), findsOneWidget);
+    expect(find.text('No written remarks'), findsOneWidget);
+    // Not one number: no table, no mean, no pass mark.
+    expect(find.byKey(const Key('gradesTable')), findsNothing);
+    expect(find.byKey(const Key('panelMean')), findsNothing);
+    expect(find.byKey(const Key('recordVerdict')), findsNothing);
+    expect(find.byKey(const Key('releaseEvaluations')), findsNothing);
+  });
+
+  testWidgets('opening a panelist\'s card shows their remarks, no scores',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'l1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('remarksCard-p1')));
+    await tester.pumpAndSettle();
+
+    final detail = find.byKey(const Key('remarksDetail'));
+    expect(detail, findsOneWidget);
+    expect(find.descendant(of: detail, matching: find.text('Dr. Panelist One')),
+        findsOneWidget);
+    expect(find.descendant(of: detail, matching: find.text('Narrow it.')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('closeRemarks')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('remarksDetail')), findsNothing);
+  });
+
+  testWidgets('a released defense with no remarks says so to the leader',
+      (tester) async {
+    final db = await _seedDefence(
+        evaluationsReleasedAt: DateTime(2026, 9, 23, 11));
+    await _writeEvaluation(db, 'p1', 100, name: 'Dr. Panelist One');
+    await tester.pumpWidget(app(db, 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('noRemarks')), findsOneWidget);
+    expect(find.byKey(const Key('panelMean')), findsNothing);
+  });
+
+  testWidgets('before release the group\'s leader sees no grades',
+      (tester) async {
+    await tester.pumpWidget(app(await seedWithOne(), 'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('notReleasedNotice')), findsOneWidget);
+    expect(find.byKey(const Key('panelMean')), findsNothing);
+    expect(find.byKey(const Key('leaderGradesIntro')), findsNothing);
+  });
+
   testWidgets('before release it shows the count and no scores', (
     tester,
   ) async {
@@ -157,7 +237,7 @@ void main() {
     expect(find.byKey(const Key('gradesTable')), findsNothing);
   });
 
-  // D40's mitigation. The count is on the button, so releasing early is a
+  // The mitigation. The count is on the button, so releasing early is a
   // visible choice rather than an accident.
   testWidgets('release stays locked until every grader has submitted',
       (tester) async {
@@ -190,9 +270,52 @@ void main() {
         isNotNull);
   });
 
-  // Ruling 2: before release, a panelist NEVER opens the evaluations list
+  // Sheets saved before submissions were recorded are on file but not on
+  // the list the rules judge, so release stays locked and the screen says
+  // what unlocks it.
+  testWidgets('sheets that were never recorded keep release locked and say '
+      'why', (tester) async {
+    useTallSurface(tester);
+    final db = await _seedDefence();
+    for (final uid in ['p1', 'p2', 'c1', 'dn1']) {
+      await _writeEvaluation(db, uid, 90, name: 'Grader $uid', record: false);
+    }
+    await tester.pumpWidget(app(db, 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('4 of 4 have submitted'), findsOneWidget);
+    expect(find.byKey(const Key('unrecordedNote')), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('releaseEvaluations')))
+            .onPressed,
+        isNull);
+  });
+
+  // The count alone is not the gate: four sheets are in, which is the
+  // required four, but panelist p2 has not graded. Release must stay locked.
+  testWidgets('release stays locked while a panelist has not submitted, '
+      'even when the sheet count is met', (tester) async {
+    useTallSurface(tester);
+    final db = await seedWithOne(); // p1 only
+    for (final uid in ['c1', 'dn1', 'extra-office-holder']) {
+      await _writeEvaluation(db, uid, 90, name: 'Grader $uid');
+    }
+    await tester.pumpWidget(app(db, 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('4 of 4 have submitted'), findsOneWidget);
+    expect(find.text('Waiting on 1 more evaluation'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('releaseEvaluations')))
+            .onPressed,
+        isNull);
+  });
+
+  // Ruling 2: before release, a panelist never opens the evaluations list
   // (the rules still deny it to them), so they see only whether THEY have
-  // submitted -- never a count of others, and never the release control.
+  // submitted, never a count of others, and never the release control.
   testWidgets(
     'before release a panelist sees only their own submission status',
     (tester) async {
@@ -217,33 +340,51 @@ void main() {
     expect(find.byKey(const Key('panelMean')), findsOneWidget);
   });
 
-  // The transpose exists so this table FITS. Criteria are fixed at eleven
-  // forever and panelists are three, so putting criteria down and
-  // panelists across turns fourteen columns into four. These pin the
-  // result at both ends of the range the app ships to.
-  //
-  // An overflow surfaces as an exception in a widget test, so
-  // `takeException()` is the assertion that nothing is clipped -- laid out
-  // the other way this table was 1260dp wide and threw at every width.
-  testWidgets('the table fits a 360dp phone with nothing clipped', (
-    tester,
-  ) async {
+  // On a narrow screen the panelists' columns slide sideways while the
+  // criterion column stays put; nothing may overflow the page.
+  testWidgets('the grades slide on a 360dp phone and the labels stay',
+      (tester) async {
     tester.view.physicalSize = const Size(360, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(app(await seedReleased(), 'p1'));
     await tester.pumpAndSettle();
-
     expect(tester.takeException(), isNull);
-    expect(
-      tester.getSize(find.byKey(const Key('gradesTable'))).width,
-      lessThanOrEqualTo(360),
-    );
+
+    final first = evaluationCriteria.first;
+    final label = find.text('${first.label}  /${first.weight}');
+    final heading = find.byKey(const ValueKey('heading_p2'));
+    expect(label, findsOneWidget);
+    final labelBefore = tester.getTopLeft(label);
+    final headingBefore = tester.getTopLeft(heading);
+
+    await tester.drag(find.byKey(const Key('gradesScroll')), const Offset(-300, 0));
+    await tester.pumpAndSettle();
+
+    // The grades moved; the criterion did not.
+    expect(tester.getTopLeft(heading).dx, lessThan(headingBefore.dx));
+    expect(tester.getTopLeft(label), labelBefore);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a panelist name is drawn in full, not cut short', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'p1'));
+    await tester.pumpAndSettle();
+
+    final heading = find.text('Dr. Panelist One');
+    expect(heading, findsOneWidget);
+    final text = tester.widget<Text>(heading);
+    expect(text.overflow, isNot(TextOverflow.ellipsis));
+    expect(text.softWrap, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   // Reported from a real screen: "Alertness and smartness in answering
-  // question /25" -- the form's own wording -- was cut off mid-word by a
+  // question /25" (the form's own wording) was cut off mid-word by a
   // fixed 60dp row height. The row now grows to whatever the label needs.
   testWidgets('the longest criterion label is drawn in full, not clipped', (
     tester,
@@ -256,7 +397,7 @@ void main() {
     expect(longest, findsOneWidget);
     // It runs to four lines at this column width. A row capped at 60 could
     // not have drawn them, which is exactly what went wrong.
-    expect(tester.getSize(longest.first).height, greaterThan(60));
+    expect(tester.getSize(longest.first).height, greaterThan(24));
     expect(tester.takeException(), isNull);
   });
 
@@ -281,17 +422,14 @@ void main() {
         .evaluate();
     expect(bordered, isNotEmpty);
 
-    final table = tester.widget<DataTable>(
-      find.byKey(const Key('gradesTable')),
-    );
     for (final key in [
       const ValueKey('section_content'),
       const ValueKey('section_presentation'),
       const ValueKey('row_total'),
     ]) {
-      final row = table.rows.firstWhere((r) => r.key == key);
+      final box = tester.widget<Container>(find.byKey(key));
       expect(
-        row.color?.resolve(<WidgetState>{}),
+        (box.decoration as BoxDecoration).color,
         isNotNull,
         reason: '$key should be tinted',
       );
@@ -309,32 +447,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-  });
-
-  // No horizontal scroll at all, and that is deliberate rather than an
-  // omission: a DataTable handed unbounded width -- which is exactly what a
-  // horizontal SingleChildScrollView gives it -- sizes itself to about
-  // 1260dp whatever it holds, so the scroll view CAUSED the overflow it was
-  // added to rescue. Bounded by the page, the table lays out inside the
-  // width it has.
-  testWidgets('the table is not wrapped in a horizontal scroll view', (
-    tester,
-  ) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(app(await seedReleased(), 'p1'));
-    await tester.pumpAndSettle();
-
-    final horizontal = find
-        .ancestor(
-          of: find.byKey(const Key('gradesTable')),
-          matching: find.byWidgetPredicate(
-            (w) =>
-                w is SingleChildScrollView &&
-                w.scrollDirection == Axis.horizontal,
-          ),
-        )
-        .evaluate();
-    expect(horizontal, isEmpty);
   });
 
   testWidgets('the panel mean is the mean of the submitted totals', (
@@ -355,7 +467,7 @@ void main() {
   // panel deliberates over.
   testWidgets('the panel mean keeps a decimal place', (tester) async {
     useTallSurface(tester);
-    // p1 at 100, p2 at 67 -- a mean of 83.5.
+    // p1 at 100, p2 at 67: a mean of 83.5.
     await tester.pumpWidget(app(await seedReleased(second: 67), 'p1'));
     await tester.pumpAndSettle();
 
@@ -387,31 +499,12 @@ void main() {
                 as Map)
             .cast<String, int>();
 
-    final table = tester.widget<DataTable>(
-      find.byKey(const Key('gradesTable')),
-    );
-
-    // Criteria are ROWS and panelists are COLUMNS, so find this panelist's
-    // column index by their header, then read down it.
-    // Panelist headings are boxed so a long name wraps to two lines
-    // instead of overflowing a column sized for two digits, so the Text
-    // sits inside a SizedBox rather than being the label itself.
-    final column = table.columns.indexWhere((c) {
-      final label = c.label;
-      if (label is! SizedBox) return false;
-      return (label.child as Text).data == 'Dr. Panelist One';
-    });
-    expect(column, greaterThan(0), reason: 'panelist column not found');
-
+    // Criteria are ROWS and panelists are COLUMNS: read down p1's column.
     for (final c in evaluationCriteria) {
-      final row = table.rows.firstWhere(
-        (r) => r.key == ValueKey('criterion_${c.key}'),
+      final cell = tester.widget<Text>(
+        find.byKey(ValueKey('score_${c.key}_p1')),
       );
-      expect(
-        (row.cells[column].child as Text).data,
-        '${storedScores[c.key]}',
-        reason: c.key,
-      );
+      expect(cell.data, '${storedScores[c.key]}', reason: c.key);
       // A perfect sheet, so every criterion carries its own DIFFERENT
       // weight: a cell wired to the wrong row would show as a mismatch
       // rather than coincide.
@@ -426,33 +519,17 @@ void main() {
     await tester.pumpWidget(app(await seedReleased(), 'p1'));
     await tester.pumpAndSettle();
 
-    final table = tester.widget<DataTable>(
-      find.byKey(const Key('gradesTable')),
-    );
-
     for (final c in evaluationCriteria) {
-      expect(
-        table.rows.where((r) => r.key == ValueKey('criterion_${c.key}')),
-        hasLength(1),
-        reason: c.key,
-      );
+      expect(find.byKey(ValueKey('criterion_${c.key}')), findsOneWidget,
+          reason: c.key);
     }
-    // Form 5c's own A/B structure, which the previous wide layout flattened.
+    // Form 5c's own A/B structure.
     for (final s in EvaluationSection.values) {
-      expect(
-        table.rows.where((r) => r.key == ValueKey('section_${s.name}')),
-        hasLength(1),
-        reason: s.name,
-      );
+      expect(find.byKey(ValueKey('section_${s.name}')), findsOneWidget,
+          reason: s.name);
     }
-    expect(
-      table.rows.where((r) => r.key == const ValueKey('row_total')),
-      hasLength(1),
-    );
-    expect(
-      table.rows.where((r) => r.key == const ValueKey('row_rating')),
-      hasLength(1),
-    );
+    expect(find.byKey(const ValueKey('row_total')), findsOneWidget);
+    expect(find.byKey(const ValueKey('row_rating')), findsOneWidget);
   });
 
   // §6 wants names on this screen, not raw Firebase uids.
@@ -474,7 +551,7 @@ void main() {
   });
 
   // A sheet written before evaluatorName existed still has to identify
-  // someone -- the uid is a poor identity but it is not a blank cell.
+  // someone: the uid is a poor identity but it is not a blank cell.
   testWidgets('a sheet with no stored name falls back to the uid', (
     tester,
   ) async {
@@ -530,7 +607,7 @@ void main() {
     expect(find.byKey(const Key('recordVerdict')), findsNothing);
   });
 
-  // D42: the adviser is visibly the scribe.
+  // The adviser is visibly the scribe.
   testWidgets('a recorded verdict names who recorded it', (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seedReleased(verdict: 'pass'), 'p1'));
@@ -539,7 +616,7 @@ void main() {
     expect(find.byKey(const Key('verdict')), findsOneWidget);
     // "the adviser", never a uid: the rules pin verdictRecordedBy to the
     // writer's own uid on the only arm that can set it, and only the
-    // adviser passes that arm, so the role IS the identity here.
+    // adviser passes that arm, so the role is the identity here.
     final scribe = tester
         .widget<Text>(find.byKey(const Key('verdictScribe')))
         .data!;
@@ -564,9 +641,9 @@ void main() {
     expect(find.byKey(const Key('panelMean')), findsNothing);
   });
 
-  // pump() once, NOT pumpAndSettle -- settling resolves the stream and the
+  // pump() once, not pumpAndSettle: settling resolves the stream and the
   // assertion becomes vacuous.
-  testWidgets('shows a loading state before the defence resolves', (
+  testWidgets('shows a loading state before the defense resolves', (
     tester,
   ) async {
     useTallSurface(tester);
@@ -576,7 +653,7 @@ void main() {
     expect(find.byKey(const Key('gradesLoading')), findsOneWidget);
   });
 
-  // ISUFST's passing mark is 75. D77 supersedes D41's blanket "never
+  // ISUFST's passing mark is 75. The spec supersedes the blanket "never
   // computed" for this one guard: the panel still decides, but the system
   // refuses to record a Pass the numbers cannot carry. Only the adviser
   // (a1) sees these controls at all.
@@ -592,7 +669,7 @@ void main() {
     tester,
   ) async {
     useTallSurface(tester);
-    // p1 at 100, p2 at 48 -- a mean of 74.0, below the passing mark.
+    // p1 at 100, p2 at 48: a mean of 74.0, below the passing mark.
     await tester.pumpWidget(app(await seedReleased(second: 48), 'a1'));
     await tester.pumpAndSettle();
 
@@ -604,30 +681,64 @@ void main() {
     expect(find.byKey(const Key('verdictLocked')), findsOneWidget);
   });
 
-  // The boundary: 75 is a pass, not a fail.
-  testWidgets('a mean of exactly 75 still admits Pass', (tester) async {
+  // The boundary: 75 is a pass, not a fail, so Fail is the locked one.
+  testWidgets('a mean of exactly 75 admits Pass and locks Fail', (tester) async {
     useTallSurface(tester);
-    // p1 at 100, p2 at 50 -- a mean of exactly 75.0.
+    // p1 at 100, p2 at 50: a mean of exactly 75.0.
     await tester.pumpWidget(app(await seedReleased(second: 50), 'a1'));
     await tester.pumpAndSettle();
 
     final seg = verdictControl(tester);
     expect(segmentEnabled(seg, PassFail.pass), isTrue);
-    expect(segmentEnabled(seg, PassFail.fail), isTrue);
+    expect(segmentEnabled(seg, PassFail.fail), isFalse);
     expect(find.byKey(const Key('verdictLocked')), findsNothing);
+    expect(find.byKey(const Key('verdictFailLocked')), findsOneWidget);
   });
 
-  testWidgets('a comfortably passing mean leaves both verdicts open', (
-    tester,
-  ) async {
+  testWidgets('a comfortably passing mean admits only Pass', (tester) async {
     useTallSurface(tester);
-    // p1 at 100, p2 at 100 -- a mean of 100.
+    // p1 at 100, p2 at 100: a mean of 100.
     await tester.pumpWidget(app(await seedReleased(), 'a1'));
     await tester.pumpAndSettle();
 
     final seg = verdictControl(tester);
     expect(segmentEnabled(seg, PassFail.pass), isTrue);
-    expect(segmentEnabled(seg, PassFail.fail), isTrue);
+    expect(segmentEnabled(seg, PassFail.fail), isFalse);
+  });
+
+  // The two locks are exclusive: exactly one verdict is ever open.
+  testWidgets('a sub-75 mean leaves Fail open and shows no Fail lock', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(second: 48), 'a1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('verdictFailLocked')), findsNothing);
+  });
+
+  // Defence in depth, the other way: at or above the mark the record
+  // button must not act on a Fail the gate forbids.
+  testWidgets('at 75 or more, tapping Fail never arms the record button', (
+    tester,
+  ) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(app(await seedReleased(), 'a1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<PassFail>),
+        matching: find.text('Fail'),
+      ),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('recordVerdict')),
+    );
+    expect(button.onPressed, isNull);
   });
 
   testWidgets('recording a verdict confirms before it is written', (

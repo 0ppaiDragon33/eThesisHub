@@ -75,8 +75,8 @@ void main() {
   // `ResponsiveScaffold` was the chrome each of the four dashboards built
   // for itself, and it is gone: [AppShell] is now the single chrome around
   // every signed-in route. These two cases move across unchanged in what
-  // they assert — the threshold below which navigation hides itself, and
-  // that it returns at two — because that rule is a property of the app's
+  // they assert: the threshold below which navigation hides itself, and
+  // that it returns at two, because that rule is a property of the app's
   // navigation, not of the widget that used to hold it.
   group('AppShell navigation threshold', () {
     Future<Widget> shell(List<ShellDestination> destinations) async {
@@ -125,7 +125,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The rail breakpoint is 720, so the default 800px test surface is
-      // WIDE — navigation is the sidebar, not the hamburger. The property
+      // WIDE: navigation is the sidebar, not the hamburger. The property
       // this pins is that two destinations are enough to draw navigation at
       // all (the shell withholds it below two).
       expect(find.byKey(const Key('shellSidebar')), findsOneWidget);
@@ -203,7 +203,7 @@ void main() {
     testWidgets('shows exactly when the domain restriction is relaxed',
         (tester) async {
       // The notice exists so a relaxation cannot be forgotten. Tying the
-      // assertion to the flag is deliberate here — the claim being made is
+      // assertion to the flag is deliberate here: the claim being made is
       // that the two always agree, in whichever state the flag is left.
       await tester.pumpWidget(wrap(const InstitutionalDomainNotice()));
       await tester.pumpAndSettle();
@@ -223,7 +223,7 @@ void main() {
   group('AppTheme', () {
     testWidgets('buttons lay out inside a Row', (tester) async {
       // A Row gives its children unbounded width, so a button theme with
-      // `minimumSize: Size.fromHeight(48)` — which is Size(infinity, 48) —
+      // `minimumSize: Size.fromHeight(48)`, which is Size(infinity, 48),
       // throws "BoxConstraints forces an infinite width" during layout and
       // takes the whole subtree with it. That is what left the nomination
       // inbox rendering as an empty screen while its data was fine: the
@@ -304,7 +304,7 @@ void main() {
         // The design now uses a canvas distinct from the paper surface (a
         // page sits on canvas, cards on paper), so scaffoldBackground is no
         // longer identical to colorScheme.surface. What must hold is that
-        // both are explicitly defined — a half-defined theme is how light
+        // both are explicitly defined: a half-defined theme is how light
         // text lands on a light background.
         expect(theme.scaffoldBackgroundColor, isNotNull);
         expect(theme.colorScheme.surface, isNotNull);
@@ -364,7 +364,7 @@ void main() {
       // this milestone that resemblance was asserted in a doc comment and
       // absent from the screen. If the family ever silently drops back to
       // the platform default, every argument in Chapter IV loses its
-      // referent -- so it is pinned here rather than left to inspection.
+      // referent, so it is pinned here rather than left to inspection.
       final t = AppTheme.light.textTheme;
       expect(t.headlineSmall?.fontFamily, AppTheme.serif);
       expect(t.titleLarge?.fontFamily, AppTheme.serif);
@@ -374,7 +374,7 @@ void main() {
       // 13px reads as small rather than as considered. ThemeData fills any
       // style that leaves fontFamily unset with the platform default (e.g.
       // 'Roboto' on Android) rather than leaving it null, so the assertion
-      // that matters is that these styles never pick up the serif -- not
+      // that matters is that these styles never pick up the serif, not
       // that the field is literally null.
       expect(t.bodyMedium?.fontFamily, isNot(AppTheme.serif));
       expect(t.bodySmall?.fontFamily, isNot(AppTheme.serif));

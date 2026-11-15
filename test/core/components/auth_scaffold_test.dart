@@ -23,8 +23,8 @@ void main() {
 
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.text('form body'), findsOneWidget);
-    // The wide layout adds the route panel — the five desks a thesis passes
-    // through, under its own sentence — beside the form. The narrow band's
+    // The wide layout adds the route panel: the five desks a thesis passes
+    // through, under its own sentence: beside the form. The narrow band's
     // sentence (`brandSentence`) is a different line and is not shown here.
     expect(find.text('Researchers'), findsOneWidget);
     expect(find.text('Every thesis, from nomination to the archive.'), findsOneWidget);
@@ -37,7 +37,7 @@ void main() {
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.text('form body'), findsOneWidget);
     // The narrow band carries the wordmark and the product sentence, but not
-    // the wide route panel — a phone has no room for the five desks.
+    // the wide route panel: a phone has no room for the five desks.
     expect(find.text(AuthScaffold.brandSentence), findsOneWidget);
     expect(find.text('Researchers'), findsNothing);
   });
@@ -50,7 +50,7 @@ void main() {
     expect(find.byType(BrandEmblem), findsOneWidget);
   });
 
-  // D83. The band is inside the scroll view and the Scaffold keeps Flutter's
+  // The band is inside the scroll view and the Scaffold keeps Flutter's
   // default resize behaviour, so a keyboard shrinks the viewport and the band
   // scrolls away rather than eating the space the form needs. This pins the
   // structure that makes that true.
@@ -74,8 +74,8 @@ void main() {
     expect(scaffold.resizeToAvoidBottomInset, anyOf(isNull, isTrue));
   });
 
-  // D82's breakpoint, from both sides. An off-by-one here — `>` where `>=`
-  // was meant — would swap the layout on a whole class of tablet widths and
+  // The breakpoint, from both sides. An off-by-one here: `>` where `>=`
+  // was meant: would swap the layout on a whole class of tablet widths and
   // no other test in this file would notice.
   testWidgets('switches layout exactly at the breakpoint', (tester) async {
     // The route panel (wide-only) is the discriminator: the brand sentence
@@ -87,7 +87,7 @@ void main() {
     expect(find.text('Researchers'), findsOneWidget);
   });
 
-  // D83, and the question this whole design was challenged on: with the
+  // The question this whole design was challenged on: with the
   // keyboard up, can you still see the field you are typing in?
   //
   // Nothing here simulates a keyboard beyond shrinking the viewport, because
@@ -95,8 +95,8 @@ void main() {
   // the framework's: Scaffold shrinks the viewport to the space above the
   // inset, the focused EditableText calls Scrollable.ensureVisible on itself,
   // and the band scrolls away because it is a CHILD of the scroll view rather
-  // than a sibling pinned above it. Break any link — pin the band outside the
-  // scrollable, or set resizeToAvoidBottomInset: false — and this fails.
+  // than a sibling pinned above it. Break any link: pin the band outside the
+  // scrollable, or set resizeToAvoidBottomInset: false, and this fails.
   testWidgets('a focused field stays visible above a keyboard-sized inset',
       (tester) async {
     const inset = 300.0;

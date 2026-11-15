@@ -8,7 +8,7 @@ import 'package:ethesishub/data/models/thesis_status.dart';
 
 /// Where a thesis currently sits, named by the desk it is sitting on.
 ///
-/// This is the one piece of vocabulary the whole system shares — it appears
+/// This is the one piece of vocabulary the whole system shares: it appears
 /// on the student's status screen, in the coordinator's and dean's queues,
 /// and beside each thesis in a list. Everywhere it appears it must say the
 /// same thing, which is why the wording and colour live here and not in each
@@ -32,7 +32,7 @@ class StatusChip extends StatelessWidget {
         ThesisStatus.nominationPendingCoordinator => 'With the Coordinator',
         ThesisStatus.nominationPendingDean => 'With the Dean',
         ThesisStatus.nominationApproved => 'Approved',
-        ThesisStatus.titlePendingDefence => 'Title defence',
+        ThesisStatus.titlePendingDefence => 'Title defense',
         ThesisStatus.titleApproved => 'Title approved',
         ThesisStatus.titleRejected => 'Titles returned',
         ThesisStatus.archived => 'Archived',
@@ -109,30 +109,46 @@ class StatusChip extends StatelessWidget {
 /// thesis vocabulary. Kept here so the words a student reads are decided
 /// in one place rather than per screen.
 class ChapterStatusWords {
-  static String labelFor(ChapterStatus status) => switch (status) {
-        ChapterStatus.submitted => 'With your adviser',
-        ChapterStatus.revise => 'Needs revision',
+  // Each word is said from one of two seats. The student's chapter is "with
+  // your adviser"; the same chapter is, to the adviser, something that
+  // "needs your review". Pass [adviser] for the adviser's side.
+
+  static String labelFor(ChapterStatus status, {bool adviser = false}) =>
+      switch (status) {
+        ChapterStatus.submitted =>
+          adviser ? 'Needs your review' : 'With your adviser',
+        ChapterStatus.revise => adviser ? 'With the group' : 'Needs revision',
         ChapterStatus.approved => 'Approved',
       };
 
-  static String detailFor(ChapterStatus status) => switch (status) {
-        ChapterStatus.submitted =>
-          'Your adviser has this version and has not responded yet.',
-        ChapterStatus.revise =>
-          'Read the feedback, then upload the next version.',
-        ChapterStatus.approved =>
-          'Locked. Only your adviser can reopen it.',
+  static String detailFor(ChapterStatus status, {bool adviser = false}) =>
+      switch (status) {
+        ChapterStatus.submitted => adviser
+            ? 'The group uploaded a version. Review it and leave feedback.'
+            : 'Your adviser has this version and has not responded yet.',
+        ChapterStatus.revise => adviser
+            ? 'Waiting for the group to upload a new version.'
+            : 'Read the feedback, then upload the next version.',
+        ChapterStatus.approved => adviser
+            ? 'Approved and locked. You can reopen it.'
+            : 'Locked. Only your adviser can reopen it.',
       };
 
-  static Tone toneFor(ChapterStatus status) => switch (status) {
-        ChapterStatus.submitted => Tone.awaiting,
-        ChapterStatus.revise => Tone.returned,
+  static Tone toneFor(ChapterStatus status, {bool adviser = false}) =>
+      switch (status) {
+        // Waiting on the adviser is the adviser's cue to act.
+        ChapterStatus.submitted => adviser ? Tone.act : Tone.awaiting,
+        ChapterStatus.revise => adviser ? Tone.awaiting : Tone.returned,
         ChapterStatus.approved => Tone.endorsed,
       };
 
-  static IconData iconFor(ChapterStatus status) => switch (status) {
-        ChapterStatus.submitted => Icons.schedule_outlined,
-        ChapterStatus.revise => Icons.undo_rounded,
+  static IconData iconFor(ChapterStatus status, {bool adviser = false}) =>
+      switch (status) {
+        ChapterStatus.submitted => adviser
+            ? Icons.rate_review_outlined
+            : Icons.schedule_outlined,
+        ChapterStatus.revise =>
+          adviser ? Icons.schedule_outlined : Icons.undo_rounded,
         ChapterStatus.approved => Icons.lock_outline_rounded,
       };
 

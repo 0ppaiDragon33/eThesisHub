@@ -5,7 +5,7 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/features/defence/defence_calendar.dart';
 
 /// The Calendar destination, at '/calendar': every dated defence the reader
-/// is part of -- pre-oral, final and re-defences -- by month. The
+/// is part of (pre-oral, final and re-defences) by month. The
 /// Coordinator and the Dean see every defence in the college.
 ///
 /// Its own place in the sidebar rather than a toggle on Defences, so the
@@ -20,7 +20,7 @@ class CalendarScreen extends StatelessWidget {
       key: Key('calendarScreen'),
       maxWidth: AppTokens.measureWide,
       title: 'Calendar',
-      subtitle: 'Scheduled pre-oral, final and re-defences.',
+      subtitle: 'Scheduled pre-oral, final and redefenses.',
       children: [DefenceCalendar()],
     );
   }

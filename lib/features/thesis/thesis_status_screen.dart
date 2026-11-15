@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/comment_with_time.dart';
 import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
+import 'package:ethesishub/core/widgets/party_popper_header.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/academic_term.dart';
@@ -19,6 +22,7 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
 import 'package:ethesishub/features/dashboard/progress_rail.dart';
 import 'package:ethesishub/features/documents/manuscript_upload.dart';
+import 'package:ethesishub/features/forms/editable/editor_services.dart';
 import 'package:ethesishub/features/forms/form_viewer.dart';
 import 'package:ethesishub/features/thesis/change_request_tracker.dart';
 import 'package:ethesishub/features/titles/consolidated_comments.dart';
@@ -31,10 +35,11 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
 /// Shows the student leader where their thesis nomination stands: the
-/// current stage, each nominee's Conforme state, and — once approved — a
-/// Form 1 download. Saving/sharing goes through the `printing` package
-/// rather than `dart:io`, which this app never imports anywhere: the app
-/// targets both Android and Web, and `dart:io` is unavailable on Web.
+/// current stage, each nominee's Conforme state, and (once approved) a
+/// Form 1 preview with a download option. Saving/sharing goes through the
+/// `printing` package rather than `dart:io`, which this app never imports
+/// anywhere: the app targets both Android and Web, and `dart:io` is
+/// unavailable on Web.
 ///
 /// Re-nomination gap: a decline is surfaced here with its reason, but no
 /// "re-nominate" action is offered. `submitNominations`'s batch create (and
@@ -43,12 +48,12 @@ import 'package:ethesishub/providers/title_providers.dart';
 /// (`mayCreateNomination()`/the `nominations/{nomineeUid}` delete rule both
 /// require `thesisData(thesisId).status == 'draft'`), and there is no rule
 /// branch that lets the leader move the thesis document itself back from
-/// `nominationPendingConforme` to `draft` — the leader's `update` branch on
+/// `nominationPendingConforme` to `draft`: the leader's `update` branch on
 /// `theses/{thesisId}` only permits the single forward step `draft ->
 /// nominationPendingConforme`, gated on the *current* status already being
 /// `draft`. Reopening that transition safely needs its own guard (an audit
 /// record, a status the leader cannot reach unilaterally, or coordinator
-/// involvement) — the rules file's own comment on the nominations `delete`
+/// involvement): the rules file's own comment on the nominations `delete`
 /// rule warns against solving this by simply dropping the `draft` pin that
 /// closed the decline-laundering hole, and that is exactly what an
 /// unguarded revert-to-draft would do. Shipping a "re-nominate" button under
@@ -58,42 +63,91 @@ import 'package:ethesishub/providers/title_providers.dart';
 class ThesisStatusScreen extends ConsumerWidget {
   const ThesisStatusScreen({super.key});
 
-  /// Delegates to [StatusChip], the single shared status vocabulary — a
+  /// Delegates to [StatusChip], the single shared status vocabulary: a
   /// second switch here previously drifted from it ("Waiting for the Dean"
   /// against "With the Dean", "Nomination approved" against "Approved").
   static String label(ThesisStatus s) => StatusChip.labelFor(s);
 
-  Future<void> _download(
-      WidgetRef ref, Thesis thesis, List<Nomination> nominations) async {
-    final leader =
-        await ref.read(userRepositoryProvider).fetchUser(thesis.leaderUid);
+  /// Builds Form 1 and returns its bytes. The preview and the download both
+  /// read the same bytes, so the copy the student saves is the one they read.
+  Future<Uint8List> _buildForm1Bytes(
+    WidgetRef ref,
+    Thesis thesis,
+    List<Nomination> nominations,
+  ) async {
+    final leader = await ref
+        .read(userRepositoryProvider)
+        .fetchUser(thesis.leaderUid);
+
+    // The researchers' names on Form 1 must read the same here as for the
+    // adviser, the panel, the Coordinator and the Dean. They cannot read the
+    // leader's profile, only the name stored on the thesis, so the stored
+    // name is brought level with the profile before the form is built,
+    // otherwise a leader who changed their name, or whose thesis predates
+    // the field, prints one name here and another on the faculty side until
+    // the background sync next runs. The members' names are stored on the
+    // thesis and read identically by everyone.
+    final profileName = leader?.fullName.trim() ?? '';
+    if (profileName.isNotEmpty && thesis.leaderName != profileName) {
+      try {
+        await ref
+            .read(thesisRepositoryProvider)
+            .setLeaderDetails(
+              thesis.id,
+              name: profileName,
+              specialization: leader?.specialization?.trim() ?? '',
+              section: leader?.section?.trim() ?? '',
+            );
+      } catch (_) {
+        // A refused write only leaves the faculty side on the stored name;
+        // the form below still prints the profile name.
+      }
+    }
 
     // Form 1 is printed and handed to the Dean, so the two signatory names on
     // it must not come out blank.
     //
     // `Form1Data._nameFor` falls back to the thesis's own ex-officio
-    // nominations, and usually that is enough — every coordinator and the dean
+    // nominations, and usually that is enough: every coordinator and the dean
     // holding a directory entry at submission time gets an ex-officio seat on
     // the thesis. But the fallback is not sufficient in the real cases the
-    // fallback exists for: a coordinator promoted AFTER this thesis's
+    // fallback exists for: a coordinator promoted after this thesis's
     // nominations went out has no seat on it and would print blank, as would
     // one who had not yet signed in (and so had no directory entry) when the
-    // roster was fixed. The roster cannot be amended afterwards — creates are
-    // pinned to `draft` — so nothing recovers the name later.
+    // roster was fixed. The roster cannot be amended afterwards: creates are
+    // pinned to `draft`, so nothing recovers the name later.
     //
     // This was passed `const {}`, which made the directory branch dead and
     // left both names resting entirely on that fallback. Resolving the two
     // uids against the live directory here is one read each, only on the
-    // download path, and `facultyDirectory` is readable by any verified user.
+    // preview/download path, and `facultyDirectory` is readable by any
+    // verified user.
     // The signatory names are resolved against the live directory inside
     // buildForm1For, shared with the signers' "View Form 1".
-    final bytes = await buildForm1For(
+    return buildForm1For(
       thesis: thesis,
       nominations: nominations,
       directory: ref.read(facultyDirectoryRepositoryProvider),
-      leaderName: leader?.fullName,
+      leaderName: profileName.isEmpty ? thesis.leaderName : profileName,
     );
-    await Printing.sharePdf(bytes: bytes, filename: 'Form1-${thesis.id}.pdf');
+  }
+
+  /// Opens Form 1 in a full-screen preview. Download lives on the preview.
+  Future<void> _openForm1(
+    BuildContext context,
+    WidgetRef ref,
+    Thesis thesis,
+    List<Nomination> nominations,
+  ) async {
+    final bytes = _buildForm1Bytes(ref, thesis, nominations);
+    if (!context.mounted) return;
+    // Not awaited: the preview is a screen the reader leaves when they like.
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      builder: (_) =>
+          _Form1Preview(bytes: bytes, filename: 'Form1-${thesis.id}.pdf'),
+    );
   }
 
   @override
@@ -109,20 +163,23 @@ class ThesisStatusScreen extends ConsumerWidget {
           maxWidth: AppTokens.measureWide,
           children: [LoadingState.page(label: 'Loading your thesis…')],
         ),
-        error: (e, _) => PageShell(children: [
-          ErrorState(
-            error: e,
-            message: 'Could not load your thesis.',
-            onRetry: () => ref.invalidate(myThesisProvider),
-          ),
-        ]),
+        error: (e, _) => PageShell(
+          children: [
+            ErrorState(
+              error: e,
+              message: 'Could not load your thesis.',
+              onRetry: () => ref.invalidate(myThesisProvider),
+            ),
+          ],
+        ),
         data: (thesis) {
           if (thesis == null) {
             // The in-app door to '/thesis/create' lives here, on the
             // destination a student without a group reaches first.
             return PageShell(
               title: 'My thesis',
-              subtitle: 'Your group\'s workspace appears here once it '
+              subtitle:
+                  'Your group\'s workspace appears here once it '
                   'exists.',
               children: [
                 EmptyState(
@@ -142,16 +199,116 @@ class ThesisStatusScreen extends ConsumerWidget {
             stream: ref
                 .read(thesisRepositoryProvider)
                 .watchNominations(thesis.id),
-            builder: (context, snap) => FadeIn(child: _Workspace(
-              thesis: thesis,
-              nominations: snap.data ?? const <Nomination>[],
-              nominationsLoading: !snap.hasData && !snap.hasError,
-              nominationsError: snap.error,
-              onDownloadForm1: () =>
-                  _download(ref, thesis, snap.data ?? const []),
-            )),
+            builder: (context, snap) => FadeIn(
+              child: _Workspace(
+                thesis: thesis,
+                nominations: snap.data ?? const <Nomination>[],
+                nominationsLoading: !snap.hasData && !snap.hasError,
+                nominationsError: snap.error,
+                onDownloadForm1: () =>
+                    _openForm1(context, ref, thesis, snap.data ?? const []),
+              ),
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Full-screen Form 1 preview with a Download button, laid out like the
+/// stored-document viewer so a form and a manuscript behave the same way.
+class _Form1Preview extends ConsumerStatefulWidget {
+  const _Form1Preview({required this.bytes, required this.filename});
+
+  final Future<Uint8List> bytes;
+  final String filename;
+
+  @override
+  ConsumerState<_Form1Preview> createState() => _Form1PreviewState();
+}
+
+class _Form1PreviewState extends ConsumerState<_Form1Preview> {
+  bool _saving = false;
+  String? _error;
+
+  // A method tear-off, so the preview gets the same function on every
+  // rebuild; a fresh closure would make it draw the pages again each time
+  // the Download button redraws.
+  Future<Uint8List> _source() => widget.bytes;
+
+  Future<void> _download() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await Printing.sharePdf(
+        bytes: await widget.bytes,
+        filename: widget.filename,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not save a copy.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = ref.watch(formPreviewBuilderProvider);
+    final text = Theme.of(context).textTheme;
+    return Dialog.fullscreen(
+      key: const Key('form1Preview'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppTokens.xs,
+              AppTokens.xs,
+              AppTokens.md,
+              AppTokens.xs,
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  key: const Key('closeForm1Preview'),
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+                const SizedBox(width: AppTokens.xs),
+                Expanded(
+                  child: Text(
+                    'Form 1',
+                    style: text.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_error != null) ...[
+                  Flexible(
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppTokens.sm),
+                ],
+                OutlinedButton.icon(
+                  key: const Key('downloadForm1Preview'),
+                  onPressed: _saving ? null : _download,
+                  icon: const Icon(Icons.download_outlined, size: 18),
+                  label: Text(_saving ? 'Saving…' : 'Download'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(child: preview(_source)),
+        ],
       ),
     );
   }
@@ -199,9 +356,10 @@ class _Workspace extends ConsumerWidget {
               textKey: const Key('statusLabel'),
             ),
             Text(
-              [thesis.college, thesis.program]
-                  .where((s) => s.isNotEmpty)
-                  .join(', '),
+              [
+                thesis.college,
+                thesis.program,
+              ].where((s) => s.isNotEmpty).join(', '),
               style: text.bodySmall,
             ),
           ],
@@ -236,11 +394,7 @@ class _Workspace extends ConsumerWidget {
               if (thesis.status != ThesisStatus.archived) ...[
                 const Gap.md(),
                 Text(
-                  'Now: ${ProgressRail.describe(ProgressRail.stageFor(
-                    status: thesis.status,
-                    defences: defences,
-                    chapters: chapters,
-                  ))}.',
+                  'Now: ${ProgressRail.describe(ProgressRail.stageFor(status: thesis.status, defences: defences, chapters: chapters))}.',
                   style: text.bodySmall,
                 ),
               ],
@@ -250,8 +404,13 @@ class _Workspace extends ConsumerWidget {
         const Gap.lg(),
         SplitColumns(
           primary: [
-            _NextAction(thesis: thesis, nominations: nominations,
-                onDownloadForm1: onDownloadForm1),
+            if (thesis.status == ThesisStatus.archived)
+              _ArchivedCelebration(thesis: thesis),
+            _NextAction(
+              thesis: thesis,
+              nominations: nominations,
+              onDownloadForm1: onDownloadForm1,
+            ),
             _ChangeRequestActions(thesis: thesis),
             ChangeRequestTracker(thesisId: thesis.id, thesis: thesis),
             if (thesis.status == ThesisStatus.titleApproved &&
@@ -264,8 +423,8 @@ class _Workspace extends ConsumerWidget {
             if (thesis.titleDecidedAt != null)
               Panel(
                 title: 'Panel comments',
-                subtitle: 'Round ${thesis.titleRound}, grouped by candidate and '
-                    'panel member',
+                subtitle:
+                    'Round ${thesis.titleRound}',
                 icon: Icons.forum_outlined,
                 child: _ConsolidatedComments(
                   thesisId: thesis.id,
@@ -305,12 +464,14 @@ class _Workspace extends ConsumerWidget {
                     ),
                   _TermFacts(thesis: thesis),
                   FactLine(
-                      label: 'Group created',
-                      value: Dates.day(thesis.createdAt)),
+                    label: 'Group created',
+                    value: Dates.day(thesis.createdAt),
+                  ),
                   if (thesis.titleRound > 0)
                     FactLine(
-                        label: 'Title round',
-                        value: '${thesis.titleRound}'),
+                      label: 'Title round',
+                      value: '${thesis.titleRound}',
+                    ),
                 ],
               ),
             ),
@@ -337,8 +498,9 @@ class _NextAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
-    final anyDeclined =
-        nominations.any((n) => n.conformeStatus == ConformeStatus.declined);
+    final anyDeclined = nominations.any(
+      (n) => n.conformeStatus == ConformeStatus.declined,
+    );
     final stalledByDecline =
         thesis.status == ThesisStatus.nominationPendingConforme && anyDeclined;
 
@@ -355,16 +517,18 @@ class _NextAction extends StatelessWidget {
         FilledButton.icon(
           key: const Key('goToSubmitTitles'),
           icon: const Icon(Icons.edit_document, size: 18),
-          label: Text(thesis.status == ThesisStatus.titleRejected
-              ? 'Resubmit candidate titles'
-              : 'Submit candidate titles'),
+          label: Text(
+            thesis.status == ThesisStatus.titleRejected
+                ? 'Resubmit candidate titles'
+                : 'Submit candidate titles',
+          ),
           onPressed: () => context.go('/thesis/titles?id=${thesis.id}'),
         ),
       if (thesis.status == ThesisStatus.nominationApproved)
         OutlinedButton.icon(
           key: const Key('downloadForm1'),
-          icon: const Icon(Icons.download, size: 18),
-          label: const Text('Download Form 1'),
+          icon: const Icon(Icons.visibility_outlined, size: 18),
+          label: const Text('View Form 1'),
           onPressed: onDownloadForm1,
         ),
       // The Dean's title approval unlocks chapter uploads.
@@ -391,7 +555,8 @@ class _NextAction extends StatelessWidget {
             // reopen a thesis (see the class note on ThesisStatusScreen).
             ErrorState(
               key: const Key('reNominationGap'),
-              message: 'A nominee declined. Ask the Research Coordinator to '
+              message:
+                  'A nominee declined. Ask the Research Coordinator to '
                   'reopen this thesis.',
             ),
           ],
@@ -401,11 +566,10 @@ class _NextAction extends StatelessWidget {
             const Gap.md(),
             ErrorState(
               key: const Key('nominationReturned'),
-              message: 'Returned by the '
+              message:
+                  'Returned by the '
                   '${thesis.nominationReturnedRole == 'dean' ? 'Dean' : 'Research Coordinator'}: '
-                  '${thesis.nominationReturnReason}. Choose your adviser and '
-                  'panel again; everyone you nominate is asked to accept '
-                  'again.',
+                  '${thesis.nominationReturnReason}. Choose your adviser and panel again.',
             ),
           ],
           // The student cannot fix what they cannot read, so the remark
@@ -414,7 +578,8 @@ class _NextAction extends StatelessWidget {
               (thesis.titleRejectionRemark ?? '').isNotEmpty) ...[
             const Gap.md(),
             ErrorState(
-              message: 'This set was rejected: '
+              message:
+                  'This set was rejected: '
                   '${thesis.titleRejectionRemark}',
             ),
           ],
@@ -427,8 +592,10 @@ class _NextAction extends StatelessWidget {
             ),
           ] else if (!stalledByDecline) ...[
             const Gap.sm(),
-            Text('Nothing for your group to do right now.',
-                style: text.bodySmall?.copyWith(color: p.muted)),
+            Text(
+              'Nothing for your group to do right now.',
+              style: text.bodySmall?.copyWith(color: p.muted),
+            ),
           ],
         ],
       ),
@@ -437,8 +604,8 @@ class _NextAction extends StatelessWidget {
 }
 
 /// The two buttons that open the change-of-adviser / change-of-title
-/// request forms (spec 2026-09-25). Leader-only, and gated per-kind on
-/// [canRequestAdviserChange] / [canRequestTitleChange] -- the finer
+/// request forms. Leader-only, and gated per-kind on
+/// [canRequestAdviserChange] / [canRequestTitleChange]: the finer
 /// defence-state eligibility the security rules do not themselves check
 /// (they only gate on `status == 'titleApproved'` and leader identity).
 /// Renders nothing at all for a non-leader, or once neither kind of change
@@ -451,7 +618,8 @@ class _ChangeRequestActions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(currentUserProvider).valueOrNull;
-    if (me == null || me.uid != thesis.leaderUid) return const SizedBox.shrink();
+    if (me == null || me.uid != thesis.leaderUid)
+      return const SizedBox.shrink();
 
     final defences = ref.watch(myDefencesProvider).valueOrNull ?? const [];
     final canAdviser = canRequestAdviserChange(thesis, defences);
@@ -500,18 +668,19 @@ class _PeoplePanel extends StatelessWidget {
   final Object? error;
 
   static String positionLabel(NominationPosition p) => switch (p) {
-        NominationPosition.adviser => 'Adviser',
-        NominationPosition.panelist => 'Panel member',
-        NominationPosition.coordinator => 'Research Coordinator',
-        NominationPosition.dean => 'Dean',
-      };
+    NominationPosition.adviser => 'Adviser',
+    NominationPosition.panelist => 'Panel member',
+    NominationPosition.coordinator => 'Research Coordinator',
+    NominationPosition.dean => 'Dean',
+  };
 
   /// The nominee's position, with the decline reason appended when they
-  /// declined and gave one — so the leader reads it in the row, not only in
+  /// declined and gave one, so the leader reads it in the row, not only in
   /// the badge's tooltip.
   static String _nomineeSubtitle(Nomination n) {
-    final base =
-        n.exOfficio ? '${positionLabel(n.position)}, ex officio' : positionLabel(n.position);
+    final base = n.exOfficio
+        ? '${positionLabel(n.position)}, designated member'
+        : positionLabel(n.position);
     final reason = n.declineReason;
     if (n.conformeStatus == ConformeStatus.declined &&
         reason != null &&
@@ -531,26 +700,26 @@ class _PeoplePanel extends StatelessWidget {
       child: loading
           ? const LoadingState()
           : error != null
-              ? ErrorState(error: error, message: 'Could not load nominees.')
-              : sorted.isEmpty
-                  ? Text(
-                      'No one nominated yet.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    )
-                  : Column(
-                      children: [
-                        for (final n in sorted)
-                          PersonLine(
-                            name: n.nomineeName,
-                            // A decline is surfaced here WITH its reason (see
-                            // the class doc): the reason rides the subtitle so
-                            // the leader can read why without hunting for a
-                            // tooltip. The badge still carries "Declined".
-                            role: _nomineeSubtitle(n),
-                            trailing: _ConformeBadge(n: n),
-                          ),
-                      ],
-                    ),
+          ? ErrorState(error: error, message: 'Could not load nominees.')
+          : sorted.isEmpty
+          ? Text(
+              'No one nominated yet.',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          : Column(
+              children: [
+                for (final n in sorted)
+                  PersonLine(
+                    name: n.nomineeName,
+                    // A decline is surfaced here WITH its reason (see
+                    // the class doc): the reason rides the subtitle so
+                    // the leader can read why without hunting for a
+                    // tooltip. The badge still carries "Declined".
+                    role: _nomineeSubtitle(n),
+                    trailing: _ConformeBadge(n: n),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -565,7 +734,7 @@ class _ConformeBadge extends StatelessWidget {
     final (label, tone) = switch (n.conformeStatus) {
       ConformeStatus.accepted => ('Accepted', Tone.endorsed),
       ConformeStatus.declined => ('Declined', Tone.returned),
-      ConformeStatus.exOfficio => ('Ex officio', Tone.neutral),
+      ConformeStatus.exOfficio => ('Designated member', Tone.neutral),
       ConformeStatus.pending => ('Pending', Tone.awaiting),
     };
     final badge = ToneBadge(
@@ -592,7 +761,8 @@ class _DocumentsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final approvedOnward = thesis.deanApprovedAt != null ||
+    final approvedOnward =
+        thesis.deanApprovedAt != null ||
         thesis.status == ThesisStatus.nominationApproved;
     final rows = <Widget>[
       if (approvedOnward)
@@ -600,17 +770,21 @@ class _DocumentsPanel extends ConsumerWidget {
           icon: Icons.picture_as_pdf_outlined,
           title: 'Form 1',
           detail: 'Nomination of adviser and panel',
-          action: 'Download',
+          action: 'Preview',
           onTap: onDownloadForm1,
         ),
       if ((thesis.presentationPath ?? '').isNotEmpty)
         _DocRow(
           icon: Icons.slideshow_outlined,
-          title: 'Title defence presentation',
+          title: 'Title defense presentation',
           detail: 'Submitted with your candidate titles',
           action: 'Open',
-          onTap: () => openStoredDocument(context, ref, thesis.presentationPath!,
-              label: 'the title defence presentation'),
+          onTap: () => openStoredDocument(
+            context,
+            ref,
+            thesis.presentationPath!,
+            label: 'the title defense presentation',
+          ),
         ),
       if (thesis.hasManuscript)
         _DocRow(
@@ -620,8 +794,12 @@ class _DocumentsPanel extends ConsumerWidget {
               ? 'Submitted'
               : 'Submitted ${Dates.day(thesis.manuscriptUploadedAt!)}',
           action: 'Open',
-          onTap: () => openStoredDocument(context, ref, thesis.manuscriptPath!,
-              label: 'the final manuscript'),
+          onTap: () => openStoredDocument(
+            context,
+            ref,
+            thesis.manuscriptPath!,
+            label: 'the final manuscript',
+          ),
         ),
     ];
     return Panel(
@@ -634,7 +812,7 @@ class _DocumentsPanel extends ConsumerWidget {
       ),
       child: rows.isEmpty
           ? Text(
-              'Your forms and files appear here as each stage is completed.',
+              'No documents yet.',
               style: Theme.of(context).textTheme.bodySmall,
             )
           : Column(children: rows),
@@ -663,7 +841,11 @@ class _DocRow extends StatelessWidget {
     final p = Palette.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(
-          AppTokens.lg - 4, AppTokens.sm + 2, AppTokens.sm, AppTokens.sm + 2),
+        AppTokens.lg - 4,
+        AppTokens.sm + 2,
+        AppTokens.sm,
+        AppTokens.sm + 2,
+      ),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: p.rule)),
       ),
@@ -794,8 +976,11 @@ class _History extends StatelessWidget {
                               .withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(events[i].icon,
-                            size: 16, color: events[i].tone.color(context)),
+                        child: Icon(
+                          events[i].icon,
+                          size: 16,
+                          color: events[i].tone.color(context),
+                        ),
                       ),
                       if (i < events.length - 1)
                         Expanded(child: Container(width: 1.5, color: p.rule)),
@@ -805,14 +990,17 @@ class _History extends StatelessWidget {
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(
-                          top: 5,
-                          bottom: i < events.length - 1 ? AppTokens.md : 0),
+                        top: 5,
+                        bottom: i < events.length - 1 ? AppTokens.md : 0,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(events[i].what, style: text.labelLarge),
-                          Text(Dates.dayTime(events[i].at),
-                              style: text.bodySmall),
+                          Text(
+                            Dates.dayTime(events[i].at),
+                            style: text.bodySmall,
+                          ),
                         ],
                       ),
                     ),
@@ -847,18 +1035,18 @@ class _ApprovedTitle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final changed =
-        changedTitle?.isNotEmpty == true ? changedTitle : null;
+    final changed = changedTitle?.isNotEmpty == true ? changedTitle : null;
     final candidatesAsync = ref.watch(candidateTitlesProvider(thesisId));
     final candidates = candidatesAsync.valueOrNull;
 
     // Loading and "the document is gone" are kept apart, the same way every
     // other branch on this screen is: telling a student their approved title
-    // no longer exists while it is still loading is the M1a bug.
+    // no longer exists while it is still loading is the nomination bug.
     if (changed == null && candidatesAsync.isLoading) {
       return const LoadingState(label: 'Loading your approved title…');
     }
-    final approved = changed ??
+    final approved =
+        changed ??
         candidates
             ?.where((c) => c.id == approvedTitleId)
             .map((c) => c.titleText)
@@ -876,11 +1064,12 @@ class _ApprovedTitle extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Approved title',
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelMedium
-                        ?.copyWith(color: c)),
+                Text(
+                  'Approved title',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: c),
+                ),
                 const SizedBox(height: AppTokens.xs),
                 Text(
                   approved ?? 'The approved title could not be found.',
@@ -896,11 +1085,11 @@ class _ApprovedTitle extends ConsumerWidget {
   }
 }
 
-/// The panel's remarks, consolidated per commenter under each candidate —
+/// The panel's remarks, consolidated per commenter under each candidate,
 /// what the student reads once the Dean has recorded a decision. Shown as a
 /// separate widget because it needs its own two live streams
 /// (`candidateTitlesProvider`, `titleCommentsProvider`), watched only once a
-/// decision exists — most statuses never render this at all.
+/// decision exists: most statuses never render this at all.
 class _ConsolidatedComments extends ConsumerWidget {
   const _ConsolidatedComments({
     required this.thesisId,
@@ -949,6 +1138,7 @@ class _ConsolidatedComments extends ConsumerWidget {
       if (c.candidate.id == approvedTitleId) return 0;
       return c.blocks.isEmpty ? 2 : 1;
     }
+
     numbered.sort((a, b) {
       final r = rank(a.item).compareTo(rank(b.item));
       return r != 0 ? r : a.number.compareTo(b.number);
@@ -958,8 +1148,10 @@ class _ConsolidatedComments extends ConsumerWidget {
     final silent = numbered.where((n) => n.item.blocks.isEmpty).toList();
 
     if (numbered.isEmpty) {
-      return Text('No candidate titles for this round.',
-          style: Theme.of(context).textTheme.bodySmall);
+      return Text(
+        'No candidate titles for this round.',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
     }
 
     return Column(
@@ -975,10 +1167,7 @@ class _ConsolidatedComments extends ConsumerWidget {
           const Gap.md(),
         ],
         if (silent.isNotEmpty)
-          _SilentCandidates(
-            entries: silent,
-            approvedTitleId: approvedTitleId,
-          ),
+          _SilentCandidates(entries: silent, approvedTitleId: approvedTitleId),
       ],
     );
   }
@@ -1001,8 +1190,10 @@ class _CandidateRemarks extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     final accent = approved ? Tone.endorsed.color(context) : p.seal;
-    final remarkCount =
-        candidate.blocks.fold<int>(0, (a, b) => a + b.bodies.length);
+    final remarkCount = candidate.blocks.fold<int>(
+      0,
+      (a, b) => a + b.bodies.length,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1018,7 +1209,11 @@ class _CandidateRemarks extends StatelessWidget {
           // Candidate header.
           Padding(
             padding: const EdgeInsets.fromLTRB(
-                AppTokens.md, AppTokens.md, AppTokens.md, AppTokens.sm + 2),
+              AppTokens.md,
+              AppTokens.md,
+              AppTokens.md,
+              AppTokens.sm + 2,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1030,16 +1225,20 @@ class _CandidateRemarks extends StatelessWidget {
                     color: accent.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('$number',
-                      style: text.labelLarge?.copyWith(color: accent)),
+                  child: Text(
+                    '$number',
+                    style: text.labelLarge?.copyWith(color: accent),
+                  ),
                 ),
                 const SizedBox(width: AppTokens.md - 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(candidate.candidate.titleText,
-                          style: text.titleMedium),
+                      Text(
+                        candidate.candidate.titleText,
+                        style: text.titleMedium,
+                      ),
                       const SizedBox(height: AppTokens.xs),
                       Wrap(
                         spacing: AppTokens.sm,
@@ -1095,7 +1294,8 @@ class _CommenterBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
-    final sameWord = block.authorName.trim().toLowerCase() ==
+    final sameWord =
+        block.authorName.trim().toLowerCase() ==
         block.authorRole.trim().toLowerCase();
 
     return Row(
@@ -1130,7 +1330,9 @@ class _CommenterBlock extends StatelessWidget {
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: AppTokens.xs + 2),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppTokens.md - 4, vertical: AppTokens.sm),
+                    horizontal: AppTokens.md - 4,
+                    vertical: AppTokens.sm,
+                  ),
                   decoration: BoxDecoration(
                     color: p.canvas,
                     borderRadius: const BorderRadius.only(
@@ -1192,12 +1394,16 @@ class _SilentCandidates extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 30,
-                    child: Text('${e.number}.',
-                        style: text.labelMedium?.copyWith(color: p.muted)),
+                    child: Text(
+                      '${e.number}.',
+                      style: text.labelMedium?.copyWith(color: p.muted),
+                    ),
                   ),
                   Expanded(
-                    child: Text(e.item.candidate.titleText,
-                        style: text.bodyMedium?.copyWith(color: p.muted)),
+                    child: Text(
+                      e.item.candidate.titleText,
+                      style: text.bodyMedium?.copyWith(color: p.muted),
+                    ),
                   ),
                   if (e.item.candidate.id == approvedTitleId)
                     const ToneBadge(
@@ -1231,9 +1437,10 @@ class _TermFacts extends ConsumerWidget {
     if (!started.isValid) {
       return FactLine(
         label: 'Term',
-        value: [thesis.semester, thesis.academicYear]
-            .where((s) => s.isNotEmpty)
-            .join(', '),
+        value: [
+          thesis.semester,
+          thesis.academicYear,
+        ].where((s) => s.isNotEmpty).join(', '),
       );
     }
     final now = ref.watch(currentTermProvider).valueOrNull;
@@ -1242,7 +1449,8 @@ class _TermFacts extends ConsumerWidget {
       return level == null ? t.short : '${yearLevelLabel(level)} · ${t.short}';
     }
 
-    final showNow = now != null &&
+    final showNow =
+        now != null &&
         now.isValid &&
         now != started &&
         (now.index ?? 0) > (started.index ?? 0);
@@ -1261,6 +1469,117 @@ class _TermFacts extends ConsumerWidget {
             value: describe(now),
           ),
       ],
+    );
+  }
+}
+
+/// Congratulations once the thesis is archived: a banner, and a dialog
+/// the first time the page is opened in a session.
+class _ArchivedCelebration extends StatefulWidget {
+  const _ArchivedCelebration({required this.thesis});
+
+  final Thesis thesis;
+
+  // Per app session, so reopening the screen does not replay the dialog.
+  static final Set<String> _celebrated = {};
+
+  @override
+  State<_ArchivedCelebration> createState() => _ArchivedCelebrationState();
+}
+
+class _ArchivedCelebrationState extends State<_ArchivedCelebration> {
+  String get _title {
+    final changed = widget.thesis.approvedTitleText;
+    return (changed != null && changed.isNotEmpty)
+        ? changed
+        : widget.thesis.workingTitle;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (_ArchivedCelebration._celebrated.add(widget.thesis.id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            key: const Key('archivedCongratsDialog'),
+            // Two party poppers burst confetti either side of the trophy.
+            icon: PartyPopperHeader(
+              key: const Key('archivedCongratsPoppers'),
+              center: Icon(Icons.emoji_events_rounded,
+                  size: 52, color: Tone.endorsed.color(dialogContext)),
+            ),
+            title: const Text('Congratulations!'),
+            content: Text(
+              'Your thesis "$_title" is approved and archived.',
+              textAlign: TextAlign.center,
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+              FilledButton(
+                key: const Key('archivedCongratsView'),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  context.push('/archive/${widget.thesis.id}');
+                },
+                child: const Text('View in the archive'),
+              ),
+            ],
+          ),
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final accent = Tone.endorsed.color(context);
+    return Panel(
+      key: const Key('archivedCelebration'),
+      emphasis: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.emoji_events_rounded, size: 32, color: accent),
+          ),
+          const SizedBox(width: AppTokens.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Congratulations!', style: text.headlineSmall),
+                const SizedBox(height: AppTokens.xs),
+                Text(
+                  'Your thesis "$_title" is approved and archived.',
+                  style: text.bodyLarge,
+                ),
+                const SizedBox(height: AppTokens.md),
+                FilledButton.icon(
+                  key: const Key('viewInArchive'),
+                  onPressed: () =>
+                      context.push('/archive/${widget.thesis.id}'),
+                  icon: const Icon(Icons.menu_book_outlined, size: 18),
+                  label: const Text('View in the archive'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -15,7 +15,7 @@ import 'package:ethesishub/providers/academic_term_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// A name for a uid, resolved from `users/{uid}` -- the same document
+/// A name for a uid, resolved from `users/{uid}`: the same document
 /// `thesis_status_screen.dart`'s Form 1 download resolves a leader's name
 /// from, and the same one `student_overview.dart` resolves an adviser's
 /// name from (there, via the faculty directory; here, via the profile
@@ -35,7 +35,7 @@ final _userNameProvider = FutureProvider.family<String, String?>((ref, uid) asyn
       ThesisStatus.nominationPendingDean =>
         (label: 'Review', route: '/review'),
       ThesisStatus.titlePendingDefence =>
-        (label: 'Title defence', route: '/defence/${t.id}'),
+        (label: 'Title defense', route: '/defence/${t.id}'),
       ThesisStatus.titleApproved =>
         (label: 'Chapters', route: '/thesis/chapters?id=${t.id}'),
       ThesisStatus.archived =>
@@ -55,7 +55,7 @@ String yearSectionFor(Thesis t, AcademicTerm? now) {
 }
 
 /// Every thesis in the college: searchable, filterable by stage, with a
-/// contextual action per row. Coordinator and dean only — it watches
+/// contextual action per row. Coordinator and dean only: it watches
 /// [allThesesProvider] directly.
 ///
 /// [filter] lets a host (the pipeline bar) drive the stage filter.

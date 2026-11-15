@@ -18,7 +18,7 @@ typedef DocumentPicker = Future<PickedDocument?> Function({
 Future<PickedDocument?> realPicker({required Set<String> allowed}) async {
   // `allowed` used to be accepted and dropped on the floor, so the OS dialog
   // offered every file on the machine and the student learned their .zip was
-  // wrong only after picking it. `validateDocument` still runs afterwards --
+  // wrong only after picking it. `validateDocument` still runs afterwards,
   // this narrows the dialog, it does not replace the check.
   final result = await FilePicker.platform.pickFiles(
     withData: true,
@@ -57,17 +57,22 @@ class PickedDocument {
 const kJustificationTypes = {'pdf', 'doc', 'docx'};
 const kJustificationMaxBytes = 10 * 1024 * 1024;
 
-const kPresentationTypes = {'pptx', 'ppt', 'pdf'};
+/// A presentation is normally slides, but a PDF or a Word file is accepted
+/// too: a group that wrote its title defence as a document should not have to
+/// convert it first. None of these is drawn in the app; the panel downloads
+/// the file from the viewer.
+const kPresentationTypes = {'pptx', 'ppt', 'pdf', 'docx', 'doc'};
 const kPresentationMaxBytes = 25 * 1024 * 1024;
 
-/// PDF only (spec 2026-09-26): the defence room draws each approved chapter
-/// as pages, and a Word file cannot be drawn in the app. A chapter carries
-/// figures and tables, so the size cap is above M1b's 10 MB justification
-/// limit and below the bucket's 50 MB ceiling.
-const kChapterTypes = {'pdf'};
+/// PDF or Word. The defence room draws each approved PDF chapter as pages;
+/// a Word chapter cannot be drawn in the app, so there it shows a placeholder
+/// with an Open file button instead (see `manuscript_plan.dart`). A chapter
+/// carries figures and tables, so the size cap is above title defence's 10 MB
+/// justification limit and below the bucket's 50 MB ceiling.
+const kChapterTypes = {'pdf', 'docx', 'doc'};
 const kChapterMaxBytes = 15 * 1024 * 1024;
 
-/// What My files accepts: documents, slides and photos (spec §6.3).
+/// What My files accepts: documents, slides and photos.
 const kPersonalFileTypes = {
   'pdf', 'doc', 'docx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg',
 };
@@ -78,7 +83,7 @@ const kPersonalFileMaxBytes = 25 * 1024 * 1024;
 /// The MIME type a stored object should carry, from its extension.
 ///
 /// Everything used to be uploaded as `application/octet-stream`, which tells
-/// a browser only "unknown binary" — so the download links on the title
+/// a browser only "unknown binary", so the download links on the title
 /// defence screen would force a save dialog instead of opening the PDF the
 /// panel is trying to read mid-defence. `octet-stream` remains the fallback
 /// for anything unrecognised, which is the honest answer for a file whose
@@ -107,7 +112,7 @@ String contentTypeFor(String extension) {
 // and the college; an extension check alone accepts a renamed executable or
 // a corrupt file that only fails when someone tries to open it in the room.
 const _pdfSig = [0x25, 0x50, 0x44, 0x46]; // "%PDF"
-const _zipSig = [0x50, 0x4B, 0x03, 0x04]; // "PK\x03\x04" — docx/pptx are zips
+const _zipSig = [0x50, 0x4B, 0x03, 0x04]; // "PK\x03\x04": docx/pptx are zips
 const _oleSig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]; // legacy Office
 const _pngSig = [0x89, 0x50, 0x4E, 0x47]; // "\x89PNG"
 const _jpegSig = [0xFF, 0xD8, 0xFF]; // JPEG start-of-image marker
@@ -141,8 +146,11 @@ String? validateDocument(
 }) {
   final ext = file.extension.toLowerCase();
   if (!allowed.contains(ext)) {
-    final names = allowed.map((e) => e.toUpperCase()).join(', ');
-    return 'Choose a $names file.';
+    final names = allowed.map((e) => e.toUpperCase()).toList();
+    final list = names.length == 1
+        ? names.single
+        : '${names.sublist(0, names.length - 1).join(', ')} or ${names.last}';
+    return 'Choose a $list file.';
   }
   if (file.bytes.length > maxBytes) {
     final mb = (maxBytes / (1024 * 1024)).round();
@@ -159,7 +167,7 @@ String? validateDocument(
 
 /// Uploads to Supabase and returns where it landed.
 ///
-/// The path carries a UUID and NOT the original filename: the bucket is
+/// The path carries a UUID and not the original filename: the bucket is
 /// public, so anything guessable is readable by anyone.
 Future<StoredFile> uploadDocument({
   required StorageService storage,

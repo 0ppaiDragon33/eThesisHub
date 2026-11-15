@@ -54,7 +54,7 @@ void main() {
   });
 
   // Form 5b is a strict subset of the fields Form5cData already resolves
-  // -- fromForm5c must carry every one of them through unchanged.
+  // fromForm5c must carry every one of them through unchanged.
   test('fromForm5c carries every field Form 5c already resolved', () async {
     final c = Form5cData.assemble(
       thesis: _thesis(),

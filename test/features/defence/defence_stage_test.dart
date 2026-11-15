@@ -36,7 +36,7 @@ void main() {
     }
   });
 
-  test('each scheduled stage holds only its own defences', () {
+  test('each scheduled stage holds only its own defenses', () {
     final pre = d('p', DefenceType.preOral);
     final fin = d('f', DefenceType.final_);
     final again = d('p_redefence', DefenceType.preOral, redefenceOf: 'p');
@@ -51,7 +51,7 @@ void main() {
     expect(DefenceStage.preOral.labelFor(2, compact: false), 'Pre-oral (2)');
     expect(
       DefenceStage.finalDefence.labelFor(1, compact: false),
-      'Final defence (1)',
+      'Final defense (1)',
     );
     expect(DefenceStage.finalDefence.labelFor(1, compact: true), 'Final (1)');
     expect(DefenceStage.title.labelFor(0, compact: true), 'Title');

@@ -1,48 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/defence_annotation.dart';
-import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/features/defence/manuscript/highlight_colours.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_providers.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_view.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
-import 'package:ethesishub/providers/service_providers.dart';
 
 /// Opens a chapter file the manuscript cannot draw (an old Word upload) in
-/// the device's own viewer, through a fresh signed URL.
+/// the document viewer, which says it cannot be previewed and downloads it
+/// from there.
 Future<void> openChapterFile(
   BuildContext context,
   WidgetRef ref,
   ChapterVersion v,
 ) async {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  try {
-    final url = await ref.read(storageServiceProvider).signedUrl(v.storagePath);
-    final uri = Uri.tryParse(url);
-    final opened =
-        uri != null &&
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened) {
-      messenger?.showSnackBar(
-        const SnackBar(content: Text('Could not open that file.')),
-      );
-    }
-  } on StorageFailure catch (e) {
-    messenger?.showSnackBar(SnackBar(content: Text(e.message)));
-  } catch (_) {
-    // The launcher throws (a PlatformException) rather than answering false
-    // when, for one, no app on the device can open the file.
-    messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not open that file.')),
-    );
-  }
+  await openStoredDocument(context, ref, v.storagePath,
+      label: 'Version ${v.version}');
 }
 
 /// The defence manuscript, framed and bound to one defence: its chapters,

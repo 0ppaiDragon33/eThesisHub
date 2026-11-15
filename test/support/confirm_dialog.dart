@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Taps the confirming button of a `confirmAction` dialog, if one opened.
 ///
 /// Decisive actions (accept, decline, submit, approve, schedule, ...) ask
-/// "are you sure?" first. Tests that are about what the action DOES call
+/// "are you sure?" first. Tests that are about what the action does call
 /// this right after tapping it. A tap the screen refuses before asking (a
 /// missing reason, an unscored criterion) opens no dialog, so this does
 /// nothing there and the test goes on to check the refusal.

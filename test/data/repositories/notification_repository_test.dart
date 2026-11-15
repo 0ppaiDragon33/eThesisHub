@@ -47,7 +47,7 @@ void main() {
       await repo.upsertIfAbsent('u1', item());
       await repo.markRead('u1', 'archivePublished_t1');
 
-      // Redetection fires again with the same deterministic id (D71).
+      // Redetection fires again with the same deterministic id.
       await repo.upsertIfAbsent('u1', item());
 
       final items = await repo.watchItems('u1').first;

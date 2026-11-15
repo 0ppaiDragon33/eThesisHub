@@ -23,7 +23,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// The student's thesis desk.
 ///
-/// Built around one object — the group's thesis — rather than a row of
+/// Built around one object (the group's thesis) rather than a row of
 /// counters: its identity and journey across the top, the next step and
 /// the chapter register in the main column, and the people, the next
 /// defence and recent decisions beside them.
@@ -84,8 +84,8 @@ class StudentOverview extends ConsumerWidget {
                 const _NoGroupYet(),
                 NeedsYouQueue(
                   items: needsYouAsync,
-                  emptyTitle: 'All caught up',
-                  emptyMessage: 'Nothing needs your attention right now.',
+                  emptyTitle: 'No pending items',
+                  emptyMessage: 'Your group has nothing to act on.',
                 ),
               ])
             : _Desk(thesis: t, header: header),
@@ -117,8 +117,8 @@ class _Desk extends ConsumerWidget {
         primary: [
           NeedsYouQueue(
             items: needsYouAsync,
-            emptyTitle: 'All caught up',
-            emptyMessage: 'Nothing needs your attention right now.',
+            emptyTitle: 'No pending items',
+            emptyMessage: 'Your group has nothing to act on.',
           ),
           _ChapterRegister(thesis: thesis, chapters: chaptersAsync),
         ],
@@ -204,16 +204,22 @@ class _ThesisHero extends StatelessWidget {
   }
 }
 
-class _ChapterRegister extends StatelessWidget {
+class _ChapterRegister extends ConsumerWidget {
   const _ChapterRegister({required this.thesis, required this.chapters});
 
   final Thesis thesis;
   final AsyncValue<List<ThesisChapter>> chapters;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The same manuscript the Chapters screen shows: I-III until the
+    // pre-oral is passed, then I-V. Taken as not yet passed while defenses
+    // load.
+    final preOralPassed = passedPreOral(
+            ref.watch(myDefencesProvider).valueOrNull ?? const [],
+            thesis.id) !=
+        null;
     final unlocked = thesis.status == ThesisStatus.titleApproved;
-    final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
 
     return Panel(
@@ -242,38 +248,21 @@ class _ChapterRegister extends StatelessWidget {
         ),
         data: (list) {
           final byId = {for (final c in list) c.id: c};
-          final approved =
-              list.where((c) => c.status == ChapterStatus.approved).length;
+          // ONE manuscript, as on the Chapters screen: I-III first, then
+          // I-V once the pre-oral is passed. Anything uploaded chapter by
+          // chapter, from before manuscripts, is listed beneath it.
+          final shelf = manuscriptShelf(
+              preOralPassed: preOralPassed, uploaded: byId.keys);
+          final shown = [
+            shelf.current,
+            if (shelf.earlier != null) shelf.earlier!,
+            ...shelf.legacy,
+          ];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppTokens.lg - 4, AppTokens.md, AppTokens.lg - 4, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: approved / 5),
-                          duration: const Duration(milliseconds: 600),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, v, _) => LinearProgressIndicator(
-                            value: v,
-                            minHeight: 8,
-                            color: Tone.endorsed.color(context),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppTokens.md),
-                    Text('$approved of 5 approved', style: text.labelMedium),
-                  ],
-                ),
-              ),
               const SizedBox(height: AppTokens.sm),
-              for (final id in ChapterId.values)
+              for (final id in shown)
                 _ChapterLine(
                   id: id,
                   chapter: byId[id],
@@ -308,19 +297,14 @@ class _ChapterLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final c = chapter;
-    final parts = id.label.split(' — ');
     final row = Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.lg - 4, vertical: AppTokens.sm + 2),
       child: Row(
         children: [
-          SizedBox(
-            width: 92,
-            child: Text(parts.first, style: text.labelMedium),
-          ),
           Expanded(
             child: Text(
-              parts.length > 1 ? parts.last : '',
+              id.isManuscript ? id.label : 'Chapter ${id.mark} · ${id.heading}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: text.bodyMedium,
@@ -392,12 +376,12 @@ class _NextDefencePanel extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     return Panel(
-      title: 'Next defence',
+      title: 'Next defense',
       icon: Icons.event_outlined,
       child: defences.when(
         loading: () => const LoadingState(),
         error: (e, _) =>
-            ErrorState(error: e, message: 'Could not load defences.'),
+            ErrorState(error: e, message: 'Could not load defenses.'),
         data: (list) {
           final next = StudentOverview.nextDefence(list);
           if (next == null) {

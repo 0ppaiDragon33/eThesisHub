@@ -13,7 +13,7 @@ import 'package:ethesishub/providers/defence_providers.dart';
 /// A month grid of the same defences [DefencesList] shows, reading the
 /// same [myDefencesProvider] so the two presentations cannot disagree.
 ///
-/// Hand-rolled -- no calendar package. The whole layout algorithm is: the
+/// Hand-rolled, no calendar package. The whole layout algorithm is: the
 /// Monday on or before the 1st, plus six weeks, giving a fixed 42-cell
 /// grid that never reshapes as the month's day count changes.
 class DefenceCalendar extends ConsumerStatefulWidget {
@@ -85,10 +85,10 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
     // Loading/error/empty stay apart, exactly like DefencesList: a month
     // that could not load must not read as a month with nothing in it.
     return defencesAsync.when(
-      loading: () => const LoadingState(label: 'Loading your defences…'),
+      loading: () => const LoadingState(label: 'Loading your defenses…'),
       error: (e, _) => ErrorState(
         error: e,
-        message: 'Could not load your defences.',
+        message: 'Could not load your defenses.',
       ),
       data: (defences) {
         final shown =
@@ -97,9 +97,7 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
           return const EmptyState(
             key: Key('noDefences'),
             icon: Icons.forum_outlined,
-            title: 'No defences scheduled',
-            message: 'A defence appears here once the Coordinator schedules '
-                'one you are part of.',
+            title: 'No defenses scheduled',
           );
         }
         return _buildCalendar(context, shown);
@@ -112,7 +110,7 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
 
-    // A defence with no confirmed date belongs on no day -- it is never
+    // A defence with no confirmed date belongs on no day: it is never
     // bucketed by [DateUtils.dateOnly] below, so it can neither land on
     // the epoch nor silently vanish; it is listed separately instead.
     final awaiting = defences.where((d) => d.scheduledAt == null).toList();
@@ -206,7 +204,7 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (selectedDefences.isEmpty)
-            Text('No defences this day.',
+            Text('No defenses this day.',
                 style: text.bodySmall?.copyWith(color: muted))
           else
             for (final d in selectedDefences) DefenceRow(defence: d),
@@ -218,7 +216,7 @@ class _DefenceCalendarState extends ConsumerState<DefenceCalendar> {
         ? null
         : Panel(
             title: '${awaiting.length} '
-                'defence${awaiting.length == 1 ? '' : 's'} awaiting a date',
+                'defense${awaiting.length == 1 ? '' : 's'} awaiting a date',
             icon: Icons.event_busy_outlined,
             child: Column(
               key: const Key('awaitingDateHeading'),

@@ -89,7 +89,7 @@ void main() {
   });
 
   // This used to assert the opposite: that no entry was created. That was
-  // forced by the rules, where the designation arm is update-only — but it
+  // forced by the rules, where the designation arm is update-only, but it
   // left a designation set on an account that had never signed in sitting
   // inert on `users`, invisible to the student-facing picker, which reads
   // only `facultyDirectory`. The rules now allow a coordinator to create the
@@ -107,7 +107,7 @@ void main() {
     expect(snap.exists, isTrue);
     expect(snap.data()!['nominableAsAdviser'], true);
     expect(snap.data()!['nominableAsPanelist'], false);
-    // Taken from `users`, never from the caller — this is what the rules pin.
+    // Taken from `users`, never from the caller: this is what the rules pin.
     expect(snap.data()!['fullName'], 'Alma');
     expect(snap.data()!['role'], 'faculty');
   });
@@ -117,7 +117,7 @@ void main() {
     final db = FakeFirebaseFirestore();
     final repo = FacultyDirectoryRepository(db);
 
-    // No entry exists for 'ghost' -- update on a missing doc throws
+    // No entry exists for 'ghost': update on a missing doc throws
     // not-found, and the repository must let that propagate (the caller
     // decides whether to swallow it).
     await expectLater(

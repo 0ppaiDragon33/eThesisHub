@@ -193,7 +193,7 @@ void main() {
     expect(after.workingTitle, 'A Better Title');
     // The approved-title resolvers (archive, evaluation sheet, the student's
     // approved-title card) read approvedTitleText, so the change must reach
-    // it too — not only workingTitle.
+    // it too, not only workingTitle.
     expect(after.approvedTitleText, 'A Better Title');
   });
 
@@ -361,6 +361,145 @@ void main() {
         (await db.doc('theses/t1/changeRequests/adviser').get()).exists,
         isFalse,
       );
+    });
+  });
+
+  // The request was eligible when filed. A defence scheduled while it waited
+  // makes the thesis ineligible, and the rules cannot see that, so the
+  // sign-offs that can read every defence ask again.
+  group('eligibility is asked again at sign-off', () {
+    Future<void> defenceOn(FakeFirebaseFirestore db,
+        {String type = 'preOral',
+        String status = 'scheduled',
+        String? verdict}) async {
+      await db.collection('defenses').add({
+        'thesisId': 't1',
+        'type': type,
+        'venue': 'AVR',
+        'panelUids': <String>['p1'],
+        'adviserUid': 'a1',
+        'leaderUid': 'l1',
+        'status': status,
+        'createdBy': 'c1',
+        'panelVerdict': ?verdict,
+      });
+    }
+
+    Future<ChangeRequestRepository> adviserRequestAtCoordinator(
+        FakeFirebaseFirestore db) async {
+      final repo = ChangeRequestRepository(db);
+      await repo.submitAdviserChange(
+        thesis: await theThesis(db),
+        newAdviser: newAdv(),
+        formerAdviserName: 'Dr. Old',
+        reasons: 'x',
+      );
+      for (final role in ['newAdviser', 'formerAdviser']) {
+        await repo.respond(
+          thesisId: 't1',
+          type: ChangeRequestType.adviser,
+          role: role,
+          accept: true,
+        );
+      }
+      return repo;
+    }
+
+    test('the Coordinator cannot recommend an adviser change once a defense '
+        'is scheduled', () async {
+      final db = await seed();
+      final repo = await adviserRequestAtCoordinator(db);
+      await defenceOn(db);
+      await expectLater(
+        repo.respond(
+          thesisId: 't1',
+          type: ChangeRequestType.adviser,
+          role: 'coordinator',
+          accept: true,
+        ),
+        throwsA(isA<StateError>().having(
+            (e) => e.message, 'message', contains('Return the request'))),
+      );
+      // Nothing moved.
+      final r = (await repo.watchForThesis('t1').first).single;
+      expect(r.stage, ChangeRequestStage.pendingCoordinator);
+    });
+
+    test('the Dean cannot approve it either, and the adviser is unchanged',
+        () async {
+      final db = await seed();
+      final repo = await adviserRequestAtCoordinator(db);
+      await repo.respond(
+        thesisId: 't1',
+        type: ChangeRequestType.adviser,
+        role: 'coordinator',
+        accept: true,
+      );
+      await defenceOn(db); // scheduled while it waited for the Dean
+      await expectLater(
+        repo.approveAsDean(thesisId: 't1', type: ChangeRequestType.adviser),
+        throwsA(isA<StateError>()),
+      );
+      expect((await theThesis(db)).adviserUid, 'a1');
+      final r = (await repo.watchForThesis('t1').first).single;
+      expect(r.stage, ChangeRequestStage.pendingDean);
+    });
+
+    test('a cancelled defense does not block an adviser change', () async {
+      final db = await seed();
+      final repo = await adviserRequestAtCoordinator(db);
+      await defenceOn(db, status: 'cancelled');
+      await repo.respond(
+        thesisId: 't1',
+        type: ChangeRequestType.adviser,
+        role: 'coordinator',
+        accept: true,
+      );
+      await repo.approveAsDean(thesisId: 't1', type: ChangeRequestType.adviser);
+      expect((await theThesis(db)).adviserUid, 'a2');
+    });
+
+    test('the Dean cannot approve a title change after the final passed, '
+        'but a scheduled pre-oral does not stop one', () async {
+      final db = await seed();
+      final repo = ChangeRequestRepository(db);
+      await repo.submitTitleChange(
+        thesis: await theThesis(db),
+        newTitle: 'A Better Title',
+        reasons: 'x',
+      );
+      await defenceOn(db); // a pre-oral is under way: a title may still change
+      for (final role in ['adviser', 'coordinator']) {
+        await repo.respond(
+          thesisId: 't1',
+          type: ChangeRequestType.title,
+          role: role,
+          accept: true,
+        );
+      }
+      await defenceOn(db, type: 'final', status: 'completed', verdict: 'pass');
+      await expectLater(
+        repo.approveAsDean(thesisId: 't1', type: ChangeRequestType.title),
+        throwsA(isA<StateError>()),
+      );
+      expect((await theThesis(db)).workingTitle, 'Old Title');
+    });
+
+    // The way out must stay open: an ineligible request is returned, not
+    // stuck.
+    test('an ineligible request can still be returned', () async {
+      final db = await seed();
+      final repo = await adviserRequestAtCoordinator(db);
+      await defenceOn(db);
+      await repo.respond(
+        thesisId: 't1',
+        type: ChangeRequestType.adviser,
+        role: 'coordinator',
+        accept: false,
+        reason: 'A defense is now scheduled.',
+      );
+      final r = (await repo.watchForThesis('t1').first).single;
+      expect(r.stage, ChangeRequestStage.returned);
     });
   });
 }

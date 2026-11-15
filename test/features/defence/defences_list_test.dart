@@ -79,7 +79,7 @@ Future<FakeFirebaseFirestore> _seedUser(String uid, {String role = 'faculty'}) a
 }
 
 // Without this override, `FirebaseAuth.instance` throws `[core/no-app]`
-// because no app is initialised in a widget test -- see
+// because no app is initialised in a widget test: see
 // defence_room_screen_test.dart's `_wrap` for the same pattern.
 Widget _wrap(
   FakeFirebaseFirestore db, {
@@ -103,12 +103,12 @@ Widget _wrap(
 
 void main() {
   testWidgets(
-      'a faculty member sees defences from BOTH positions, including one '
+      'a faculty member sees defenses from BOTH positions, including one '
       'added to the panel side alone after mount', (tester) async {
     final db = await _seedUser('f1');
     // Only the adviser-side defence exists at mount. A snapshot-once merge
     // (read the panelist side once with `.first`, re-run only when the
-    // adviser stream ticks) would pass this alone -- the whole point of this
+    // adviser stream ticks) would pass this alone: the whole point of this
     // shape is that it stays live, so the assertion that actually catches
     // that is below: adding a PANEL-only defence after the widget has
     // already settled, with nothing on the adviser side changing.
@@ -126,7 +126,7 @@ void main() {
     expect(find.byKey(const Key('defenceRow-advised')), findsOneWidget);
     expect(find.byKey(const Key('defenceRow-paneled')), findsNothing);
 
-    // Nothing about f1's adviser query changes here -- this write only
+    // Nothing about f1's adviser query changes here: this write only
     // touches panelUids on a new document. A fan-in that only advances on
     // the adviser stream's own emissions would never see this and the
     // widget would stay stuck on just 'advised' forever.
@@ -175,7 +175,7 @@ void main() {
     final ySooner = tester.getTopLeft(sooner).dy;
     final yLater = tester.getTopLeft(later).dy;
     expect(ySooner, lessThan(yLater),
-        reason: 'the Sept 1 defence must render above the Oct 1 one, '
+        reason: 'the Sept 1 defense must render above the Oct 1 one, '
             'soonest first, regardless of insertion order');
   });
 
@@ -187,7 +187,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('noDefences')), findsOneWidget);
-    expect(find.text('No defences scheduled'), findsOneWidget);
+    expect(find.text('No defenses scheduled'), findsOneWidget);
   });
 
   testWidgets('a loading schedule is not shown as empty', (tester) async {
@@ -208,17 +208,17 @@ void main() {
     ));
     await tester.pump();
 
-    expect(find.text('Loading your defences…'), findsOneWidget);
+    expect(find.text('Loading your defenses…'), findsOneWidget);
     expect(find.byKey(const Key('noDefences')), findsNothing);
-    expect(find.text('No defences scheduled'), findsNothing);
+    expect(find.text('No defenses scheduled'), findsNothing);
   });
 
   testWidgets(
-      'the leader\'s Open button goes to their defence page, which leads to '
+      'the leader\'s Open button goes to their defense page, which leads to '
       'the released highlights', (tester) async {
     // The room no longer holds a live comment log: the panel's remarks are
     // highlights, and the room's leader view shows only what the adviser
-    // has released (M3-2). So the group opens the room like everyone else,
+    // has released. So the group opens the room like everyone else,
     // and finds "View manuscript and highlights" there.
     // `_seedDefence` snapshots `leaderUid: 'l1'`, so signing in as l1 is
     // what makes this the leader's own row.
@@ -277,13 +277,13 @@ void main() {
     expect(find.widgetWithText(AppBar, 'Room d1'), findsOneWidget);
   });
 
-  // ---- M4: the evaluation affordances on a row ----
+  // ---- the evaluation affordances on a row ----
   //
   // These two keys shipped with no test at all. An entry point nothing
-  // asserts is exactly the shape of the M2 leader upload flow that nothing
+  // asserts is exactly the shape of the chapters leader upload flow that nothing
   // navigated to, caught only in final review.
 
-  testWidgets('a panelist on a completed defence is offered the sheet',
+  testWidgets('a panelist on a completed defense is offered the sheet',
       (tester) async {
     final db = await _seedUser('p1');
     await _seedDefence(db,
@@ -317,7 +317,7 @@ void main() {
     expect(find.byKey(const Key('goToGrades-d1')), findsOneWidget);
   });
 
-  testWidgets('an open defence offers neither affordance', (tester) async {
+  testWidgets('an open defense offers neither affordance', (tester) async {
     final db = await _seedUser('p1');
     await _seedDefence(db,
         id: 'd1',
@@ -333,7 +333,7 @@ void main() {
     expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
   });
 
-  // D39's seal, in the row: a panelist reaches the grades only once the
+  // The seal, in the row: a panelist reaches the grades only once the
   // adviser has released them.
   testWidgets('a panelist reaches the grades only once they are released',
       (tester) async {
@@ -400,9 +400,9 @@ void main() {
     expect(find.byKey(const Key('goToEvaluate-d1')), findsOneWidget);
   });
 
-  // The leader never reaches either: D47 puts the numbers out of reach
-  // rather than merely unrendered.
-  testWidgets('the thesis leader is offered neither affordance',
+  // The leader never grades, but the release is for them too: Grades once
+  // the adviser has released, never Evaluate.
+  testWidgets('the thesis leader is offered Grades, never Evaluate',
       (tester) async {
     final db = await _seedUser('l1', role: 'student');
     await _seedDefence(db,
@@ -417,6 +417,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('goToEvaluate-d1')), findsNothing);
+    expect(find.byKey(const Key('goToGrades-d1')), findsOneWidget);
+  });
+
+  testWidgets('the thesis leader is offered no Grades before the release',
+      (tester) async {
+    final db = await _seedUser('l1', role: 'student');
+    await _seedDefence(db,
+        id: 'd1',
+        adviserUid: 'a1',
+        panelUids: const ['p1'],
+        status: 'completed',
+        scheduledAt: DateTime(2026, 9, 1, 9));
+
+    await tester.pumpWidget(_wrap(db, uid: 'l1'));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('goToGrades-d1')), findsNothing);
   });
 
@@ -484,7 +500,7 @@ void main() {
     expect(find.widgetWithText(AppBar, 'Grades d1'), findsOneWidget);
   });
 
-  testWidgets('a row shows the thesis working title, not the defence type',
+  testWidgets('a row shows the thesis working title, not the defense type',
       (tester) async {
     final db = await _seedUser('f1');
     await db
@@ -508,7 +524,7 @@ void main() {
     // The row joins type, date and venue into one line ('Pre-oral defence,
     // …'); the trailing comma distinguishes it from the 'Pre-oral defences'
     // section heading.
-    expect(find.textContaining('Pre-oral defence,'), findsOneWidget);
+    expect(find.textContaining('Pre-oral defense,'), findsOneWidget);
   });
 
   testWidgets(
@@ -544,7 +560,7 @@ void main() {
     expect(find.text('Loading title…'), findsOneWidget);
   });
 
-  testWidgets('cancelled defences stay visible, struck through and muted',
+  testWidgets('cancelled defenses stay visible, struck through and muted',
       (tester) async {
     final db = await _seedUser('f1');
     await db
@@ -610,8 +626,8 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
-    final preOralHeading = find.text('Pre-oral defences');
-    final finalHeading = find.text('Final defences');
+    final preOralHeading = find.text('Pre-oral defenses');
+    final finalHeading = find.text('Final defenses');
     expect(preOralHeading, findsOneWidget);
     expect(finalHeading, findsOneWidget);
 
@@ -646,17 +662,17 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Final defences'), findsOneWidget);
+    expect(find.text('Final defenses'), findsOneWidget);
     expect(find.textContaining('Pre-oral'), findsNothing);
   });
 
   // Fix: section headings on the Re-defence stage. A section reads
-  // "re-defences" only once EVERY defence inside it is one -- a section
+  // "re-defences" only once every defence inside it is one: a section
   // holding a mix (an ordinary defence alongside a re-defence, which the
   // stage-less DefencesList used in this file can show together) stays the
   // plain heading.
   testWidgets(
-      'a section mixing an ordinary defence and a re-defence keeps the '
+      'a section mixing an ordinary defense and a redefense keeps the '
       'plain heading', (tester) async {
     final db = await _seedUser('f1');
     await _seedDefence(
@@ -679,15 +695,15 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
-    // Both pre-oral (the failed original and its re-defence), so mixed --
+    // Both pre-oral (the failed original and its re-defence), so mixed,
     // the plain heading, not "re-defences".
-    expect(find.text('Pre-oral defences'), findsOneWidget);
-    expect(find.text('Pre-oral re-defences'), findsNothing);
+    expect(find.text('Pre-oral defenses'), findsOneWidget);
+    expect(find.text('Pre-oral redefenses'), findsNothing);
   });
 
   testWidgets(
-      'a section heading reads "re-defences" when nothing in it is an '
-      'ordinary defence', (tester) async {
+      'a section heading reads "redefenses" when nothing in it is an '
+      'ordinary defense', (tester) async {
     final db = await _seedUser('f1');
     await _seedDefence(
       db,
@@ -702,8 +718,8 @@ void main() {
     await tester.pumpWidget(_wrap(db, uid: 'f1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Final re-defences'), findsOneWidget);
-    expect(find.text('Final defences'), findsNothing);
+    expect(find.text('Final redefenses'), findsOneWidget);
+    expect(find.text('Final defenses'), findsNothing);
   });
 
   testWidgets('a where filter narrows the list and its empty state',
@@ -731,7 +747,7 @@ void main() {
           body: SingleChildScrollView(
             child: DefencesList(
               where: _isFinal,
-              emptyTitle: 'No final defences',
+              emptyTitle: 'No final defenses',
               emptyMessage: 'None yet.',
             ),
           ),
@@ -740,7 +756,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('No final defences'), findsOneWidget);
+    expect(find.text('No final defenses'), findsOneWidget);
     expect(find.byKey(const Key('defenceRow-onlyPreOral')), findsNothing);
   });
 }

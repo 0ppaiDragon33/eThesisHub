@@ -23,18 +23,18 @@ import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// The office's forms, findable on their own — not only as a download
+/// The office's forms, findable on their own, not only as a download
 /// button bolted onto whatever screen happens to already hold the data.
 ///
 /// The complaint this answers: a reader went looking for "the forms" and
 /// there was nowhere to look. Forms at this university are physical
-/// artifacts before they are anything else — people print blanks, carry
-/// them into rooms, and fill them in by hand — so the one thing every
+/// artifacts before they are anything else: people print blanks, carry
+/// them into rooms, and fill them in by hand, so the one thing every
 /// card on this screen guarantees, unconditionally, is a blank template.
 /// No thesis, no defence, no evaluation, no archive entry: a completely
 /// empty database still renders three cards, each with a working
-/// download. Everything else on a card — a link to a filled version this
-/// reader happens to be entitled to — is additive on top of that
+/// download. Everything else on a card: a link to a filled version this
+/// reader happens to be entitled to: is additive on top of that
 /// guarantee, never a precondition for it.
 class FormsScreen extends StatelessWidget {
   const FormsScreen({super.key});
@@ -58,11 +58,11 @@ class FormsScreen extends StatelessWidget {
         forms: [_Form1Card(), _Form4aCard(), _Form4bCard()],
       ),
       _FormGroup(
-        title: 'Pre-oral defence',
+        title: 'Pre-oral defense',
         forms: [_Form3Card()],
       ),
       _FormGroup(
-        title: 'Final defence',
+        title: 'Final defense',
         forms: [_Form5aCard(), _Form5bCard(), _Form5cCard()],
       ),
       _FormGroup(
@@ -201,11 +201,11 @@ void _reportFailure(BuildContext context, String form, Object error) {
   ).showSnackBar(SnackBar(content: Text('Could not generate $form: $error')));
 }
 
-/// Form 1 — Nomination of Thesis Adviser and Panel Members.
+/// Form 1. Nomination of Thesis Adviser and Panel Members.
 ///
 /// No blank template download, still deliberately: the official Form 1 is
 /// generated from a thesis's own nominations, so this card links to the
-/// thesis page for it. What it adds is the editable copy (spec 2026-09-24):
+/// thesis page for it. What it adds is the editable copy:
 /// anyone can start a named copy of a blank Form 1, reword it in the app and
 /// download it, from [FormCopiesSection] below the actions.
 class _Form1Card extends ConsumerWidget {
@@ -245,14 +245,14 @@ class _Form1Card extends ConsumerWidget {
   }
 }
 
-/// Form 5c — Evaluation Guide.
+/// Form 5c. Evaluation Guide.
 ///
 /// The blank template button is always enabled: [buildForm5cBlank] takes
 /// no data at all. There is no provider on hand that lists "every
 /// evaluation this panelist has submitted" across every defence (the
 /// existing providers are all scoped to one defence at a time), so rather
 /// than build one for a convenience link, this card points at the screen
-/// that already owns that list one defence at a time — Defences.
+/// that already owns that list one defence at a time. Defences.
 class _Form5cCard extends StatefulWidget {
   const _Form5cCard();
 
@@ -277,7 +277,7 @@ class _Form5cCardState extends State<_Form5cCard> {
       cardKey: const Key('form5cCard'),
       name: 'Form 5c — Evaluation Guide',
       purpose:
-          'The panel\'s scoring rubric for a defence.',
+          'The panel\'s scoring rubric for a defense.',
       actions: [
         OutlinedButton(
           key: const Key('form5cBlankButton'),
@@ -286,7 +286,7 @@ class _Form5cCardState extends State<_Form5cCard> {
         ),
         const Gap.sm(),
         Text(
-          'Submitted sheets are kept with their defence.',
+          'Submitted sheets are kept with their defense.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -295,7 +295,7 @@ class _Form5cCardState extends State<_Form5cCard> {
         OutlinedButton(
           key: const Key('form5cOpenDefences'),
           onPressed: () => context.go('/defences?stage=preOral'),
-          child: const Text('Open Defences'),
+          child: const Text('Open Defenses'),
         ),
       ],
       footer: const FormCopiesSection(
@@ -306,13 +306,13 @@ class _Form5cCardState extends State<_Form5cCard> {
   }
 }
 
-/// Form 8 — Certification of Submission of Bound Copies.
+/// Form 8. Certification of Submission of Bound Copies.
 ///
 /// The blank template button is always enabled: [buildForm8Blank] takes
 /// no data at all, and carries the diagonal "TEMPLATE" watermark and the
 /// under-heading marking that keep it from being confused with a real,
 /// signed certificate (§6, `Form8Unissuable`). The filled list beneath it
-/// — one row per archived thesis, each with its own "Download" control —
+/// one row per archived thesis, each with its own "Download" control,
 /// is wired straight from providers this screen already reads
 /// ([archiveProvider], [currentUserProvider]) and the same
 /// [Form8Unissuable] gate `ArchiveEntryScreen` uses, so a coordinator
@@ -413,7 +413,7 @@ class _Form8CardState extends State<_Form8Card> {
   }
 }
 
-/// Form 3 — Request to Convene the Thesis Panel Members for Pre-Oral
+/// Form 3. Request to Convene the Thesis Panel Members for Pre-Oral
 /// Defense.
 ///
 /// Blank template only, on this screen: a filled letter needs a specific
@@ -455,7 +455,7 @@ class _Form3Card extends StatelessWidget {
   }
 }
 
-/// Form 5a — Request for Final Oral Defense. Same shape as Form 3's
+/// Form 5a. Request for Final Oral Defense. Same shape as Form 3's
 /// card, one defence type later.
 class _Form5aCard extends StatelessWidget {
   const _Form5aCard();
@@ -476,7 +476,7 @@ class _Form5aCard extends StatelessWidget {
       cardKey: const Key('form5aCard'),
       name: 'Form 5a — Request for Final Oral Defense',
       purpose:
-          'The student\'s letter requesting the final oral defence '
+          'The student\'s letter requesting the final oral defense '
           'of an approved thesis.',
       actions: [
         OutlinedButton(
@@ -493,8 +493,8 @@ class _Form5aCard extends StatelessWidget {
   }
 }
 
-/// Form 5b — Presenter and Evaluator Profile. Every field this needs is
-/// already resolved wherever Form 5c is generated (D60) — this card
+/// Form 5b. Presenter and Evaluator Profile. Every field this needs is
+/// already resolved wherever Form 5c is generated: this card
 /// still offers only the blank, for the same reason Form 3 and Form 5a
 /// do: there is no picker here for which defence's profile to fill.
 class _Form5bCard extends StatelessWidget {
@@ -532,9 +532,9 @@ class _Form5bCard extends StatelessWidget {
   }
 }
 
-/// Form 4a — Change of Undergraduate Thesis Adviser.
+/// Form 4a. Change of Undergraduate Thesis Adviser.
 ///
-/// Blank template ONLY, and permanently — not a gap this screen's
+/// Blank template only, and permanently, not a gap this screen's
 /// picker will one day close. The app tracks no adviser-reassignment
 /// workflow at all: `Thesis.adviserUid` is set once at nomination
 /// approval, with no "former adviser" / "nominated adviser" / reason
@@ -575,7 +575,7 @@ class _Form4aCard extends StatelessWidget {
   }
 }
 
-/// Form 4b — Change of Undergraduate Thesis Title. Blank template only,
+/// Form 4b. Change of Undergraduate Thesis Title. Blank template only,
 /// for the same reason as Form 4a: title changes here go through the
 /// multi-round title defence, not an approved-title-to-new-title letter.
 class _Form4bCard extends StatelessWidget {
@@ -613,10 +613,10 @@ class _Form4bCard extends StatelessWidget {
   }
 }
 
-/// Form 7 — Certificate of Review. Blank template only, on this screen,
+/// Form 7. Certificate of Review. Blank template only, on this screen,
 /// for the same reason as Forms 3/5a/5b: there is no picker here for
 /// which thesis's certificate to fill. The review table itself is
-/// blank in every rendering regardless — see `form7_data.dart`.
+/// blank in every rendering regardless: see `form7_data.dart`.
 class _Form7Card extends StatelessWidget {
   const _Form7Card();
 

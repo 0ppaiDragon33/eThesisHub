@@ -20,6 +20,43 @@ Future<ProviderContainer> containerFor(String uid) async {
   return container;
 }
 
+/// Runs one detector for [uid] against a single defense and returns what
+/// landed in that account's feed.
+Future<List<AppNotification>> feedAfter(
+  Provider<void> detector, {
+  required String uid,
+  required String role,
+  required Map<String, dynamic> defence,
+  Map<String, dynamic>? evaluation,
+}) async {
+  final container = await containerFor(uid);
+  final db = container.read(firestoreProvider);
+  await db.collection('users').doc(uid).set({'role': role});
+  await db.collection('defenses').doc('d1').set({
+    'thesisId': 't1',
+    'type': 'preOral',
+    'venue': 'Room 1',
+    'panelUids': <String>['faculty1'],
+    'adviserUid': 'adviser1',
+    'leaderUid': 'student1',
+    'status': 'scheduled',
+    'createdBy': 'coord1',
+    ...defence,
+  });
+  if (evaluation != null) {
+    await db.doc('defenses/d1/evaluations/$uid').set(evaluation);
+  }
+  container.listen(detector, (_, _) {}); // kept alive, as AppShellHost does
+  await container.read(notificationsProvider.future);
+  for (var i = 0; i < 6; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+  return container.read(notificationRepositoryProvider).watchItems(uid).first;
+}
+
+Iterable<AppNotification> ofType(List<AppNotification> items, String type) =>
+    items.where((i) => i.type.name == type);
+
 void main() {
   group('nominationLifecycleDetectorProvider', () {
     test('a returned nomination tells the leader who returned it and why',
@@ -273,13 +310,13 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
-      // No feedback existed at subscription time -- confirms the detector
+      // No feedback existed at subscription time: confirms the detector
       // did not require the outer `myThesisProvider` source to re-emit.
       var items = await container.read(notificationRepositoryProvider).watchItems('student1').first;
       expect(items.where((i) => i.type.name == 'chapterFeedback'), isEmpty);
 
       // A comment written after the standing subscription was already
-      // live -- this is exactly the case the one-shot `.future` read used
+      // live: this is exactly the case the one-shot `.future` read used
       // to miss.
       await firestore
           .collection('theses')
@@ -449,13 +486,150 @@ void main() {
       final scheduled =
           items.firstWhere((i) => i.type.name == 'defenceScheduled');
       expect(scheduled.message, contains('on the panel for'));
-      expect(scheduled.message, isNot(contains('Your defence')));
+      expect(scheduled.message, isNot(contains('Your defense')));
+    });
+
+    // The Research Coordinator and the Dean grade every defense, so each is
+    // told when one is coming, not just the group, the adviser and panel.
+    group('the Research Coordinator and the Dean', () {
+      final when = Timestamp.fromDate(DateTime(2026, 11, 20));
+
+      for (final role in ['coordinator', 'dean']) {
+        test('a $role is told a defense is scheduled, as a grader', () async {
+          final items = await feedAfter(defenceDetectorProvider,
+              uid: '${role}1', role: role, defence: {'scheduledAt': when});
+          final scheduled = ofType(items, 'defenceScheduled').toList();
+          expect(scheduled, hasLength(1));
+          expect(scheduled.single.defenceId, 'd1');
+          expect(scheduled.single.message, contains('You grade it as'));
+          expect(scheduled.single.message, isNot(contains('Your defense')));
+        });
+      }
+
+      test('the Coordinator who scheduled it is not told what they did',
+          () async {
+        final items = await feedAfter(defenceDetectorProvider,
+            uid: 'coord1',
+            role: 'coordinator',
+            defence: {'scheduledAt': when, 'createdBy': 'coord1'});
+        expect(ofType(items, 'defenceScheduled'), isEmpty);
+      });
+
+      test('a defense already held is not announced to them, so a first '
+          'launch does not flood the bell', () async {
+        for (final status in ['completed', 'inProgress', 'cancelled']) {
+          final items = await feedAfter(defenceDetectorProvider,
+              uid: 'dean1',
+              role: 'dean',
+              defence: {'scheduledAt': when, 'status': status});
+          expect(ofType(items, 'defenceScheduled'), isEmpty, reason: status);
+        }
+      });
+    });
+
+    test('a cancelled defense tells the group, the adviser and the panel, '
+        'not the office holders', () async {
+      for (final (uid, role) in [
+        ('student1', 'student'),
+        ('adviser1', 'faculty'),
+        ('faculty1', 'faculty'),
+      ]) {
+        final items = await feedAfter(defenceDetectorProvider,
+            uid: uid,
+            role: role,
+            defence: {
+              'status': 'cancelled',
+              'scheduledAt': Timestamp.fromDate(DateTime(2026, 11, 20)),
+            });
+        final cancelled = ofType(items, 'defenceCancelled').toList();
+        expect(cancelled, hasLength(1), reason: uid);
+        expect(cancelled.single.message, contains('was cancelled'));
+        expect(cancelled.single.message, contains('20/11/2026'));
+      }
+      for (final (uid, role) in [('dean1', 'dean'), ('coord2', 'coordinator')]) {
+        final items = await feedAfter(defenceDetectorProvider,
+            uid: uid, role: role, defence: {'status': 'cancelled'});
+        expect(ofType(items, 'defenceCancelled'), isEmpty, reason: uid);
+      }
+    });
+
+    test('the group leader is told the verdict, and only the group leader',
+        () async {
+      final passed = await feedAfter(defenceDetectorProvider,
+          uid: 'student1',
+          role: 'student',
+          defence: {
+            'status': 'completed',
+            'panelVerdict': 'pass',
+            'verdictRecordedAt': Timestamp.fromDate(DateTime(2026, 11, 21)),
+          });
+      final verdict = ofType(passed, 'verdictRecorded').toList();
+      expect(verdict, hasLength(1));
+      expect(verdict.single.message, contains('passed your pre-oral defense'));
+
+      final failed = await feedAfter(defenceDetectorProvider,
+          uid: 'student1',
+          role: 'student',
+          defence: {'status': 'completed', 'panelVerdict': 'fail'});
+      expect(ofType(failed, 'verdictRecorded').single.message,
+          contains('did not pass'));
+
+      // The faculty were in the room: no bell item for them.
+      final adviser = await feedAfter(defenceDetectorProvider,
+          uid: 'adviser1',
+          role: 'faculty',
+          defence: {'status': 'completed', 'panelVerdict': 'pass'});
+      expect(ofType(adviser, 'verdictRecorded'), isEmpty);
+    });
+
+    test('the group leader is told when the remarks are released, and only '
+        'the group leader', () async {
+      final released = await feedAfter(defenceDetectorProvider,
+          uid: 'student1',
+          role: 'student',
+          defence: {
+            'status': 'completed',
+            'evaluationsReleasedAt':
+                Timestamp.fromDate(DateTime(2026, 11, 21)),
+          });
+      final grades = ofType(released, 'remarksReleased').toList();
+      expect(grades, hasLength(1));
+      expect(grades.single.message, contains('remarks'));
+      expect(grades.single.message, isNot(contains('grade')));
+
+      // Not yet released: nothing to say.
+      final pending = await feedAfter(defenceDetectorProvider,
+          uid: 'student1',
+          role: 'student',
+          defence: {'status': 'completed'});
+      expect(ofType(pending, 'remarksReleased'), isEmpty);
+
+      // The faculty released it or sat on the panel: no bell item for them.
+      final adviser = await feedAfter(defenceDetectorProvider,
+          uid: 'adviser1',
+          role: 'faculty',
+          defence: {
+            'status': 'completed',
+            'evaluationsReleasedAt':
+                Timestamp.fromDate(DateTime(2026, 11, 21)),
+          });
+      expect(ofType(adviser, 'remarksReleased'), isEmpty);
+    });
+
+    test('nothing is said about a verdict that has not been recorded',
+        () async {
+      final items = await feedAfter(defenceDetectorProvider,
+          uid: 'student1',
+          role: 'student',
+          defence: {'status': 'completed'});
+      expect(ofType(items, 'verdictRecorded'), isEmpty);
     });
 
   });
 
   group('evaluationsCompleteDetectorProvider', () {
-    Future<ProviderContainer> adviserWith(List<String> submitted) async {
+    Future<ProviderContainer> adviserWith(List<String> submitted,
+        {bool recorded = true}) async {
       final container = await containerFor('adviser1');
       final firestore = container.read(firestoreProvider);
       await firestore.collection('users').doc('adviser1').set({'role': 'faculty'});
@@ -468,6 +642,10 @@ void main() {
         'leaderUid': 'student1',
         'status': 'completed',
         'createdBy': 'coord1',
+        // Each grader records themselves here when they submit; release
+        // is judged on this list. `recorded: false` is a defence whose
+        // sheets predate the list.
+        if (recorded) 'submittedUids': submitted,
       });
       for (final uid in submitted) {
         await firestore
@@ -494,6 +672,31 @@ void main() {
       expect(done.single.defenceId, 'd1');
     });
 
+    test('enough sheets but a panelist has not graded: nothing yet',
+        () async {
+      // Three sheets is the required count for one panelist, but p1 is not
+      // among them.
+      final container = await adviserWith(['c1', 'dn1', 'c2']);
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('adviser1')
+          .first;
+      expect(items.where((i) => i.type == NotificationType.evaluationsComplete),
+          isEmpty);
+    });
+
+    test('sheets that were never recorded do not unlock the release',
+        () async {
+      final container =
+          await adviserWith(['p1', 'c1', 'dn1'], recorded: false);
+      final items = await container
+          .read(notificationRepositoryProvider)
+          .watchItems('adviser1')
+          .first;
+      expect(items.where((i) => i.type == NotificationType.evaluationsComplete),
+          isEmpty);
+    });
+
     test('one still missing: nothing yet', () async {
       final container = await adviserWith(['p1', 'c1']);
       final items = await container
@@ -506,7 +709,54 @@ void main() {
   });
 
   group('evaluationAwaitsDetectorProvider', () {
-    test('a completed defence with no evaluation on file from this panelist writes one', () async {
+    // They grade every defense, so a Form 5c is owed on each one, and the
+    // adviser cannot release the grades until it is in.
+    for (final role in ['coordinator', 'dean']) {
+      test('a $role is told a closed defense is waiting on their Form 5c, '
+          'though they are on no panel', () async {
+        final items = await feedAfter(evaluationAwaitsDetectorProvider,
+            uid: '${role}1', role: role, defence: {'status': 'completed'});
+        final awaits = ofType(items, 'evaluationAwaits').toList();
+        expect(awaits, hasLength(1));
+        expect(awaits.single.defenceId, 'd1');
+      });
+
+      test('a $role who has already filed it is not told again', () async {
+        final items = await feedAfter(evaluationAwaitsDetectorProvider,
+            uid: '${role}1',
+            role: role,
+            defence: {'status': 'completed'},
+            evaluation: {
+              'evaluatorName': role,
+              'total': 90,
+              'scores': <String, int>{},
+              'rating': 'pass',
+            });
+        expect(ofType(items, 'evaluationAwaits'), isEmpty);
+      });
+
+      test('a $role is not told about a defense whose grades are released',
+          () async {
+        final items = await feedAfter(evaluationAwaitsDetectorProvider,
+            uid: '${role}1',
+            role: role,
+            defence: {
+              'status': 'completed',
+              'evaluationsReleasedAt':
+                  Timestamp.fromDate(DateTime(2026, 11, 1)),
+            });
+        expect(ofType(items, 'evaluationAwaits'), isEmpty);
+      });
+    }
+
+    test('a defense still being held is not announced as waiting yet',
+        () async {
+      final items = await feedAfter(evaluationAwaitsDetectorProvider,
+          uid: 'dean1', role: 'dean', defence: {'status': 'inProgress'});
+      expect(ofType(items, 'evaluationAwaits'), isEmpty);
+    });
+
+    test('a completed defense with no evaluation on file from this panelist writes one', () async {
       final container = await containerFor('faculty1');
       final firestore = container.read(firestoreProvider);
       await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});
@@ -534,7 +784,7 @@ void main() {
           'd1');
     });
 
-    test('a completed defence this panelist already scored writes nothing', () async {
+    test('a completed defense this panelist already scored writes nothing', () async {
       final container = await containerFor('faculty1');
       final firestore = container.read(firestoreProvider);
       await firestore.collection('users').doc('faculty1').set({'role': 'faculty'});

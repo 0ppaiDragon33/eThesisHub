@@ -51,7 +51,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       }
 
       // The email is verified, but `reload()` above only refreshed the local
-      // User — the cached ID token still says `email_verified: false`, and
+      // User: the cached ID token still says `email_verified: false`, and
       // the security rules read the TOKEN. Force a fresh one now, before the
       // invite write below and before the user reaches any create screen, so
       // Firestore does not refuse a genuinely-verified account. Without this
@@ -83,7 +83,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
 
           // Keep the faculty directory current. Written by the subject's own
           // client because Spark has no Cloud Functions. Also backfills anyone
-          // promoted before this module shipped. Best-effort — the directory
+          // promoted before this module shipped. Best-effort: the directory
           // entry must never block sign-in. Same guard as the audit log above.
           try {
             final profile =
@@ -194,7 +194,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
         FilledButton(
           key: const Key('reload'),
           onPressed: _busy ? null : _handleContinue,
-          child: Text(_busy ? 'Checking…' : "I've verified — continue"),
+          child: Text(_busy ? 'Checking…' : "I've verified my email"),
         ),
         const SizedBox(height: AppTokens.sm),
         OutlinedButton(

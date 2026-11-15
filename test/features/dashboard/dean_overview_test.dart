@@ -18,7 +18,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-// Same shape as navigation_test.dart's own copy -- every field
+// Same shape as navigation_test.dart's own copy: every field
 // `Thesis.fromMap` requires, so a seeded document reads back cleanly.
 Map<String, dynamic> thesis({
   String leaderUid = 'l1',
@@ -142,7 +142,7 @@ void main() {
 
     // The awaiting thesis surfaces on the overview (the needs-you queue and
     // the title-defences-to-close list can both name it), with an Approve
-    // action — that action is the signal this test is really about.
+    // action: that action is the signal this test is really about.
     expect(find.text('A Working Title'), findsWidgets);
     expect(find.text('Approve'), findsOneWidget);
   });
@@ -166,8 +166,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Awaiting your approval'), findsOneWidget);
-    expect(find.text('At title defence'), findsOneWidget);
-    expect(find.text('Defences this week'), findsOneWidget);
+    expect(find.text('At title defense'), findsOneWidget);
+    expect(find.text('Defenses this week'), findsOneWidget);
     expect(find.text('Active theses'), findsOneWidget);
   });
 
@@ -195,7 +195,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Checking what needs you…'), findsOneWidget);
-    expect(find.text('All caught up'), findsNothing);
+    expect(find.text('No other pending items'), findsNothing);
   });
 
   testWidgets('the greeting survives a missing profile document',
@@ -206,8 +206,8 @@ void main() {
     // Pumped as [DeanOverview] rather than through [OverviewScreen], which
     // is the widget whose whole job is to pick an overview BY role and
     // which correctly renders nothing once the role has settled as unknown
-    // — an account with no profile is routed to /no-profile now (spec
-    // D25), so asking the role dispatcher to show a dean's overview
+    // an account with no profile is routed to /no-profile now,
+    // so asking the role dispatcher to show a dean's overview
     // without a role would assert the opposite of what the app does. The
     // property under test is this overview's own.
     final db = FakeFirebaseFirestore();
@@ -223,10 +223,10 @@ void main() {
   });
 
   testWidgets(
-      'the Defences this week tile still shows the college-wide count '
+      'the Defenses this week tile still shows the college-wide count '
       'without a profile document', (tester) async {
     // myDefencesProvider awaits currentUserProvider.future and branches on
-    // role -- with no `users/{uid}` document, that branch does not match
+    // role: with no `users/{uid}` document, that branch does not match
     // the dean/coordinator arm, and it silently falls through to the
     // faculty adviser/panel fan-in instead of watchAll(). Nothing hangs,
     // so the earlier "greeting survives a missing profile" test cannot
@@ -251,14 +251,14 @@ void main() {
     // role by design, so it cannot host a no-profile test.
     await tester.pumpWidget(
         await wrap(const DeanOverview(), db, uid: 'd1', role: 'dean'));
-    // Remove the profile the helper wrote -- the same missing-document
+    // Remove the profile the helper wrote: the same missing-document
     // window the greeting test exercises, but checked against the tile
     // instead of the greeting.
     await db.collection('users').doc('d1').delete();
     await tester.pumpAndSettle();
 
     final tile = find.ancestor(
-        of: find.text('Defences this week'), matching: find.byWidgetPredicate((w) => w is Metric));
+        of: find.text('Defenses this week'), matching: find.byWidgetPredicate((w) => w is Metric));
     expect(find.descendant(of: tile, matching: find.text('1')),
         findsOneWidget);
     expect(find.descendant(of: tile, matching: find.text('0')),

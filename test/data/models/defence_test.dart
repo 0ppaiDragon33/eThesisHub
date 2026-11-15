@@ -30,7 +30,7 @@ void main() {
     expect(DefenceStatus.fromString(null), DefenceStatus.scheduled);
   });
 
-  test('a defence parses its stored shape', () {
+  test('a defense parses its stored shape', () {
     final d = Defence.fromMap('d1', {
       'thesisId': 't1',
       'type': 'preOral',
@@ -93,7 +93,7 @@ void main() {
     expect(c.body, 'Justify the choice of respondents.');
   });
 
-  test('a cancelled defence is terminal and accepts no comments', () {
+  test('a cancelled defense is terminal and accepts no comments', () {
     // Cancelled rather than deleted: the defence record is evidence, and a
     // hard delete leaves nothing to explain a gap in the history.
     expect(DefenceStatus.cancelled.acceptsComments, isFalse);
@@ -102,7 +102,7 @@ void main() {
     expect(DefenceStatus.fromString('cancelled'), DefenceStatus.cancelled);
   });
 
-  test('only a scheduled defence is editable', () {
+  test('only a scheduled defense is editable', () {
     expect(DefenceStatus.scheduled.isEditable, isTrue);
     expect(DefenceStatus.inProgress.isEditable, isFalse);
     expect(DefenceStatus.completed.isEditable, isFalse);
@@ -114,10 +114,10 @@ void main() {
     expect(defenceOpenGrace, const Duration(minutes: 30));
   });
 
-  // The four M4 fields are absent on every defence created before this
+  // The four evaluation fields are absent on every defence created before this
   // milestone, so absent must read as "not yet", never as an error and
   // never as a value.
-  test('a defence with no evaluation fields is unreleased and unjudged',
+  test('a defense with no evaluation fields is unreleased and unjudged',
       () {
     final d = Defence.fromMap('d1', {
       'thesisId': 't1',
@@ -138,7 +138,7 @@ void main() {
     expect(d.verdictRecordedAt, isNull);
   });
 
-  test('a released, judged defence reads all four back', () {
+  test('a released, judged defense reads all four back', () {
     final d = Defence.fromMap('d1', {
       'thesisId': 't1',
       'type': 'final',
@@ -220,7 +220,7 @@ void main() {
       );
 
   group('re-defence', () {
-    test('reads redefenceOf, and a defence without it is not a re-defence',
+    test('reads redefenceOf, and a defense without it is not a redefense',
         () {
       final plain = Defence.fromMap('d1', {'type': 'final'});
       expect(plain.redefenceOf, isNull);
@@ -235,23 +235,23 @@ void main() {
     });
 
     test('names all four kinds', () {
-      expect(defence('a').label, 'Pre-oral defence');
-      expect(defence('a', type: DefenceType.final_).label, 'Final defence');
-      expect(defence('a', redefenceOf: 'x').label, 'Pre-oral re-defence');
+      expect(defence('a').label, 'Pre-oral defense');
+      expect(defence('a', type: DefenceType.final_).label, 'Final defense');
+      expect(defence('a', redefenceOf: 'x').label, 'Pre-oral redefense');
       expect(defence('a', type: DefenceType.final_, redefenceOf: 'x').label,
-          'Final re-defence');
+          'Final redefense');
     });
 
-    test('a re-defence has the id derived from the failed defence', () {
+    test('a redefense has the id derived from the failed defense', () {
       expect(Defence.redefenceIdFor('abc'), 'abc_redefence');
     });
 
-    test('a failed defence with no re-defence awaits one', () {
+    test('a failed defense with no redefense awaits one', () {
       final failed = defence('d1', verdict: PassFail.fail);
       expect(awaitingRedefence([failed]), [failed]);
     });
 
-    test('a failed defence that has its re-defence awaits nothing', () {
+    test('a failed defense that has its redefense awaits nothing', () {
       final failed = defence('d1', verdict: PassFail.fail);
       final again = defence('d1_redefence', redefenceOf: 'd1',
           status: DefenceStatus.scheduled);
@@ -259,7 +259,7 @@ void main() {
       expect(hasRedefence(failed, [failed, again]), isTrue);
     });
 
-    test('a cancelled re-defence still uses up the one re-defence', () {
+    test('a cancelled redefense still uses up the one redefense', () {
       // The rules refuse a second document at the same derived id, so the
       // app must not offer a re-defence it cannot create.
       final failed = defence('d1', verdict: PassFail.fail);
@@ -268,7 +268,7 @@ void main() {
       expect(awaitingRedefence([failed, cancelled]), isEmpty);
     });
 
-    test('a failed re-defence, a pass and no verdict await nothing', () {
+    test('a failed redefense, a pass and no verdict await nothing', () {
       expect(
         awaitingRedefence([
           defence('r', verdict: PassFail.fail, redefenceOf: 'x'),

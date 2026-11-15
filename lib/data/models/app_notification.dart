@@ -27,7 +27,17 @@ enum NotificationType {
   nominationReturned,
 
   /// Every grader has submitted their Form 5c; the adviser can release them.
-  evaluationsComplete;
+  evaluationsComplete,
+
+  /// A defense the reader is party to was cancelled.
+  defenceCancelled,
+
+  /// The panel's verdict on the group's defense was recorded.
+  verdictRecorded,
+
+  /// The adviser released the evaluations: the group can read the panel's
+  /// written remarks (never the scores).
+  remarksReleased;
 
   String get value => name;
 
@@ -40,23 +50,23 @@ enum NotificationType {
 }
 
 /// A deterministic item id, derived from the type and a source-specific
-/// key — never random, never wall-clock. Two clients detecting the same
+/// key, never random, never wall-clock. Two clients detecting the same
 /// event (two of the reader's own devices, or one client re-running
 /// detection after a reconnect) must land on the exact same id, so the
-/// second write is a no-op rather than a duplicate row (D71).
+/// second write is a no-op rather than a duplicate row.
 ///
 /// `sourceKey` is each detector's own concern: a comment id is already
 /// unique on its own, but a field-level change (a defence's schedule
 /// moving) has no natural document id of its own, so its detector folds
-/// the new value into the key instead — see
+/// the new value into the key instead: see
 /// `lib/providers/notification_providers.dart`.
 String notificationId(NotificationType type, String sourceKey) =>
     '${type.value}_$sourceKey';
 
 /// One entry in a reader's own notification feed.
 ///
-/// Lives at `notifications/{uid}/items/{id}` — always the READER's own
-/// subcollection, written only by the reader's own client (D70). `id` is
+/// Lives at `notifications/{uid}/items/{id}`: always the READER's own
+/// subcollection, written only by the reader's own client. `id` is
 /// always a [notificationId] result; nothing constructs one ad hoc.
 class AppNotification {
   const AppNotification({
@@ -76,22 +86,22 @@ class AppNotification {
   /// The defence this item is about, for the three defence-driven types.
   ///
   /// Null for every other type, and also for items written before this
-  /// field existed — a defence notification is addressed to
+  /// field existed: a defence notification is addressed to
   /// `/defence/room/{defenceId}`, and `/defence/{thesisId}` is a DIFFERENT
-  /// screen (M1b's title defence), so a thesis id is not a usable
+  /// screen (title defence's title defence), so a thesis id is not a usable
   /// substitute. Readers fall back to the defences list rather than
   /// guessing.
   final String? defenceId;
 
-  /// A pure, already-rendered sentence — generated once by the detector
+  /// A pure, already-rendered sentence: generated once by the detector
   /// that wrote this item, from fields the writer already has standing
   /// read access to. Never re-derived on read.
   final String message;
 
   final bool read;
 
-  /// The SOURCE event's own timestamp (D72), not when this client noticed
-  /// it — so the feed sorts correctly even for a client that only
+  /// The SOURCE event's own timestamp, not when this client noticed
+  /// it, so the feed sorts correctly even for a client that only
   /// reconnects long after the underlying event happened.
   final DateTime createdAt;
 

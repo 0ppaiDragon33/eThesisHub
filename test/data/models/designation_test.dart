@@ -71,7 +71,7 @@ void main() {
 
     test('toMap does NOT write designation', () {
       // upsertOwnEntry round-trips through toMap, and the subject may not
-      // write their own designation -- that is spec D27's whole point.
+      // write their own designation: that is spec the whole point.
       // Including it here would send the field on every sign-in.
       final e = FacultyDirectoryEntry.fromMap('u1', {
         'fullName': 'Dr. A',

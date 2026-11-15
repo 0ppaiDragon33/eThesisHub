@@ -1,7 +1,7 @@
 import 'package:ethesishub/data/models/user_role.dart';
 
 /// A pending or completed promotion, keyed in Firestore by the invitee's
-/// lowercased email — the address is the document id, not a field.
+/// lowercased email: the address is the document id, not a field.
 ///
 /// Invites carry `college` and `specialization` so a promoted account is
 /// correct from its very first sign-in. Nothing else fills those two fields:
@@ -11,7 +11,7 @@ import 'package:ethesishub/data/models/user_role.dart';
 /// coordinator issuing the invite already knows both.
 ///
 /// An invite is marked consumed rather than deleted once applied, so a
-/// completed promotion always leaves a record — the invitee can never erase
+/// completed promotion always leaves a record: the invitee can never erase
 /// the evidence of their own elevation.
 class FacultyInvite {
   const FacultyInvite({

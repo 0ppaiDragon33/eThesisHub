@@ -1,5 +1,5 @@
 /// Which change a request asks for. The value is also the document id, so a
-/// thesis holds at most one request of each kind (spec 2026-09-25 §4.1).
+/// thesis holds at most one request of each kind.
 enum ChangeRequestType {
   adviser,
   title;
@@ -15,7 +15,7 @@ enum ChangeRequestType {
   }
 }
 
-/// One approver's answer. Defaults to `pending` — the safe state that grants
+/// One approver's answer. Defaults to `pending`: the safe state that grants
 /// nothing and blocks the stage.
 enum SignoffStatus {
   pending,
@@ -32,7 +32,7 @@ enum SignoffStatus {
   }
 }
 
-/// Where a request sits in its chain (spec §4.2). `pendingAdvisers` is the
+/// Where a request sits in its chain. `pendingAdvisers` is the
 /// adviser request's first stage (both advisers accept in parallel);
 /// `pendingAdviser` is the title request's (the current adviser notes it).
 enum ChangeRequestStage {
@@ -116,7 +116,7 @@ class Signoff {
 }
 
 /// A student's request to change their thesis's adviser or approved title,
-/// routed through the sign-off chain (spec 2026-09-25).
+/// routed through the sign-off chain.
 class ChangeRequest {
   const ChangeRequest({
     required this.type,
@@ -150,7 +150,7 @@ class ChangeRequest {
   final String? newTitle;
 
   /// The thesis's working title at the moment a title-change request was
-  /// submitted -- captured then because by the time the request reaches
+  /// submitted: captured then because by the time the request reaches
   /// `approved`, the Dean's batch has already overwritten the thesis's
   /// `workingTitle` with [newTitle]. Null for an adviser request.
   final String? oldTitle;
@@ -158,13 +158,13 @@ class ChangeRequest {
   /// The faculty uids whose sign-off is CURRENTLY awaited on this request.
   /// Denormalized so the faculty inbox can query with `arrayContains` rather
   /// than an unfiltered collection-group scan a per-document read rule would
-  /// reject wholesale (spec 2026-09-25 fix round 2, Fix 1). Read-authorization
-  /// only -- write authorization still comes from the per-role update arms.
+  /// reject wholesale. Read-authorization
+  /// only: write authorization still comes from the per-role update arms.
   final List<String> awaitingUids;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  /// True while the request is still moving through the chain — not returned
+  /// True while the request is still moving through the chain, not returned
   /// to the student and not approved.
   bool get isOpen => stage.isPending;
 

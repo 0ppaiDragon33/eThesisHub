@@ -12,16 +12,16 @@ import 'package:ethesishub/providers/auth_providers.dart';
 /// What `/overview` shows: which overview to render, decided by the
 /// signed-in account's role.
 ///
-/// Deliberately does not default a role (spec D25). This project has twice
-/// shipped software that quietly chose one — a group leader's upload button
-/// permanently hidden, a dean silently routed down the faculty code path —
+/// Deliberately does not default a role. We have twice
+/// shipped software that quietly chose one: a group leader's upload button
+/// permanently hidden, a dean silently routed down the faculty code path,
 /// and both times it looked like it was working.
 ///
 /// It is just as important that "not yet known" is not treated as
 /// "unknown". This screen used to read `.valueOrNull?.role` and render
 /// `SizedBox.shrink()` for null, which is true BOTH while
 /// `currentUserProvider` is still loading AND when the profile document is
-/// genuinely absent — so a perfectly ordinary first paint was
+/// genuinely absent, so a perfectly ordinary first paint was
 /// indistinguishable from a broken account, and rendered the same nothing.
 /// The three cases are now kept apart:
 ///
@@ -29,8 +29,8 @@ import 'package:ethesishub/providers/auth_providers.dart';
 ///   been diagnosed with anything.
 /// - **settled and known**: that role's overview.
 /// - **settled and unknown** (the document is absent, or the read failed):
-///   nothing at all, and the router's redirect — which re-fires on exactly
-///   this change — is what carries the reader to `/no-profile`, where the
+///   nothing at all, and the router's redirect, which re-fires on exactly
+///   this change: is what carries the reader to `/no-profile`, where the
 ///   two causes are named apart and Retry and Sign out are offered. Nothing
 ///   here guesses a role to fill the gap in the meantime.
 class OverviewScreen extends ConsumerWidget {

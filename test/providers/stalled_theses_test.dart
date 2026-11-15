@@ -72,7 +72,7 @@ void main() {
   });
 
   // The distinction the whole provider exists for. Most theses awaiting
-  // Conforme are perfectly healthy -- nobody has answered yet -- and
+  // Conforme are perfectly healthy (nobody has answered yet) and
   // surfacing those as work the coordinator must do would bury the few that
   // are genuinely stuck.
   test('a thesis merely awaiting answers is NOT listed', () async {
@@ -101,7 +101,7 @@ void main() {
   });
 
   // A thesis at another status is not a candidate at all, however its
-  // nominations read -- a declined nomination on an already-approved thesis
+  // nominations read: a declined nomination on an already-approved thesis
   // is history, not a stall.
   test('a declined nomination at another status is not stalled', () async {
     final db = FakeFirebaseFirestore();

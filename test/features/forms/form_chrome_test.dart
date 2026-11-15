@@ -12,7 +12,7 @@ Future<Uint8List> renderChrome({
   required String formTitle,
   String? reference,
 }) async {
-  // compress: false, exactly as every real form does — otherwise the text
+  // compress: false, exactly as every real form does, otherwise the text
   // operators are Flate-compressed and nothing below can assert on them.
   final doc = pw.Document(compress: false);
   doc.addPage(
@@ -40,8 +40,8 @@ void main() {
     expect(text, contains('research@isufst.edu.ph'));
   });
 
-  // Each form has its OWN RD code — Form 1 is RD-30, Form 5c is RD-37,
-  // Form 8 is RD-39 — so this must be a parameter, never a constant.
+  // Each form has its OWN RD code. Form 1 is RD-30, Form 5c is RD-37,
+  // Form 8 is RD-39, so this must be a parameter, never a constant.
   test('the RD code and form title come from the caller', () async {
     final text = extractPdfText(await renderChrome(
       rdCode: 'RD-37-06/24-04',

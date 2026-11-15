@@ -19,7 +19,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// asks for and the reasons behind it.
 ///
 /// [asDean] selects the provider ([deanChangeRequestsProvider] over
-/// [coordinatorChangeRequestsProvider]) and which actions the row offers —
+/// [coordinatorChangeRequestsProvider]) and which actions the row offers,
 /// Approve/Return for the Dean (the Dean's approve applies the thesis change
 /// in one batch via `approveAsDean`), Recommend/Return for the Coordinator
 /// (both a plain `respond`). A Return always asks for a reason first, the
@@ -27,7 +27,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 ///
 /// `respond`/`approveAsDean` throw `StateError` when the request has moved
 /// on since this widget last read it (another reader's answer, or a
-/// resubmission) — surfaced as a plain human message, same as
+/// resubmission): surfaced as a plain human message, same as
 /// [ChangeRequestInbox].
 class ChangeRequestQueue extends ConsumerStatefulWidget {
   const ChangeRequestQueue({super.key, required this.asDean});

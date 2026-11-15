@@ -14,7 +14,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// The Re-defence stage of the Defences page (spec 2026-09-25 §6.3): failed
+/// The Re-defence stage of the Defences page: failed
 /// defences still awaiting their re-defence, then the re-defences
 /// themselves.
 class RedefenceStage extends ConsumerWidget {
@@ -25,9 +25,9 @@ class RedefenceStage extends ConsumerWidget {
     return ref
         .watch(myDefencesProvider)
         .when(
-          loading: () => const LoadingState(label: 'Loading your defences…'),
+          loading: () => const LoadingState(label: 'Loading your defenses…'),
           error: (e, _) =>
-              ErrorState(error: e, message: 'Could not load your defences.'),
+              ErrorState(error: e, message: 'Could not load your defenses.'),
           data: (all) {
             final awaiting = awaitingRedefence(all);
             final scheduled = all.any(DefenceStage.redefence.includes);
@@ -35,9 +35,9 @@ class RedefenceStage extends ConsumerWidget {
               return const EmptyState(
                 key: Key('noRedefences'),
                 icon: Icons.replay_outlined,
-                title: 'No re-defences',
+                title: 'No redefenses',
                 message:
-                    'Defences the panel rated Fail.',
+                    'Defenses the panel rated Fail.',
               );
             }
             final canSchedule =
@@ -49,7 +49,7 @@ class RedefenceStage extends ConsumerWidget {
                 if (awaiting.isNotEmpty)
                   Panel(
                     key: const Key('awaitingRedefence'),
-                    title: 'Awaiting a re-defence',
+                    title: 'Awaiting a redefense',
                     subtitle: 'The panel\'s verdict on these was Fail',
                     icon: Icons.replay_outlined,
                     child: Column(
@@ -121,11 +121,11 @@ class AwaitingRedefenceRow extends ConsumerWidget {
               onPressed: () =>
                   context.push('/defence/schedule?redefenceOf=${failed.id}'),
               icon: const Icon(Icons.replay_outlined, size: 18),
-              label: const Text('Schedule re-defence'),
+              label: const Text('Schedule redefense'),
             )
           else
             Text(
-              'Waiting for the Coordinator to schedule the re-defence.',
+              'Waiting for the Coordinator to schedule the redefense.',
               key: Key('awaitingRedefenceNote-${failed.id}'),
               style: text.bodySmall,
             ),

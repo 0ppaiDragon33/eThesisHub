@@ -11,7 +11,7 @@ import 'package:ethesishub/features/forms/form_chrome.dart';
 
 const _bodyStyle = pw.TextStyle(fontSize: 11);
 
-/// Form 3's text, block by block, for an editable copy (spec 2026-09-24).
+/// Form 3's text, block by block, for an editable copy.
 /// Every string on the page below the letterhead comes from here; the
 /// official blank and filled letters read it unedited, so they print as
 /// they always have.
@@ -199,8 +199,8 @@ pw.Widget _page(FormText t, {Form3Data? data}) {
   );
 }
 
-/// Generates Form 3 — Request to Convene the Thesis Panel Members for
-/// Pre-Oral Defense — as a PDF. `compress: false` keeps the content
+/// Generates Form 3. Request to Convene the Thesis Panel Members for
+/// Pre-Oral Defense: as a PDF. `compress: false` keeps the content
 /// streams text-greppable; see `form1_pdf.dart` for why that matters.
 Future<Uint8List> buildForm3Pdf(Form3Data data) async {
   final doc = pw.Document(compress: false, theme: await formTheme());

@@ -5,8 +5,8 @@ import 'package:ethesishub/data/models/evaluation_criteria.dart';
 ///
 /// Used for two different things that must never be confused: one
 /// panelist's own rating on their sheet, and the panel's deliberated
-/// verdict under §8b, which the adviser records and which is NEVER
-/// computed from the ratings (D41).
+/// verdict under §8b, which the adviser records and which is never
+/// computed from the ratings.
 enum PassFail {
   pass,
   fail;
@@ -27,7 +27,7 @@ enum PassFail {
 }
 
 /// The sum of a score map. The stored `total` is written from this, and
-/// `firestore.rules` recomputes the same sum before accepting a write --
+/// `firestore.rules` recomputes the same sum before accepting a write,
 /// a stored total that could disagree with its own scores would be worse
 /// than no stored total at all.
 int totalOf(Map<String, int> scores) =>
@@ -36,9 +36,9 @@ int totalOf(Map<String, int> scores) =>
 /// ISUFST's passing mark for the thesis final grade, confirmed by the
 /// institution as a hard floor rather than a guideline.
 ///
-/// A panel mean below this admits only a Fail verdict (D77). That is the
+/// A panel mean below this admits only a Fail verdict. That is the
 /// single place the system constrains §8b's deliberation, and it is why
-/// D41's blanket "never computed — not by a majority of the ratings, nor by
+/// the blanket "never computed, not by a majority of the ratings, nor by
 /// a threshold on the mean" no longer holds without qualification. The
 /// panel still decides; the system refuses to record a Pass the numbers
 /// cannot carry.
@@ -71,7 +71,7 @@ class Evaluation {
   final String evaluatorUid;
 
   /// The evaluator's name AS IT STOOD WHEN THEY SUBMITTED, denormalized
-  /// here rather than resolved from `users/{uid}` on read -- the same
+  /// here rather than resolved from `users/{uid}` on read: the same
   /// treatment, and the same reason, as `authorName` on a defence
   /// comment. This is a permanent academic record: who marked this sheet
   /// must not silently change when the account behind the uid is renamed,
@@ -82,11 +82,11 @@ class Evaluation {
   /// falls back to the uid rather than rendering a blank column.
   final String evaluatorName;
 
-  /// Criterion key -> points, each 0..that criterion's weight (D34).
+  /// Criterion key -> points, each 0..that criterion's weight.
   final Map<String, int> scores;
 
   /// Criterion key -> remark, for the eight Content criteria only.
-  /// Optional per criterion (D45): requiring all eight produces filler.
+  /// Optional per criterion: requiring all eight produces filler.
   final Map<String, String> comments;
 
   /// 0..100. Stored rather than derived so a list can compare and order
@@ -94,7 +94,7 @@ class Evaluation {
   final int total;
 
   /// This panelist's own §8a rating. Null only when the stored value is
-  /// unreadable -- see [PassFail.fromString].
+  /// unreadable: see [PassFail.fromString].
   final PassFail? rating;
 
   /// When this panelist first submitted. Survives every later edit, so
@@ -106,8 +106,8 @@ class Evaluation {
   /// The subtotal for one half of the form.
   ///
   /// Counts only keys this build can place in a section. A key written by
-  /// a future build is kept in [scores] -- it is part of someone's
-  /// permanent record -- but cannot be added to a section it has no
+  /// a future build is kept in [scores]: it is part of someone's
+  /// permanent record, but cannot be added to a section it has no
   /// section for.
   int sectionTotal(EvaluationSection section) {
     var sum = 0;
@@ -136,6 +136,43 @@ class Evaluation {
       rating: PassFail.fromString(map['rating'] as String?),
       submittedAt: map['submittedAt'] as DateTime?,
       updatedAt: map['updatedAt'] as DateTime?,
+    );
+  }
+}
+
+/// What one grader wrote on their Form 5c, with none of the numbers.
+///
+/// Stored apart from [Evaluation] (`defenses/{id}/remarks/{uid}`) because
+/// Firestore rules work per document: this is the half the group's leader
+/// may read once the adviser releases, and the scores must not be in the
+/// same document. Written in the same batch as the sheet.
+class EvaluationRemarks {
+  const EvaluationRemarks({
+    required this.evaluatorUid,
+    required this.evaluatorName,
+    required this.comments,
+  });
+
+  final String evaluatorUid;
+
+  /// The name as it stood when they submitted, like [Evaluation.evaluatorName].
+  final String evaluatorName;
+
+  /// Criterion key -> remark, Content criteria only.
+  final Map<String, String> comments;
+
+  factory EvaluationRemarks.fromMap(
+    String evaluatorUid,
+    Map<String, dynamic> map,
+  ) {
+    final raw = (map['comments'] as Map?) ?? const {};
+    return EvaluationRemarks(
+      evaluatorUid: evaluatorUid,
+      evaluatorName: map['evaluatorName'] as String? ?? '',
+      comments: {
+        for (final e in raw.entries)
+          if (e.value is String) e.key.toString(): e.value as String,
+      },
     );
   }
 }

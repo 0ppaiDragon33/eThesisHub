@@ -38,9 +38,9 @@ void main() {
     expect(submissionsThisMonth(const [], now: now), 0);
   });
 
-  test('the defences peek reads naturally', () {
-    expect(defencesPeek(0), 'No defences');
-    expect(defencesPeek(1), '1 defence');
-    expect(defencesPeek(3), '3 defences');
+  test('the defenses peek reads naturally', () {
+    expect(defencesPeek(0), 'No defenses');
+    expect(defencesPeek(1), '1 defense');
+    expect(defencesPeek(3), '3 defenses');
   });
 }

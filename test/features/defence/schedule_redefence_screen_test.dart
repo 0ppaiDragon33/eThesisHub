@@ -76,13 +76,13 @@ Future<GoRouter> pump(WidgetTester tester, FakeFirebaseFirestore db) async {
 }
 
 void main() {
-  testWidgets('says which defence is re-defended, and schedules it',
+  testWidgets('says which defense is re-defended, and schedules it',
       (tester) async {
     final db = await seed();
     await pump(tester, db);
 
     expect(find.byKey(const Key('redefenceOfSummary')), findsOneWidget);
-    expect(find.textContaining('Re-defence of the final defence held'),
+    expect(find.textContaining('Redefense of the final defense held'),
         findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('redefenceVenue')), 'AVR 2');
@@ -97,20 +97,20 @@ void main() {
     expect(find.text('room f1_redefence'), findsOneWidget);
   });
 
-  testWidgets('a passed defence cannot be re-defended', (tester) async {
+  testWidgets('a passed defense cannot be re-defended', (tester) async {
     final db = await seed(verdict: 'pass');
     await pump(tester, db);
     expect(find.byKey(const Key('cannotRedefend')), findsOneWidget);
     expect(find.byKey(const Key('scheduleRedefenceButton')), findsNothing);
   });
 
-  testWidgets('a re-defence cannot be re-defended', (tester) async {
+  testWidgets('a redefense cannot be re-defended', (tester) async {
     final db = await seed(redefenceOf: 'f0');
     await pump(tester, db);
     expect(find.byKey(const Key('cannotRedefend')), findsOneWidget);
   });
 
-  testWidgets('a defence already re-defended cannot be again',
+  testWidgets('a defense already re-defended cannot be again',
       (tester) async {
     final db = await seed();
     await db.doc('defenses/f1_redefence').set({
@@ -128,14 +128,14 @@ void main() {
     await tester.tap(find.byKey(const Key('scheduleRedefenceButton')));
     await confirmIfAsked(tester);
     await tester.pumpAndSettle();
-    expect(find.text('Give the re-defence a venue.'), findsOneWidget);
+    expect(find.text('Give the redefense a venue.'), findsOneWidget);
   });
 
   testWidgets('only the Coordinator gets the button', (tester) async {
     final db = await seed(role: 'faculty');
     await pump(tester, db);
     expect(find.byKey(const Key('scheduleRedefenceButton')), findsNothing);
-    expect(find.text('Only the Research Coordinator can schedule defences.'),
+    expect(find.text('Only the Research Coordinator can schedule defenses.'),
         findsOneWidget);
   });
 }

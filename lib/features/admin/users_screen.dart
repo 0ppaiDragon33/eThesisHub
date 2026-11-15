@@ -33,7 +33,7 @@ typedef PositionCounts = ({int advising, int panelling});
 /// currently holds a position on is to look at every thesis. [allThesesProvider]
 /// is already watched by two dashboards and is permitted to the coordinator,
 /// so this folds over that ONE stream once per build rather than issuing a
-/// query per row -- a college with thirty faculty would otherwise cost
+/// query per row: a college with thirty faculty would otherwise cost
 /// thirty-plus reads to render one screen.
 Map<String, PositionCounts> positionCounts(List<Thesis> theses) {
   final map = <String, PositionCounts>{};
@@ -56,10 +56,10 @@ Map<String, PositionCounts> positionCounts(List<Thesis> theses) {
 /// The coordinator's Users destination: every account in the college,
 /// activated or not, with who may be nominated as an adviser or a panelist.
 ///
-/// No `Scaffold`, no `AppBar` -- the app shell owns both for every
+/// No `Scaffold`, no `AppBar`: the app shell owns both for every
 /// signed-in route, and a second one here would stack a second app bar.
 ///
-/// Two tabs sit at the top, Accounts and Invites. This screen IS the
+/// Two tabs sit at the top, Accounts and Invites. This screen is the
 /// Accounts tab; Invites is a `context.go('/invites')` away, its own
 /// linkable route rendering `FacultyInvitesScreen`, so both stay
 /// bookmarkable rather than one being buried as local tab state the other
@@ -73,7 +73,7 @@ class UsersScreen extends ConsumerStatefulWidget {
 
 class _UsersScreenState extends ConsumerState<UsersScreen> {
   /// `null` means "every role". Selecting a role explicitly (including
-  /// [UserRole.student]) always shows it -- [_showStudents] only matters
+  /// [UserRole.student]) always shows it: [_showStudents] only matters
   /// while this is `null`.
   UserRole? _roleFilter;
 
@@ -118,22 +118,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       kicker: 'Research office',
       title: 'Users',
       subtitle: 'Activate accounts and set who can be nominated.',
-      actions: [
-        OutlinedButton.icon(
-          key: const Key('stalledLink'),
-          onPressed: () => context.push('/stalled'),
-          icon: const Icon(Icons.report_outlined, size: 18),
-          label: const Text('Stalled nominations'),
-        ),
-        // The publish queue's link from the coordinator's admin area; it
-        // is deliberately not a destination.
-        OutlinedButton.icon(
-          key: const Key('archiveQueueLink'),
-          onPressed: () => context.go('/archive/queue'),
-          icon: const Icon(Icons.upload_outlined, size: 18),
-          label: const Text('Publish queue'),
-        ),
-      ],
       children: [
         const UsersTabs(selected: UsersTab.accounts),
         const Gap.lg(),
@@ -165,7 +149,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               );
             }
             final positions = positionCounts(thesesAsync.valueOrNull ?? const []);
-            // Only asserted once the directory has actually loaded --
+            // Only asserted once the directory has actually loaded,
             // while it is still settling, treating every faculty row as
             // "not yet signed in" would flash a false warning on accounts
             // that have one.
@@ -173,12 +157,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               for (final e in directoryAsync.valueOrNull ?? const [])
                 e.uid,
             };
-            // Spec §7: each panel resolves its own AsyncValue, and a failed
+            // each panel resolves its own AsyncValue, and a failed
             // one must SAY so rather than degrade into something that reads
             // as data. A failed theses query used to render every Positions
-            // cell as "—", indistinguishable from "holds nothing" -- the
-            // exact misreading the column exists to prevent (§5.1, because
-            // of D30): the coordinator narrows someone while the screen
+            // cell as " (", indistinguishable from "holds nothing") the
+            // exact misreading the column exists to prevent:
+            // the coordinator narrows someone while the screen
             // says they sit on nothing. Same for the directory, whose
             // failure silently withdrew every "not yet signed in" marker.
             return Column(
@@ -223,12 +207,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
 enum UsersTab { accounts, invites }
 
 /// Accounts (`/users`) vs Invites (`/invites`), rendered as tabs even though
-/// they are two separate routes -- see [UsersScreen]'s class doc.
+/// they are two separate routes: see [UsersScreen]'s class doc.
 ///
 /// Public and shared by BOTH screens. It lived privately in this file at
 /// first, so `/invites` rendered with the rail highlighting "Users", the app
 /// bar reading "Invites", and no Accounts/Invites control anywhere on the
-/// screen -- a tab you could enter and not leave. Spec §5 promises a
+/// screen: a tab you could enter and not leave. promises a
 /// destination "with two tabs", which is only true if both of them carry
 /// the strip.
 class UsersTabs extends StatelessWidget {
@@ -372,7 +356,7 @@ class _UsersTable extends StatelessWidget {
 
   /// The theses query failed, so [positions] is empty for a reason that has
   /// nothing to do with what anyone holds. Every cell says "unknown"
-  /// instead of "—".
+  /// instead of ": ".
   final bool positionsFailed;
   final Set<String> directoryUids;
   final bool directoryLoaded;
@@ -564,9 +548,9 @@ class _NameCell extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: AppTokens.xs),
               child: Text(
-                // Spec §4.2.1: an invited-and-designated account that has
-                // never signed in has no directory entry yet -- the entry
-                // is only created client-side at sign-in -- so a
+                // an invited-and-designated account that has
+                // never signed in has no directory entry yet: the entry
+                // is only created client-side at sign-in, so a
                 // designation set here has not reached the nomination
                 // picker. This is that window, named rather than hidden.
                 'Not signed in yet.',
@@ -594,9 +578,9 @@ class _PositionsCell extends StatelessWidget {
   final AppUser user;
   final PositionCounts? counts;
 
-  /// The theses query failed. "—" would be a lie here: it reads as "holds
+  /// The theses query failed. ": " would be a lie here: it reads as "holds
   /// nothing", which is the one conclusion this column exists to stop a
-  /// coordinator drawing wrongly before they narrow someone (D30).
+  /// coordinator drawing wrongly before they narrow someone.
   final bool failed;
 
   @override
@@ -621,12 +605,12 @@ class _PositionsCell extends StatelessWidget {
 
 /// The two designation checkboxes for one account.
 ///
-/// Stateful because a refused write has to be shown. Spec §7: *"a refused
+/// Stateful because a refused write has to be shown. *"a refused
 /// write says which write was refused … a coordinator hitting the self-edit
 /// ban through some path the UI did not anticipate must be told that, not
 /// 'something went wrong'."* Previously the write was neither awaited nor
 /// caught, so a refusal became an unhandled Future error and the checkbox
-/// silently snapped back to its old value on the next stream event -- which
+/// silently snapped back to its old value on the next stream event, which
 /// also hid the real case in [UserRepository.setDesignation], where the
 /// `users` write can succeed and the `facultyDirectory` mirror be refused,
 /// leaving authority and mirror divergent with nothing on screen saying so.
@@ -637,8 +621,8 @@ class _DesignationCell extends ConsumerStatefulWidget {
 
   /// The reader's own row. The `users` coordinator arm carries
   /// `request.auth.uid != uid` for ALL seven writable fields, not only
-  /// `active`, so designating yourself is always refused -- the controls
-  /// say so up front, exactly as the active switch does (spec §5.2, whose
+  /// `active`, so designating yourself is always refused: the controls
+  /// say so up front, exactly as the active switch does (whose
   /// "controls disabled and the reason stated" is plural).
   final bool isOwnRow;
 
@@ -674,7 +658,7 @@ class _DesignationCellState extends ConsumerState<_DesignationCell> {
       children: [
         // Wrap, not Row: this column is narrow at the shell's own rail
         // breakpoint, and a Row here has no way to give up horizontal
-        // space -- it would silently clip "Panelist" off the edge instead
+        // space: it would silently clip "Panelist" off the edge instead
         // of dropping to a second line.
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -758,7 +742,7 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
 
   /// Records who switched an account on or off. Best-effort and after the
   /// write: it swallows its own failure so the log can never block or undo
-  /// the action — the same treatment the sign-in audit entries already get.
+  /// the action: the same treatment the sign-in audit entries already get.
   Future<void> _logActiveChange(bool active) async {
     final actor = ref.read(signedInUidProvider);
     if (actor == null) return;
@@ -784,7 +768,7 @@ class _ActiveCellState extends ConsumerState<_ActiveCell> {
           value: user.active,
           // The rules carry `request.auth.uid != uid`: a coordinator can
           // never activate or deactivate their own account. Disabling the
-          // control here says so before the write is even attempted --
+          // control here says so before the write is even attempted,
           // hiding the row would be stranger than showing it refused.
           onChanged: widget.isOwnRow ? null : _setActive,
         ),

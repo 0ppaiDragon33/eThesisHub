@@ -2,4 +2,4 @@
 ///
 /// A student's own program and specialization on their profile are typed
 /// freely, since those names change from time to time.
-const kPrograms = ['BSIT', 'BSCS', 'BSIS'];
+const kPrograms = ['BSIT'];

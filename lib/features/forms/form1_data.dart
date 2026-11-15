@@ -81,7 +81,7 @@ class Form1Data {
         .toList();
 
     /// True when this person already has a signature block lower on the
-    /// form — the Coordinator who recommended, or the Dean who approved.
+    /// form: the Coordinator who recommended, or the Dean who approved.
     bool signsBelow(String uid) =>
         uid == thesis.coordinatorRecommendedBy ||
         uid == thesis.deanApprovedBy;
@@ -90,8 +90,8 @@ class Form1Data {
           NominationPosition.adviser => 'Thesis Adviser',
           NominationPosition.panelist => 'Panel Member',
           NominationPosition.coordinator =>
-            'Research Coordinator (ex officio)',
-          NominationPosition.dean => 'Dean (ex officio)',
+            'Research Coordinator (designated member)',
+          NominationPosition.dean => 'Dean (designated member)',
         };
 
     final rows = <ConformeRow>[
@@ -111,7 +111,7 @@ class Form1Data {
       //
       // The Coordinator who recommends and the Dean who approves each get
       // their own signature block, and printing them a second time as
-      // "Ex officio member" said nothing the block below did not — while
+      // "Ex officio member" said nothing the block below did not, while
       // costing four lines, which is what pushed a six-researcher form past
       // the bottom of the sheet. The approved layout never had these rows.
       //
@@ -123,7 +123,7 @@ class Form1Data {
           ConformeRow(
             name: n.nomineeName,
             role: roleLabel(n),
-            status: 'Ex officio member',
+            status: 'Designated member',
           ),
     ];
 
@@ -146,7 +146,7 @@ class Form1Data {
       deanName:
           _nameFor(thesis.deanApprovedBy, directoryNames, exOfficio),
       // The letter date is when the nomination was submitted, not when the
-      // group record was created — those can be weeks apart. Older theses
+      // group record was created: those can be weeks apart. Older theses
       // predate this field and have no recorded submission moment; rather
       // than print a blank or misleading date, fall back to `createdAt` so
       // the form always carries a real date.

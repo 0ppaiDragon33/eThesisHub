@@ -11,7 +11,7 @@ import 'package:ethesishub/data/models/audit_entry.dart';
 import 'package:ethesishub/providers/admin_providers.dart';
 
 /// The coordinator/dean view of the audit log: who did what, to which
-/// record, and when. Read-only — entries are written by the actions
+/// record, and when. Read-only: entries are written by the actions
 /// themselves and are append-only in the rules.
 class AuditLogScreen extends ConsumerWidget {
   const AuditLogScreen({super.key});

@@ -96,7 +96,7 @@ void main() {
 
   group('blocksFor', () {
     test('groups per commenter, in the order they first spoke', () {
-      // Ordering IS the record. Alphabetising would misrepresent a
+      // Ordering is the record. Alphabetising would misrepresent a
       // transcript, so the test seeds an order that alphabetising breaks.
       final blocks = blocksFor(const [
         (authorUid: 'z1', authorName: 'Dr. Zamora', authorRole: 'Adviser',

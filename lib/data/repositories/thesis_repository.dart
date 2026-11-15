@@ -30,7 +30,7 @@ Thesis thesisFromFirestore(String id, Map<String, dynamic> data) {
   raw['manuscriptUploadedAt'] = _firestoreDate(raw['manuscriptUploadedAt']);
   raw['nominationReturnedAt'] = _firestoreDate(raw['nominationReturnedAt']);
   // titleRound (num) and presentationPath/presentationUrl/titleDecidedBy/
-  // titleRejectionRemark/approvedTitleId (String) need no conversion —
+  // titleRejectionRemark/approvedTitleId (String) need no conversion,
   // Thesis.fromMap reads them with plain num/String casts, and Firestore
   // never wraps a number or string in a Timestamp.
   return Thesis.fromMap(id, raw);
@@ -38,7 +38,7 @@ Thesis thesisFromFirestore(String id, Map<String, dynamic> data) {
 
 /// Thrown when a nominee answers a request whose thesis has been reopened to
 /// `draft` for re-nomination. The request they hold is stale and a fresh one
-/// is on its way, so this is NOT the "already completed" case — the inbox
+/// is on its way, so this is not the "already completed" case: the inbox
 /// tells them to wait rather than that they missed their chance.
 class NominationBeingRevised implements Exception {
   const NominationBeingRevised();
@@ -164,7 +164,7 @@ class ThesisRepository {
   /// `nomineeUid` is stored as a field as well as being the document id.
   /// The id is what every rule authorises on (`nominations/{nomineeUid}`,
   /// including the collection-group read rule), so it must not move; but a
-  /// collection-group query cannot filter on the id — comparing
+  /// collection-group query cannot filter on the id: comparing
   /// `FieldPath.documentId` inside a collection group requires a full
   /// document path, not a bare id, and fails client-side with
   /// `invalid-argument`. The field is what `watchMyPendingNominations`
@@ -188,7 +188,7 @@ class ThesisRepository {
   /// Writes every nomination and advances the thesis in one batch, so a
   /// half-submitted nomination cannot exist.
   ///
-  /// A nominee's uid can collide across roles — the Dean or a Research
+  /// A nominee's uid can collide across roles: the Dean or a Research
   /// Coordinator may also be nominated by name as adviser or panelist "for
   /// the sake of records". Precedence is resolved explicitly here, by
   /// building one map of uid -> nomination doc before writing anything, so
@@ -198,7 +198,7 @@ class ThesisRepository {
   ///
   /// - A panelist nomination that collides with an ex-officio seat collapses
   ///   into that single ex-officio entry (`exOfficio: true`, no Conforme
-  ///   asked) — sitting on the panel already follows from holding the
+  ///   asked): sitting on the panel already follows from holding the
   ///   office.
   /// - An adviser nomination always wins, even over an ex-officio seat:
   ///   supervising a specific thesis is a personal commitment distinct from
@@ -217,12 +217,12 @@ class ThesisRepository {
       throw ArgumentError('Only a copy of Form 1 can be attached here.');
     }
 
-    // Counted AFTER the precedence collapse below, not before it. A raw
+    // Counted after the precedence collapse below, not before it. A raw
     // `panelists.length >= 3` accepts a selection that commits as two: an
     // office holder picked as a panelist collapses into their single
     // ex-officio seat, and an adviser pick overrides a panelist pick for the
     // same uid. What must be at least three is what `approve` will later
-    // count — `position == panelist && !exOfficio` — and what the Dean's own
+    // count (`position == panelist && !exOfficio`) and what the Dean's own
     // rule requires (`panelistUids.size() >= 3`). Getting this wrong is not
     // recoverable: the shortfall only surfaces at `approve`, by which point no
     // rule lets anyone move the thesis, in either direction.
@@ -233,8 +233,8 @@ class ThesisRepository {
         .difference({adviser.uid});
     if (effectivePanel.length < 3) {
       throw ArgumentError('At least three panel members are required, and '
-          'ex-officio members and the adviser do not count toward that '
-          'minimum — this submission would leave ${effectivePanel.length}.');
+          'designated members and the adviser do not count toward that '
+          'minimum. This submission would leave ${effectivePanel.length}.');
     }
 
     final batch = _db.batch();
@@ -285,13 +285,13 @@ class ThesisRepository {
 
     // A FIRST submission finds nothing here and simply writes the roster.
     //
-    // A SECOND one — after `reopenForRenomination` hands a stalled thesis
-    // back to the group — is deliberately much narrower, because rewriting
+    // A SECOND one: after `reopenForRenomination` hands a stalled thesis
+    // back to the group: is deliberately much narrower, because rewriting
     // the roster wholesale is wrong twice over. It would reset everyone who
     // had already answered back to `pending`, asking people to accept a
     // second time; and `firestore.rules` refuses it anyway, since the
     // nomination update arm is pinned to `request.auth.uid == nomineeUid`
-    // — answering is the nominee's alone, never the leader's. The leader may
+    // answering is the nominee's alone, never the leader's. The leader may
     // only DELETE, only while `draft`, and only a seat whose
     // `conformeStatus` is `declined`.
     //
@@ -313,7 +313,7 @@ class ThesisRepository {
       if (status == 'declined') {
         // Re-asking the same person who refused would mean deleting and
         // re-creating the same document. In a batch both operations are
-        // judged against the state BEFORE the batch, so the create is seen
+        // judged against the state before the batch, so the create is seen
         // as an update and refused. Naming that is better than emitting a
         // permission-denied the screen would blame on availability.
         throw ArgumentError(
@@ -333,7 +333,7 @@ class ThesisRepository {
       }
 
       // Same person, same seat, already asked: leave their answer alone.
-      // This is the case that makes a reopen usable — an accepted nominee
+      // This is the case that makes a reopen usable: an accepted nominee
       // is not asked to accept again.
     }
 
@@ -400,8 +400,8 @@ class ThesisRepository {
   /// Every thesis in the college, unfiltered.
   ///
   /// Readable only by a coordinator or the dean. Their arm of the `theses`
-  /// list rule reads no field off `resource`, so — unlike the defence
-  /// listing in M3 — this query needs no `where` clause to be admitted.
+  /// list rule reads no field off `resource`, so: unlike the defence
+  /// listing in defence: this query needs no `where` clause to be admitted.
   /// Pinned by four emulator tests, including a student control.
   ///
   /// Never watch this from a student or faculty screen: it produces a
@@ -414,7 +414,7 @@ class ThesisRepository {
 
   /// Theses this faculty member advises.
   ///
-  /// Needs the adviser arm on `allow list` added in M2 — before it, this
+  /// Needs the adviser arm on `allow list` added in chapters: before it, this
   /// query was denied outright, which is why the faculty dashboard carried
   /// a placeholder for two milestones.
   Stream<List<Thesis>> watchAdvisedTheses(String uid) {
@@ -426,7 +426,7 @@ class ThesisRepository {
 
   /// The current set of nomination doc ids for a thesis. Nominations are
   /// created exactly once, atomically, by `submitNominations`' batch and are
-  /// never added to or removed afterward — only their fields (conformeStatus
+  /// never added to or removed afterward, only their fields (conformeStatus
   /// etc.) mutate. That invariant is what makes it safe to enumerate ids
   /// with a plain, non-transactional query *before* opening a transaction
   /// below: the transaction never trusts this query's field values, only
@@ -436,7 +436,7 @@ class ThesisRepository {
   ///
   /// This split exists because `Transaction.get()` in `cloud_firestore`
   /// (verified against 6.8.0, the version pinned here) only accepts a
-  /// `DocumentReference` — there is no `Transaction.get(Query)` overload, so
+  /// `DocumentReference`: there is no `Transaction.get(Query)` overload, so
   /// a collection query cannot run inside a transaction at all. The same is
   /// true of `fake_cloud_firestore` 4.2.0's `_DummyTransaction`. This is a
   /// hard SDK limitation, not a choice made here.
@@ -446,15 +446,15 @@ class ThesisRepository {
   }
 
   /// Records a nominee's Conforme and, once every nomination that actually
-  /// needs one has been accepted, advances the thesis — atomically with the
+  /// needs one has been accepted, advances the thesis: atomically with the
   /// read that decides it, and only while the thesis is still awaiting
   /// Conforme.
   ///
   /// Ex-officio seats (`needsConforme == false`) are never asked and must
-  /// never gate this — see `Nomination.needsConforme`.
+  /// never gate this: see `Nomination.needsConforme`.
   ///
   /// Guarded on the thesis's *current persisted* status, read fresh inside
-  /// the transaction, the same way `recommend`/`approve` guard themselves —
+  /// the transaction, the same way `recommend`/`approve` guard themselves,
   /// never on anything the caller supplies. A response that arrives after
   /// the thesis has already left `nominationPendingConforme` (a duplicate
   /// tap, a retried write, a stale client, or an honest late click after
@@ -539,24 +539,24 @@ class ThesisRepository {
   /// A declined Conforme is terminal without this. The nominee cannot
   /// un-decline, [respondToNomination] counts them outstanding forever, and
   /// `firestore.rules` freezes the leader out of their own thesis the moment
-  /// it leaves `draft` — so the group cannot replace them either. Recovery
+  /// it leaves `draft`, so the group cannot replace them either. Recovery
   /// was the Firebase Console.
   ///
   /// Guarded on the thesis's *current persisted* status, read inside the
   /// transaction, exactly as [recommend] and [approve] guard themselves. A
-  /// reopen that arrives after the thesis has moved on — a duplicate tap, a
-  /// stale client — is refused rather than silently rewinding a thesis the
+  /// reopen that arrives after the thesis has moved on: a duplicate tap, a
+  /// stale client: is refused rather than silently rewinding a thesis the
   /// coordinator has already recommended or the dean has already approved.
   ///
   /// The declined nomination documents are deliberately left in place: a
   /// coordinator cannot delete them (the rules grant that only to the
   /// leader), and the leader's own resubmission prunes whatever is no longer
-  /// on the roster — see [submitNominations].
+  /// on the roster: see [submitNominations].
   Future<void> reopenForRenomination({
     required String thesisId,
     required String coordinatorUid,
   }) async {
-    // Returns its failure rather than throwing inside the transaction — see
+    // Returns its failure rather than throwing inside the transaction: see
     // `respondToNomination` for why (the Android `MissingPluginException` on
     // transaction cancel).
     final failure = await _db.runTransaction<StateError?>((tx) async {
@@ -642,13 +642,13 @@ class ThesisRepository {
   /// accepted nominations, so the stored panel can never disagree with what
   /// the nominees actually accepted.
   ///
-  /// Per spec §4.0a: ex-officio members and the adviser must never appear in
-  /// `panelistUids[]` — the adviser lives in `adviserUid` instead — and
+  /// Per ex-officio members and the adviser must never appear in
+  /// `panelistUids[]` (the adviser lives in `adviserUid` instead) and
   /// declined nominees must never appear in either.
   ///
   /// The status guard, the nomination reads that derive `adviserUid`/
   /// `panelistUids`, and the write that commits them all happen inside one
-  /// `runTransaction` — see `_nominationIds` for why the id list itself is
+  /// `runTransaction`: see `_nominationIds` for why the id list itself is
   /// fetched outside it. A decline landing after the id list is fetched but
   /// before this method would previously have committed can no longer slip
   /// through: `transaction.get()` re-reads each nomination's actual
@@ -660,7 +660,7 @@ class ThesisRepository {
   }) async {
     final ids = await _nominationIds(thesisId);
 
-    // Returns its failure rather than throwing inside the transaction — see
+    // Returns its failure rather than throwing inside the transaction: see
     // `respondToNomination` for why (the Android `MissingPluginException` on
     // transaction cancel).
     final failure = await _db.runTransaction<StateError?>((tx) async {
@@ -723,7 +723,7 @@ class ThesisRepository {
   /// parent thesis). Requires the collection-group rule on `nominations`.
   ///
   /// Filters on the `nomineeUid` FIELD, not on the document id. The id is
-  /// still the uid — every rule authorises on it — but
+  /// still the uid (every rule authorises on it) but
   /// `where(FieldPath.documentId, isEqualTo: uid)` on a collection group is
   /// rejected client-side with `invalid-argument`: inside a collection group
   /// a documentId() comparison must be given a full document path, and there
@@ -773,13 +773,13 @@ class ThesisRepository {
   ///
   /// Replaces any previous upload, so a group that uploaded the wrong file
   /// can simply upload the right one. The old object is left in the bucket
-  /// — deleting it would need the previous path and a second network call
+  /// deleting it would need the previous path and a second network call
   /// that can fail independently, and an orphaned PDF behind an
   /// unguessable URL is the cheaper problem.
   ///
   /// Every check here is ALSO a rule. They are repeated because
   /// `fake_cloud_firestore` enforces none of them, so without these the
-  /// Dart suite would pass against writes production denies — and because
+  /// Dart suite would pass against writes production denies, and because
   /// a client-side refusal can say WHY, which a `permission-denied`
   /// cannot.
   Future<void> attachManuscript({
@@ -819,7 +819,7 @@ class ThesisRepository {
         ThesisStatus.titleApproved) {
       throw StateError(
           'The manuscript is submitted once the thesis has passed its '
-          'final defence and before it is archived.');
+          'final defense and before it is archived.');
     }
 
     await _thesis(thesisId).update({

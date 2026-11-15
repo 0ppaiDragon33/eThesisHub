@@ -77,9 +77,9 @@ void main() {
     expect(d.evaluatorField, 'Information Technology');
   });
 
-  // D59 + M4's D36: one panelist can hold TWO 5c sheets for one thesis,
+  // One panelist can hold TWO 5c sheets for one thesis,
   // one per defence. They must be distinguishable on the page.
-  test('the defence type distinguishes the two sheets a panelist may hold',
+  test('the defense type distinguishes the two sheets a panelist may hold',
       () {
     expect(assemble(defence: buildDefence(type: DefenceType.preOral))
         .defenceType, DefenceType.preOral);

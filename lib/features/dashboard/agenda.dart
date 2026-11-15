@@ -30,7 +30,7 @@ class WeekAgenda extends StatelessWidget {
   Widget build(BuildContext context) {
     return Panel(
       title: title,
-      subtitle: 'Defences in the next seven days',
+      subtitle: 'Defenses in the next seven days',
       icon: Icons.event_note_outlined,
       flush: true,
       trailing: TextButton(
@@ -44,7 +44,7 @@ class WeekAgenda extends StatelessWidget {
         ),
         error: (e, _) => Padding(
           padding: const EdgeInsets.all(AppTokens.md),
-          child: ErrorState(error: e, message: 'Could not load defences.'),
+          child: ErrorState(error: e, message: 'Could not load defenses.'),
         ),
         data: (all) {
           final week = defencesThisWeek(all)
@@ -53,7 +53,7 @@ class WeekAgenda extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.all(AppTokens.lg - 4),
               child: Text(
-                'No defences scheduled this week.',
+                'No defenses scheduled this week.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             );

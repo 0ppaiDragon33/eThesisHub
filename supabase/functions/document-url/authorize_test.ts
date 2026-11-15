@@ -133,12 +133,29 @@ Deno.test("an unauthorized caller is refused the manuscript too", () => {
 
 // --- the repository (archived) case ----------------------------------------
 
-Deno.test("an archived manuscript is readable by any active stranger", () => {
-  // The repository is meant to be browsed. Once published, the manuscript
-  // opens for anyone with an active account, matching archive/{id}'s own
-  // activeUser() read rule.
+Deno.test("an archived manuscript is NOT readable by a stranger student", () => {
+  // Students cannot see each other's archived thesis, matching archive/{id}'s
+  // read rule (owner + faculty-side roles only).
   assertEquals(
     mayReadDocument(caller({}), thesis, "manuscript", { isArchived: true }),
+    false,
+  );
+});
+
+Deno.test("an archived manuscript is readable by its owner", () => {
+  assertEquals(
+    mayReadDocument(caller({ uid: "leader" }), thesis, "manuscript", {
+      isArchived: true,
+    }),
+    true,
+  );
+});
+
+Deno.test("an archived manuscript is readable by any active faculty", () => {
+  assertEquals(
+    mayReadDocument(caller({ role: "faculty" }), thesis, "manuscript", {
+      isArchived: true,
+    }),
     true,
   );
 });
@@ -147,14 +164,16 @@ Deno.test("archiving does NOT make chapter drafts public", () => {
   // Only the published manuscript becomes browsable; the working chapters
   // stay members-only even after the thesis is archived.
   assertEquals(
-    mayReadDocument(caller({}), thesis, "chapterII", { isArchived: true }),
+    mayReadDocument(caller({ role: "faculty" }), thesis, "chapterII", {
+      isArchived: true,
+    }),
     false,
   );
 });
 
 Deno.test("a deactivated account cannot browse the archive", () => {
   assertEquals(
-    mayReadDocument(caller({ active: false }), thesis, "manuscript", {
+    mayReadDocument(caller({ active: false, role: "faculty" }), thesis, "manuscript", {
       isArchived: true,
     }),
     false,

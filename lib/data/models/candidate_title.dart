@@ -14,10 +14,10 @@ class CandidateTitle {
   final String id;
   final String titleText;
 
-  /// Supabase object path — what we would need to delete the file.
+  /// Supabase object path: what we would need to delete the file.
   final String justificationPath;
 
-  /// Public URL — what the panel opens. The bucket is public and the path is
+  /// Public URL: what the panel opens. The bucket is public and the path is
   /// an unguessable UUID.
   final String justificationUrl;
 

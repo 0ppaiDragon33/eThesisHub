@@ -11,7 +11,7 @@ import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-/// Mirrors archive_routes_test.dart's `containerFor`/`pumpApp` -- a real
+/// Mirrors archive_routes_test.dart's `containerFor`/`pumpApp`: a real
 /// ProviderContainer standing up the actual `goRouterProvider`, so
 /// navigating to '/forms' goes through the real `GoRoute` table rather
 /// than around it.
@@ -46,7 +46,7 @@ Future<void> pumpApp(WidgetTester tester, ProviderContainer c) async {
 
 void main() {
   // Requirement test 4, first half: '/forms' resolves to the Forms screen,
-  // through the real GoRouter table -- not merely `destinationsFor` logic,
+  // through the real GoRouter table, not merely `destinationsFor` logic,
   // which cannot catch a route missing from `app_router.dart` at all.
   testWidgets('/forms resolves to the Forms screen', (tester) async {
     final c = await containerFor('student', 'u1');
@@ -59,15 +59,32 @@ void main() {
     expect(find.byKey(const Key('forms')), findsOneWidget);
   });
 
-  // Requirement test 4, second half: '/forms' is a destination for every
-  // role. Iterates UserRole.values rather than hard-coding a count, so
-  // adding a fifth role would fail this test until Forms is wired for it
-  // too, instead of silently passing at the old count.
-  test('/forms is a destination for every role', () {
+  // Typing the address does not bring the library back for the others.
+  for (final role in ['faculty', 'coordinator', 'dean']) {
+    testWidgets('$role is sent home from /forms', (tester) async {
+      final c = await containerFor(role, 'u1');
+      addTearDown(c.dispose);
+      await pumpApp(tester, c);
+
+      c.read(goRouterProvider).go('/forms');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('forms')), findsNothing);
+    });
+  }
+
+  // Requirement test 4, second half: '/forms' is a destination for a
+  // student, and for no one else. The library is a student's page; the
+  // others reach the forms they fill in from the screen that asks for them.
+  test('/forms is a destination for a student alone', () {
     for (final role in UserRole.values) {
       final routes =
           destinationsFor(role: role).map((d) => d.route).toList();
-      expect(routes, contains('/forms'), reason: role.name);
+      if (role == UserRole.student) {
+        expect(routes, contains('/forms'), reason: role.name);
+      } else {
+        expect(routes, isNot(contains('/forms')), reason: role.name);
+      }
     }
   });
 }

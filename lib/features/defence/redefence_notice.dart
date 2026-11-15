@@ -8,7 +8,7 @@ import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 
-/// Under a Fail verdict with no re-defence yet (spec 2026-09-25 §6.5): the
+/// Under a Fail verdict with no re-defence yet: the
 /// Coordinator's way to schedule it, or, for everyone else, word that it is
 /// coming.
 ///
@@ -42,12 +42,12 @@ class RedefenceNotice extends ConsumerWidget {
           onPressed: () =>
               context.push('/defence/schedule?redefenceOf=${defence.id}'),
           icon: const Icon(Icons.replay_outlined, size: 18),
-          label: const Text('Schedule re-defence'),
+          label: const Text('Schedule redefense'),
         ),
       );
     }
     return const Text(
-      'A re-defence of this stage is to be scheduled.',
+      'A redefense of this stage is to be scheduled.',
       key: Key('redefencePending'),
     );
   }

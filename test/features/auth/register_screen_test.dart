@@ -168,7 +168,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // It is long enough to pass the length floor, so only the well-known
-    // check can be refusing it — and the message must say what to do, not
+    // check can be refusing it, and the message must say what to do, not
     // recite a rule.
     expect(find.textContaining('too easy to guess'), findsOneWidget);
     expect((await db.collection('users').get()).docs, isEmpty);
@@ -184,7 +184,7 @@ void main() {
         wrap(const RegisterScreen(), db: FakeFirebaseFirestore()));
     await tester.pumpAndSettle();
 
-    // Nothing before anything is typed — the form should not open with a red
+    // Nothing before anything is typed: the form should not open with a red
     // bar already showing.
     expect(find.byKey(const Key('passwordStrength')), findsNothing);
 
@@ -203,12 +203,12 @@ void main() {
       (tester) async {
     // Register is the screen most likely to break the shared scaffold: five
     // fields, a phone width and a keyboard up. The field that hurts is the
-    // last one — it is furthest down the card and the first to go under the
+    // last one: it is furthest down the card and the first to go under the
     // keyboard if AuthScaffold stops giving way by scrolling.
     //
     // Tapping the field is what makes this test mean anything. A pump alone
     // never runs the focus path, so it would pass against a scaffold with
-    // resizeToAvoidBottomInset: false — which is exactly the regression it
+    // resizeToAvoidBottomInset: false, which is exactly the regression it
     // is here to catch.
     const inset = 300.0;
     const height = 700.0;
@@ -223,7 +223,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // showKeyboard, not tap: the field starts below the fold, so a tap never
-    // reaches it — the hit test fails before any focus happens. This drives
+    // reaches it: the hit test fails before any focus happens. This drives
     // the same focus path a real tap would once the field is on screen.
     await tester.showKeyboard(find.byKey(const Key('confirmPassword')));
     await tester.pumpAndSettle();

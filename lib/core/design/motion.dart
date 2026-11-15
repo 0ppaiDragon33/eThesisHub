@@ -177,7 +177,7 @@ class SkeletonBox extends StatelessWidget {
   }
 }
 
-/// Fades and lifts its child in once, when it first appears — for content
+/// Fades and lifts its child in once, when it first appears: for content
 /// that has just replaced a loading skeleton.
 class FadeIn extends StatefulWidget {
   const FadeIn({
@@ -203,8 +203,8 @@ class _FadeInState extends State<FadeIn> with SingleTickerProviderStateMixin {
   bool _started = false;
 
   /// Held so it can be cancelled in [dispose]. A `Future.delayed` here would
-  /// leave a pending timer to fire after the widget is gone — guarded only
-  /// by `mounted`, and flagged by the test framework as a leak — so a
+  /// leave a pending timer to fire after the widget is gone: guarded only
+  /// by `mounted`, and flagged by the test framework as a leak, so a
   /// cancellable [Timer] is used instead.
   Timer? _delayTimer;
 

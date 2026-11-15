@@ -92,7 +92,7 @@ class FailingThesisRepository extends ThesisRepository {
   }
 }
 
-/// Creates successfully, but only after an artificial delay — long enough
+/// Creates successfully, but only after an artificial delay: long enough
 /// for a double-tap test to land its second tap before the first completes.
 class SlowThesisRepository extends ThesisRepository {
   SlowThesisRepository(super.db) : _delegate = ThesisRepository(db);
@@ -317,7 +317,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // No raw exception text; a friendly, permission-specific message
-    // instead — distinct from the generic failure message so a reader can
+    // instead: distinct from the generic failure message so a reader can
     // tell what went wrong.
     expect(find.textContaining('permission-denied'), findsNothing);
     expect(find.textContaining('FirebaseException'), findsNothing);

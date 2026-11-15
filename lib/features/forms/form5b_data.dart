@@ -1,8 +1,8 @@
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/features/forms/form5c_data.dart';
 
-/// Form 5b's whole payload — the Presenter and Evaluator Profile that
-/// sits ahead of Form 5c in the Guidelines and, per M6's D60, already had
+/// Form 5b's whole payload: the Presenter and Evaluator Profile that
+/// sits ahead of Form 5c in the Guidelines and already had
 /// every one of its fields borrowed into Form 5c's own header. Splitting
 /// it out as its own document is therefore cheap: this class carries no
 /// field Form5cData did not already resolve.
@@ -27,7 +27,7 @@ class Form5bData {
 
   /// The identical subset already assembled for a Form 5c sheet. A
   /// panelist who has generated Form 5c for a defence already has every
-  /// field this needs — nothing here re-resolves anything Form5cData did
+  /// field this needs: nothing here re-resolves anything Form5cData did
   /// not already resolve.
   factory Form5bData.fromForm5c(Form5cData d) {
     return Form5bData(

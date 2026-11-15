@@ -9,7 +9,7 @@ import 'package:ethesishub/core/routing/app_router.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-/// Mirrors archive_routes_test.dart's `containerFor`/`pumpApp` -- a real
+/// Mirrors archive_routes_test.dart's `containerFor`/`pumpApp`: a real
 /// ProviderContainer standing up the actual `goRouterProvider`, so
 /// navigating to '/files' goes through the real `GoRoute` table rather
 /// than around it.

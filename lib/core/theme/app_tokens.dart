@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// This system's subject is paper: official forms that carry a reference
 /// code, collect signatures, and move from the researchers to an adviser, to
 /// the College Research Coordinator, to the Dean. The interface is built to
-/// read the same way — a light page, restrained rules, and colour used to
+/// read the same way: a light page, restrained rules, and colour used to
 /// mean something rather than to decorate.
 ///
 /// Blue is the institution's mark and is spent only on things you can act
@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 /// outcomes the whole system exists to record, and they must be legible at a
 /// glance in a list of thirty theses.
 ///
-/// A second, separate palette — `accents` — exists for tile badges and
+/// A second, separate palette (`accents`) exists for tile badges and
 /// chart series. Those identify rather than judge, so they carry no
 /// meaning and must never be derived from a status. See the note above
 /// the declarations.
@@ -30,7 +30,7 @@ class AppTokens {
   static const seal = Color(0xFF0B5FA5);
 
   /// Accepted, recommended, approved. Fountain-pen green, not a success
-  /// toast — the register is a signature, not a notification.
+  /// toast: the register is a signature, not a notification.
   static const endorsed = Color(0xFF1F6B4A);
 
   /// Declined, returned. A desaturated rubber-stamp red: this is a routine
@@ -38,7 +38,7 @@ class AppTokens {
   /// alarm would misrepresent what happened.
   static const returned = Color(0xFFB4472F);
 
-  /// Awaiting someone. Deliberately quiet — most things are waiting most of
+  /// Awaiting someone. Deliberately quiet: most things are waiting most of
   /// the time, so this must not compete with the two decided states.
   static const awaiting = Color(0xFF7A6A3F);
 
@@ -61,7 +61,7 @@ class AppTokens {
   // telling one thing from another without saying anything about it. A tile
   // badge and a chart segment identify; they do not judge.
   //
-  // Three of these share a hue with a meaning colour on purpose — inventing
+  // Three of these share a hue with a meaning colour on purpose: inventing
   // five unrelated hues would make the app look like a different product.
   // What keeps that safe is not separation on screen (a pine badge and an
   // `endorsed` chip do appear together) but separation by component: accents

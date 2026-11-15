@@ -82,16 +82,16 @@ class UserRepository {
   }
 
   /// Sets whether this account may be nominated as an adviser and/or a
-  /// panelist, writing `users` -- the authority -- first, then mirroring the
+  /// panelist, writing `users` (the authority) first, then mirroring the
   /// same two fields onto `facultyDirectory` if an entry exists there.
   ///
   /// A faculty member who has been invited and designated but has never
-  /// signed in has no directory entry yet -- there is nothing to mirror to,
+  /// signed in has no directory entry yet: there is nothing to mirror to,
   /// since the entry is only created client-side at sign-in
   /// ([FacultyDirectoryRepository.upsertOwnEntry]). The directory repository
   /// mirrors with `update`, which throws `not-found` in that case; that is
-  /// expected, not an error (spec §4.2.1 names this window), so only that
-  /// one code is swallowed here. A `permission-denied` -- or anything else --
+  /// expected, not an error (names this window), so only that
+  /// one code is swallowed here. A `permission-denied`, or anything else,
   /// still surfaces, since it means something is actually wrong.
   Future<void> setDesignation({
     required String uid,
@@ -108,7 +108,7 @@ class UserRepository {
     // `facultyDirectory` only mirrors them, for the student-facing nomination
     // picker, which cannot read `users`. The entry is written client-side by
     // its own subject at sign-in, so an invited account that has never signed
-    // in has none — spec §4.2.1 names that window, and the Users screen says
+    // in has none: names that window, and the Users screen says
     // so on the row.
     //
     // Updating a missing entry is REFUSED, not merely absent:
@@ -117,7 +117,7 @@ class UserRepository {
     // blank row in the picker. Firestore reports a refused rule as
     // permission-denied and never as not-found, so catching not-found alone
     // let designating a never-signed-in account fail the whole call with "the
-    // security rules refused this read for your account" — after the
+    // security rules refused this read for your account": after the
     // authoritative write above had already succeeded.
     //
     // Asking first, rather than widening the catch, is what keeps a genuine
@@ -168,7 +168,7 @@ class UserRepository {
   }
 
   /// [college] and [specialization] are optional and travel with the invite
-  /// onto the promoted account — see [promoteFromInvite]. They have no other
+  /// onto the promoted account: see [promoteFromInvite]. They have no other
   /// source in the app, and the coordinator issuing the invite knows them.
   Future<void> createInvite({
     required String email,
@@ -188,7 +188,7 @@ class UserRepository {
     });
   }
 
-  /// Every invite, open and consumed alike — consumed ones are the permanent
+  /// Every invite, open and consumed alike: consumed ones are the permanent
   /// record of a completed promotion, so the list is an audit surface as much
   /// as a worklist. Only coordinators may read it (`firestore.rules`).
   Stream<List<FacultyInvite>> watchInvites() {
@@ -203,7 +203,7 @@ class UserRepository {
 
   /// Retracts an invite that was never claimed. Consumed invites are the
   /// record of a promotion that actually happened, so removing one would
-  /// erase evidence rather than cancel anything — the caller is expected to
+  /// erase evidence rather than cancel anything: the caller is expected to
   /// offer this only for open invites, and the rules permit deletion by
   /// coordinators alone.
   Future<void> deleteInvite(String email) =>

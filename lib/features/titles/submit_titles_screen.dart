@@ -32,10 +32,10 @@ class SubmitTitlesScreen extends ConsumerStatefulWidget {
 
   final String thesisId;
 
-  /// Injectable so a widget test can reach the success path — upload,
-  /// submit and navigate — without a platform file dialog. Defaults to the
+  /// Injectable so a widget test can reach the success path: upload,
+  /// submit and navigate: without a platform file dialog. Defaults to the
   /// real picker. `file_picker` has no test seam of its own, and the
-  /// success branch is the one this project has shipped broken twice.
+  /// success branch is the one we have shipped broken twice.
   final DocumentPicker? pickDocument;
 
   @override
@@ -124,7 +124,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
       context,
       title: 'Submit these titles?',
       message: 'Your ${titleTexts.length} candidate titles go to the panel '
-          'for the title defence.',
+          'for the title defense.',
       confirmLabel: 'Submit',
       confirmKey: const Key('confirmSubmitTitles'),
     );
@@ -204,18 +204,18 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
   /// Wraps a state that is not the form in the same frame the form uses.
   ///
   /// Every early return here used to render a bare [PageShell], which is
-  /// layout only — no Scaffold and so no app bar. A student whose thesis was
+  /// layout only, no Scaffold and so no app bar. A student whose thesis was
   /// not yet ready for candidate titles landed on a white page with no back
   /// button and no navigation, and had to reload the whole app to escape it.
   /// Whatever the screen has to say, it says it somewhere you can leave.
   /// The Scaffold and AppBar that used to be here belong to the app shell
-  /// now, which supplies them to every signed-in route — so every state
+  /// now, which supplies them to every signed-in route, so every state
   /// below still has a bar, a sidebar and a way back.
   Widget _framed(List<Widget> children) => PageShell(children: children);
 
   @override
   Widget build(BuildContext context) {
-    // Watched, not read lazily inside the submit handler — see
+    // Watched, not read lazily inside the submit handler: see
     // nominate_screen.dart for the bug this avoids: reading it lazily races
     // the auth stream's first event and throws a null-check error the
     // generic catch swallows.
@@ -223,7 +223,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
     final thesisAsync = ref.watch(thesisByIdProvider(widget.thesisId));
 
     // Four distinct outcomes, kept apart. Collapsing loading into "not
-    // ready" is exactly the bug M1a shipped: a student was told "this
+    // ready" is exactly the bug nomination shipped: a student was told "this
     // thesis has moved past draft" while it was still loading.
     if (thesisAsync.isLoading) {
       return _framed(const [LoadingState(label: 'Loading your thesis…')]);
@@ -360,14 +360,27 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
             title: 'Presentation',
             subtitle: 'One file for the whole set',
             icon: Icons.slideshow_outlined,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: attachment(
-                key: const Key('pickPresentation'),
-                emptyLabel: 'Attach presentation',
-                fileName: _presentation?.name,
-                onPressed: _pickPresentation,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: attachment(
+                    key: const Key('pickPresentation'),
+                    emptyLabel: 'Attach presentation',
+                    fileName: _presentation?.name,
+                    onPressed: _pickPresentation,
+                  ),
+                ),
+                const Gap.sm(),
+                // One file serves the whole set, so it has to carry every
+                // title the panel will be asked to judge.
+                Text(
+                  'Your presentation must include all the candidate titles.',
+                  key: const Key('presentationNote'),
+                  style: text.bodySmall?.copyWith(color: p.muted),
+                ),
+              ],
             ),
           ),
           const Gap.lg(),
@@ -379,8 +392,7 @@ class _SubmitTitlesScreenState extends ConsumerState<SubmitTitlesScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'The panel comments on each candidate; the Dean records '
-                  'the approved title.',
+                  'The panel comments on each title; the Dean approves one.',
                   style: text.bodySmall?.copyWith(color: p.muted),
                 ),
               ),

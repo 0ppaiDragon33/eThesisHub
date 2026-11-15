@@ -33,14 +33,14 @@ final authStateProvider = StreamProvider<User?>(
 /// in `AsyncError` forever: signing out and back in as somebody else did not
 /// rebuild it, and the only thing that ever cleared the refusal was reloading
 /// the page. Watching the uid rather than the whole auth state means a token
-/// refresh -- which fires `authStateChanges` without changing who you are --
+/// refresh, which fires `authStateChanges` without changing who you are,
 /// does not tear every listener down and build it again for nothing.
 final signedInUidProvider = Provider<String?>(
   (ref) => ref.watch(authStateProvider).valueOrNull?.uid,
 );
 
-/// Every faculty invite, open and consumed. Only coordinators may read this —
-/// the security rules deny `list` to everyone else — so the stream surfaces
+/// Every faculty invite, open and consumed. Only coordinators may read this,
+/// the security rules deny `list` to everyone else, so the stream surfaces
 /// an error rather than an empty list for any other role, and the screen says
 /// so instead of implying there are none.
 final facultyInvitesProvider = StreamProvider<List<FacultyInvite>>(
@@ -54,7 +54,7 @@ final facultyInvitesProvider = StreamProvider<List<FacultyInvite>>(
 /// The signed-in user's profile, or null when signed out.
 ///
 /// Awaits the auth state rather than reading `.value`, because `.value` is
-/// null both while auth is loading and when the user is signed out — reading
+/// null both while auth is loading and when the user is signed out: reading
 /// it directly would report "signed out" during startup and bounce users to
 /// the login screen. Awaiting keeps the provider in a loading state until
 /// auth actually settles.

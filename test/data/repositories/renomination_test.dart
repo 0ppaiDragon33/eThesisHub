@@ -9,7 +9,7 @@ import 'package:ethesishub/data/repositories/thesis_repository.dart';
 /// The rules make this narrow on purpose. A leader may delete a nomination
 /// only while the thesis is `draft` AND only one whose `conformeStatus` is
 /// `declined`; they may never UPDATE a nomination at all, because the update
-/// arm is pinned to `request.auth.uid == nomineeUid` — answering is the
+/// arm is pinned to `request.auth.uid == nomineeUid`: answering is the
 /// nominee's alone.
 ///
 /// So a re-submission that rewrites the whole roster is refused twice over,
@@ -142,7 +142,7 @@ void main() {
 
     // A nominee still holding a pending request in their inbox answers it
     // while the thesis sits reopened at `draft`. That is not "already
-    // completed" — a fresh request is coming — so it is reported as its own
+    // completed" (a fresh request is coming) so it is reported as its own
     // case, and (the reason this matters on a device) the guard is returned
     // from the transaction rather than thrown inside it, which on Android
     // aborts through an unimplemented `cancel` and crashes.
@@ -161,7 +161,7 @@ void main() {
     test('dropping a seat that did not decline is refused with a reason',
         () async {
       // p1 accepted and is dropped from the roster. p3 declined and is
-      // replaced, which is allowed — so the only thing under test here is
+      // replaced, which is allowed, so the only thing under test here is
       // the dropped accepted seat.
       await expectLater(
         repo.submitNominations(

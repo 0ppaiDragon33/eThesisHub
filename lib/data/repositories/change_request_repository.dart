@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:ethesishub/data/models/change_request.dart';
+import 'package:ethesishub/data/models/change_request_eligibility.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/form_copy.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/data/repositories/defence_repository.dart';
 import 'package:ethesishub/data/repositories/thesis_repository.dart';
 
 /// A change request as Firestore stores it, with its server timestamps
@@ -35,7 +37,7 @@ ChangeRequest changeRequestFromFirestore(String id, Map<String, dynamic> raw) {
 }
 
 /// Reads and writes the change-of-adviser / change-of-title requests under a
-/// thesis (spec 2026-09-25). The stage machine and the Dean's apply-the-
+/// thesis. The stage machine and the Dean's apply-the-
 /// change step live here; the security rules mirror every transition.
 class ChangeRequestRepository {
   ChangeRequestRepository(this._db);
@@ -67,7 +69,7 @@ class ChangeRequestRepository {
   };
 
   /// Writes the request and, in the same batch, the leader's attached copy of
-  /// its form (Form 4a for an adviser change, 4b for a title change) -- or
+  /// its form (Form 4a for an adviser change, 4b for a title change), or
   /// clears one from an earlier round when [copy] is null. Same batch because
   /// the rules accept the copy only alongside the request it goes with.
   Future<void> _write(
@@ -148,6 +150,35 @@ class ChangeRequestRepository {
     }, copy);
   }
 
+  /// Whether the thesis can STILL take this change. The request was eligible
+  /// when it was filed; a defence scheduled since, or a final that has now
+  /// passed, can have made it ineligible while it waited. Firestore rules
+  /// cannot query a thesis's defences, so the app asks again where the
+  /// decision is made: the Coordinator's recommend and the Dean's approval,
+  /// the two sign-offs that can read every defence.
+  ///
+  /// A returned (declined) request is never blocked: the message tells the
+  /// signer to return it, and that must always be possible.
+  Future<void> _assertStillEligible(
+    String thesisId,
+    ChangeRequestType type,
+  ) async {
+    final thesisSnap = await _db.collection('theses').doc(thesisId).get();
+    if (!thesisSnap.exists) throw StateError('This thesis no longer exists.');
+    final thesis = thesisFromFirestore(thesisSnap.id, thesisSnap.data()!);
+    final defences = await DefenceRepository(_db).forThesis(thesisId);
+    final eligible = type == ChangeRequestType.adviser
+        ? canRequestAdviserChange(thesis, defences)
+        : canRequestTitleChange(thesis, defences);
+    if (eligible) return;
+    throw StateError(type == ChangeRequestType.adviser
+        ? 'This thesis can no longer change adviser: a defense has been '
+            'scheduled since the request was made. Return the request '
+            'instead.'
+        : 'This thesis can no longer change its title: its final defense '
+            'has passed. Return the request instead.');
+  }
+
   /// Records one role's accept or decline, advancing the stage when the step
   /// completes. A transaction so a concurrent sign-off cannot double-advance;
   /// the guard is RETURNED and thrown outside, never thrown inside the
@@ -160,6 +191,12 @@ class ChangeRequestRepository {
     String? reason,
   }) async {
     final ref = _request(thesisId, type);
+    // The Coordinator's recommend is a decision point: ask again whether the
+    // thesis can still take the change. Outside the transaction, which may
+    // run its body more than once and should not repeat these reads.
+    if (accept && role == 'coordinator') {
+      await _assertStillEligible(thesisId, type);
+    }
     final failure = await _db.runTransaction<Object?>((tx) async {
       final snap = await tx.get(ref);
       if (!snap.exists) return StateError('This request no longer exists.');
@@ -199,7 +236,7 @@ class ChangeRequestRepository {
           update['stage'] = ChangeRequestStage.pendingCoordinator.value;
           update['awaitingUids'] = <String>[];
         } else {
-          // The step holds -- this signer has answered, so drop them from
+          // The step holds: this signer has answered, so drop them from
           // the awaited set; the other adviser stays awaited.
           final answeredUid = role == 'newAdviser'
               ? req.newAdviserUid
@@ -239,6 +276,9 @@ class ChangeRequestRepository {
     if (thesis.status != ThesisStatus.titleApproved) {
       throw StateError('This thesis can no longer take this change.');
     }
+    // The Dean's approval is what changes the thesis, so this is the check
+    // that matters most.
+    await _assertStillEligible(thesisId, type);
 
     final batch = _db.batch();
     batch.update(reqRef, {
@@ -253,7 +293,7 @@ class ChangeRequestRepository {
           ? {'adviserUid': req.newAdviserUid}
           // Both fields: workingTitle drives the list views, approvedTitleText
           // drives the approved-title resolvers (archive, evaluation sheet,
-          // the student's approved-title card) — so a change of title reaches
+          // the student's approved-title card), so a change of title reaches
           // the official record, not only the lists.
           : {'workingTitle': req.newTitle, 'approvedTitleText': req.newTitle},
     );

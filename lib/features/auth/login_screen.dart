@@ -98,7 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
           // Keep the faculty directory current. Written by the subject's own
           // client because Spark has no Cloud Functions. Also backfills anyone
-          // promoted before this module shipped. Best-effort — the directory
+          // promoted before this module shipped. Best-effort: the directory
           // entry must never block sign-in. Same guard as the audit log above.
           try {
             final profile =

@@ -34,8 +34,8 @@ void main() {
   // defence ('df1', scheduled, snapshotting the same panel/adviser/leader
   // uids as the thesis) already scheduled on it. Parameterised over
   // role/uid so the same fixture can stand in as whichever actor a given
-  // test needs -- the coordinator scheduling, the panel or adviser opening
-  // the room, or a title-defence judge -- without rebuilding Firestore state
+  // test needs: the coordinator scheduling, the panel or adviser opening
+  // the room, or a title-defence judge: without rebuilding Firestore state
   // per test.
   Future<ProviderContainer> setUpFixture(
     WidgetTester tester, {
@@ -77,7 +77,7 @@ void main() {
     expect(find.byKey(const Key('scheduleDefenceScreen')), findsOneWidget);
   });
 
-  testWidgets('a panelist reaches the defence room', (tester) async {
+  testWidgets('a panelist reaches the defense room', (tester) async {
     final c = await setUpFixture(tester, role: 'faculty', uid: 'p1');
 
     c.read(goRouterProvider).go('/defence/room/df1');
@@ -85,12 +85,12 @@ void main() {
 
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
     // The app bar belongs to the shell now and is titled for the ROUTE, so
-    // the defence type moved to the page's own heading -- which is still
+    // the defence type moved to the page's own heading, which is still
     // the thing that only renders once the defence document (not just the
     // loading state, which shares the same key) has actually resolved.
     expect(tester.widget<Text>(find.byKey(const Key('shellTitle'))).data,
-        'Defence room');
-    expect(find.text('Pre-oral defence'), findsOneWidget);
+        'Defense room');
+    expect(find.text('Pre-oral defense'), findsOneWidget);
   });
 
   testWidgets('the manuscript view is reachable', (tester) async {
@@ -106,11 +106,11 @@ void main() {
 
   // The collision guard. '/defence/schedule' and '/defence/:thesisId' share
   // the same segment count (two), so a naive reordering would let
-  // ':thesisId' swallow 'schedule' as if it were a literal thesis id -- the
+  // ':thesisId' swallow 'schedule' as if it were a literal thesis id: the
   // exact class of failure that made '/faculty' shadow the invites screen
   // for an entire milestone, caught that time only because a test drove the
   // router instead of pumping a screen directly.
-  testWidgets("M1b's title defence still resolves", (tester) async {
+  testWidgets("M1b's title defense still resolves", (tester) async {
     final c = await setUpFixture(tester, role: 'coordinator', uid: 'c1');
 
     c.read(goRouterProvider).go('/defence/t1');
@@ -121,7 +121,7 @@ void main() {
     expect(find.byKey(const Key('defenceRoom')), findsNothing);
   });
 
-  testWidgets('an unknown defence id shows a not-found state with a way back',
+  testWidgets('an unknown defense id shows a not-found state with a way back',
       (tester) async {
     final c = await setUpFixture(tester, role: 'faculty', uid: 'p1');
 
@@ -133,19 +133,19 @@ void main() {
     // so the real assertion is the shell's single AppBar plus the
     // not-found copy, not the key's absence.
     expect(find.byKey(const Key('shellTitle')), findsOneWidget);
-    expect(find.text('Defence not found'), findsOneWidget);
+    expect(find.text('Defense not found'), findsOneWidget);
   });
 
   // The guard this task's brief warns about by name: the studentOnly
   // redirect matches '/defence/' by PREFIX, and without the
   // '/defence/room/' exemption in app_router.dart's redirect callback, this
   // would silently bounce the leader back to '/student' before
-  // DefenceRoomScreen ever built -- exactly the class of bug that bounced
-  // advisers off '/thesis/chapters' in M2. DefencesList (mounted on the
+  // DefenceRoomScreen ever built: exactly the class of bug that bounced
+  // advisers off '/thesis/chapters' in chapters. DefencesList (mounted on the
   // student dashboard itself, per its own doc comment) is what actually
   // sends a student down this path via its "Open" button.
-  testWidgets('the student leader reaches the defence room, unlike the '
-      'title defence route', (tester) async {
+  testWidgets('the student leader reaches the defense room, unlike the '
+      'title defense route', (tester) async {
     final c = await setUpFixture(tester, role: 'student', uid: 'u1');
 
     c.read(goRouterProvider).go('/defence/room/df1');
@@ -153,7 +153,7 @@ void main() {
 
     expect(find.byKey(const Key('defenceRoom')), findsOneWidget);
 
-    // '/defence/schedule' and the title defence route are NOT exempt --
+    // '/defence/schedule' and the title defence route are not exempt,
     // only '/defence/room/...' is. A student typing either by hand still
     // bounces home, same as before this task.
     c.read(goRouterProvider).go('/defence/schedule?id=t1');

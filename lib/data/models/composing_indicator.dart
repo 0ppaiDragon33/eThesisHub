@@ -2,7 +2,7 @@
 ///
 /// Transient by design: the client deletes it on submit or blur. But a laptop
 /// closed mid-comment leaves one behind, and there are no Cloud Functions on
-/// the Spark plan to sweep it up — so readers expire them instead. The
+/// the Spark plan to sweep it up, so readers expire them instead. The
 /// leftover document is harmless and hides itself.
 class ComposingIndicator {
   const ComposingIndicator({

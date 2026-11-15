@@ -16,7 +16,7 @@ void main() {
 
   testWidgets('draws a mortarboard, not an image asset', (tester) async {
     await pump(tester, const BrandEmblem());
-    // Drawn in code (D81): there is a glyph and no Image to ship or lose.
+    // Drawn in code: there is a glyph and no Image to ship or lose.
     expect(find.byIcon(Icons.school), findsOneWidget);
     expect(find.byType(Image), findsNothing);
   });
@@ -28,7 +28,7 @@ void main() {
 
     await pump(tester, const BrandEmblem(), brightness: Brightness.dark);
     // MaterialApp lerps between themes through AnimatedTheme, and a discrete
-    // field like brightness flips only past the halfway point — so the frame
+    // field like brightness flips only past the halfway point, so the frame
     // straight after the second pump still reports the light theme.
     await tester.pumpAndSettle();
     final dark = tester.widget<Container>(find.byType(Container));

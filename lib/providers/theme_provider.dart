@@ -10,7 +10,7 @@ const themeModeKey = 'theme_mode';
 /// Persisted for the same reason [SidebarExpandedNotifier] persists its
 /// choice: picking a theme is a statement about how someone wants to read
 /// the app, and re-asking every launch ignores them. Same shape as that
-/// provider on purpose -- a `Notifier<ThemeMode>` that reads prefs in
+/// provider on purpose: a `Notifier<ThemeMode>` that reads prefs in
 /// `build()` and writes in its setter, with a module-level key constant.
 ///
 /// Defaults to [ThemeMode.system]: matching the OS is the least surprising

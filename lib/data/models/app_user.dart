@@ -42,8 +42,8 @@ class AppUser {
 
   /// Whether a group may nominate this account onto their panel.
   ///
-  /// An ex-officio seat ignores this entirely — that seat comes from the
-  /// office, not from a coordinator's list (spec D32).
+  /// An ex-officio seat ignores this entirely: that seat comes from the
+  /// office, not from a coordinator's list.
   final bool nominableAsPanelist;
 
   /// True for every role that may hold a thesis position or approve work.

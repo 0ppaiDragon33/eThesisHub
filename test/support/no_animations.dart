@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// one-shot delay `Timer`) wrapping a `Shimmer` (which `repeat()`s a ticker
 /// forever). A test that pumps a loading state and ends leaves that timer
 /// pending and that ticker active, and the framework rightly fails the test
-/// for it — the widgets are behaving correctly, the harness simply never let
+/// for it: the widgets are behaving correctly, the harness simply never let
 /// them finish.
 ///
 /// Both widgets honour `MediaQuery.disableAnimations`: `FadeIn` jumps

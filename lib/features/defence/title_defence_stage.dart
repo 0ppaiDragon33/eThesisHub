@@ -13,7 +13,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
-/// The Title defence stage of the Defences page (spec 2026-09-25 §6.2).
+/// The Title defence stage of the Defences page.
 ///
 /// Everyone but a student gets the title defences they can open, each with
 /// a way in. A student gets where their own titles stand, never the room:
@@ -27,7 +27,7 @@ class TitleDefenceStage extends ConsumerWidget {
     if (!me.hasValue) {
       return me.hasError
           ? ErrorState(error: me.error, message: 'Could not load your account.')
-          : const LoadingState(label: 'Loading title defences…');
+          : const LoadingState(label: 'Loading title defenses…');
     }
     final role = me.value?.role;
     if (role == UserRole.student) return const _StudentTitleCard();
@@ -35,16 +35,16 @@ class TitleDefenceStage extends ConsumerWidget {
     return ThesisQueue(
       theses: ref.watch(myTitleDefencesProvider),
       waitingSince: (t) => t.titlesSubmittedAt,
-      errorMessage: 'Could not load the title defences.',
-      emptyTitle: 'No title defences',
+      errorMessage: 'Could not load the title defenses.',
+      emptyTitle: 'No title defenses',
       emptyMessage: role == UserRole.faculty
-          ? 'None of your theses are at title defence right now.'
+          ? 'None of your theses are at title defense right now.'
           : 'A thesis appears here once its group has submitted their '
                 'candidate titles.',
       rowAction: (context, t) => FilledButton.tonal(
         key: Key('goToDefence-${t.id}'),
         onPressed: () => context.push('/defence/${t.id}'),
-        child: const Text('Open title defence'),
+        child: const Text('Open title defense'),
       ),
     );
   }
@@ -67,13 +67,13 @@ class _StudentTitleCard extends ConsumerWidget {
                 icon: Icons.groups_outlined,
                 title: 'No thesis yet',
                 message:
-                    'Your title defence appears here once your group '
+                    'Your title defense appears here once your group '
                     'has a thesis.',
               );
             }
             return Panel(
               key: const Key('studentTitleCard'),
-              title: 'Title defence',
+              title: 'Title defense',
               icon: Icons.forum_outlined,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

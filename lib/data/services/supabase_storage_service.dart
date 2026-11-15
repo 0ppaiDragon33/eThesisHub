@@ -14,7 +14,7 @@ class SupabaseStorageService implements StorageService, PersonalFileRemover {
 
   /// The source of the caller's identity.
   ///
-  /// Supabase has no idea who the reader is — the app authenticates with
+  /// Supabase has no idea who the reader is: the app authenticates with
   /// Firebase and initialises Supabase with the publishable key and no
   /// session, so every request to Supabase arrives as the same anonymous
   /// principal. The Firebase ID token is what the `document-url` function
@@ -25,7 +25,7 @@ class SupabaseStorageService implements StorageService, PersonalFileRemover {
   /// Every failure leaves here as a [StorageFailure].
   ///
   /// Supabase is outside Firebase, so nothing translates its errors the way
-  /// `ErrorState` translates Firestore's — a paused project surfaces as a
+  /// `ErrorState` translates Firestore's: a paused project surfaces as a
   /// bare `XMLHttpRequest error`, which a screen would otherwise report as
   /// "please try again" for a condition retrying can never fix.
   @override
@@ -164,7 +164,7 @@ class SupabaseStorageService implements StorageService, PersonalFileRemover {
           ),
         _ => const StorageFailure(
             'File storage could not produce a link for this document. This is '
-            'not something you can fix by retrying — tell whoever administers '
+            'not something you can fix by retrying. Tell whoever administers '
             'the project.',
             code: 'storage-failed',
           ),

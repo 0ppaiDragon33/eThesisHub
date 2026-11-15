@@ -14,7 +14,7 @@ const _monthLabels = [
 ];
 
 /// Submissions per month over the trailing seven months, for the dean and
-/// coordinator dashboards — it watches [allThesesProvider] directly, which
+/// coordinator dashboards: it watches [allThesesProvider] directly, which
 /// the security rules deny to every other role.
 ///
 /// The header always states its own range ("Past 7 months") so a young
@@ -56,8 +56,8 @@ class _MonthBucket {
   int get hashCode => Object.hash(year, month);
 }
 
-/// `createdAt` is non-nullable on [Thesis] today — the repository backfills
-/// a missing server timestamp with "now" before this model ever sees it —
+/// `createdAt` is non-nullable on [Thesis] today: the repository backfills
+/// a missing server timestamp with "now" before this model ever sees it,
 /// but this panel is written against the honest contract (a submission date
 /// can be absent) rather than today's fallback, so a future change that
 /// surfaces a genuine null does not silently misdate a thesis into "this

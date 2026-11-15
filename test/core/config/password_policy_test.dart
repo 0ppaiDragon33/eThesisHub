@@ -66,7 +66,7 @@ void main() {
   group('the strength meter', () {
     test('length dominates, per NIST', () {
       // Eight characters using every character class reaches no better than
-      // fair — composition cannot buy its way to strong...
+      // fair: composition cannot buy its way to strong...
       expect(PasswordPolicy.strengthOf('Ab1!xyzq'), PasswordStrength.fair);
       // ...while a long all-lowercase phrase with no digit or symbol in it
       // is strong outright.

@@ -29,10 +29,10 @@ class _CountingDefenceRepository extends DefenceRepository {
 }
 
 void main() {
-  // The field report ("Defences this week -- Could not load" and "Could not
+  // The field report ("Defences this week. Could not load" and "Could not
   // work out what needs you" on a fresh coordinator/dean login, gone after a
   // manual refresh) traced to allDefencesProvider: it was the one user-scoped
-  // stream that did NOT rebuild when the signed-in user resolved, so the cold
+  // stream that did not rebuild when the signed-in user resolved, so the cold
   // permission-denied stuck. Its siblings (defenceProvider,
   // defenceCommentsProvider) already watch signedInUidProvider; this pins that
   // allDefencesProvider does too.
@@ -77,7 +77,7 @@ void main() {
       await pumpEventQueue();
       final afterFirst = repo.watchAllCalls;
 
-      // authStateChanges also fires on token refresh -- same uid, same person.
+      // authStateChanges also fires on token refresh: same uid, same person.
       auth.add(MockUser(uid: 'coord-1', email: 'c@isufst.edu.ph'));
       await pumpEventQueue();
 

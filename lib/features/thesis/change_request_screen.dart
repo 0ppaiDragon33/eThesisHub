@@ -20,7 +20,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// The student leader's form for requesting a change of adviser (Form 4a) or
 /// a change of the approved title (Form 4b), routed through the sign-off
-/// chain (spec 2026-09-25). One screen, two modes, chosen by [type].
+/// chain. One screen, two modes, chosen by [type].
 ///
 /// Modelled on `schedule_defence_screen.dart`'s shape: `_framed`, busy/error
 /// state, and the same `ArgumentError`/`FirebaseException` handling.
@@ -187,7 +187,7 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
       }
       if (mounted) context.pop();
     } on ArgumentError catch (e) {
-      // The repository's own message — the one failure a leader can act on
+      // The repository's own message: the one failure a leader can act on
       // directly.
       if (mounted) setState(() => _error = e.message.toString());
     } on FirebaseException catch (e) {
@@ -218,8 +218,8 @@ class _ChangeRequestScreenState extends ConsumerState<ChangeRequestScreen> {
     Thesis thesis,
     List<FacultyDirectoryEntry> directory,
   ) {
-    // Honours nominableAsAdviser (spec D32/faculty-directory convention) and
-    // excludes the current adviser — requesting a "change" to the same
+    // Honours nominableAsAdviser (faculty-directory convention) and
+    // excludes the current adviser: requesting a "change" to the same
     // person is never offered as an option at all.
     final offerable = directory
         .where((f) => f.nominableAsAdviser)

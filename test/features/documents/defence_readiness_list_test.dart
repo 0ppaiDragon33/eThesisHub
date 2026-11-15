@@ -66,14 +66,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Proposal Ready Thesis'), findsOneWidget);
-    expect(find.text('3 of 5 chapters approved'), findsOneWidget);
+    expect(find.text('Chapters I–III approved'), findsOneWidget);
     expect(find.text('Ready for pre-oral'), findsOneWidget);
+  });
+
+  // A group uploads one manuscript: its approval is the readiness.
+  testWidgets('an approved Chapters I-III manuscript shows pre-oral readiness',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    await _seedThesis(db, 't1', workingTitle: 'Manuscript Ready Thesis',
+        chapters: {'manuscriptProposal': 'approved'});
+    await tester.pumpWidget(_wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chapters I–III approved'), findsOneWidget);
+    expect(find.text('Ready for pre-oral'), findsOneWidget);
+  });
+
+  testWidgets('a manuscript under review says where it stands, not ready',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    await _seedThesis(db, 't1', workingTitle: 'Under Review Thesis',
+        chapters: {'manuscriptProposal': 'submitted'});
+    await tester.pumpWidget(_wrap(db));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manuscript — Chapters I–III: With your adviser'),
+        findsOneWidget);
+    expect(find.text('Not ready'), findsOneWidget);
   });
 
   testWidgets('a thesis with nothing approved shows not ready, not vacuously '
       'ready', (tester) async {
     // Two of three approved is the exact case the brief warns a `some`
-    // check would wrongly pass -- see the falsification in
+    // check would wrongly pass: see the falsification in
     // defence_readiness_test.dart. Exercised here through the widget too.
     final db = FakeFirebaseFirestore();
     await _seedThesis(db, 't2', workingTitle: 'Not Ready Thesis', chapters: {
@@ -85,7 +111,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Not Ready Thesis'), findsOneWidget);
-    expect(find.text('2 of 5 chapters approved'), findsOneWidget);
+    expect(find.text('Chapters not all approved'), findsOneWidget);
     expect(find.text('Not ready'), findsOneWidget);
   });
 
@@ -106,7 +132,7 @@ void main() {
     // Seed the thesis but never write to its `documents` subcollection.
     // FakeFirebaseFirestore still emits an initial empty snapshot
     // synchronously, so without pumpAndSettle this asserts the row's own
-    // loading branch, not a settled "0 of 5" -- the two would otherwise be
+    // loading branch, not a settled "0 of 5": the two would otherwise be
     // indistinguishable, exactly the bug this task's brief calls out.
     await db.collection('theses').doc('t3').set({
       'leaderUid': 'l1', 'adviserUid': 'a1', 'status': 'titleApproved',
@@ -117,20 +143,20 @@ void main() {
     await tester.pumpWidget(_wrap(db));
     // Two pumps, deliberately short of pumpAndSettle: the first resolves
     // the outer thesesByStatusProvider stream (mounting the per-thesis
-    // row), the second lets that row's own chaptersProvider start -- but
+    // row), the second lets that row's own chaptersProvider start, but
     // its stream has not emitted yet, so the row's loading branch is what
     // should be showing.
     await tester.pump();
     await tester.pump();
 
     expect(find.text('Chapters still loading…'), findsOneWidget);
-    expect(find.text('0 of 5 chapters approved'), findsNothing);
+    expect(find.text('No manuscript uploaded yet'), findsNothing);
   });
 
   testWidgets('tapping a readiness row navigates to that thesis\'s chapters',
       (tester) async {
-    // Spec §7 names the coordinator and dean as audience for the chapter
-    // screens, and the rules already grant them read there -- but nothing
+    // names the coordinator and dean as audience for the chapter
+    // screens, and the rules already grant them read there, but nothing
     // in `lib/` ever linked a coordinator or dean there before this row's
     // `onTap`. This is the door being connected.
     final db = FakeFirebaseFirestore();
@@ -219,7 +245,7 @@ void main() {
       'a coordinator sees the schedule action and reaches the schedule '
       'screen by tapping it', (tester) async {
     // FIX 1: nothing in `lib/` navigated to `/defence/schedule` before this
-    // -- a coordinator seeing a ready thesis had no control anywhere that
+    // a coordinator seeing a ready thesis had no control anywhere that
     // scheduled its defence. This is that door being connected.
     final db = FakeFirebaseFirestore();
     await db.collection('users').doc('coord1').set({
@@ -247,8 +273,8 @@ void main() {
   });
 
   testWidgets('a dean does not see the schedule action', (tester) async {
-    // Hiding is not access control -- the rules deny a dean the write
-    // regardless -- but a control that always fails is worse than no
+    // Hiding is not access control: the rules deny a dean the write
+    // regardless, but a control that always fails is worse than no
     // control, so it must not even render for them.
     final db = FakeFirebaseFirestore();
     await db.collection('users').doc('dean1').set({

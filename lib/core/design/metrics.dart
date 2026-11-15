@@ -28,7 +28,7 @@ class Metric<T> extends StatelessWidget {
   final String? Function(T)? caption;
   final VoidCallback? onTap;
 
-  /// When it returns true the figure is drawn in the act colour — used for
+  /// When it returns true the figure is drawn in the act colour: used for
   /// "this is waiting on you" counts that are above zero.
   final bool Function(T)? highlight;
 
@@ -122,7 +122,7 @@ class Metric<T> extends StatelessWidget {
   }
 }
 
-/// A single band of figures divided by rules — one object, not four cards.
+/// A single band of figures divided by rules: one object, not four cards.
 ///
 /// Four across when there is room, otherwise a two-by-two grid. The
 /// decision is made once for the whole strip from its own width.
@@ -177,7 +177,7 @@ class MetricStrip extends StatelessWidget {
   }
 }
 
-/// A proportional bar of counts — used for the college pipeline.
+/// A proportional bar of counts: used for the college pipeline.
 ///
 /// The bar is the at-a-glance shape; the legend under it carries every
 /// number in words, so nothing depends on reading colour.
@@ -230,7 +230,7 @@ class SegmentBar extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppTokens.sm, vertical: AppTokens.xs),
                   // Bounded so a single legend item can never be wider than a
-                  // narrow panel (the "chart given no space" case) — the label
+                  // narrow panel (the "chart given no space" case): the label
                   // ellipsizes rather than overflowing the row.
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 168),

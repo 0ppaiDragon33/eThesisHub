@@ -18,7 +18,7 @@ import 'package:ethesishub/features/defence/defences_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-// Same shape as navigation_test.dart's own copy -- every field
+// Same shape as navigation_test.dart's own copy: every field
 // `Thesis.fromMap` requires, so a seeded document reads back cleanly.
 Map<String, dynamic> thesis({
   String leaderUid = 'l1',
@@ -67,7 +67,7 @@ Future<Widget> wrap(
       )),
       ...overrides,
     ],
-    // Each screen renders no Scaffold/Material of its own -- the app shell
+    // Each screen renders no Scaffold/Material of its own: the app shell
     // owns that. Standing one up here is what `MaterialApp(home: dashboard)`
     // got for free from `ResponsiveScaffold` in the dashboard-level harness.
     child: MaterialApp(home: Scaffold(body: screen)),
@@ -94,7 +94,7 @@ void main() {
     expect(find.byKey(const Key('studentOverview')), findsOneWidget);
   });
 
-  testWidgets('defences screen renders the defences list standalone',
+  testWidgets('defenses screen renders the defenses list standalone',
       (tester) async {
     final db = FakeFirebaseFirestore();
 
@@ -107,7 +107,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
-    expect(find.text('Defences'), findsOneWidget);
+    expect(find.text('Defenses'), findsOneWidget);
   });
 
   testWidgets('advisees screen renders the adviser roster standalone',
@@ -203,11 +203,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('readinessScreen')), findsOneWidget);
-    expect(find.text('Defence readiness'), findsOneWidget);
+    expect(find.text('Defense readiness'), findsOneWidget);
   });
 
   testWidgets('the overview screen never guesses a role', (tester) async {
-    // Spec D25. With no users/{uid} document, this must render no
+    // With no users/{uid} document, this must render no
     // dashboard at all rather than falling through to a default.
     final db = FakeFirebaseFirestore(); // no profile seeded
     await tester.pumpWidget(await wrap(
@@ -227,10 +227,10 @@ void main() {
 
   testWidgets('the overview screen shows a LOADING state while the role is '
       'still resolving', (tester) async {
-    // The other half of spec D25, and the half that had no test.
+    // The other half of the no-role handling, and the half that had no test.
     //
     // This screen used to read `.valueOrNull?.role` and render
-    // `SizedBox.shrink()` for null -- which is true BOTH while
+    // `SizedBox.shrink()` for null, which is true BOTH while
     // currentUserProvider is still loading AND when the profile document is
     // absent. An ordinary first paint was therefore indistinguishable from
     // a broken account and rendered the same nothing. The sibling test
@@ -239,7 +239,7 @@ void main() {
     // and every other test still passes.
     //
     // The stream never emits, so the loading branch is genuinely
-    // observable, and there is a single bare `pump()` -- NOT pumpAndSettle,
+    // observable, and there is a single bare `pump()`: Not pumpAndSettle,
     // which would resolve the profile and observe the loaded state instead,
     // proving nothing.
     final db = FakeFirebaseFirestore();
@@ -258,15 +258,15 @@ void main() {
     expect(find.byKey(const Key('overviewScreen')), findsOneWidget);
     expect(find.text('Loading your overview…'), findsOneWidget);
 
-    // And no role is guessed to fill the gap while it loads -- the failure
-    // this project has shipped twice, both times looking like it worked.
+    // And no role is guessed to fill the gap while it loads: the failure
+    // we have shipped twice, both times looking like it worked.
     expect(find.byKey(const Key('studentOverview')), findsNothing);
     expect(find.byKey(const Key('facultyOverview')), findsNothing);
     expect(find.byKey(const Key('deanOverview')), findsNothing);
     expect(find.byKey(const Key('coordinatorOverview')), findsNothing);
   });
 
-  testWidgets('an adviser opens an advisee\'s title defence from Advisees',
+  testWidgets('an adviser opens an advisee\'s title defense from Advisees',
       (tester) async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(
@@ -282,6 +282,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('openTitleDefence-t1')), findsOneWidget);
-    expect(find.text('Open title defence'), findsOneWidget);
+    expect(find.text('Open title defense'), findsOneWidget);
   });
 }

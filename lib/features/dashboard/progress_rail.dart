@@ -8,7 +8,7 @@ import 'package:ethesishub/data/models/thesis_status.dart';
 /// The six stages a thesis passes through, and which one it is at.
 ///
 /// A student's real question is "where are we and what is next", which a
-/// status chip answers only narrowly — it names the current state without
+/// status chip answers only narrowly: it names the current state without
 /// showing the road. This is the one element of the dashboard with no
 /// equivalent in the reference design, and it is here because the lifecycle
 /// is the thing students ask their adviser about most.
@@ -44,7 +44,7 @@ class ProgressRail extends StatefulWidget {
   /// saw the same rail as one whose pre-oral had been called off.
   final List<Defence> defences;
 
-  /// The thesis's chapters. Spec §6.1 derives the stage past `titleApproved`
+  /// The thesis's chapters. The spec derives the stage past `titleApproved`
   /// from "chapter and defence state", and this is the chapter half: a
   /// defence examines chapter work, so with no chapter on file at all the
   /// rail holds at Chapters rather than claiming a defence stage off a
@@ -75,7 +75,7 @@ class ProgressRail extends StatefulWidget {
   /// is the only one that reads defence and chapter state.
   ///
   /// The filter is `!= cancelled` rather than `!isTerminal`: a cancelled
-  /// defence is a record struck out — a duplicate, or one called off — and
+  /// defence is a record struck out (a duplicate, or one called off) and
   /// must not advance anything, while a **completed** one is the opposite,
   /// proof the stage was actually reached. Dropping completed defences too
   /// would send a group that had finished its final defence back to
@@ -102,12 +102,12 @@ class ProgressRail extends StatefulWidget {
       'Adviser and panel accept; Coordinator and '
           'Dean sign off',
     RailStage.title => 'Candidate titles go before the panel',
-    RailStage.chapters => 'Chapters I–V, reviewed by the adviser',
+    RailStage.chapters => 'Your manuscript, reviewed by the adviser',
     RailStage.preOral => 'Proposal defended before the panel',
-    RailStage.finalDefence => 'Final defence, then the archive',
+    RailStage.finalDefence => 'Final defense, then the archive',
   };
 
-  /// A comfortable width for one stage — wide enough that its label sits on a
+  /// A comfortable width for one stage: wide enough that its label sits on a
   /// single line. Six of these is the rail's natural width; below it, the row
   /// scrolls sideways rather than squeezing the labels into stacks.
   static const double _stepWidth = 96;

@@ -75,7 +75,16 @@ class HighlightsList extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(a.name, style: text.labelMedium),
+                  // Flexible so one long name shortens instead of
+                  // overflowing the legend on a narrow screen.
+                  Flexible(
+                    child: Text(
+                      a.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelMedium,
+                    ),
+                  ),
                 ],
               ),
           ],

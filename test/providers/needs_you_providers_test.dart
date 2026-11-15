@@ -21,12 +21,12 @@ import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// Task 9 fix round 2 (whole-branch review, IMPORTANT 1+2). `NeedsYouQueue`
+/// `NeedsYouQueue`
 /// decides `push` vs `go` per row on `NeedsYouItem.deep`
 /// (`lib/core/widgets/needs_you_queue.dart:114-116`).
 ///
-/// Round 1 pinned that flag against `_isDeepRoute`, a hand-written
-/// restatement of "the five deep routes named in the Task 9 brief" -- which
+/// An earlier version pinned that flag against `_isDeepRoute`, a hand-written
+/// restatement of "the five deep routes", which
 /// is exactly the enumeration the implementation itself was built against,
 /// so the test could never disagree with the bug: both were reading off the
 /// same wrong list. `/review` (no destination anywhere owns it) and
@@ -34,8 +34,8 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// (an adviser, a dean, a coordinator) both shipped `deep: false` and
 /// neither test nor implementation noticed.
 ///
-/// This now asserts against [isDeepForRole] -- the same ownership test
-/// `AppShell` itself runs to decide the back control -- rather than a
+/// This now asserts against [isDeepForRole]: the same ownership test
+/// `AppShell` itself runs to decide the back control, rather than a
 /// second hand-written list. A new row wired with the wrong flag still
 /// fails automatically, but now it fails against the actual definition of
 /// "deep", not a copy of it.
@@ -64,7 +64,7 @@ class _FakeDocumentRepository extends DocumentRepository {
 /// The bug they pin: `ref.listen(..., fireImmediately: true)` hands the
 /// listener an `AsyncLoading` VALUE, which is not null. A gate written as
 /// `if (source == null) return` therefore passes on the first frame, and
-/// `valueOrNull ?? const []` publishes `data([])` -- "Nothing needs you
+/// `valueOrNull ?? const []` publishes `data([])`: "Nothing needs you
 /// today" before a single snapshot has landed, and forever after a
 /// `permission-denied`.
 
@@ -93,7 +93,7 @@ Future<FakeFirebaseFirestore> seedFacultyWorld() async {
 }
 
 /// Drives [facultyNeedsYouProvider] off a real (fake) Firestore for [uid],
-/// with the nomination and advisee sources stubbed empty -- these tests are
+/// with the nomination and advisee sources stubbed empty: these tests are
 /// only about the evaluation row, so the other three fan-in sources are held
 /// still rather than exercised. [currentUserProvider] is stubbed to `null`
 /// rather than seeded: `myDefencesProvider` only branches on
@@ -157,7 +157,7 @@ void main() {
   });
 
   group('facultyNeedsYouProvider: the evaluation queue row', () {
-    test('a panelist owes a sheet on a closed, unreleased defence',
+    test('a panelist owes a sheet on a closed, unreleased defense',
         () async {
       final db = await seedFacultyWorld();
       await db.collection('defenses').doc('d9').set({
@@ -175,13 +175,13 @@ void main() {
 
       expect(row, hasLength(1));
       expect(row.single.route, '/defence/room/d9/evaluate');
-      expect(row.single.title, 'Final defence');
+      expect(row.single.title, 'Final defense');
     });
 
     // Fix: re-defences are named as re-defences. `d.type.label` names only
     // the kind ('Final defence'), even on a defence that redoes a failed
-    // one -- `d.label` is the one that reads 'Final re-defence'.
-    test('a panelist owes a sheet on a re-defence, named as one', () async {
+    // one: `d.label` is the one that reads 'Final re-defence'.
+    test('a panelist owes a sheet on a redefense, named as one', () async {
       final db = await seedFacultyWorld();
       await db.collection('defenses').doc('d-orig').set({
         'thesisId': 't1', 'type': 'final',
@@ -204,7 +204,7 @@ void main() {
       final row = items.where((i) => i.route == '/defence/room/d9/evaluate');
 
       expect(row, hasLength(1));
-      expect(row.single.title, 'Final re-defence');
+      expect(row.single.title, 'Final redefense');
     });
 
     test('the row goes once that panelist has submitted', () async {
@@ -233,7 +233,7 @@ void main() {
       expect(items.where((i) => i.chipLabel == 'Evaluate'), isEmpty);
     });
 
-    test('a released defence owes nothing, submitted or not', () async {
+    test('a released defense owes nothing, submitted or not', () async {
       final db = await seedFacultyWorld();
       await db.collection('defenses').doc('d9').set({
         'thesisId': 't1', 'type': 'final',
@@ -251,7 +251,7 @@ void main() {
       expect(items.where((i) => i.chipLabel == 'Evaluate'), isEmpty);
     });
 
-    // The adviser is barred from scoring, so they can never owe a sheet --
+    // The adviser is barred from scoring, so they can never owe a sheet,
     // and this is the queue that would otherwise nag them forever.
     test('the adviser is never asked to evaluate', () async {
       final db = await seedFacultyWorld();
@@ -375,7 +375,7 @@ void main() {
         leaderUid: 'leader1',
         status: DefenceStatus.completed,
         createdBy: 'c1',
-        // consolidatedAt absent -- still owed, so this is the
+        // consolidatedAt absent, still owed, so this is the
         // 'Consolidate' row, route '/defence/{id}', deep: true.
       );
       final defenceInProgress = Defence(
@@ -422,11 +422,11 @@ void main() {
         myDefencesProvider
             .overrideWith((ref) => Stream.value([defenceDue, defenceInProgress])),
         documentRepositoryProvider.overrideWithValue(_FakeDocumentRepository({
-          // A submitted chapter on the one advisee thesis -- the 'Review'
+          // A submitted chapter on the one advisee thesis: the 'Review'
           // row, route '/thesis/chapters?id=...', deep: true. It is the
           // LIST route, not '/thesis/chapters/:chapterId', but no faculty
-          // destination owns '/thesis/chapters' at all -- only a
-          // student's sidebar does -- so it is deep for this reader
+          // destination owns '/thesis/chapters' at all, only a
+          // student's sidebar does, so it is deep for this reader
           // regardless.
           't-advisee': const [
             ThesisChapter(
@@ -447,7 +447,7 @@ void main() {
       // Sanity: the fixture above must actually produce every row shape it
       // claims to, or this test would vacuously pass with an empty list.
       expect(items.length, 4, reason: 'fixture did not emit the expected '
-          'nomination + chapter-review + two defence rows: $items');
+          'nomination + chapter-review + two defense rows: $items');
       for (final item in items) {
         expect(item.deep, isDeepForRole(UserRole.faculty, item.route),
             reason: 'NeedsYouItem.deep=${item.deep} disagrees with the '
@@ -456,12 +456,12 @@ void main() {
     });
 
     test(
-        'facultyNeedsYouProvider: a defence row addresses the defence room by '
+        'facultyNeedsYouProvider: a defense row addresses the defense room by '
         'defence id, never /defence/:thesisId', () async {
-      // `/defence/:thesisId` is M1b's TitleDefenceScreen, keyed by a THESIS
+      // `/defence/:thesisId` is title defence's TitleDefenceScreen, keyed by a THESIS
       // id; the defence room is `/defence/room/:defenceId`. Putting `d.id`
       // into the former made the screen read `theses/{defenceId}`, a
-      // document that does not exist -- and because `thesisData()` reads
+      // document that does not exist, and because `thesisData()` reads
       // `.data` off a null `get()`, the rules raise an evaluation error,
       // which surfaces as `permission-denied` rather than "not found". An
       // adviser clicking Consolidate landed on "Could not load this thesis".
@@ -516,7 +516,7 @@ void main() {
       // Joining a defence happening now lands in the live room.
       expect(join.route, '/defence/room/d-join');
 
-      // No row may ever address a defence through the thesis-keyed route --
+      // No row may ever address a defence through the thesis-keyed route,
       // a thesis id and a defence id are not interchangeable.
       for (final item in items) {
         expect(item.route, isNot('/defence/${'d-consolidate'}'));
@@ -543,7 +543,7 @@ void main() {
         id: 't-defence',
         leaderUid: 'leader2',
         memberNames: const [],
-        workingTitle: 'Title-defence-pending thesis',
+        workingTitle: 'Title-defense-pending thesis',
         college: 'CICT',
         program: 'BSIT',
         semester: 'First',
@@ -567,7 +567,7 @@ void main() {
       final items = container.read(deanNeedsYouProvider).requireValue;
       expect(items.length, 2,
           reason: 'fixture did not emit the expected approval + title-'
-              'defence rows: $items');
+              'defense rows: $items');
       for (final item in items) {
         expect(item.deep, isDeepForRole(UserRole.dean, item.route),
             reason: 'NeedsYouItem.deep=${item.deep} disagrees with the '
@@ -595,7 +595,7 @@ void main() {
         id: 't-defence',
         leaderUid: 'leader2',
         memberNames: const [],
-        workingTitle: 'Title-defence-pending thesis',
+        workingTitle: 'Title-defense-pending thesis',
         college: 'CICT',
         program: 'BSIT',
         semester: 'First',
@@ -604,14 +604,14 @@ void main() {
         panelistUids: const [],
         createdAt: DateTime(2026),
       );
-      // Cleared the chapter gate (chapters I-III approved -- proposalReady)
-      // and has no scheduled defence yet -- the 'Schedule' row, route
+      // Cleared the chapter gate (chapters I-III approved: proposalReady)
+      // and has no scheduled defence yet: the 'Schedule' row, route
       // '/defence/schedule?id=...', deep: true.
       final readyCandidate = Thesis(
         id: 't-ready',
         leaderUid: 'leader3',
         memberNames: const [],
-        workingTitle: 'Ready-for-defence thesis',
+        workingTitle: 'Ready-for-defense thesis',
         college: 'CICT',
         program: 'BSIT',
         semester: 'First',
@@ -663,7 +663,7 @@ void main() {
       final items = container.read(coordinatorNeedsYouProvider).requireValue;
       expect(items.length, 4,
           reason: 'fixture did not emit the expected recommendation + '
-              'title-defence + schedule + stalled rows: $items');
+              'title-defense + schedule + stalled rows: $items');
       // The stalled row is the reason this count moved from 3 to 4; assert
       // it is actually present rather than letting any fourth row satisfy
       // the count.
@@ -678,8 +678,8 @@ void main() {
 
   group('deep-route classification is role-dependent, not a fixed list',
       () {
-    // The defect this fixes: '/thesis/chapters' IS a destination for a
-    // student (once chapters are unlocked) but is NOT one for anybody
+    // The defect this fixes: '/thesis/chapters' is a destination for a
+    // student (once chapters are unlocked) but is not one for anybody
     // else, so whether it counts as "deep" must be computed against the
     // reading role's own destination list, never a role-blind list of
     // route shapes.

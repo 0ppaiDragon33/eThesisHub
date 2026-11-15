@@ -25,7 +25,7 @@ const _destinations = [
     route: '/thesis/chapters',
   ),
   ShellDestination(
-    label: 'Defences',
+    label: 'Defenses',
     icon: Icons.event_note_outlined,
     route: '/defences',
   ),
@@ -76,8 +76,8 @@ Future<void> setViewSize(WidgetTester tester, double width, double height) async
 /// wires itself to Firebase-backed providers this widget test does not
 /// set up. Same shape and the same keys the real widget uses for its full
 /// (name + role + sign-out) rendering, so the sweep below is exercising
-/// the same layout hazard -- fixed-height content pinned to the bottom of
-/// a `NavigationRail` -- without needing a real profile stream.
+/// the same layout hazard: fixed-height content pinned to the bottom of
+/// a `NavigationRail`: without needing a real profile stream.
 class _FakeAccountFooter extends StatelessWidget {
   const _FakeAccountFooter();
 
@@ -112,9 +112,9 @@ class _FakeAccountFooter extends StatelessWidget {
 /// Whether the sidebar is showing its expanded (labelled) form.
 ///
 /// The shell no longer uses `NavigationRail`, so there is no `extended`
-/// flag to read. The sidebar's rendered width IS the collapsed/expanded
-/// distinction — it animates between [AppShell.collapsedRailWidth] and
-/// [AppShell.expandedRailWidth] — so measuring it asserts the same property
+/// flag to read. The sidebar's rendered width is the collapsed/expanded
+/// distinction: it animates between [AppShell.collapsedRailWidth] and
+/// [AppShell.expandedRailWidth], so measuring it asserts the same property
 /// the old `rail.extended` did, against what the reader actually sees.
 bool sidebarExpanded(WidgetTester tester) =>
     tester.getSize(find.byKey(const Key('shellSidebar'))).width ==
@@ -143,7 +143,7 @@ void main() {
       // (Visibility.maintain) purely to hold it in the accessibility tree,
       // so find.text matched even when nothing was painted. The sidebar
       // that replaced it drops the label widget outright and carries the
-      // name on an explicit `Semantics(label:)` instead — so the text is
+      // name on an explicit `Semantics(label:)` instead, so the text is
       // genuinely gone AND the accessible name survives. Both are asserted.
       final handle = tester.ensureSemantics();
 
@@ -171,9 +171,9 @@ void main() {
 
     testWidgets('the edge strip toggles the sidebar', (tester) async {
       // The property to assert on is the sidebar's own collapsed/expanded
-      // state, measured by width — see [sidebarExpanded].
+      // state, measured by width: see [sidebarExpanded].
       //
-      // The dedicated `Key('sidebarToggle')` button is gone -- the rail's
+      // The dedicated `Key('sidebarToggle')` button is gone: the rail's
       // own edge is now the control (`Key('sidebarEdgeToggle')`).
       await setSize(tester, 1400);
       await tester.pumpWidget(
@@ -205,19 +205,19 @@ void main() {
       expect(find.byKey(const Key('sidebarToggle')), findsNothing);
     });
 
-    // MINOR (fix round 1 review): the gesture-arena reasoning behind the
-    // background `GestureDetector` -- a descendant recognizer (a
+    // The gesture-arena reasoning behind the
+    // background `GestureDetector`: a descendant recognizer (a
     // destination's own `InkWell`) wins over the ancestor for a simple
-    // tap -- was verified by the reviewer probing this exact behaviour by
+    // tap: was verified by probing this exact behaviour by
     // hand, but nothing in the suite pinned it. These two tests pin both
     // halves; both were falsified before being trusted (destination tap:
     // set `onDestinationSelected: null` and confirmed `navigatedTo` stayed
     // null; background tap: set the ancestor `onTap: null` and confirmed
     // `extended` stayed true), then restored.
     //
-    // One candidate regression the review named -- swapping
-    // `HitTestBehavior.translucent` for `.opaque` on the ancestor -- was
-    // also tried and does NOT break either test: that distinction only
+    // One candidate regression the review named: swapping
+    // `HitTestBehavior.translucent` for `.opaque` on the ancestor: was
+    // also tried and does not break either test: that distinction only
     // matters for a `Stack` of overlapping siblings (whether a hit
     // continues past the first opaque hit to whatever sits behind it),
     // and this is a plain ancestor wrapping a descendant, not a `Stack`,
@@ -240,7 +240,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(navigatedTo, '/thesis/chapters');
-      expect(sidebarExpanded(tester), isTrue); // unchanged -- the tap navigated,
+      expect(sidebarExpanded(tester), isTrue); // unchanged: the tap navigated,
       // it did not fall through to the background toggle.
     });
 
@@ -249,7 +249,7 @@ void main() {
       await setSize(tester, 1400);
       await tester.pumpWidget(
         // No accountFooter: `NavigationRail.trailing` is null, so the
-        // whole area below the three destinations is genuinely empty --
+        // whole area below the three destinations is genuinely empty,
         // nothing there but the rail's own background and the
         // `GestureDetector` behind it.
         await wrap(destinations: const AsyncValue.data(_destinations)),
@@ -280,7 +280,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // R3: assert by key, not by the default tooltip string — a custom
+      // R3: assert by key, not by the default tooltip string: a custom
       // tooltip would silently make the original assertion pass for the
       // wrong reason.
       expect(find.byKey(const Key('shellMenu')), findsNothing);
@@ -342,7 +342,7 @@ void main() {
   group('role resolution', () {
     testWidgets('while loading, renders chrome and NO tappable destination',
         (tester) async {
-      // Spec D26. A skeleton cannot misroute, because there is nothing to
+      // A skeleton cannot misroute, because there is nothing to
       // tap. A guessed role can offer a destination the account does not
       // hold, and tapping it produces a permission-denied the reader
       // cannot act on.
@@ -363,7 +363,7 @@ void main() {
         'while loading on narrow width, shows a hamburger whose drawer '
         'holds the skeleton', (tester) async {
       // On a phone the loading state must not be bare chrome with nothing
-      // in it — the hamburger stays present so the reader can see
+      // in it: the hamburger stays present so the reader can see
       // navigation is coming, and opening it finds the same inert
       // skeleton rather than an empty drawer.
       await setSize(tester, 400);
@@ -453,7 +453,7 @@ void main() {
         'with no onBack supplied, tapping it does not crash when there is '
         'nothing to pop', (tester) async {
       // The default falls back to `Navigator.maybePop`, not `Navigator.
-      // pop` -- a deep screen reached directly by URL has nothing beneath
+      // pop`: a deep screen reached directly by URL has nothing beneath
       // it in this Navigator (AppShell is the sole route under
       // MaterialApp's `home`), and `pop` would throw where `maybePop`
       // simply does nothing.
@@ -507,7 +507,7 @@ void main() {
         'suppressBackControl hides it even on a route no destination owns',
         (tester) async {
       // '/no-profile' owns nothing in any destination list, so
-      // isDeeperThanDestination alone always answers true there -- but
+      // isDeeperThanDestination alone always answers true there, but
       // `AppShellHost._back` can only ever fall through to '/overview',
       // which the redirect immediately bounces back to '/no-profile'. A
       // control that does nothing is exactly what this milestone exists
@@ -554,7 +554,7 @@ void main() {
     // Selection used to be `NavigationRail.selectedIndex`. The sidebar that
     // replaced it marks the owning destination with `Semantics(selected:)`,
     // which is both what paints the highlight and what a screen reader
-    // announces — so asserting the flag covers the sighted and the
+    // announces, so asserting the flag covers the sighted and the
     // non-sighted reader at once.
     bool isSelected(WidgetTester tester, String route) => tester
         .getSemantics(find.byKey(Key('nav-$route')))
@@ -579,7 +579,7 @@ void main() {
     });
 
     testWidgets('an unowned route highlights nothing', (tester) async {
-      // Spec D24: a wrong highlight tells the reader they are somewhere
+      // A wrong highlight tells the reader they are somewhere
       // they are not, which is worse than no highlight.
       final handle = tester.ensureSemantics();
       await setSize(tester, 1400);
@@ -598,13 +598,13 @@ void main() {
   });
 
   group('short-rail account footer', () {
-    // Coordinator: ten destinations (Calendar, Archive, Forms, My files, and
-    // the Activity log), the worst case for how much vertical space the rail's
+    // Coordinator: twelve destinations (Calendar, Archive, Publish queue,
+    // Stalled nominations, My files, and the Activity log), the worst case for how much vertical space the rail's
     // own content claims before the footer gets a turn. Title defences no
-    // longer has an entry of its own -- it is the Title stage of Defences
-    // now (spec 2026-09-25 §6.7).
+    // longer has an entry of its own: it is the Title stage of Defences
+    // now.
     final coordinatorDestinations = destinationsFor(role: UserRole.coordinator);
-    assert(coordinatorDestinations.length == 10); // guards the "worst case" claim
+    assert(coordinatorDestinations.length == 12); // guards the "worst case" claim
 
     for (final height in [320.0, 420.0, 600.0, 1000.0]) {
       testWidgets('rail height=$height overflows nothing', (tester) async {
@@ -656,7 +656,7 @@ void main() {
   });
 
   group('content width when the sidebar collapses', () {
-    // Proves point 2 with a measurement, not just a rebuild: at the SAME
+    // Proves point 2 with a measurement, not just a rebuild: at the same
     // fixed viewport, collapsing the rail must free real width for a
     // `PageShell`-style dashboard body to grow into, not just recentre in
     // the same box.
@@ -698,9 +698,9 @@ void main() {
       expect(collapsedWidth, lessThanOrEqualTo(AppTokens.measureWide));
     });
 
-    // FINDING 1 (fix round 1 review): the test above passes at ANY
-    // `measureWide` value at or above the collapsed width -- 1180 or 1440
-    // alike -- because it only ever compares collapsed-vs-expanded at one
+    // The test above passes at ANY
+    // `measureWide` value at or above the collapsed width: 1180 or 1440
+    // alike, because it only ever compares collapsed-vs-expanded at one
     // viewport. It guards "collapsing grows the content," which is a real,
     // separate property, but nothing pinned the cap's actual VALUE, so
     // reverting `AppTokens.measureWide` to 1180 would break nothing here.
@@ -709,14 +709,14 @@ void main() {
     // the binding constraint makes the token itself the only thing left
     // that can be capping the probe. At 2000px: collapsed leaves
     // 2000 - (collapsedRailWidth + edge strip) = 1920 available, expanded
-    // leaves 2000 - (expandedRailWidth + edge strip) = 1772 -- both well
+    // leaves 2000 - (expandedRailWidth + edge strip) = 1772: both well
     // past `measureWide` (1440), so the rail state genuinely is
     // irrelevant, unlike at a viewport merely wider than the cap alone.
     //
     // `PageShell` pads its content by `AppTokens.lg` on each side inside
     // the `ConstrainedBox` that applies `maxWidth`, so the probe (which
     // fills `PageShell`'s own stretched content width) sits at
-    // `measureWide` minus that padding, not at `measureWide` itself --
+    // `measureWide` minus that padding, not at `measureWide` itself,
     // the expected value below is exact, not an inequality, so a changed
     // token moves this test's failure, not just its margin.
     for (final expanded in [true, false]) {
@@ -735,7 +735,7 @@ void main() {
   // the browser settles its size, and a desktop window can be dragged
   // shorter than the top bar at any time. The shell stacks a fixed-height
   // top bar above an Expanded body, so any viewport shorter than that bar
-  // is an overflow — it paints outside itself and stripes the screen.
+  // is an overflow: it paints outside itself and stripes the screen.
   //
   // Nothing readable fits in a viewport this small; the requirement is only
   // that the shell yields quietly instead of raising.

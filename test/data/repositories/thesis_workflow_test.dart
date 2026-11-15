@@ -77,7 +77,7 @@ void main() {
 
     final noms = await repo.watchNominations(id).first;
     final dean = noms.firstWhere((n) => n.nomineeUid == 'd1');
-    // The dean was never touched — still sitting at exOfficio, not accepted.
+    // The dean was never touched, still sitting at exOfficio, not accepted.
     expect(dean.conformeStatus, ConformeStatus.exOfficio);
 
     final thesis = await repo.watchThesis(id).first;
@@ -143,7 +143,7 @@ void main() {
     // The adviser's Conforme is withdrawn after the coordinator recommended.
     // Reachable in practice: `respondToNomination` guards on status, but a
     // decline recorded through any other path (or an admin correction) leaves
-    // exactly this state — pendingDean with no accepted adviser.
+    // exactly this state: pendingDean with no accepted adviser.
     await db
         .collection('theses')
         .doc(id)
@@ -265,7 +265,7 @@ void main() {
 
   test('the ex officio dean is absent from panelistUids after approval',
       () async {
-    // d1 is ex officio AND is the one calling approve() as dean — a naive
+    // d1 is ex officio AND is the one calling approve() as dean: a naive
     // filter keyed only on "accepted" (the dean's ConformeStatus is
     // exOfficio, not accepted, so this should already exclude them, but we
     // assert it explicitly since panelistUids[] is untested territory).
@@ -284,7 +284,7 @@ void main() {
     // submitNominations() never actually produces exOfficio:true combined
     // with position:panelist (an ex-officio collision always relabels
     // position to dean/coordinator), so the test above cannot by itself
-    // prove the `!n.exOfficio` guard inside approve() is doing anything —
+    // prove the `!n.exOfficio` guard inside approve() is doing anything,
     // the position filter alone would already exclude the dean. Write a
     // nomination directly to decouple the two fields and prove the guard
     // is load-bearing independent of that invariant.
@@ -396,7 +396,7 @@ void main() {
 
   // --- Review finding (c): the faculty inbox's collection-group query used
   // `where(FieldPath.documentId, isEqualTo: uid)`, which real Firestore
-  // rejects with `invalid-argument` — inside a collection group a
+  // rejects with `invalid-argument`: inside a collection group a
   // documentId() comparison must be given a full document path, so the inbox
   // could not run at all. The query now filters on a `nomineeUid` FIELD,
   // which only works if `submitNominations` actually writes that field.
@@ -493,7 +493,7 @@ void main() {
 
     // Simulate a concurrent client declining p3 while approve() is
     // mid-flight, bypassing the repository entirely (as an external write
-    // -- a retried client, a second device -- would). The two-microtask
+    // a retried client, a second device: would). The two-microtask
     // delay is an empirically-derived, implementation-coupled number: it
     // lands after approve()'s upfront nomination-id query but while its
     // per-document transaction reads are still in flight. See the task-6

@@ -57,7 +57,7 @@ Widget wrap(FakeFirebaseFirestore db, ThesisStatus queue, bool isDean,
     );
 
 /// Matches the `useTallSurface` pattern from `nominate_screen_test.dart` /
-/// `nomination_inbox_screen_test.dart` — the default 800x600 test surface
+/// `nomination_inbox_screen_test.dart`: the default 800x600 test surface
 /// can leave the act button below the fold.
 void useTallSurface(WidgetTester tester) {
   tester.view.physicalSize = const Size(1000, 2000);
@@ -189,7 +189,7 @@ void main() {
 
     // `recommend`'s internal `watchThesis(...).first` read never delivers
     // its event on `fake_cloud_firestore`'s stream under the fake clock that
-    // `pump()`/`pumpAndSettle()` alone drive — confirmed empirically (see
+    // `pump()`/`pumpAndSettle()` alone drive: confirmed empirically (see
     // task-11-report.md): the same tap, awaited only via `pumpAndSettle()`,
     // leaves the write permanently pending and the doc unchanged.
     // `approve`'s transaction (`tx.get()`) does not have this problem, only
@@ -344,7 +344,7 @@ void main() {
     // completion are all done inside one `runAsync` block.
     // `_SlowThesisRepository`'s delay and `recommend`'s internal
     // `.snapshots().first` both need a real event-loop tick to resolve (see
-    // the comment on the "recommend and records who acted" test above) —
+    // the comment on the "recommend and records who acted" test above),
     // splitting the wait across the fake clock (`pump()`) and a separate
     // `runAsync` call left the first Timer parked forever on the fake clock,
     // never reaching the point where the real-only `.snapshots().first`
@@ -370,7 +370,7 @@ void main() {
 }
 
 /// Always reports the thesis as already having moved past the stage this
-/// screen is meant to act on — simulating a stale queue where another
+/// screen is meant to act on: simulating a stale queue where another
 /// coordinator/dean already acted before this tab's tap lands.
 class _AlwaysStaleThesisRepository extends ThesisRepository {
   _AlwaysStaleThesisRepository(super.db);

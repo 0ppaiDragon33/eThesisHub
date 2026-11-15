@@ -185,11 +185,11 @@ void main() {
     expect(find.text('Chapter II is not approved yet.'), findsOneWidget);
   });
 
-  testWidgets('before the defence opens, highlighting is closed',
+  testWidgets('before the defense opens, highlighting is closed',
       (tester) async {
     await pumpScreen(tester, await seed(status: 'scheduled'), 'p1', room);
     expect(find.byKey(const Key('highlightTool')), findsNothing);
-    expect(find.text('Highlighting opens when the defence starts.'),
+    expect(find.text('Highlighting opens when the defense starts.'),
         findsOneWidget);
   });
 

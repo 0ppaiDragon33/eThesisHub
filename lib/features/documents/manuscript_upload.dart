@@ -14,9 +14,9 @@ import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
-/// A consolidated manuscript is one bound PDF, not the working chapter
-/// files -- so unlike [kChapterTypes] this admits nothing else.
-const kManuscriptTypes = {'pdf'};
+/// A consolidated manuscript is one bound file (a PDF or a Word document),
+/// not the working chapter files. Nothing else is admitted.
+const kManuscriptTypes = {'pdf', 'docx', 'doc'};
 
 /// Above [kChapterMaxBytes]: a consolidated manuscript carries every
 /// chapter's figures and tables at once, still under the bucket's 50 MB
@@ -27,19 +27,19 @@ const kManuscriptMaxBytes = 40 * 1024 * 1024;
 /// consolidated manuscript and its abstract.
 ///
 /// ELIGIBILITY is decided from [myDefencesProvider], not from
-/// `thesis.status` -- `titleApproved` is where a thesis sits for the whole
-/// of M2-M4, so the defence record and its panel verdict are the only
+/// `thesis.status`: `titleApproved` is where a thesis sits for the whole
+/// of chapters-evaluation, so the defence record and its panel verdict are the only
 /// place a "the group is done" signal exists. A completed final defence
-/// with no verdict yet, or a `fail`, shows nothing here at all -- both are
+/// with no verdict yet, or a `fail`, shows nothing here at all: both are
 /// "not eligible" from this widget's point of view.
 ///
-/// The one status this DOES read is `archived`, the terminal state the
+/// The one status this does read is `archived`, the terminal state the
 /// coordinator writes when publishing: past that point there is nothing
 /// left to submit, and telling the group they are still "awaiting the
 /// coordinator" would contradict the Archived chip beside this widget.
 ///
 /// A FAILED defence read is its own branch and never collapses into "not
-/// eligible" -- see build().
+/// eligible": see build().
 class ManuscriptUpload extends ConsumerStatefulWidget {
   const ManuscriptUpload({super.key, required this.thesis, this.pickDocument});
 
@@ -67,7 +67,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
   @override
   void initState() {
     super.initState();
-    // Rebuilds the button's disabled state as the abstract is typed --
+    // Rebuilds the button's disabled state as the abstract is typed,
     // required is "non-empty", which cannot be decided once at build time.
     _abstractController.addListener(_onAbstractChanged);
   }
@@ -108,7 +108,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
 
     final uid = ref.read(authStateProvider).valueOrNull?.uid;
     if (uid == null) {
-      // A blank submit here would give the leader no feedback at all --
+      // A blank submit here would give the leader no feedback at all,
       // see the identical note on ChapterDetailScreen's own upload.
       if (mounted) {
         setState(() =>
@@ -121,8 +121,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
       context,
       title: 'Submit this manuscript?',
       message: '"${file.name}" will be published to the college archive '
-          'once the Coordinator approves it. Make sure it has the complete '
-          'Chapters I to V.',
+          'once the Coordinator approves it.',
       confirmLabel: 'Submit',
       confirmKey: const Key('confirmSubmitManuscript'),
     );
@@ -156,7 +155,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
         });
       }
     } on StorageFailure catch (e) {
-      // There are no server-side logs on this project -- the message and
+      // There are no server-side logs on this project: the message and
       // code are the only place the cause can surface.
       if (mounted) setState(() => _error = '${e.message} [${e.code}]');
     } on ArgumentError catch (e) {
@@ -170,7 +169,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
       }
       if (mounted) setState(() => _error = e.message.toString());
     } on StateError catch (e) {
-      // Wrong leader, or the thesis is not at titleApproved -- also a
+      // Wrong leader, or the thesis is not at titleApproved: also a
       // human-written message from the repository.
       if (stored != null) {
         try {
@@ -225,7 +224,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
   /// The end of the line: the coordinator has published this thesis.
   ///
   /// Without this branch the group is told "awaiting the coordinator"
-  /// forever -- including on a screen that is simultaneously showing them
+  /// forever: including on a screen that is simultaneously showing them
   /// an `Archived` status chip. Gating on `thesis.status` rather than on
   /// the archive collection keeps this widget reading one document; the
   /// status and the entry are written in the same batch, so they agree.
@@ -267,9 +266,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
             // The archive publishes this file, not the chapter drafts, so
             // say plainly what it must contain.
             Text(
-              'Upload your complete, final manuscript — the front matter and '
-              'Chapters I to V — as one PDF. This is the copy published to '
-              'the college archive.',
+              'Upload your final manuscript (front matter and Chapters I to V) as one PDF or Word file. It is published to the college archive.',
               key: const Key('manuscriptInstructions'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -277,7 +274,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
             OutlinedButton.icon(
               key: const Key('pickManuscript'),
               icon: const Icon(Icons.upload_file),
-              label: Text(_file?.name ?? 'Choose PDF'),
+              label: Text(_file?.name ?? 'Choose PDF or Word file'),
               onPressed: _busy ? null : _pick,
             ),
             const SizedBox(height: 12),
@@ -328,7 +325,7 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
     // A FAILED read is not "you are not eligible yet". `valueOrNull ?? []`
     // collapsed the two: a permission-denied or a dropped connection made
     // this widget return SizedBox.shrink(), so an eligible leader saw no
-    // form, no error and no explanation -- identical to a group whose
+    // form, no error and no explanation: identical to a group whose
     // defence has not passed. That conflation is the exact bug this project
     // has shipped four times, and there are no server-side logs on the
     // Spark plan, so the screen is the only place the code can surface.
@@ -338,14 +335,14 @@ class _ManuscriptUploadState extends ConsumerState<ManuscriptUpload> {
         child: ErrorState(
           key: const Key('manuscriptDefenceError'),
           error: defencesAsync.error,
-          message: 'Could not check your final defence. Try again in a moment.',
+          message: 'Could not check your final defense. Try again in a moment.',
         ),
       );
     }
 
     // Already published: the coordinator has archived this thesis, and
     // nothing further happens to it. Checked before eligibility because it
-    // is the stronger fact -- a thesis cannot reach `archived` without a
+    // is the stronger fact: a thesis cannot reach `archived` without a
     // passed final defence.
     if (widget.thesis.status == ThesisStatus.archived) {
       return Padding(

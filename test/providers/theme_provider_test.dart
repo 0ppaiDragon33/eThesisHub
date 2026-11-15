@@ -41,7 +41,7 @@ void main() {
     first.read(themeModeProvider.notifier).cycle(); // -> light
     first.dispose();
 
-    // Same backing store, fresh container — what a relaunch looks like.
+    // Same backing store, fresh container: what a relaunch looks like.
     final prefs = await SharedPreferences.getInstance();
     final second = ProviderContainer(
       overrides: [sharedPrefsProvider.overrideWithValue(prefs)],

@@ -36,7 +36,7 @@ void main() {
     // The rail used to take `hasDefence: defences.isNotEmpty`, so a FINAL
     // defence rendered as "Pre-oral" and RailStage.finalDefence was
     // unreachable dead code.
-    test('a final defence reaches the final stage', () {
+    test('a final defense reaches the final stage', () {
       expect(
         ProgressRail.stageFor(
           status: ThesisStatus.titleApproved,
@@ -47,7 +47,7 @@ void main() {
       );
     });
 
-    test('a pre-oral defence reaches the pre-oral stage, not the final one',
+    test('a pre-oral defense reaches the pre-oral stage, not the final one',
         () {
       expect(
         ProgressRail.stageFor(
@@ -62,7 +62,7 @@ void main() {
     // A cancelled defence is a record struck out. It used to push the rail
     // to "Pre-oral" all the same, so a group whose pre-oral was called off
     // saw the same rail as one that had actually sat it.
-    test('a cancelled defence does not advance the rail', () {
+    test('a cancelled defense does not advance the rail', () {
       expect(
         ProgressRail.stageFor(
           status: ThesisStatus.titleApproved,
@@ -73,7 +73,7 @@ void main() {
       );
     });
 
-    test('a cancelled final defence does not reach the final stage', () {
+    test('a cancelled final defense does not reach the final stage', () {
       expect(
         ProgressRail.stageFor(
           status: ThesisStatus.titleApproved,
@@ -87,8 +87,8 @@ void main() {
     });
 
     // A completed defence is the opposite of a cancelled one: proof the
-    // stage was actually reached, so it must NOT send the rail backwards.
-    test('a completed final defence keeps the final stage', () {
+    // stage was actually reached, so it must not send the rail backwards.
+    test('a completed final defense keeps the final stage', () {
       expect(
         ProgressRail.stageFor(
           status: ThesisStatus.titleApproved,
@@ -116,7 +116,7 @@ void main() {
       );
     });
 
-    test('a status before titleApproved ignores defence and chapter state',
+    test('a status before titleApproved ignores defense and chapter state',
         () {
       expect(
         ProgressRail.stageFor(
@@ -128,7 +128,7 @@ void main() {
       );
     });
 
-    test('a passed final re-defence reaches the Final stage', () {
+    test('a passed final redefense reaches the Final stage', () {
       Defence d(String id, DefenceType type, {String? redefenceOf}) => Defence(
             id: id,
             thesisId: 't1',

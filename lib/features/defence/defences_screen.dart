@@ -12,7 +12,7 @@ import 'package:ethesishub/features/defence/redefence_stage.dart';
 import 'package:ethesishub/features/defence/title_defence_stage.dart';
 
 
-/// The Defences destination, at '/defences?stage=…' (spec 2026-09-25 §6.1).
+/// The Defences destination, at '/defences?stage=…'.
 ///
 /// A stage switch reads **Title
 /// defence | Pre-oral | Final defence | Re-defence**. In the app the stage is
@@ -20,7 +20,7 @@ import 'package:ethesishub/features/defence/title_defence_stage.dart';
 /// one. The router hands it in as [initialStage], and switching stages goes
 /// to the new URL. Standing alone (in a test), switching is local state.
 ///
-/// With no stage named — the sidebar's bare '/defences' — the page opens on
+/// With no stage named (the sidebar's bare '/defences') the page opens on
 /// the first stage where the reader has something open
 /// ([defaultDefenceStageProvider]), choosing once, so work arriving later
 /// never moves the tab under them.
@@ -31,9 +31,9 @@ class DefencesScreen extends ConsumerStatefulWidget {
   const DefencesScreen({
     super.key,
     this.initialStage,
-    this.title = 'Defences',
+    this.title = 'Defenses',
     this.subtitle =
-        'Title defences, pre-oral and final defences, and re-defences.',
+        'Title defenses, pre-oral and final defenses, and redefenses.',
   });
 
   /// The stage the link named; null lets the page choose.
@@ -77,7 +77,7 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
           maxWidth: AppTokens.measureWide,
           title: widget.title,
           subtitle: widget.subtitle,
-          children: const [LoadingState(label: 'Loading your defences…')],
+          children: const [LoadingState(label: 'Loading your defenses…')],
         );
       }
       _stage = pick;
@@ -91,8 +91,8 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
       title: widget.title,
       subtitle: widget.subtitle,
       children: [
-        // The switch's own available width decides short vs. full labels --
-        // NOT the window's Breakpoint. Between about 720 and 1050px the
+        // The switch's own available width decides short vs. full labels,
+        // not the window's Breakpoint. Between about 720 and 1050px the
         // window is medium, but this switch has nowhere near enough room for
         // four full labels with icons and counts, and the horizontal scroll
         // below is a last resort a mouse cannot drag, not a fix.
@@ -127,14 +127,14 @@ class _DefencesScreenState extends ConsumerState<DefencesScreen> {
           DefenceStage.preOral => const DefencesList(
               key: ValueKey('preOralList'),
               where: _preOral,
-              emptyTitle: 'No pre-oral defences',
-              emptyMessage: 'Scheduled pre-oral defences appear here.',
+              emptyTitle: 'No pre-oral defenses',
+              emptyMessage: 'Scheduled pre-oral defenses appear here.',
             ),
           DefenceStage.finalDefence => const DefencesList(
               key: ValueKey('finalList'),
               where: _final,
-              emptyTitle: 'No final defences',
-              emptyMessage: 'Scheduled final defences appear here.',
+              emptyTitle: 'No final defenses',
+              emptyMessage: 'Scheduled final defenses appear here.',
             ),
         },
       ],

@@ -24,7 +24,7 @@ class PageShell extends StatelessWidget {
     this.maxWidth = AppTokens.measure,
   });
 
-  /// The context the page is read in — the record it belongs to, or the
+  /// The context the page is read in: the record it belongs to, or the
   /// office whose queue it is. Sentence case, set small above the title.
   final String? kicker;
   final String? title;
@@ -46,7 +46,7 @@ class PageShell extends StatelessWidget {
     final compact = Breakpoint.of(context) == Breakpoint.compact;
     // Horizontal padding is `lg` at every width and sits INSIDE the
     // `maxWidth` cap, so a page's content measure is `maxWidth` minus this
-    // padding — not `maxWidth` itself. The cap is a reading measure: adding
+    // padding, not `maxWidth` itself. The cap is a reading measure: adding
     // the padding back onto it (as an earlier revision did) widens every
     // page past the measure the token names.
     final pad = EdgeInsets.fromLTRB(

@@ -38,7 +38,7 @@ void main() {
     // Writing through addComment() in creation order isn't a real test here:
     // fake_cloud_firestore's default (no-orderBy) snapshot order already
     // matches insertion order, which in that case also matches createdAt
-    // order — so the assertion would pass whether or not watchComments
+    // order, so the assertion would pass whether or not watchComments
     // actually sorts. To make the orderBy clause load-bearing, the docs are
     // written directly with explicit createdAt values in an order that
     // DISAGREES with insertion order: the doc inserted first is timestamped
@@ -60,7 +60,7 @@ void main() {
           'createdAt': Timestamp.fromDate(at),
         });
 
-    // Inserted in this order: third, first, second — but timestamped so
+    // Inserted in this order: third, first, second, but timestamped so
     // that the true chronological order is first, second, third.
     await write('third', DateTime(2026, 1, 3));
     await write('first', DateTime(2026, 1, 1));

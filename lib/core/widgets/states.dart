@@ -5,7 +5,7 @@ import 'package:ethesishub/core/design/motion.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 
-/// Nothing here yet — and what to do about it.
+/// Nothing here yet, and what to do about it.
 ///
 /// An empty queue previously rendered as blank space, which reads as a
 /// screen that failed to load. An empty screen is an invitation to act, so
@@ -15,13 +15,13 @@ class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
     required this.title,
-    required this.message,
+    this.message,
     this.icon = Icons.inbox_outlined,
     this.action,
   });
 
   final String title;
-  final String message;
+  final String? message;
   final IconData icon;
   final Widget? action;
 
@@ -53,15 +53,17 @@ class EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppTokens.md),
           Text(title, style: text.titleMedium, textAlign: TextAlign.center),
-          const SizedBox(height: AppTokens.xs + 2),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Text(
-              message,
-              style: text.bodyMedium?.copyWith(color: p.muted),
-              textAlign: TextAlign.center,
+          if (message != null) ...[
+            const SizedBox(height: AppTokens.xs + 2),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                message!,
+                style: text.bodyMedium?.copyWith(color: p.muted),
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
+          ],
           if (action != null) ...[
             const SizedBox(height: AppTokens.lg),
             action!,
@@ -72,7 +74,7 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// Something went wrong — said plainly, with a way forward.
+/// Something went wrong: said plainly, with a way forward.
 ///
 /// Errors do not apologise and are never vague about what happened. The one
 /// case worth naming specifically is a permission denial, because on this
@@ -141,7 +143,7 @@ class ErrorState extends StatelessWidget {
                 // The hint used to REPLACE the message, so every
                 // permission-denied on a screen with four streams rendered
                 // an identical box and there was no way to tell which read
-                // had failed -- which is exactly the situation this project
+                // had failed, which is exactly the situation this project
                 // hit in the field, with no server-side logs to fall back on.
                 Text(message,
                     style: text.bodyMedium?.copyWith(color: scheme.error)),

@@ -26,8 +26,8 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// The Dean's decision docket.
 ///
-/// Organised around the two decisions only the Dean records — approving
-/// nominations and closing title defences — with college oversight (the
+/// Organised around the two decisions only the Dean records: approving
+/// nominations and closing title defences: with college oversight (the
 /// pipeline, the week's defences, the submission trend) beneath them.
 ///
 /// Watches [allThesesProvider] through its charts, which the rules permit
@@ -58,7 +58,7 @@ class DeanOverview extends ConsumerWidget {
           actions: [
             OutlinedButton(
               onPressed: () => context.go('/readiness'),
-              child: const Text('Defence readiness'),
+              child: const Text('Defense readiness'),
             ),
             FilledButton.icon(
               key: const Key('deanOpenReview'),
@@ -77,14 +77,14 @@ class DeanOverview extends ConsumerWidget {
             onTap: () => context.go('/approvals'),
           ),
           Metric<List<Thesis>>(
-            label: 'At title defence',
+            label: 'At title defense',
             value: titleDefencesAsync,
             format: (l) => '${l.length}',
             caption: (l) => l.isEmpty ? null : 'Only you can close these',
             onTap: () => context.go('/defences?stage=title'),
           ),
           Metric<List<Defence>>(
-            label: 'Defences this week',
+            label: 'Defenses this week',
             value: defencesAsync,
             format: (l) => '${defencesThisWeek(l).length}',
             onTap: () => context.go('/defences?stage=preOral'),
@@ -111,23 +111,23 @@ class DeanOverview extends ConsumerWidget {
               theses: approvalsAsync,
               actionLabel: 'Review',
               routeFor: (_) => '/review',
-              emptyText: 'No nominations waiting on you.',
+              emptyText: 'No nominations to review.',
             ),
             _DecisionDocket(
-              title: 'Title defences to close',
+              title: 'Title defenses to close',
               subtitle: 'Record the approved title or return the set',
               icon: Icons.forum_outlined,
               theses: titleDefencesAsync,
-              actionLabel: 'Open defence',
+              actionLabel: 'Open defense',
               routeFor: (t) => '/defence/${t.id}',
               emptyText: 'No groups are presenting candidate titles.',
             ),
             NeedsYouQueue(
               items: needsYouAsync,
-              title: 'Everything else waiting on you',
+              title: 'Other pending items',
               featureFirst: false,
-              emptyTitle: 'All caught up',
-              emptyMessage: 'Nothing else needs your decision right now.',
+              emptyTitle: 'No other pending items',
+              emptyMessage: 'No other decisions are pending.',
             ),
           ],
           // On a phone these fold to one row each (with a peek value) under

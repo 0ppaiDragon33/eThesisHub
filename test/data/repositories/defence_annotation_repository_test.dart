@@ -64,7 +64,7 @@ void main() {
         throwsArgumentError);
   });
 
-  test('refuses a highlight unless the defence is in progress', () async {
+  test('refuses a highlight unless the defense is in progress', () async {
     for (final status in ['scheduled', 'completed', 'cancelled']) {
       final repo = DefenceRepository(await seed(status: status));
       await expectLater(add(repo), throwsStateError, reason: status);

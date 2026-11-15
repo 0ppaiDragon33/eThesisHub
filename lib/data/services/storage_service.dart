@@ -15,7 +15,7 @@ class StoredFile {
   /// the same manuscript the thesis does), so it is still written.
   ///
   /// It is an IDENTIFIER, not a capability. The bucket is private, so
-  /// fetching this URL directly returns an error — reading the file means
+  /// fetching this URL directly returns an error: reading the file means
   /// asking [StorageService.signedUrl] for a fresh, short-lived URL. Nothing
   /// in the app should pass this to `launchUrl`.
   final String url;
@@ -25,7 +25,7 @@ class StoredFile {
 ///
 /// The bucket is private and the `document-url` function authorizes every
 /// read, so unguessability is no longer the access control it once had to be
-/// — it is now defence in depth, and it keeps a student's filename out of a
+/// it is now defence in depth, and it keeps a student's filename out of a
 /// URL that other readers of the thesis will see.
 class StoragePaths {
   static const _uuid = Uuid();
@@ -68,7 +68,7 @@ class StorageFailure implements Exception {
   /// What to show the person. Says what happened and whether retrying helps.
   final String message;
 
-  /// A short tag for the cause, shown beside the message — there are no
+  /// A short tag for the cause, shown beside the message: there are no
   /// server-side logs on this project, so the screen is the only place a
   /// cause can surface.
   final String code;
@@ -84,7 +84,7 @@ class StorageFailure implements Exception {
 ///
 /// The case that matters most is an unreachable host. On the free tier a
 /// Supabase project pauses after about a week of inactivity and is deleted
-/// after a long enough pause — and when the hostname stops resolving, the
+/// after a long enough pause, and when the hostname stops resolving, the
 /// browser throws an `XMLHttpRequest error` that is indistinguishable from a
 /// flat battery unless it is named. Telling a student to "try again" then is
 /// worse than saying nothing: retrying cannot possibly work.
@@ -100,7 +100,7 @@ StorageFailure classifyStorageError(Object error) {
       text.contains('Failed host lookup')) {
     return const StorageFailure(
       'Could not reach file storage, so nothing was uploaded. This is not '
-      'something you can fix by retrying — tell whoever administers the '
+      'something you can fix by retrying. Tell whoever administers the '
       'project.',
       code: 'storage-unreachable',
     );
@@ -122,14 +122,14 @@ StorageFailure classifyStorageError(Object error) {
   }
   // A bucket-level MIME allow-list. `validateDocument` already restricts the
   // extension, so reaching here means the bucket disagrees with the app about
-  // what a thesis document is — configuration, not a bad file, and no amount
+  // what a thesis document is: configuration, not a bad file, and no amount
   // of choosing a different file will help.
   if (text.contains('415') ||
       text.contains('invalid_mime_type') ||
       text.contains('mime type')) {
     return const StorageFailure(
       'File storage rejected this file type. The bucket has a MIME allow-list '
-      'that does not include it — this needs fixing in Supabase, not by '
+      'that does not include it. This needs fixing in Supabase, not by '
       'choosing another file.',
       code: 'storage-wrong-type',
     );
@@ -144,7 +144,7 @@ StorageFailure classifyStorageError(Object error) {
 
   // Unrecognised. Carry the service's own words through rather than replacing
   // them with a friendlier sentence that says less: an unclassified failure is
-  // precisely the one nobody can diagnose without them, and this project has
+  // precisely the one nobody can diagnose without them, and we have
   // no server-side logs to consult instead. Trimmed and collapsed, because a
   // raw stack trace on a student's screen helps nobody either.
   final detail = text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -156,7 +156,7 @@ StorageFailure classifyStorageError(Object error) {
 }
 
 abstract class StorageService {
-  /// Throws [StorageFailure] — never a raw client exception. Callers above
+  /// Throws [StorageFailure], never a raw client exception. Callers above
   /// the data layer depend on that.
   Future<StoredFile> upload({
     required List<int> bytes,
@@ -170,7 +170,7 @@ abstract class StorageService {
   ///
   /// The bucket is private, so there is no durable URL to store and none of
   /// these outlives a couple of minutes. Screens therefore hold the
-  /// **storage path** — which is what Firestore records — and ask for a URL
+  /// **storage path** (which is what Firestore records) and ask for a URL
   /// at the moment the reader opens the file.
   ///
   /// Authorization happens server-side, in the `document-url` edge function:
@@ -179,7 +179,7 @@ abstract class StorageService {
   /// made here, and a caller who is not entitled to the file gets a
   /// [StorageFailure] rather than a URL.
   ///
-  /// Throws [StorageFailure] — including `storage-forbidden` when the reader
+  /// Throws [StorageFailure]: including `storage-forbidden` when the reader
   /// is not authorized for the thesis the path belongs to.
   Future<String> signedUrl(String path);
 }

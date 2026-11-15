@@ -1,6 +1,6 @@
 import 'package:ethesishub/data/models/evaluation.dart';
 
-/// Which defence this is. The title defence is NOT here: it keeps M1b's own
+/// Which defence this is. The title defence is not here: it keeps title defence's own
 /// collection, so that working, field-verified code is untouched.
 enum DefenceType {
   preOral,
@@ -11,7 +11,7 @@ enum DefenceType {
   String get value => this == DefenceType.final_ ? 'final' : 'preOral';
 
   String get label =>
-      this == DefenceType.final_ ? 'Final defence' : 'Pre-oral defence';
+      this == DefenceType.final_ ? 'Final defense' : 'Pre-oral defense';
 
   /// Null rather than a default: a typo must not silently schedule the
   /// wrong kind of defence.
@@ -30,7 +30,7 @@ enum DefenceType {
 ///
 /// THIS NUMBER EXISTS TWICE. `firestore.rules` carries the same 30 minutes
 /// as a literal, because rules cannot import Dart. If the two ever
-/// disagree, the button looks enabled and the write is denied -- so the
+/// disagree, the button looks enabled and the write is denied, so the
 /// rules suite pins the exact boundary in minutes, and changing one
 /// without the other fails there.
 const defenceOpenGrace = Duration(minutes: 30);
@@ -39,7 +39,7 @@ enum DefenceStatus {
   scheduled,
   inProgress,
   completed,
-  /// A defence created by mistake -- wrong thesis, duplicate, or simply
+  /// A defence created by mistake: wrong thesis, duplicate, or simply
   /// abandoned. Cancelled rather than deleted: the defence record is
   /// evidence, and a hard delete leaves nothing to explain a gap in the
   /// history to a panel later.
@@ -59,7 +59,7 @@ enum DefenceStatus {
   /// Only a scheduled defence can still be edited or called off.
   bool get isEditable => this == DefenceStatus.scheduled;
 
-  /// Defaults to `scheduled` — the status that grants nothing. Defaulting
+  /// Defaults to `scheduled`: the status that grants nothing. Defaulting
   /// to `inProgress` would let corrupt data open a defence for comments.
   static DefenceStatus fromString(String? raw) {
     for (final s in DefenceStatus.values) {
@@ -90,6 +90,7 @@ class Defence {
     this.createdAt,
     this.consolidatedAt,
     this.evaluationsReleasedAt,
+    this.submittedUids = const [],
     this.panelVerdict,
     this.verdictRecordedBy,
     this.verdictRecordedAt,
@@ -112,23 +113,31 @@ class Defence {
   /// its presence is exactly what lets the group read the comments.
   final DateTime? consolidatedAt;
 
-  /// When the adviser released the panel's evaluations to each other.
+  /// When the adviser released the evaluations: the scores and remarks to
+  /// the panel, the Coordinator and the Dean, and the written remarks alone
+  /// (a separate `remarks` document, no scores) to the group's leader.
   ///
   /// The same shape as [consolidatedAt] and for the same reason: presence
   /// is the gate, so `firestore.rules` tests `'evaluationsReleasedAt' in
-  /// resource.data` -- a presence check, never a sentinel comparison. The
+  /// resource.data`: a presence check, never a sentinel comparison. The
   /// coordinator-admin milestone lost time twice to sentinel collisions
   /// (`.get(k, true)` colliding with a real `true`, then `.get(k, null)`
   /// with an explicit `null`); presence is value-blind and cannot collide.
   ///
   /// SEPARATE from [consolidatedAt]. One releases the room log to the
-  /// group; this releases the grades to the panel. Neither implies the
-  /// other.
+  /// group; this releases the grades to the panel and the remarks to the
+  /// group. Neither implies the other.
   final DateTime? evaluationsReleasedAt;
+
+  /// Who has submitted a grade sheet: the uids the graders add themselves,
+  /// in the same write as their sheet. This is what the rules read to lock
+  /// the release (they cannot count the evaluations), so the app reads the
+  /// same list. Empty on a defence that predates the field.
+  final List<String> submittedUids;
 
   /// Guidelines §8b, deliberated by the panel as a body and recorded once.
   ///
-  /// NEVER computed from the panelists' individual ratings (D41). §8b
+  /// never computed from the panelists' individual ratings. §8b
   /// hands the decision to a conversation; deriving it would be the system
   /// overruling the body the manual says decides.
   final PassFail? panelVerdict;
@@ -136,13 +145,13 @@ class Defence {
   /// The adviser who recorded [panelVerdict].
   ///
   /// Exists so a reader can see the adviser TRANSCRIBED a decision rather
-  /// than made one -- they are barred from scoring at all (D37), so their
+  /// than made one: they are barred from scoring at all, so their
   /// role here has to be visibly that of a scribe.
   final String? verdictRecordedBy;
 
   final DateTime? verdictRecordedAt;
 
-  /// The failed defence this one re-does (spec 2026-09-25 §4.1). Absent on
+  /// The failed defence this one re-does. Absent on
   /// every ordinary defence. A re-defence has the same [type] as the defence
   /// it re-does, so every gate that asks "did the final defence pass"
   /// counts a passed final re-defence without knowing re-defences exist.
@@ -154,10 +163,10 @@ class Defence {
   /// re-defence": the name of this defence, where [DefenceType.label] names
   /// only its kind.
   String get label => switch ((type, isRedefence)) {
-        (DefenceType.preOral, false) => 'Pre-oral defence',
-        (DefenceType.final_, false) => 'Final defence',
-        (DefenceType.preOral, true) => 'Pre-oral re-defence',
-        (DefenceType.final_, true) => 'Final re-defence',
+        (DefenceType.preOral, false) => 'Pre-oral defense',
+        (DefenceType.final_, false) => 'Final defense',
+        (DefenceType.preOral, true) => 'Pre-oral redefense',
+        (DefenceType.final_, true) => 'Final redefense',
       };
 
   /// Where the one re-defence of [failedId] is stored. Derived rather than
@@ -172,6 +181,21 @@ class Defence {
   /// How many Form 5c sheets must be in before the adviser may release them:
   /// every panelist, plus the Coordinator and the Dean.
   int get requiredEvaluations => panelUids.length + 2;
+
+  /// How many more sheets must come in before the grades may be released,
+  /// given the uids of the graders who have submitted ([submittedUids]).
+  ///
+  /// Zero only when every panelist has a sheet AND the full count is in.
+  /// Counting sheets alone is not enough: the Coordinator and the Dean also
+  /// grade, so two of them submitting could make the count look complete
+  /// while a panelist had not graded at all.
+  int evaluationsOutstanding(Iterable<String> submittedUids) =>
+      evaluationsOutstandingFor(
+          panelUids: panelUids, submittedUids: submittedUids);
+
+  /// Whether the adviser may release the evaluations, judged on the uids
+  /// recorded on the defence itself: exactly what the rules judge.
+  bool get canReleaseEvaluations => evaluationsOutstanding(submittedUids) == 0;
 
   bool get hasVerdict => panelVerdict != null;
 
@@ -191,6 +215,8 @@ class Defence {
       createdAt: map['createdAt'] as DateTime?,
       consolidatedAt: map['consolidatedAt'] as DateTime?,
       evaluationsReleasedAt: map['evaluationsReleasedAt'] as DateTime?,
+      submittedUids:
+          List<String>.from(map['submittedUids'] as List? ?? const []),
       panelVerdict: PassFail.fromString(map['panelVerdict'] as String?),
       verdictRecordedBy: map['verdictRecordedBy'] as String?,
       verdictRecordedAt: map['verdictRecordedAt'] as DateTime?,
@@ -199,14 +225,33 @@ class Defence {
   }
 }
 
+/// The rule behind [Defence.evaluationsOutstanding], on plain lists so the
+/// repository can use it on raw documents.
+///
+/// Every panelist must be among [submittedUids], and the whole set must
+/// reach the panel plus the Coordinator and the Dean. Both halves are the
+/// release rule in firestore.rules (`hasAll(panelUids)` and
+/// `size() >= panelUids.size() + 2`); keep the three in step.
+int evaluationsOutstandingFor({
+  required List<String> panelUids,
+  required Iterable<String> submittedUids,
+}) {
+  final submitted = submittedUids.toSet();
+  final panelMissing =
+      panelUids.where((uid) => !submitted.contains(uid)).length;
+  final countMissing = panelUids.length + 2 - submitted.length;
+  final outstanding = panelMissing > countMissing ? panelMissing : countMissing;
+  return outstanding < 0 ? 0 : outstanding;
+}
+
 /// Whether [failed] already has its re-defence among [all]. A cancelled one
 /// counts: the rules refuse a second document at the same derived id, so a
 /// cancelled re-defence still uses up the one the group is allowed.
 bool hasRedefence(Defence failed, List<Defence> all) =>
     all.any((d) => d.redefenceOf == failed.id);
 
-/// The pre-oral of [thesisId] the panel passed -- the defence itself or its
-/// re-defence -- or null while there is none. Chapters IV and V open on it.
+/// The pre-oral of [thesisId] the panel passed: the defence itself or its
+/// re-defence, or null while there is none. Chapters IV and V open on it.
 Defence? passedPreOral(List<Defence> all, String thesisId) {
   for (final d in all) {
     if (d.thesisId == thesisId &&
@@ -219,7 +264,7 @@ Defence? passedPreOral(List<Defence> all, String thesisId) {
 }
 
 /// The defences in [all] whose panel verdict was Fail and that have no
-/// re-defence yet (spec 2026-09-25 §4.3). A failed re-defence is not
+/// re-defence yet. A failed re-defence is not
 /// listed: a group gets one re-defence per stage.
 List<Defence> awaitingRedefence(List<Defence> all) => [
       for (final d in all)

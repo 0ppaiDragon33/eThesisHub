@@ -64,7 +64,7 @@ Future<FakeFirebaseFirestore> seed({String? adviserUid = 'a1'}) async {
 }
 
 // Without this override, FirebaseAuth.instance throws [core/no-app] in a
-// widget test -- same pattern as schedule_defence_screen_test.dart.
+// widget test: same pattern as schedule_defence_screen_test.dart.
 Widget _wrap(
   FakeFirebaseFirestore db, {
   required String uid,
@@ -115,7 +115,7 @@ Widget _wrap(
 
 /// `DropdownButtonFormField` does not expose its `items` as a readable
 /// field, so the only way to inspect what the picker actually offers is to
-/// open its overlay and read the mounted `DropdownMenuItem` widgets — same
+/// open its overlay and read the mounted `DropdownMenuItem` widgets: same
 /// helper as `nominate_screen_test.dart`'s `openDropdownValues`.
 Future<List<String?>> _openAdviserPickerValues(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('newAdviserPicker')));
@@ -249,7 +249,7 @@ void main() {
       'write (a no-op)',
       (tester) async {
         // The thesis's CURRENT adviser is a4 here, distinct from the a1
-        // recorded as this request's former adviser -- otherwise the "equal to
+        // recorded as this request's former adviser, otherwise the "equal to
         // current" guard above would catch it first.
         final db = await seed(adviserUid: 'a4');
         final prefill = ChangeRequest(

@@ -106,7 +106,7 @@ void main() {
   // `lib/` watched them, and under the owner's ruling that coordinators and
   // the dean stay nominable, a faculty-only slice can never be the right
   // source for a picker. `watchAllDirectory` is the path that actually ships,
-  // and it had no repository-level test of its own — so the coverage moves
+  // and it had no repository-level test of its own, so the coverage moves
   // here rather than disappearing.
   test('watchAllDirectory includes coordinators and the dean, sorted by name',
       () async {
@@ -115,8 +115,8 @@ void main() {
     await repo.upsertOwnEntry(user('d1', 'Dr. Siason', UserRole.dean));
 
     final all = await repo.watchAllDirectory().first;
-    // Every role is offered — this is exactly what the faculty-only slice
-    // got wrong — and the order is by full name, not by insertion.
+    // Every role is offered: this is exactly what the faculty-only slice
+    // got wrong, and the order is by full name, not by insertion.
     expect(all.map((e) => e.uid), ['c1', 'd1', 'f3']);
     expect(all.map((e) => e.role), ['coordinator', 'dean', 'faculty']);
   });

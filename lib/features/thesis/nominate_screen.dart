@@ -31,13 +31,13 @@ const kMaxNominationDocs = 9;
 /// members from the faculty directory.
 ///
 /// The dean and every research coordinator are recorded automatically as
-/// ex-officio panel members — never chosen here, never asked to accept. They
+/// ex-officio panel members, never chosen here, never asked to accept. They
 /// are therefore absent from the panel-member pickers: choosing one there
 /// adds nobody, because `submitNominations` resolves the pick into the seat
 /// they already hold, and a panel of three would commit as two.
 ///
 /// They do remain in the ADVISER picker. A coordinator or the dean can
-/// genuinely advise a thesis, and that is an ordinary position — it carries
+/// genuinely advise a thesis, and that is an ordinary position: it carries
 /// `exOfficio: false`, it needs their Conforme, and it prints on Form 1 as
 /// Thesis Adviser.
 ///
@@ -71,7 +71,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   String? _error;
 
   /// The exception `_error` was translated from, kept for the code
-  /// underneath the sentence — see the field on `ErrorState`, whose
+  /// underneath the sentence: see the field on `ErrorState`, whose
   /// reasoning this mirrors: there are no server-side logs on the Spark
   /// plan, so if the friendly copy is ever wrong the code is the only way
   /// to tell.
@@ -110,13 +110,13 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// Pre-selects the roster that survived a reopen.
   ///
   /// After a coordinator hands a stalled thesis back to `draft`, whoever
-  /// accepted — or is still awaiting an answer — keeps their seat:
+  /// accepted (or is still awaiting an answer) keeps their seat:
   /// [ThesisRepository.submitNominations] and the rules refuse to remove
   /// them, and only a declined seat may be refilled. A blank form here read
   /// as though every answer were lost and let the leader accidentally drop an
   /// accepted nominee (which submit then refuses with a confusing error).
   /// Pre-selecting the survivors shows who is still on the panel and leaves
-  /// only the declined seats empty for a fresh pick — re-nominating the
+  /// only the declined seats empty for a fresh pick: re-nominating the
   /// person who declined is refused, so their seat is deliberately not
   /// restored. A first nomination finds nothing here and stays blank.
   Future<void> _loadExistingRoster() async {
@@ -164,7 +164,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   }
 
   /// `kMaxNominationDocs` minus 1 seat for the adviser minus one seat per
-  /// ex-officio member, computed from the directory rather than hardcoded —
+  /// ex-officio member, computed from the directory rather than hardcoded,
   /// the number of coordinators is not fixed.
   int get _maxPanelists {
     final cap = kMaxNominationDocs - 1 - _exOfficio.length;
@@ -201,7 +201,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       return;
     }
 
-    // The EFFECTIVE panel size — what survives `submitNominations`' collapse —
+    // The EFFECTIVE panel size: what survives `submitNominations`' collapse,
     // not the raw pick count.
     //
     // Coordinators and the dean stay in the picker on purpose (the owner
@@ -214,11 +214,11 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     //
     // That failure is invisible and terminal if it is not caught here. The
     // submission succeeds, every Conforme completes, the coordinator
-    // recommends — and only then does `approve` fail, on the same `>= 3` floor
+    // recommends, and only then does `approve` fail, on the same `>= 3` floor
     // the Dean's own rule enforces (`firestore.rules`,
     // `panelistUids.size() >= 3`), on every attempt, forever: no rule lets the
     // leader back to `draft` to fix the roster. Raising it server-side cannot
-    // help either — by then nobody can act. This screen, before submit, is the
+    // help either: by then nobody can act. This screen, before submit, is the
     // last point at which the user can still change their selection.
     final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
     final collided = chosenUids.intersection(exOfficioUids);
@@ -230,7 +230,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       final effective = chosenUids.length - collided.length;
       setState(() => _error =
           '$names already ${collided.length == 1 ? 'sits' : 'sit'} on every '
-          'panel ex officio. Please choose ${3 - effective} more.');
+          'panel as ${collided.length == 1 ? 'a designated member' : 'designated members'}. '
+          'Please choose ${3 - effective} more.');
       return;
     }
 
@@ -298,7 +299,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       // Staying put was actively misleading: submitting moves the thesis out
       // of `draft`, this screen watches that status, and so the form was
       // replaced by "Nominations can only be submitted while this thesis is
-      // still a draft" — which reads as a refusal of the thing that had just
+      // still a draft", which reads as a refusal of the thing that had just
       // succeeded. Navigating also makes a second submission unreachable,
       // which no flag on this screen can do as reliably.
       if (mounted) context.go('/thesis');
@@ -321,46 +322,46 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   }
 
   /// Turns a bare `permission-denied` on submit into a sentence naming who
-  /// and what, per spec §4.2.1.
+  /// and what, per 
   ///
   /// A faculty member invited and designated but who has never signed in
   /// has no `facultyDirectory` entry yet. Their first sign-in creates one
   /// through `upsertOwnEntry`, which the rules forbid from writing the
-  /// designation fields at all — so that entry reads as nominable for both
+  /// designation fields at all, so that entry reads as nominable for both
   /// positions (a missing key defaults to `true`, same as
   /// [FacultyDirectoryEntry]'s constructor) while `users/{uid}`, which the
   /// student cannot read, may say otherwise. The picker offers that person
   /// for a position `firestore.rules` then refuses. Nothing is corrupted
   /// and nothing is exposed, but the student picked a name off a list this
-  /// screen showed them, so the refusal must say so in plain language —
+  /// screen showed them, so the refusal must say so in plain language,
   /// never leave them staring at a bare Firestore code and guessing at a
   /// network problem that was never the cause (the same lesson a
   /// storage-upload investigation taught this project once already).
   ///
   /// A batched write does not report which document a security rule
   /// refused, so every nominee whose designation the rules actually check
-  /// is a candidate: the adviser — always, office holder or not, because an
+  /// is a candidate: the adviser: always, office holder or not, because an
   /// adviser nomination carries `exOfficio: false` and is checked like
-  /// anyone else's — plus every non-ex-officio panelist. Only a panelist
+  /// anyone else's: plus every non-ex-officio panelist. Only a panelist
   /// sitting by office is exempt, and a panel slot never offers one of
   /// those in the first place. This screen's own floor of at least three
   /// real panel members means a first submission almost always names
   /// several. All of them are named together, never guessed at,
   /// rather than picking one arbitrarily and risking exactly the kind of
   /// confidently-wrong copy this method exists to avoid. The
-  /// single-sentence form is kept as the general case — not hardcoded to
-  /// "always plural" — so a submission that genuinely has only one
-  /// candidate still reads naturally, matching spec §4.2.1's example.
+  /// single-sentence form is kept as the general case, not hardcoded to
+  /// "always plural", so a submission that genuinely has only one
+  /// candidate still reads naturally, matching 's example.
   String _permissionDeniedMessage(
     FacultyDirectoryEntry adviser,
     List<FacultyDirectoryEntry> panelists,
   ) {
     final exOfficioUids = _exOfficio.map((e) => e.uid).toSet();
     final candidates = <(String name, String position)>[
-      // The adviser is ALWAYS a candidate, office holder or not. An
+      // The adviser is always a candidate, office holder or not. An
       // ex-officio office holder picked as adviser is written with
       // `exOfficio: false`, so the rules check their `nominableAsAdviser`
-      // like anyone else's — excluding them here named the three innocent
+      // like anyone else's: excluding them here named the three innocent
       // panelists and omitted the actual culprit, telling the student to
       // replace the wrong people.
       (adviser.fullName, 'adviser'),
@@ -383,16 +384,16 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// this person from a namesake.
   ///
   /// The separator is only drawn when there is something after it. Nothing in
-  /// the app fills `college` or `specialization` — they are set by hand in
-  /// the Firebase Console or not at all — so for most entries [subtitle] is
-  /// empty, and a hardcoded ' — ' rendered every option as "Karu Sama — "
+  /// the app fills `college` or `specialization`: they are set by hand in
+  /// the Firebase Console or not at all, so for most entries [subtitle] is
+  /// empty, and a hardcoded ' (' rendered every option as "Karu Sama) "
   /// with a dangling dash.
   ///
   /// Coordinators and the dean are named as such. They stay in the pickers
   /// deliberately (the owner ruled they may be nominated by name "for the
   /// sake of records"), but they also hold an automatic ex-officio seat, so
   /// choosing one as a PANEL MEMBER adds nobody new and is refused at submit.
-  /// Seeing "— coordinator" next to the name is what makes that legible
+  /// Seeing ": coordinator" next to the name is what makes that legible
   /// before the refusal rather than after it.
   /// At the advisee limit, and not already this thesis's seated adviser.
   bool _isFullAdviser(FacultyDirectoryEntry f) =>
@@ -408,7 +409,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
 
   /// Everyone already chosen in another slot, so no picker offers them twice.
   ///
-  /// One person can only hold one position on a thesis — the nomination
+  /// One person can only hold one position on a thesis: the nomination
   /// documents are keyed by uid, so a second pick of the same person is not a
   /// second seat, it silently overwrites the first. Left unfiltered, the
   /// screen invited exactly that: the same name could fill the adviser slot
@@ -416,7 +417,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// as "Choose at least three panel members" while three dropdowns visibly
   /// held names (`chosenUids` is a Set, so the duplicates collapsed).
   ///
-  /// [own] is the slot's own current value, which must stay in its own list —
+  /// [own] is the slot's own current value, which must stay in its own list,
   /// `DropdownButtonFormField` asserts its value matches exactly one item.
   Set<String> _takenExcept(String? own) {
     final taken = <String>{
@@ -437,26 +438,26 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// must keep offering them.
   ///
   /// A panel slot must not offer an ex-officio office holder. They already
-  /// sit on every panel by office — the "Also on your panel" card below
-  /// lists them — so choosing one as a panel member adds nobody:
+  /// sit on every panel by office: the "Also on your panel" card below
+  /// lists them, so choosing one as a panel member adds nobody:
   /// `submitNominations` resolves that pick into their single automatic
   /// seat. Offering the choice at all only led to a submit-time refusal for
   /// something the screen could have ruled out.
   ///
-  /// D32's exemption covers the ex-officio SEAT and nothing else. An office
+  /// The exemption covers the ex-officio SEAT and nothing else. An office
   /// holder chosen in the ADVISER slot is not sitting by office: that
   /// nomination is written with `exOfficio: false, position: 'adviser'`
   /// (see `ThesisRepository.submitNominations`), so it lands in the
-  /// non-ex-officio branch of `mayCreateNomination` and IS checked against
+  /// non-ex-officio branch of `mayCreateNomination` and is checked against
   /// `nominableAsAdviser`. Exempting them here offered a name the rules
-  /// then refused — and made designation and position disagree FORWARDS,
-  /// which D29 says cannot happen. So the adviser slot filters everyone,
+  /// then refused, and made designation and position disagree FORWARDS,
+  /// which the spec says cannot happen. So the adviser slot filters everyone,
   /// office holders included; only the panel slot's ex-officio exclusion
   /// above is about the seat.
   ///
   /// Everyone else is filtered on [FacultyDirectoryEntry.nominableAsAdviser]
   /// / `.nominableAsPanelist`, set by a coordinator on the Users screen. A
-  /// missing key on either field reads as `true` — every account predates
+  /// missing key on either field reads as `true`: every account predates
   /// these fields, and "absent means not nominable" would empty the picker
   /// of the entire existing faculty the moment this deployed.
   ///
@@ -465,7 +466,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
   /// not designated for, on the Spark plan where rules are the only
   /// enforcement point available. This filter only keeps the ordinary path
   /// from ever reaching that refusal; [_permissionDeniedMessage] is what
-  /// handles the case where the two can still disagree (spec §4.2.1).
+  /// handles the case where the two can still disagree.
   ///
   /// The effective-panel-size check in [_submit] and the matching invariant
   /// in `submitNominations` both stay. This filter makes that state
@@ -494,7 +495,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     bool isAdviserSlot = false,
   }) {
     // `DropdownButtonFormField` asserts, on every rebuild, that its
-    // `initialValue` matches exactly one item in `items` — not just at
+    // `initialValue` matches exactly one item in `items`, not just at
     // construction. A previous pick can vanish from the live directory
     // stream between selection and submit (someone edited the faculty
     // directory), which would otherwise crash the whole screen before the
@@ -540,8 +541,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
     final directoryAsync = ref.watch(allDirectoryProvider);
     // The thesis this screen was actually given, not "the signed-in
     // leader's thesis". `myThesisProvider` resolves to `data(null)` while
-    // auth is still settling — it reads `authStateProvider.value?.uid` and
-    // returns `Stream.value(null)` when that is null — so watching it here
+    // auth is still settling: it reads `authStateProvider.value?.uid` and
+    // returns `Stream.value(null)` when that is null, so watching it here
     // made `stillDraft` false on arrival and showed the "only while this
     // thesis is still a draft" refusal instead of the form. A refresh
     // appeared to fix it only because auth was warm the second time.
@@ -558,8 +559,8 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
       ]),
       data: (directory) {
         // A student can never be nominated, and the leader cannot nominate
-        // themselves. The directory is not expected to contain students —
-        // `FacultyDirectoryRepository.upsertOwnEntry` never writes one —
+        // themselves. The directory is not expected to contain students,
+        // `FacultyDirectoryRepository.upsertOwnEntry` never writes one,
         // but both exclusions are enforced here too, defensively, rather
         // than trusted from upstream data shape.
         final faculty = directory
@@ -685,7 +686,7 @@ class _NominateScreenState extends ConsumerState<NominateScreen> {
                         _ => e.role,
                       },
                       trailing: const ToneBadge(
-                          label: 'Ex officio',
+                          label: 'Designated member',
                           tone: Tone.neutral,
                           dense: true),
                     ),

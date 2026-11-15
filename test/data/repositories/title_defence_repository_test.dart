@@ -116,7 +116,7 @@ test('a resubmission clears the previous round\'s decision', () async {
   });
 
   test('more than ten candidates is refused', () async {
-    // Each candidate costs one get() in the rules. M1a measured the ceiling:
+    // Each candidate costs one get() in the rules. Nomination measured the ceiling:
     // 19 documents in a batch commit, 20 are denied, and the Cloud limit is
     // stricter than the emulator's.
     final repo = TitleDefenceRepository(await seed());
@@ -168,7 +168,7 @@ test('a resubmission clears the previous round\'s decision', () async {
   test('candidates are listed by position, not by document id', () async {
     // Seeded deliberately AGAINST the id order, because that is the bug: the
     // read had no ordering at all, so Firestore returned them by document
-    // id, which is auto-generated and random -- the panel was shown the
+    // id, which is auto-generated and random: the panel was shown the
     // group's titles shuffled, and the first one typed appeared third.
     // orderBy('submittedAt') would not have helped either: one batch writes
     // all of them, so the timestamps are identical and ties fall straight

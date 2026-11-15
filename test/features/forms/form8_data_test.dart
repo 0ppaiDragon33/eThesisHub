@@ -26,7 +26,7 @@ ArchiveEntry entry({
 }
 
 void main() {
-  // D64: read from the ARCHIVE ENTRY, not the thesis. The entry is the
+  // Read from the ARCHIVE ENTRY, not the thesis. The entry is the
   // record the certificate attests to, and it is already frozen.
   test('takes its three fields from the archive entry', () {
     final d = Form8Data.assemble(entry: entry());
@@ -36,7 +36,7 @@ void main() {
     expect(d.issuedOn, DateTime(2026, 9, 30));
   });
 
-  // D65: the printed form says "his/her", singular, but a thesis here
+  // The printed form says "his/her", singular, but a thesis here
   // belongs to a group and the deposit was joint.
   test('names every member of the group, not just the leader', () {
     final d = Form8Data.assemble(

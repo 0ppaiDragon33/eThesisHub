@@ -53,7 +53,7 @@ Future<FakeFirebaseFirestore> seed() async {
   return db;
 }
 
-/// [overrides] lets a test replace one of the screen's providers -- the
+/// [overrides] lets a test replace one of the screen's providers: the
 /// failed-read test drives [archiveProvider] into an error state, which
 /// cannot be produced through `fake_cloud_firestore` at all: it enforces
 /// no rules, so nothing there can be denied.
@@ -87,7 +87,7 @@ void main() {
     expect(find.byKey(const Key('archiveCard-t3')), findsOneWidget);
   });
 
-  // THE test for D54. Firestore matches prefixes only; this is the whole
+  // The key test here. Firestore matches prefixes only; this is the whole
   // reason search runs on the client.
   testWidgets('search matches mid-title, not just the first word',
       (tester) async {
@@ -131,13 +131,13 @@ void main() {
   // Strengthened over the brief's version: that one picked college CICT and
   // searched "Rice", but t1 and t3 both fail matches('Rice') on their own,
   // so the assertions passed identically whether or not the college
-  // predicate was even in the .where() chain -- only the
+  // predicate was even in the .where() chain, only the
   // ignore-the-search direction was actually caught. Here the search term
   // ("Coral") matches entries in TWO colleges, so dropping either
   // predicate wrongly admits a different decoy: dropping the college
   // filter admits a2 (COED); dropping the search admits a3 (CICT, but no
   // "Coral" in its title). Confirmed both failure modes by commenting out
-  // each predicate in turn -- see the fix report.
+  // each predicate in turn: see the fix report.
   testWidgets('a filter and a search combine', (tester) async {
     useTallSurface(tester);
     final db = FakeFirebaseFirestore();
@@ -178,7 +178,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('archiveCard-t3')), findsOneWidget);
 
-    // t3 is the only COED entry -- retract it, as the Coordinator would.
+    // t3 is the only COED entry: retract it, as the Coordinator would.
     await db.collection('archive').doc('t3').delete();
     await tester.pumpAndSettle();
 
@@ -241,7 +241,7 @@ void main() {
     expect(find.byKey(const Key('archiveCard-t1')), findsNothing);
   });
 
-  // pump() once, NOT pumpAndSettle -- settling resolves the stream first
+  // pump() once, not pumpAndSettle: settling resolves the stream first
   // and the assertion becomes vacuous.
   testWidgets('shows a loading state before the archive resolves',
       (tester) async {

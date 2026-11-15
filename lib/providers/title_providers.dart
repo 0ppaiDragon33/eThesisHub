@@ -25,7 +25,7 @@ final candidateTitlesProvider =
 
 /// Every comment on one thesis, live. Panel members hold this open through
 /// the defence so a remark appears for the rest of the panel as it is
-/// written — the point being that nobody repeats a point already made.
+/// written: the point being that nobody repeats a point already made.
 final titleCommentsProvider =
     StreamProvider.family<List<TitleComment>, String>((ref, thesisId) {
   // Rebuilt on a change of user: see [signedInUidProvider].
@@ -50,7 +50,7 @@ final myThesisIdsProvider = StreamProvider<List<String>>((ref) {
 });
 
 /// The theses at title defence that the signed-in reader can open
-/// (spec 2026-09-25 §6.2), per role:
+/// , per role:
 /// - Coordinator and Dean: every one.
 /// - Faculty: the ones they advise **or** sit on, each once. An adviser in
 ///   adviser mode never sees the Panels page, so advised theses must come
@@ -89,8 +89,8 @@ final myTitleDefencesProvider = Provider<AsyncValue<List<Thesis>>>((ref) {
         if (byId.containsKey(id)) continue;
         final t = ref.watch(thesisByIdProvider(id));
         if (!t.hasValue && !t.hasError) return const AsyncLoading();
-        // A thesis the reader can no longer read -- a nomination since
-        // removed, or a thesis that no longer exists -- is simply not
+        // A thesis the reader can no longer read: a nomination since
+        // removed, or a thesis that no longer exists: is simply not
         // theirs to open.
         final thesis = t.valueOrNull;
         if (thesis != null) byId[id] = thesis;

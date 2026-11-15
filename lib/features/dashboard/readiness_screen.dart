@@ -14,9 +14,8 @@ class ReadinessScreen extends StatelessWidget {
     return const PageShell(
       key: Key('readinessScreen'),
       maxWidth: AppTokens.measureWide,
-      title: 'Defence readiness',
-      subtitle: 'Pre-oral needs Chapters I–III approved; the final needs '
-          'all five.',
+      title: 'Defense readiness',
+      subtitle: 'Pre-oral needs Chapters I–III approved; the final needs I–V.',
       children: [DefenceReadinessList()],
     );
   }

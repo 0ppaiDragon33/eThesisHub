@@ -45,8 +45,8 @@ void useTallSurface(WidgetTester tester) {
 void main() {
   // Requirement test 1, and THE test that proves this feature solves the
   // reported problem: a reader went looking for "the forms" and there was
-  // nowhere to look. On a completely empty database -- no thesis, no
-  // defence, no evaluation, no archive entry -- all three forms must
+  // nowhere to look. On a completely empty database, no thesis, no
+  // defence, no evaluation, no archive entry: all three forms must
   // still be listed, and every Blank template button must be enabled.
   testWidgets('lists all nine forms on a completely empty database, with every '
       'Blank template button enabled', (tester) async {
@@ -90,7 +90,7 @@ void main() {
   });
 
   // Form 1 deliberately has no blank template button (Form1Data requires a
-  // whole Thesis) -- confirm the screen does not fabricate one.
+  // whole Thesis): confirm the screen does not fabricate one.
   testWidgets('Form 1 has no blank template button', (tester) async {
     useTallSurface(tester);
     final db = await seedUser('s1');
@@ -101,7 +101,7 @@ void main() {
   });
 
   // A student with no thesis of their own must not get a dead "Open my
-  // thesis" link -- the empty-database case again, this time for Form 1's
+  // thesis" link: the empty-database case again, this time for Form 1's
   // convenience link specifically.
   testWidgets('a student with no thesis gets no "Open my thesis" link', (
     tester,
@@ -138,7 +138,7 @@ void main() {
   });
 
   // A non-coordinator must never see the archived-theses list under Form
-  // 8, even when entries exist -- issuing Form 8 is the coordinator's act.
+  // 8, even when entries exist: issuing Form 8 is the coordinator's act.
   testWidgets(
     'a non-coordinator with archived theses gets the blank but no list',
     (tester) async {

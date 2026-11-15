@@ -12,7 +12,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
 /// Signed in, but with no `users/{uid}` document written to [db]. The read
-/// succeeds and comes back empty -- the "registration did not finish" case.
+/// succeeds and comes back empty: the "registration did not finish" case.
 Future<Widget> wrapNoProfile(FakeFirebaseFirestore db,
     {required String uid}) async {
   SharedPreferences.setMockInitialValues({});
@@ -33,7 +33,7 @@ Future<Widget> wrapNoProfile(FakeFirebaseFirestore db,
 
 /// Signed in, but the profile read itself fails. `fake_cloud_firestore`
 /// enforces no security rules and so cannot be made to produce a
-/// `permission-denied` -- there is no rules engine to refuse the read -- so
+/// `permission-denied` (there is no rules engine to refuse the read) so
 /// the failure is faked at the provider level instead, by overriding
 /// [currentUserProvider] directly with an [AsyncError].
 Future<Widget> wrapNoProfileWithError(Object error) async {
@@ -59,7 +59,7 @@ Future<Widget> wrapNoProfileWithError(Object error) async {
 void main() {
   testWidgets('an absent profile says the record is missing', (tester) async {
     // The read succeeded and the document is not there. This means
-    // registration did not finish — a different problem from a failed
+    // registration did not finish: a different problem from a failed
     // read, with a different remedy, and collapsing the two into
     // "something went wrong" is what sent this project hunting a network
     // problem that did not exist.
@@ -98,7 +98,7 @@ void main() {
   });
 
   testWidgets('never renders a dashboard', (tester) async {
-    // Spec D25. The failure mode is not a crash — it is the app quietly
+    // The failure mode is not a crash: it is the app quietly
     // choosing a role and looking like it works.
     final db = FakeFirebaseFirestore();
     await tester.pumpWidget(await wrapNoProfile(db, uid: 'u1'));

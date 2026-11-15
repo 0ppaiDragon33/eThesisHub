@@ -6,6 +6,7 @@ import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/states.dart';
+import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/chapter.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
@@ -23,19 +24,48 @@ enum DefenceReadiness { notReady, proposalReady, finalReady }
 /// the chapter documents, and in a batch those still evaluate against
 /// their PRE-batch state, so the very chapter being approved still reads
 /// as unapproved. The flag would be forgeable. This cannot be, because it
-/// IS the source of truth.
+/// is the source of truth.
 DefenceReadiness readinessOf(List<ThesisChapter> chapters) {
   final approved = {
     for (final c in chapters)
       if (c.status == ChapterStatus.approved) c.id,
   };
-  if (ChapterId.finalChapters.every(approved.contains)) {
+  // An approved manuscript is the unit now: Chapters I-III before the
+  // pre-oral, I-V before the final. A thesis from before manuscripts has
+  // its chapters as separate records instead, and those still count.
+  if (approved.contains(ChapterId.manuscriptFinal) ||
+      ChapterId.finalChapters.every(approved.contains)) {
     return DefenceReadiness.finalReady;
   }
-  if (ChapterId.proposalChapters.every(approved.contains)) {
+  if (approved.contains(ChapterId.manuscriptProposal) ||
+      ChapterId.proposalChapters.every(approved.contains)) {
     return DefenceReadiness.proposalReady;
   }
   return DefenceReadiness.notReady;
+}
+
+/// One line saying where a thesis's manuscript stands, for a readiness
+/// row or the scheduling screen. Read from the same records as
+/// [readinessOf], so the two cannot disagree.
+String manuscriptSummary(List<ThesisChapter> chapters) {
+  switch (readinessOf(chapters)) {
+    case DefenceReadiness.finalReady:
+      return 'Chapters I–V approved';
+    case DefenceReadiness.proposalReady:
+      return 'Chapters I–III approved';
+    case DefenceReadiness.notReady:
+      // The manuscript the group is on, if any: the full one once it has
+      // been started, else the proposal one.
+      final byId = {for (final c in chapters) c.id: c};
+      final c = byId[ChapterId.manuscriptFinal] ??
+          byId[ChapterId.manuscriptProposal];
+      if (c == null) {
+        return chapters.any((c) => !c.id.isManuscript)
+            ? 'Chapters not all approved'
+            : 'No manuscript uploaded yet';
+      }
+      return '${c.id.label}: ${ChapterStatusWords.labelFor(c.status)}';
+  }
 }
 
 /// A label for [DefenceReadiness], for the row's trailing text.
@@ -49,7 +79,7 @@ String _labelFor(DefenceReadiness r) => switch (r) {
 /// for the dean and coordinator.
 ///
 /// Watches every thesis at [ThesisStatus.titleApproved] and, per thesis,
-/// its chapters -- in a child widget, [_ReadinessRow], because a dynamic
+/// its chapters: in a child widget, [_ReadinessRow], because a dynamic
 /// number of `chaptersProvider` family instances cannot be looped over
 /// with `ref.watch` inside this single build. Same shape as
 /// `_DefencesList` in faculty_dashboard.dart.
@@ -65,7 +95,7 @@ class DefenceReadinessList extends ConsumerWidget {
       loading: () => const LoadingState(),
       error: (e, _) => ErrorState(
         error: e,
-        message: 'Could not load defence readiness.',
+        message: 'Could not load defense readiness.',
       ),
       data: (theses) {
         if (theses.isEmpty) {
@@ -89,14 +119,14 @@ class DefenceReadinessList extends ConsumerWidget {
   }
 }
 
-/// One thesis's row: its title, how many of the five chapters are
-/// approved, and the readiness label.
+/// One thesis's row: its title, where its manuscript stands, and the
+/// readiness label.
 ///
 /// A separate widget so its `chaptersProvider(thesis.id)` watch has its
 /// own loading and error handling. Collapsing that into the parent's data
-/// branch would mean a thesis whose chapters are still loading shows zero
-/// approved -- the same "0 of 5, not ready" a group that has genuinely
-/// approved nothing would show, indistinguishable from it.
+/// branch would mean a thesis whose chapters are still loading shows no
+/// manuscript: the same "nothing uploaded, not ready" a group that has
+/// genuinely uploaded nothing would show, indistinguishable from it.
 class _ReadinessRow extends ConsumerWidget {
   const _ReadinessRow({required this.thesis});
 
@@ -105,7 +135,7 @@ class _ReadinessRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chaptersAsync = ref.watch(chaptersProvider(thesis.id));
-    // Coordinator only -- the rules already deny anyone else the write that
+    // Coordinator only: the rules already deny anyone else the write that
     // schedules a defence, but a control that always fails is worse than no
     // control, so it is hidden rather than merely disabled for a dean, who
     // reaches this same list to monitor readiness without scheduling it.
@@ -115,10 +145,6 @@ class _ReadinessRow extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     final chapters = chaptersAsync.valueOrNull;
-    final approvedCount = chapters
-            ?.where((c) => c.status == ChapterStatus.approved)
-            .length ??
-        0;
     final readiness = chapters == null ? null : readinessOf(chapters);
     final tone = switch (readiness) {
       DefenceReadiness.finalReady ||
@@ -140,66 +166,72 @@ class _ReadinessRow extends ConsumerWidget {
         onTap: () => context.push('/thesis/chapters?id=${thesis.id}'),
         child: Padding(
           padding: const EdgeInsets.all(AppTokens.md),
-          child: Row(
+          // Stacked, never side by side: the title, the bar and the status
+          // each get the card's full width. The old layout put a fixed
+          // 160-wide bar, its caption, the badge and the schedule button
+          // in one row; on a phone the caption was left with almost no
+          // width and wrapped one letter per line.
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      // Keeps the title level with the button's centre when
+                      // the button is shown, and flush when it is not.
+                      padding: EdgeInsets.only(
+                          top: isCoordinator ? AppTokens.sm : 0),
+                      child: Text(thesis.workingTitle,
+                          style: text.titleMedium),
+                    ),
+                  ),
+                  if (isCoordinator) ...[
+                    const SizedBox(width: AppTokens.sm),
+                    IconButton(
+                      key: Key('schedule-${thesis.id}'),
+                      icon: const Icon(Icons.event_available_outlined),
+                      tooltip: 'Schedule a defense',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () =>
+                          context.push('/defence/schedule?id=${thesis.id}'),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppTokens.sm),
+              chaptersAsync.when(
+                loading: () =>
+                    Text('Chapters still loading…', style: text.bodySmall),
+                error: (e, _) => Row(
                   children: [
-                    Text(thesis.workingTitle, style: text.titleMedium),
-                    const SizedBox(height: AppTokens.sm),
-                    chaptersAsync.when(
-                      loading: () => Text('Chapters still loading…',
+                    const Icon(Icons.error_outline, size: 18),
+                    const SizedBox(width: AppTokens.sm),
+                    Expanded(
+                      child: Text('Could not load this thesis\'s chapters.',
                           style: text.bodySmall),
-                      error: (e, _) => Text(
-                          'Could not load this thesis\'s chapters.',
-                          style: text.bodySmall),
-                      data: (_) => Row(
-                        children: [
-                          SizedBox(
-                            width: 160,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: approvedCount / 5,
-                                minHeight: 6,
-                                color: Tone.endorsed.color(context),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppTokens.sm),
-                          Flexible(
-                            child: Text(
-                                '$approvedCount of 5 chapters approved',
-                                style: text.bodySmall),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
+                // Where the manuscript stands, not a count of chapters: a
+                // group uploads one manuscript. A Wrap so the badge drops
+                // under the caption when the two do not fit on one line.
+                data: (list) => Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: AppTokens.sm,
+                  runSpacing: AppTokens.xs + 2,
+                  children: [
+                    Text(manuscriptSummary(list), style: text.bodySmall),
+                    if (readiness != null)
+                      ToneBadge(
+                          label: _labelFor(readiness),
+                          tone: tone,
+                          dense: true),
+                  ],
+                ),
               ),
-              const SizedBox(width: AppTokens.md),
-              if (readiness != null)
-                ToneBadge(label: _labelFor(readiness), tone: tone, dense: true)
-              else if (chaptersAsync.hasError)
-                const Icon(Icons.error_outline)
-              else
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              if (isCoordinator) ...[
-                const SizedBox(width: AppTokens.sm),
-                IconButton(
-                  key: Key('schedule-${thesis.id}'),
-                  icon: const Icon(Icons.event_available_outlined),
-                  tooltip: 'Schedule a defence',
-                  onPressed: () =>
-                      context.push('/defence/schedule?id=${thesis.id}'),
-                ),
-              ],
             ],
           ),
         ),

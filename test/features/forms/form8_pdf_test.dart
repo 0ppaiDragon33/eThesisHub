@@ -74,7 +74,7 @@ void main() {
     expect(text, contains('2026'));
   });
 
-  // D66: the printed form ends in a ruled line for a wet signature, so
+  // The printed form ends in a ruled line for a wet signature, so
   // `archivedBy` is never resolved to a name.
   test('rules a blank signature line labelled for the coordinator', () async {
     final text = extractPdfText(
@@ -99,7 +99,7 @@ void main() {
   // `issuedOn` is nullable (it comes straight from `archivedAt`, which
   // `ArchiveEntry.fromMap` leaves null when the map omits it). The renderer
   // must rule a blank rather than print the literal string "null" on a
-  // certification — that's the failure the ruled blank exists to prevent.
+  // certification: that's the failure the ruled blank exists to prevent.
   test('a null issue date rules a blank rather than printing "null"', () async {
     final data = Form8Data(
       studentNames: const ['Santos, J.', 'Lim, K.'],
@@ -114,7 +114,7 @@ void main() {
     expect(text, isNot(contains('null')));
     // The "Date" caption is unconditional text under the date block, so its
     // presence rules out the block being omitted wholesale when the date is
-    // null — distinct from merely not printing "null" in its place.
+    // null: distinct from merely not printing "null" in its place.
     expect(text, contains('Date'));
   });
 
@@ -134,13 +134,13 @@ void main() {
       expect(text, isNot(contains('null')));
     });
 
-    // A watermark and a "BLANK TEMPLATE — not an issued certification"
+    // A watermark and a "BLANK TEMPLATE, not an issued certification"
     // banner were built here and then removed. The reasoning that put them
     // there treated the blank as a FILE someone might mistake for a real
     // certificate; it is a SHEET someone prints and fills in. A watermark
     // means writing over grey letterforms, and the banner becomes untrue
-    // the moment the form is used as intended — once completed and signed,
-    // the paper IS an issued certification while still saying it is not.
+    // the moment the form is used as intended: once completed and signed,
+    // the paper is an issued certification while still saying it is not.
     //
     // This test pins the removal so neither comes back by accident.
     test('carries no template marking to write around or contradict', () async {

@@ -103,6 +103,31 @@ void main() {
     );
   });
 
+  test('chapters and title presentations take Word as well as PDF', () {
+    expect(kChapterTypes, containsAll(['pdf', 'docx', 'doc']));
+    expect(kPresentationTypes, containsAll(['pdf', 'docx', 'doc']));
+    for (final ext in ['docx', 'doc']) {
+      expect(
+        validateDocument(doc('chapter.$ext', 1000, ext),
+            allowed: kChapterTypes, maxBytes: kChapterMaxBytes),
+        isNull,
+      );
+    }
+  });
+
+  test('the type error lists every accepted type in plain words', () {
+    expect(
+      validateDocument(doc('notes.txt', 10, 'txt'),
+          allowed: const {'pdf'}, maxBytes: 1000),
+      'Choose a PDF file.',
+    );
+    expect(
+      validateDocument(doc('notes.txt', 10, 'txt'),
+          allowed: const {'pdf', 'docx', 'doc'}, maxBytes: 1000),
+      'Choose a PDF, DOCX or DOC file.',
+    );
+  });
+
   test('a docx carrying PDF bytes is refused', () {
     final error = validateDocument(
         doc('fake.docx', 1000, 'docx',

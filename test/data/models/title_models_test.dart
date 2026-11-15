@@ -64,9 +64,9 @@ void main() {
         ThesisStatus.titleRejected);
   });
 
-  test('Thesis reads the title-defence fields, and titleRound defaults to 0',
+  test('Thesis reads the title-defense fields, and titleRound defaults to 0',
       () {
-    // Theses created by M1a predate titleRound entirely.
+    // Theses created by nomination predate titleRound entirely.
     final old = Thesis.fromMap('t1', {
       'leaderUid': 'l1', 'memberNames': <String>[], 'workingTitle': 'T',
       'college': 'CICT', 'program': 'BSIT', 'semester': 'First',

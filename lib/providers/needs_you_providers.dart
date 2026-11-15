@@ -23,19 +23,19 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// `AsyncLoading` **value**, not `null`. A gate written as
 /// `if (source == null) return` therefore passes on the very first frame,
 /// and a merge built out of `valueOrNull ?? const []` publishes `data([])`
-/// -- "Nothing needs you today" before a single snapshot has landed, and
+/// "Nothing needs you today" before a single snapshot has landed, and
 /// forever after a `permission-denied`. That is the exact "0 is
-/// indistinguishable from loading" bug spec §4 and §9 name, and this
+/// indistinguishable from loading" bug and §9 name, and this
 /// project has shipped it four times.
 ///
 /// Returns:
-/// * `null` -- keep waiting; at least one source has no snapshot yet, so
+/// * `null`: keep waiting; at least one source has no snapshot yet, so
 ///   the provider stays `AsyncLoading` (which is what the queue renders as
 ///   "Checking what needs you…").
-/// * an errored [AsyncValue] -- the first source that failed. The caller
+/// * an errored [AsyncValue]: the first source that failed. The caller
 ///   forwards it with `controller.addError` so the queue shows its error
 ///   state rather than an empty one.
-/// * `data(true)` -- every source has a value; publish.
+/// * `data(true)`: every source has a value; publish.
 ///
 /// Errors are checked before loading so a failure is surfaced even while a
 /// sibling source is still in flight: the read is not coming back, and a
@@ -57,8 +57,8 @@ AsyncValue<bool>? _gate(List<AsyncValue<Object?>?> sources) {
 
 /// What is waiting on the signed-in student.
 ///
-/// Only items they can act on. A chapter sitting with the adviser is NOT
-/// here — it is on a tile, where a number is the honest representation of
+/// Only items they can act on. A chapter sitting with the adviser is not
+/// here: it is on a tile, where a number is the honest representation of
 /// "someone else has it". An empty queue is therefore real information.
 final studentNeedsYouProvider =
     StreamProvider<List<NeedsYouItem>>((ref) async* {
@@ -74,7 +74,7 @@ final studentNeedsYouProvider =
     const route = '/thesis/nominate?id=';
     items.add(NeedsYouItem(
       title: thesis.workingTitle,
-      detail: 'Still a draft — nominate an adviser and panel to begin.',
+      detail: 'Draft. Nominate an adviser and panel.',
       route: '$route${thesis.id}',
       chipLabel: 'Nominate',
       tone: NeedsYouTone.act,
@@ -96,7 +96,7 @@ final studentNeedsYouProvider =
 
   // Chapters only exist once a title is approved, so this stream is only
   // subscribed after that point. Reached through the repository directly
-  // rather than `chaptersProvider(...).stream` -- that getter is deprecated
+  // rather than `chaptersProvider(...).stream`: that getter is deprecated
   // in this Riverpod version, and going straight to the repository (as
   // `currentUserProvider` does for its own nested stream) avoids it without
   // losing the dependency on `documentRepositoryProvider`.
@@ -110,12 +110,12 @@ final studentNeedsYouProvider =
           if (c.status == ChapterStatus.revise)
             NeedsYouItem(
               title: c.id.label,
-              detail: 'Returned by your adviser — revise and re-upload.',
+              detail: 'Returned by your adviser. Revise and upload a new version.',
               route: '/thesis/chapters?id=${thesis.id}',
               chipLabel: 'Revise',
               tone: NeedsYouTone.returned,
               // This branch only runs once `thesis.status ==
-              // titleApproved`, so chapters really are unlocked -- the
+              // titleApproved`, so chapters really are unlocked: the
               // default `chaptersUnlocked: true` is correct here, not a
               // shortcut.
               deep: isDeepForRole(UserRole.student, '/thesis/chapters'),
@@ -136,13 +136,13 @@ final studentNeedsYouProvider =
 /// to think of looking in the other mode. If you ever find yourself reaching
 /// for `facultyModeProvider` in here, that is the bug.
 ///
-/// Merges four sources with a live fan-in -- one `.listen()` subscription
-/// per source and `ref.onDispose` cleanup -- following the shape proven in
+/// Merges four sources with a live fan-in: one `.listen()` subscription
+/// per source and `ref.onDispose` cleanup: following the shape proven in
 /// `myDefencesProvider`
-/// (`lib/providers/defence_providers.dart:32`). Do NOT collapse this into an
+/// (`lib/providers/defence_providers.dart:32`). Do not collapse this into an
 /// `await for` over one stream with `.first` read against another: that
 /// shape only advances when the FIRST stream emits, and a change that
-/// touches only a later source never arrives. This project has shipped that
+/// touches only a later source never arrives. We have shipped that
 /// exact bug once already.
 ///
 /// The chapter source is itself a second, nested fan-in: which theses to
@@ -169,14 +169,14 @@ final facultyNeedsYouProvider =
 
   // defenceId -> this faculty member's own evaluation on it (null once
   // resolved but not yet submitted), kept live by a subscription
-  // opened/closed as the defence list itself changes -- the same
+  // opened/closed as the defence list itself changes: the same
   // second-order shape as the chapter fan-in above, applied to
   // `watchMyEvaluation` instead of `watchChapters`.
   final evaluationsByDefence = <String, Evaluation?>{};
   final evaluationSubs = <String, StreamSubscription<Evaluation?>>{};
 
   void emit() {
-    // Wait for a real VALUE from each top-level source before emitting --
+    // Wait for a real VALUE from each top-level source before emitting,
     // not merely for a non-null AsyncValue, which `fireImmediately` supplies
     // on frame one. See [_gate].
     final gate = _gate([noms, advisees, defences]);
@@ -189,9 +189,9 @@ final facultyNeedsYouProvider =
     // The chapter fan-in is second-order: `syncChapterSubs` opens a
     // subscription per advised thesis the moment the advisee list resolves,
     // but those subscriptions have not delivered their first snapshot yet.
-    // Emitting here would under-count the chapters awaiting review -- a
+    // Emitting here would under-count the chapters awaiting review: a
     // transient "nothing needs you" of exactly the kind this gate exists to
-    // prevent -- so wait for every open subscription to have reported once.
+    // prevent, so wait for every open subscription to have reported once.
     for (final id in chapterSubs.keys) {
       if (!chaptersByThesis.containsKey(id)) return;
     }
@@ -200,9 +200,9 @@ final facultyNeedsYouProvider =
     // subscription per relevant defence the moment the defence list
     // resolves, but those subscriptions have not delivered a first snapshot
     // yet. Emitting here could read a defence this panelist has already
-    // submitted for as still owed -- exactly the transient false positive
+    // submitted for as still owed: exactly the transient false positive
     // (or, worse, a false "nothing needs you" if it under-counts) this gate
-    // exists to prevent -- so wait for every open subscription to have
+    // exists to prevent, so wait for every open subscription to have
     // reported once.
     for (final id in evaluationSubs.keys) {
       if (!evaluationsByDefence.containsKey(id)) return;
@@ -234,11 +234,11 @@ final facultyNeedsYouProvider =
           route: '/thesis/chapters?id=${entry.key}',
           chipLabel: 'Review',
           tone: NeedsYouTone.waiting,
-          // No faculty destination owns '/thesis/chapters' at all -- only
-          // a student's sidebar ever does -- so this is deep for every
+          // No faculty destination owns '/thesis/chapters' at all, only
+          // a student's sidebar ever does, so this is deep for every
           // adviser regardless of that student's own chaptersUnlocked
           // state. Previously hard-coded `deep: false` (its default), the
-          // exact "reviewed against the Task 9 brief's five-route list
+          // exact "checked against a fixed five-route list
           // instead of the destination it points at" bug this fixes.
           deep: isDeepForRole(UserRole.faculty, '/thesis/chapters'),
         ));
@@ -253,11 +253,11 @@ final facultyNeedsYouProvider =
     final now = DateTime.now();
     for (final d in defences!.requireValue) {
       // A panelist owes a sheet on every defence they sat that has closed
-      // and not yet been released. Gates on `evaluationsReleased`, NOT
-      // `isReleased` -- three lines apart in defence.dart and easy to
+      // and not yet been released. Gates on `evaluationsReleased`, not
+      // `isReleased`: three lines apart in defence.dart and easy to
       // confuse: `isReleased` is the comment log reaching the group,
       // `evaluationsReleased` is the grades reaching the panel. The adviser
-      // is barred from scoring at all (D37), so they are never in
+      // is barred from scoring at all, so they are never in
       // `panelUids` here and this row can never nag them.
       if (d.panelUids.contains(uid) &&
           d.status == DefenceStatus.completed &&
@@ -265,7 +265,7 @@ final facultyNeedsYouProvider =
           !submittedOn.contains(d.id)) {
         items.add(NeedsYouItem(
           title: d.label,
-          detail: 'Score this defence against Form 5c.',
+          detail: 'Score this defense against Form 5c.',
           route: '/defence/room/${d.id}/evaluate',
           chipLabel: 'Evaluate',
           tone: NeedsYouTone.act,
@@ -279,12 +279,12 @@ final facultyNeedsYouProvider =
           d.consolidatedAt == null) {
         items.add(NeedsYouItem(
           title: d.label,
-          detail: 'The defence concluded — release the panel''s highlights '
-              'to the group.',
-          // The defence room, where the adviser releases. NOT
-          // '/defence/${d.id}': that route is M1b's TitleDefenceScreen,
+          detail: "Defense finished. Release the panel's highlights to the "
+              'group.',
+          // The defence room, where the adviser releases. Not
+          // '/defence/${d.id}': that route is title defence's TitleDefenceScreen,
           // keyed by a THESIS id, so a defence id sent there reads a
-          // `theses/` document that does not exist — and because
+          // `theses/` document that does not exist, and because
           // `thesisData()` reads `.data` off a null `get()`, the rules
           // raise an evaluation error, which surfaces as permission-denied
           // rather than as "not found".
@@ -295,8 +295,12 @@ final facultyNeedsYouProvider =
         ));
       }
 
+      // FIX: only a defence that has not happened yet can be "scheduled
+      // for today". Completed / cancelled defences keep their scheduledAt
+      // forever, which is why "Join" kept showing after they were done.
       final at = d.scheduledAt;
-      final scheduledToday = at != null &&
+      final scheduledToday = d.status == DefenceStatus.scheduled &&
+          at != null &&
           at.year == now.year &&
           at.month == now.month &&
           at.day == now.day;
@@ -304,9 +308,9 @@ final facultyNeedsYouProvider =
         items.add(NeedsYouItem(
           title: d.label,
           detail: d.status == DefenceStatus.inProgress
-              ? 'This defence is in progress now.'
+              ? 'This defense is in progress now.'
               : 'Scheduled for today at ${d.venue}.',
-          // The live room, by defence id — same reasoning as Consolidate
+          // The live room, by defence id: same reasoning as Consolidate
           // above.
           route: '/defence/room/${d.id}',
           chipLabel: 'Join',
@@ -321,7 +325,7 @@ final facultyNeedsYouProvider =
 
   // Opens a chapter subscription for every currently advised thesis that
   // does not already have one, and closes any whose thesis fell off the
-  // list -- the advisee list is the only thing that decides which chapter
+  // list: the advisee list is the only thing that decides which chapter
   // streams should be open.
   void syncChapterSubs(List<Thesis> currentAdvisees) {
     final ids = currentAdvisees.map((t) => t.id).toSet();
@@ -352,8 +356,8 @@ final facultyNeedsYouProvider =
     fireImmediately: true,
   );
 
-  // Opens an evaluation subscription for every currently relevant defence --
-  // one this faculty member sits on, closed, and not yet released -- and
+  // Opens an evaluation subscription for every currently relevant defence,
+  // one this faculty member sits on, closed, and not yet released, and
   // closes any whose defence fell off that set. Only the defence list
   // decides which evaluation streams should be open: a defence that gets
   // scheduled, closes, or is released moves it in or out of `relevant`
@@ -421,18 +425,18 @@ final facultyNeedsYouProvider =
 /// recommended, and candidate title sets ready for a defence decision.
 ///
 /// Each row routes to exactly where the dean dashboard's own destinations
-/// already send that same thesis -- `/review` for an approval (see the
+/// already send that same thesis: `/review` for an approval (see the
 /// `goToReview` button in `dean_dashboard.dart`) and `/defence/{id}` for a
-/// title defence (see `TitleDefenceStage`) -- reused verbatim so a row here is
+/// title defence (see `TitleDefenceStage`): reused verbatim so a row here is
 /// never a dead end.
 ///
 /// A live fan-in over two [thesesByStatusProvider] streams, following the
 /// shape proven in [facultyNeedsYouProvider]: one `ref.listen` subscription
 /// per source and `ref.onDispose` cleanup. Do
-/// NOT collapse this into an `await for` over one stream with `.first` read
-/// against the other -- that shape only advances when the FIRST stream
+/// not collapse this into an `await for` over one stream with `.first` read
+/// against the other: that shape only advances when the FIRST stream
 /// emits, and a change that touches only the second source never arrives.
-/// This project has shipped that exact bug once already.
+/// We have shipped that exact bug once already.
 final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   final controller = StreamController<List<NeedsYouItem>>();
 
@@ -440,7 +444,7 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   AsyncValue<List<Thesis>>? titleDefences;
 
   void emit() {
-    // Wait for a real VALUE from each source before emitting -- not merely
+    // Wait for a real VALUE from each source before emitting, not merely
     // for a non-null AsyncValue, which `fireImmediately` supplies on frame
     // one. See [_gate].
     final gate = _gate([approvals, titleDefences]);
@@ -459,16 +463,16 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           route: '/review',
           chipLabel: 'Approve',
           tone: NeedsYouTone.act,
-          // No `ShellDestination` owns '/review' -- it is not the dean's
+          // No `ShellDestination` owns '/review': it is not the dean's
           // own destination, whatever `needs_you_item.dart` used to claim
-          // -- so this is deep for every role, including the dean.
+          // so this is deep for every role, including the dean.
           // Previously hard-coded `deep: false` (its default).
           deep: isDeepForRole(UserRole.dean, '/review'),
         ),
       for (final t in titleDefences!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
-          detail: 'Presented their candidate titles -- decide the outcome.',
+          detail: 'Candidate titles presented. Record the decision.',
           route: '/defence/${t.id}',
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
@@ -508,19 +512,19 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
 /// but have none scheduled yet.
 ///
 /// Each row routes to exactly where the coordinator dashboard's own
-/// destinations already send that same thesis -- `/review` for a
+/// destinations already send that same thesis: `/review` for a
 /// recommendation (see the `goToReview` button in `coordinator_dashboard.
 /// dart`), `/defence/{id}` for a title defence (see `TitleDefenceStage`), and
 /// `/defence/schedule?id={id}` for scheduling a defence (see the
-/// `schedule-{id}` button in `defence_readiness.dart`'s `_ReadinessRow`) --
+/// `schedule-{id}` button in `defence_readiness.dart`'s `_ReadinessRow`),
 /// reused verbatim so a row here is never a dead end.
 ///
 /// A live fan-in over four sources, following the shape proven in
 /// [facultyNeedsYouProvider] and [deanNeedsYouProvider]: one `ref.listen`
-/// subscription per top-level source and `ref.onDispose` cleanup. Do NOT collapse this into an `await for` over one
-/// stream with `.first` read against another -- that shape only advances
+/// subscription per top-level source and `ref.onDispose` cleanup. Do not collapse this into an `await for` over one
+/// stream with `.first` read against another: that shape only advances
 /// when the FIRST stream emits, and a change that touches only a later
-/// source never arrives. This project has shipped that exact bug once
+/// source never arrives. We have shipped that exact bug once
 /// already.
 ///
 /// The "ready for a defence but none scheduled" source is itself a second,
@@ -528,9 +532,9 @@ final deanNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
 /// chapter subscriptions: which theses to watch chapters for is only known
 /// once the `titleApproved` list has emitted, and that list can grow or
 /// shrink, so the per-thesis chapter subscriptions are opened and closed to
-/// track it. Readiness itself is computed with [readinessOf] -- the exact
+/// track it. Readiness itself is computed with [readinessOf]: the exact
 /// function `defence_readiness.dart` uses to decide the same question for
-/// its own screen -- rather than re-deriving what "ready" means here. Two
+/// its own screen, rather than re-deriving what "ready" means here. Two
 /// definitions of readiness that could drift apart would be worse than
 /// reusing the one that already exists.
 ///
@@ -553,7 +557,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
   final chapterSubs = <String, StreamSubscription<List<ThesisChapter>>>{};
 
   void emit() {
-    // Wait for a real VALUE from each top-level source before emitting --
+    // Wait for a real VALUE from each top-level source before emitting,
     // not merely for a non-null AsyncValue, which `fireImmediately` supplies
     // on frame one. See [_gate].
     final gate =
@@ -595,7 +599,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
       for (final t in titleDefences!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
-          detail: 'Presented their candidate titles -- decide the outcome.',
+          detail: 'Candidate titles presented. Record the decision.',
           route: '/defence/${t.id}',
           chipLabel: 'Decide',
           tone: NeedsYouTone.act,
@@ -607,8 +611,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
             readinessOf(chaptersByThesis[t.id]!) != DefenceReadiness.notReady)
           NeedsYouItem(
             title: t.workingTitle,
-            detail: 'Its chapters have cleared the gate for a defence -- '
-                'schedule one.',
+            detail: 'Chapters are approved. Set a defense date.',
             route: '/defence/schedule?id=${t.id}',
             chipLabel: 'Schedule',
             tone: NeedsYouTone.act,
@@ -616,13 +619,13 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
           ),
       // A declined Conforme wedges a thesis permanently, and only a
       // coordinator can free it. It is `returned` rather than `act` because
-      // nothing here is progress -- the group has been sent backwards and
+      // nothing here is progress: the group has been sent backwards and
       // needs their thesis handed back.
       for (final t in stalled!.requireValue)
         NeedsYouItem(
           title: t.workingTitle,
-          detail: 'A nominee declined, so this thesis cannot advance -- '
-              'reopen it for re-nomination.',
+          detail: 'A nominee declined. Reopen the thesis so the group can '
+              'nominate again.',
           route: '/stalled',
           chipLabel: 'Reopen',
           tone: NeedsYouTone.returned,
@@ -635,7 +638,7 @@ final coordinatorNeedsYouProvider = StreamProvider<List<NeedsYouItem>>((ref) {
 
   // Opens a chapter subscription for every currently ready-candidate thesis
   // that does not already have one, and closes any whose thesis fell off
-  // the list -- the candidate list is the only thing that decides which
+  // the list: the candidate list is the only thing that decides which
   // chapter streams should be open.
   void syncChapterSubs(List<Thesis> currentCandidates) {
     final ids = currentCandidates.map((t) => t.id).toSet();

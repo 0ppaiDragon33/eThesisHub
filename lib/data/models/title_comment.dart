@@ -19,7 +19,7 @@ class TitleComment {
   final String authorUid;
   final String authorName;
 
-  /// The position this person held WHEN THEY WROTE IT — "Adviser", "Panel
+  /// The position this person held WHEN THEY WROTE IT: "Adviser", "Panel
   /// Member", "Research Coordinator", "Dean". Stored rather than resolved at
   /// render time, so a later change of position cannot rewrite the header on
   /// a remark made months earlier.

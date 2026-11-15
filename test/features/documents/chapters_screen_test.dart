@@ -5,15 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ethesishub/data/models/chapter.dart';
+import 'package:ethesishub/data/models/defence.dart';
+import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/features/documents/chapters_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
+import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/document_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 
 Future<FakeFirebaseFirestore> seed({
   String status = 'titleApproved',
   Map<String, dynamic>? chapter,
+  // Which document `chapter` is written to: the proposal manuscript, or one
+  // of the old per-chapter ids for a thesis from before manuscripts.
+  String chapterDoc = 'manuscriptProposal',
 }) async {
   final db = FakeFirebaseFirestore();
   await db.collection('theses').doc('t1').set({
@@ -24,7 +30,7 @@ Future<FakeFirebaseFirestore> seed({
   });
   if (chapter != null) {
     await db.collection('theses').doc('t1')
-        .collection('documents').doc('chapterI').set(chapter);
+        .collection('documents').doc(chapterDoc).set(chapter);
   }
   return db;
 }
@@ -45,28 +51,109 @@ Widget wrap(FakeFirebaseFirestore db, {List<Override> overrides = const []}) =>
     );
 
 void main() {
-  testWidgets('all five chapters are listed even when none are uploaded',
-      (tester) async {
+  // One manuscript, not Introduction / Related Literature / Methodology as
+  // three things to upload.
+  testWidgets('before the pre-oral is passed there is one manuscript, '
+      'Chapters I-III', (tester) async {
     // "Not started" is derived from absence: no document is written until
-    // the first upload, so the screen must render the full set itself.
+    // the first upload, so the screen must render the row itself.
     await tester.pumpWidget(wrap(await seed()));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('chapterRow-manuscriptProposal')),
+        findsOneWidget);
+    expect(find.text('Manuscript — Chapters I–III'), findsOneWidget);
+    expect(find.textContaining('Not started'), findsOneWidget);
+    // Not five (or three) separate chapters, and not the full manuscript yet.
     for (final id in ['chapterI', 'chapterII', 'chapterIII', 'chapterIV',
-                      'chapterV']) {
-      expect(find.byKey(Key('chapterRow-$id')), findsOneWidget);
+                      'chapterV', 'manuscriptFinal']) {
+      expect(find.byKey(Key('chapterRow-$id')), findsNothing, reason: id);
     }
-    // I-III read "Not started"; IV and V, with no pre-oral passed, say
-    // when they open instead.
-    expect(find.textContaining('Not started'), findsNWidgets(3));
-    expect(find.text('Opens once the pre-oral defence is passed'),
-        findsNWidgets(2));
+    expect(find.byKey(const Key('manuscriptNextNote')), findsOneWidget);
   });
 
-  testWidgets('an uploaded chapter shows its status and version',
+  testWidgets('once the pre-oral is passed it becomes one manuscript, '
+      'Chapters I-V', (tester) async {
+    final passed = Defence(
+      id: 'd1',
+      thesisId: 't1',
+      type: DefenceType.preOral,
+      venue: 'AVR',
+      panelUids: const ['p1'],
+      adviserUid: 'a1',
+      leaderUid: 'l1',
+      status: DefenceStatus.completed,
+      createdBy: 'c1',
+      panelVerdict: PassFail.pass,
+    );
+    await tester.pumpWidget(wrap(await seed(), overrides: [
+      myDefencesProvider.overrideWith((ref) => Stream.value([passed])),
+    ]));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const Key('chapterRow-manuscriptFinal')), findsOneWidget);
+    expect(find.text('Manuscript — Chapters I–V'), findsOneWidget);
+    expect(find.byKey(const Key('manuscriptNextNote')), findsNothing);
+    for (final id in ['chapterI', 'chapterII', 'chapterIII', 'chapterIV',
+                      'chapterV']) {
+      expect(find.byKey(Key('chapterRow-$id')), findsNothing, reason: id);
+    }
+  });
+
+  testWidgets('the proposal manuscript stays on record beneath the full one',
+      (tester) async {
+    final passed = Defence(
+      id: 'd1',
+      thesisId: 't1',
+      type: DefenceType.preOral,
+      venue: 'AVR',
+      panelUids: const ['p1'],
+      adviserUid: 'a1',
+      leaderUid: 'l1',
+      status: DefenceStatus.completed,
+      createdBy: 'c1',
+      panelVerdict: PassFail.pass,
+    );
+    await tester.pumpWidget(wrap(
+        await seed(chapter: {
+          'type': 'manuscriptProposal', 'currentVersion': 2,
+          'status': 'approved',
+        }),
+        overrides: [
+          myDefencesProvider.overrideWith((ref) => Stream.value([passed])),
+        ]));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const Key('chapterRow-manuscriptFinal')), findsOneWidget);
+    expect(find.byKey(const Key('chapterRow-manuscriptProposal')),
+        findsOneWidget);
+    expect(find.text('Before your pre-oral'), findsOneWidget);
+  });
+
+  // A thesis that uploaded chapter by chapter, before manuscripts existed,
+  // keeps what it has on file, listed apart from the manuscript.
+  testWidgets('chapters uploaded one by one, from before manuscripts, stay '
+      'reachable', (tester) async {
+    await tester.pumpWidget(wrap(await seed(
+      chapterDoc: 'chapterII',
+      chapter: {'type': 'chapterII', 'currentVersion': 2, 'status': 'approved'},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Earlier chapter uploads'), findsOneWidget);
+    expect(find.byKey(const Key('chapterRow-chapterII')), findsOneWidget);
+    expect(find.byKey(const Key('chapterRow-chapterI')), findsNothing);
+    // The manuscript is still the thing to upload.
+    expect(find.byKey(const Key('chapterRow-manuscriptProposal')),
+        findsOneWidget);
+  });
+
+  testWidgets('an uploaded manuscript shows its status and version',
       (tester) async {
     await tester.pumpWidget(wrap(await seed(chapter: {
-      'type': 'chapterI', 'currentVersion': 3, 'status': 'revise',
+      'type': 'manuscriptProposal', 'currentVersion': 3, 'status': 'revise',
     })));
     await tester.pumpAndSettle();
 
@@ -80,7 +167,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('notUnlocked')), findsOneWidget);
-    expect(find.byKey(const Key('chapterRow-chapterI')), findsNothing);
+    expect(
+        find.byKey(const Key('chapterRow-manuscriptProposal')), findsNothing);
     // A refusal with no app bar strands the user: they must reload the app.
     expect(find.byType(AppBar), findsOneWidget);
   });

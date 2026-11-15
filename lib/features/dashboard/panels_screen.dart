@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:ethesishub/core/design/metrics.dart';
 import 'package:ethesishub/core/design/panel.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
@@ -9,7 +10,10 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/core/widgets/status_chip.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/data/models/faculty_mode.dart';
 import 'package:ethesishub/data/models/thesis_status.dart';
+import 'package:ethesishub/features/dashboard/switch_mode_notice.dart';
+import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
@@ -29,6 +33,10 @@ class PanelsScreen extends ConsumerWidget {
       title: 'My panels',
       subtitle: 'Titles to review and theses you sit on.',
       children: [
+        const SwitchModeNotice(
+          needed: FacultyMode.panelist,
+          message: 'Switch to Panelist mode to use your panels.',
+        ),
         idsAsync.when(
           loading: () => const LoadingState(label: 'Loading your panels…'),
           error: (e, _) =>
@@ -40,8 +48,9 @@ class PanelsScreen extends ConsumerWidget {
   }
 }
 
-/// Resolves each thesis id and splits it into "to review" and "others".
-/// Its own widget: it watches a dynamic number of family instances.
+/// Resolves each thesis id and splits it into "to review", "active" and
+/// "archived". Its own widget: it watches a dynamic number of family
+/// instances.
 class PanelRegister extends ConsumerWidget {
   const PanelRegister({
     super.key,
@@ -71,8 +80,14 @@ class PanelRegister extends ConsumerWidget {
             .toSet() ??
         const <String>{};
 
+    // Opening a title defense to comment on it is panel work: disabled in
+    // Adviser mode. The switch notice at the top of the screen offers the
+    // way back.
+    final canAct = ref.watch(modeAllowsProvider(FacultyMode.panelist));
+
     final review = <Thesis>[];
-    final others = <Thesis>[];
+    final active = <Thesis>[];
+    final archived = <Thesis>[];
     var pending = 0;
     for (final id in thesisIds) {
       final async = ref.watch(thesisByIdProvider(id));
@@ -84,20 +99,93 @@ class PanelRegister extends ConsumerWidget {
       if (t.status == ThesisStatus.titlePendingDefence) {
         review.add(t);
       } else if (!advised.contains(t.id)) {
-        others.add(t);
+        (t.status == ThesisStatus.archived ? archived : active).add(t);
       }
+    }
+    int newestFirst(Thesis a, Thesis b) => b.createdAt.compareTo(a.createdAt);
+    active.sort(newestFirst);
+    archived.sort(newestFirst);
+
+    // Never a false zero while theses are still loading.
+    AsyncValue<int> count(int n) =>
+        pending > 0 ? const AsyncLoading<int>() : AsyncData<int>(n);
+
+    VoidCallback? go(String path) =>
+        canAct ? () => context.push(path) : null;
+
+    Widget tileFor(Thesis t) {
+      if (t.status == ThesisStatus.titlePendingDefence) {
+        return _PanelTile(
+          key: Key('panelTile-${t.id}'),
+          thesis: t,
+          onTap: go('/defence/${t.id}'),
+          action: FilledButton(
+            key: Key('goToDefence-${t.id}'),
+            onPressed: go('/defence/${t.id}'),
+            child: const Text('Open title defense'),
+          ),
+        );
+      }
+      if (t.status == ThesisStatus.archived) {
+        return _PanelTile(
+          key: Key('panelTile-${t.id}'),
+          thesis: t,
+          onTap: () => context.push('/archive/${t.id}'),
+          action: OutlinedButton(
+            key: Key('viewArchivedPanel-${t.id}'),
+            onPressed: () => context.push('/archive/${t.id}'),
+            child: const Text('View in the archive'),
+          ),
+        );
+      }
+      if (t.status == ThesisStatus.titleApproved) {
+        return _PanelTile(
+          key: Key('panelTile-${t.id}'),
+          thesis: t,
+          onTap: () => context.go('/defences?stage=preOral'),
+          action: TextButton(
+            onPressed: () => context.go('/defences?stage=preOral'),
+            child: const Text('View defenses'),
+          ),
+        );
+      }
+      return _PanelTile(key: Key('panelTile-${t.id}'), thesis: t);
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!reviewOnly) ...[
+          MetricStrip(metrics: [
+            Metric<int>(
+              label: 'Title sets to review',
+              value: count(review.length),
+              format: (n) => '$n',
+              highlight: (n) => n > 0,
+              caption: (n) =>
+                  n == 0 ? 'Nothing to review' : 'Read and leave comments',
+            ),
+            Metric<int>(
+              label: 'Active panels',
+              value: count(active.length),
+              format: (n) => '$n',
+              caption: (_) => 'Theses in progress',
+            ),
+            Metric<int>(
+              label: 'Archived',
+              value: count(archived.length),
+              format: (n) => '$n',
+              caption: (_) => 'Completed theses',
+            ),
+          ]),
+          const Gap.lg(),
+        ],
         if (review.isEmpty)
-          EmptyState(
-            icon: Icons.forum_outlined,
-            title: 'No title sets waiting',
+          _AllCaughtUp(
+            loading: pending > 0,
             message: pending > 0
                 ? 'Still loading $pending of your theses…'
-                : 'None of your theses are at title defence right now.',
+                : 'None of your theses are at title defense right now.',
           )
         else
           Panel(
@@ -105,48 +193,39 @@ class PanelRegister extends ConsumerWidget {
             subtitle: 'Read the candidates and leave your comments',
             icon: Icons.fact_check_outlined,
             emphasis: true,
-            flush: true,
             trailing: ToneBadge(
               label: '${review.length} waiting',
               tone: Tone.act,
               dense: true,
             ),
-            child: Column(
-              children: [
-                for (final t in review)
-                  _PanelRow(
-                    thesis: t,
-                    action: FilledButton(
-                      key: Key('goToDefence-${t.id}'),
-                      onPressed: () => context.push('/defence/${t.id}'),
-                      child: const Text('Open title defence'),
-                    ),
-                  ),
-              ],
-            ),
+            child: _TileGrid(tiles: [for (final t in review) tileFor(t)]),
           ),
-        if (!reviewOnly && others.isNotEmpty) ...[
+        if (!reviewOnly && active.isNotEmpty) ...[
           const Gap.lg(),
           Panel(
-            title: 'Your other panels',
+            title: 'Active panels',
             subtitle: 'For reference; nothing waits on you here',
             icon: Icons.groups_outlined,
-            flush: true,
-            child: Column(
-              children: [
-                for (final t in others)
-                  _PanelRow(
-                    thesis: t,
-                    action: t.status == ThesisStatus.titleApproved
-                        ? TextButton(
-                            onPressed: () =>
-                                context.go('/defences?stage=preOral'),
-                            child: const Text('View defences'),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-              ],
+            trailing: ToneBadge(
+              label: '${active.length}',
+              tone: Tone.neutral,
+              dense: true,
             ),
+            child: _TileGrid(tiles: [for (final t in active) tileFor(t)]),
+          ),
+        ],
+        if (!reviewOnly && archived.isNotEmpty) ...[
+          const Gap.lg(),
+          Panel(
+            title: 'Archived panels',
+            subtitle: 'Finished theses you sat on',
+            icon: Icons.inventory_2_outlined,
+            trailing: ToneBadge(
+              label: '${archived.length}',
+              tone: Tone.neutral,
+              dense: true,
+            ),
+            child: _TileGrid(tiles: [for (final t in archived) tileFor(t)]),
           ),
         ],
       ],
@@ -154,54 +233,148 @@ class PanelRegister extends ConsumerWidget {
   }
 }
 
-class _PanelRow extends StatelessWidget {
-  const _PanelRow({required this.thesis, required this.action});
+/// Lays tiles out three across on a wide screen, two on a medium one and one
+/// on a phone, so a short list fills the width instead of floating in it.
+class _TileGrid extends StatelessWidget {
+  const _TileGrid({required this.tiles});
+
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final cols = c.maxWidth >= 1000 ? 3 : (c.maxWidth >= 640 ? 2 : 1);
+      const gap = AppTokens.md;
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [for (final t in tiles) SizedBox(width: w, child: t)],
+      );
+    });
+  }
+}
+
+/// One thesis you sit on: where it stands, who the group is, and what you
+/// can do with it.
+class _PanelTile extends StatelessWidget {
+  const _PanelTile({
+    super.key,
+    required this.thesis,
+    this.action,
+    this.onTap,
+  });
 
   final Thesis thesis;
-  final Widget action;
+  final Widget? action;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final p = Palette.of(context);
+
+    final changed = thesis.approvedTitleText;
+    final title =
+        (changed != null && changed.isNotEmpty) ? changed : thesis.workingTitle;
+    final meta = [thesis.program, thesis.academicYear]
+        .where((s) => s.isNotEmpty)
+        .join(' · ');
+    final leader = thesis.leaderName;
+    final members = thesis.memberNames.length;
+    final group = [
+      if (leader != null && leader.isNotEmpty) 'Led by $leader',
+      if (members > 0) members == 1 ? '1 member' : '$members members',
+    ].join(' · ');
+
+    final radius = BorderRadius.circular(AppTokens.radius + 2);
+    return Material(
+      color: p.paper,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: radius,
+        side: BorderSide(color: p.rule),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppTokens.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  StatusChip(thesis.status, dense: true),
+                  const Spacer(),
+                  if (onTap != null)
+                    Icon(Icons.chevron_right_rounded,
+                        size: 20, color: p.muted),
+                ],
+              ),
+              const SizedBox(height: AppTokens.sm),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: text.titleMedium,
+              ),
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: AppTokens.xs),
+                Text(meta, style: text.bodySmall),
+              ],
+              if (group.isNotEmpty) ...[
+                const SizedBox(height: AppTokens.xs),
+                Text(group, style: text.bodySmall),
+              ],
+              if (action != null) ...[
+                const SizedBox(height: AppTokens.md),
+                Align(alignment: Alignment.centerLeft, child: action!),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "nothing waiting" state, as one slim line rather than a tall empty
+/// box, so a quiet day does not take up half the screen.
+class _AllCaughtUp extends StatelessWidget {
+  const _AllCaughtUp({required this.message, this.loading = false});
+
+  final String message;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final p = Palette.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppTokens.lg - 4, vertical: AppTokens.md - 2),
+      padding: const EdgeInsets.all(AppTokens.md),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: p.rule)),
+        color: p.paper,
+        borderRadius: BorderRadius.circular(AppTokens.radius + 2),
+        border: Border.all(color: p.rule),
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: AppTokens.md,
-        runSpacing: AppTokens.sm,
+      child: Row(
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+          Icon(
+            loading ? Icons.hourglass_empty_rounded : Icons.check_circle_outline,
+            color: loading ? p.muted : Tone.endorsed.color(context),
+          ),
+          const SizedBox(width: AppTokens.md),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(thesis.workingTitle, style: text.titleMedium),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    StatusChip(thesis.status, dense: true),
-                    const SizedBox(width: AppTokens.sm),
-                    Flexible(
-                      child: Text(
-                        thesis.program,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
+                Text('No title sets waiting', style: text.titleMedium),
+                const SizedBox(height: 2),
+                Text(message, style: text.bodySmall),
               ],
             ),
           ),
-          action,
         ],
       ),
     );

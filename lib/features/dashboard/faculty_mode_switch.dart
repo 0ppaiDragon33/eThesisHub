@@ -9,31 +9,31 @@ import 'package:ethesishub/providers/faculty_mode_provider.dart';
 
 /// The Adviser/Panelist switch, which used to live in
 /// `faculty_dashboard.dart`'s app bar and now lives in the shell's
-/// trailing slot — the same place, one level up, for every faculty route
+/// trailing slot: the same place, one level up, for every faculty route
 /// rather than only the dashboard.
 ///
-/// Renders nothing at all unless the member holds BOTH capabilities --
+/// Renders nothing at all unless the member holds BOTH capabilities,
 /// [facultyHoldsBothCapabilitiesProvider], the union of designation and
-/// positions actually held (spec D30). A member with only one capability is
+/// positions actually held. A member with only one capability is
 /// clamped to it by [effectiveFacultyModeProvider], and a switch that could
 /// only ever move them to a destination they cannot reach is a control that
 /// does nothing.
 ///
-/// The badge counts work waiting in the mode that is NOT in force, so a
+/// The badge counts work waiting in the mode that is not in force, so a
 /// member deep in one role can see the other filling up without switching
 /// to look.
 ///
 /// Below `AppShell.railBreakpoint`, the full two-segment `SegmentedButton`
 /// is replaced with a single icon button that toggles mode. The app bar on
 /// a narrow screen already carries the hamburger, an optional back
-/// control, and this widget's own badge; at 360dp — one of the commonest
-/// Android widths — the labelled segmented button was wide enough by
+/// control, and this widget's own badge; at 360dp: one of the commonest
+/// Android widths: the labelled segmented button was wide enough by
 /// itself to overflow the bar by more than a pixel, and a Badge's label
 /// only grows that once `pendingElsewhere` is nonzero. An icon-only toggle
 /// carries the same information (current mode, tap to switch, badge count)
-/// in roughly a fifth of the width, and the wide rail branch — which has
+/// in roughly a fifth of the width, and the wide rail branch, which has
 /// an entire row's worth of space regardless of how many destinations it
-/// lists — keeps the labelled version, since nothing there is tight.
+/// lists: keeps the labelled version, since nothing there is tight.
 class FacultyModeSwitch extends ConsumerWidget {
   const FacultyModeSwitch({super.key, required this.location});
 
@@ -58,7 +58,7 @@ class FacultyModeSwitch extends ConsumerWidget {
       ref.read(facultyModeProvider.notifier).set(next);
       // Only when standing on the other mode's own screen. Flipping
       // the mode from, say, a chapter should change what the sidebar
-      // offers — not teleport the reader out of what they were
+      // offers, not teleport the reader out of what they were
       // reading.
       if (location == '/advisees' || location == '/panels') {
         context.go(next == FacultyMode.adviser ? '/advisees' : '/panels');
@@ -84,7 +84,7 @@ class FacultyModeSwitch extends ConsumerWidget {
                     turns: Tween<double>(begin: 0.75, end: 1).animate(a),
                     child: ScaleTransition(scale: a, child: child),
                   ),
-                  // A letter disc — A for Adviser, P for Panelist — rather
+                  // A letter disc (A for Adviser, P for Panelist) rather
                   // than an icon: the school/forum glyphs did not read as a
                   // MODE, only as a picture, so a member could not tell
                   // which role the narrow bar had them in. The letter is
@@ -97,8 +97,8 @@ class FacultyModeSwitch extends ConsumerWidget {
                   ),
                 ),
                 tooltip: mode == FacultyMode.adviser
-                    ? 'Adviser mode — tap to switch to Panelist'
-                    : 'Panelist mode — tap to switch to Adviser',
+                    ? 'Adviser mode. Tap to switch to Panelist'
+                    : 'Panelist mode. Tap to switch to Adviser',
                 onPressed: () => select(
                   mode == FacultyMode.adviser
                       ? FacultyMode.panelist
@@ -125,7 +125,7 @@ class FacultyModeSwitch extends ConsumerWidget {
   }
 }
 
-/// A small filled disc carrying a single letter — the compact bar's mode
+/// A small filled disc carrying a single letter: the compact bar's mode
 /// indicator. Sized to sit inside an [IconButton] and to match the app
 /// bar's other trailing controls.
 class _ModeDisc extends StatelessWidget {

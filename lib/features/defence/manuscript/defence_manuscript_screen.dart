@@ -5,6 +5,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence_annotation.dart';
+import 'package:ethesishub/features/defence/defence_mode_gate.dart';
 import 'package:ethesishub/features/defence/manuscript/highlight_colours.dart';
 import 'package:ethesishub/features/defence/manuscript/highlights_panel.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_pane.dart';
@@ -46,13 +47,13 @@ class _DefenceManuscriptScreenState
     final uid = ref.watch(signedInUidProvider);
 
     if (defenceAsync.isLoading) {
-      return _framed(const [LoadingState(label: 'Loading defence…')]);
+      return _framed(const [LoadingState(label: 'Loading defense…')]);
     }
     if (defenceAsync.hasError) {
       return _framed([
         ErrorState(
           error: defenceAsync.error,
-          message: 'Could not load this defence.',
+          message: 'Could not load this defense.',
         ),
       ]);
     }
@@ -61,8 +62,8 @@ class _DefenceManuscriptScreenState
       return _framed(const [
         EmptyState(
           icon: Icons.search_off,
-          title: 'Defence not found',
-          message: 'This defence no longer exists.',
+          title: 'Defense not found',
+          message: 'This defense no longer exists.',
         ),
       ]);
     }
@@ -70,7 +71,19 @@ class _DefenceManuscriptScreenState
     // Until auth has said who this is, the gate below cannot be decided, and
     // nothing may be read on the guess that it is not the leader.
     if (uid == null) {
-      return _framed(const [LoadingState(label: 'Loading defence…')]);
+      return _framed(const [LoadingState(label: 'Loading defense…')]);
+    }
+
+    // A faculty member who holds both capabilities must be in the mode that
+    // matches their seat on THIS defense: adviser mode for the adviser,
+    // panelist mode for a panelist. Anything else is turned away here, before
+    // a single highlight, grade or evaluation is read.
+    final modeGate = checkDefenceModeGate(ref, defence, uid);
+    if (modeGate.gate == DefenceModeGate.loading) {
+      return _framed(const [LoadingState(label: 'Checking your mode…')]);
+    }
+    if (modeGate.gate == DefenceModeGate.blocked) {
+      return _framed([DefenceModeBlock(needed: modeGate.needed!)]);
     }
 
     // Decided from the defence alone, before any highlight is read: the

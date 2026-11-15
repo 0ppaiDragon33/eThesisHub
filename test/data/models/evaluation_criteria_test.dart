@@ -17,7 +17,7 @@ void main() {
     expect(sum(EvaluationSection.presentation), 50);
   });
 
-  // D35. The printed form says Title (50%), which would make Section A
+  // The printed form says Title (50%), which would make Section A
   // sum to 95 against its own stated 50%. This test is what stops someone
   // "correcting" the table back to the manual.
   test('Title is 5, not the 50 the printed form says', () {
@@ -37,7 +37,7 @@ void main() {
         3);
   });
 
-  // D38: the printed form gives comment lines to Section A only.
+  // The printed form gives comment lines to Section A only.
   test('only Content criteria take a comment', () {
     for (final c in evaluationCriteria) {
       expect(c.takesComment, c.section == EvaluationSection.content,

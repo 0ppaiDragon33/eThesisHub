@@ -33,7 +33,7 @@ Future<FakeFirebaseFirestore> seed() async {
 // `signedInUidProvider` derives synchronously from
 // `authStateProvider.valueOrNull` (see auth_providers.dart), and
 // `MockFirebaseAuth`'s own first `authStateChanges()` event is delivered
-// asynchronously -- so a provider read straight after container creation
+// asynchronously, so a provider read straight after container creation
 // can observe `signedInUidProvider` still at its initial `null` and never
 // get another chance, because `.future` is bound to that first build.
 // Awaiting `authStateProvider.future` here settles that race the same way

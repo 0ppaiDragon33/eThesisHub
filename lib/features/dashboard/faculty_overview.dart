@@ -24,19 +24,28 @@ import 'package:ethesishub/providers/needs_you_providers.dart';
 import 'package:ethesishub/providers/thesis_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
-/// Chapters `submitted` across every thesis the signed-in member advises --
+
+/// Chapters `submitted` across every thesis the signed-in member advises,
 /// the adviser-mode "chapters awaiting your review" tile. A tile-only figure,
-/// unlike [facultyNeedsYouProvider]: per spec D17 the queue itself must never
+/// unlike [facultyNeedsYouProvider]: the queue itself must never
 /// be filtered by mode, but a TILE summarising "the work of this mode" is
-/// exactly what D5 asks for.
+/// exactly what the spec asks for.
 final _chaptersAwaitingReviewProvider = FutureProvider<int>((ref) async {
   final advisees = await ref.watch(myAdviseesProvider.future);
+  final hidden = ref.watch(hiddenAdviseesProvider);
+
+  final visible = advisees.where(
+    (t) => !(t.status == ThesisStatus.archived && hidden.contains(t.id)),
+  );
+
   var count = 0;
-  for (final thesis in advisees) {
+
+  for (final thesis in visible) {
     final chapters = await ref.watch(chaptersProvider(thesis.id).future);
     count +=
         chapters.where((c) => c.status == ChapterStatus.submitted).length;
   }
+
   return count;
 });
 
@@ -57,7 +66,7 @@ final _titleSetsToReviewProvider = FutureProvider<int>((ref) async {
 });
 
 /// Defences scheduled within the next 7 days, today included. Shared by both
-/// modes -- a defence is on the calendar whichever position brought you to
+/// modes: a defence is on the calendar whichever position brought you to
 /// it, and `myDefencesProvider` already covers both.
 ///
 /// The window itself is [defencesThisWeek], the one definition the dean and
@@ -72,9 +81,9 @@ final _defencesThisWeekProvider = FutureProvider<int>((ref) async {
 
 /// The faculty desk.
 ///
-/// The inbox is mode-independent (spec D17) and leads the page. The figure
+/// The inbox is mode-independent and leads the page. The figure
 /// strip and the roster below follow the mode switch in the top bar
-/// (spec D5): an adviser sees their advisees and chapters waiting, a
+/// : an adviser sees their advisees and chapters waiting, a
 /// panelist sees the title sets waiting. The week's defences sit beside
 /// them whichever position brought the member to each.
 class FacultyOverview extends ConsumerWidget {
@@ -92,7 +101,7 @@ class FacultyOverview extends ConsumerWidget {
     final stillResolving = modeAsync.isLoading;
     final mode = modeAsync.valueOrNull;
 
-    final adviseesAsync = ref.watch(myAdviseesProvider);
+    final adviseesAsync = ref.watch(visibleAdviseesProvider);
     final nominationsAsync = ref.watch(myPendingNominationsProvider);
     final chaptersAwaitingAsync = ref.watch(_chaptersAwaitingReviewProvider);
     final defencesThisWeekAsync = ref.watch(_defencesThisWeekProvider);
@@ -116,7 +125,7 @@ class FacultyOverview extends ConsumerWidget {
       onTap: () => context.go('/nominations'),
     );
     final week = Metric<int>(
-      label: 'Defences this week',
+      label: 'Defenses this week',
       value: defencesThisWeekAsync,
       format: (n) => '$n',
       onTap: () => context.go('/defences?stage=preOral'),
@@ -124,120 +133,130 @@ class FacultyOverview extends ConsumerWidget {
 
     final Widget modeSection;
     if (stillResolving) {
-      modeSection =
-          const LoadingState(label: 'Working out which positions you hold…');
+      modeSection = const LoadingState(
+        label: 'Working out which positions you hold…',
+      );
     } else if (mode == null) {
       modeSection = const SizedBox.shrink();
     } else if (mode == FacultyMode.adviser) {
-      modeSection = MetricStrip(metrics: [
-        Metric<int>(
-          label: 'Chapters awaiting your review',
-          value: chaptersAwaitingAsync,
-          format: (n) => '$n',
-          highlight: (n) => n > 0,
-          onTap: () => context.go('/advisees'),
-        ),
-        Metric<List<Thesis>>(
-          label: 'Advisees',
-          value: adviseesAsync,
-          format: (l) => '${l.length}',
-          onTap: () => context.go('/advisees'),
-        ),
-        week,
-        conforme,
-      ]);
+      modeSection = MetricStrip(
+        metrics: [
+          Metric<int>(
+            label: 'Chapters awaiting your review',
+            value: chaptersAwaitingAsync,
+            format: (n) => '$n',
+            highlight: (n) => n > 0,
+            onTap: () => context.go('/advisees'),
+          ),
+          Metric<List<Thesis>>(
+            label: 'Advisees',
+            value: adviseesAsync,
+            format: (l) => '${l.length}',
+            onTap: () => context.go('/advisees'),
+          ),
+          week,
+          conforme,
+        ],
+      );
     } else {
-      modeSection = MetricStrip(metrics: [
-        Metric<int>(
-          label: 'Title sets to review',
-          value: titleSetsAsync,
-          format: (n) => '$n',
-          highlight: (n) => n > 0,
-          onTap: () => context.go('/panels'),
-        ),
-        Metric<int>(
-          label: 'Panels',
-          value: panelCountAsync,
-          format: (n) => '$n',
-          onTap: () => context.go('/panels'),
-        ),
-        week,
-        conforme,
-      ]);
+      modeSection = MetricStrip(
+        metrics: [
+          Metric<int>(
+            label: 'Title sets to review',
+            value: titleSetsAsync,
+            format: (n) => '$n',
+            highlight: (n) => n > 0,
+            onTap: () => context.go('/panels'),
+          ),
+          Metric<int>(
+            label: 'Panels',
+            value: panelCountAsync,
+            format: (n) => '$n',
+            onTap: () => context.go('/panels'),
+          ),
+          week,
+          conforme,
+        ],
+      );
     }
 
     final Widget roster = switch (mode) {
-      FacultyMode.adviser when !stillResolving =>
-        const AdviseeRegister(limit: 5, title: 'Your advisees'),
+      FacultyMode.adviser when !stillResolving => const AdviseeRegister(
+        limit: 5,
+        title: 'Your advisees',
+      ),
       FacultyMode.panelist when !stillResolving => idsAsync.when(
-          loading: () => const LoadingState(),
-          error: (e, _) =>
-              ErrorState(error: e, message: 'Could not load your panels.'),
-          data: (ids) => PanelRegister(thesisIds: ids, reviewOnly: true),
-        ),
+        loading: () => const LoadingState(),
+        error: (e, _) =>
+            ErrorState(error: e, message: 'Could not load your panels.'),
+        data: (ids) => PanelRegister(thesisIds: ids, reviewOnly: true),
+      ),
       _ => const SizedBox.shrink(),
     };
 
     return KeyedSubtree(
       key: const Key('facultyOverview'),
-      child: DashboardBody(children: [
-        DashboardHeader(
-          office: office,
-          animateKey: mode,
-          summary: NeedsYouHeadline(
-            items: needsYouAsync,
-            suffix: 'your advisees and panels',
-          ),
-          actions: [
-            OutlinedButton.icon(
-              onPressed: () => context.go('/nominations'),
-              icon: const Icon(Icons.drafts_outlined, size: 18),
-              label: const Text('Nomination inbox'),
-            ),
-            if (mode != null)
-              ModeSwap<FacultyMode>(
-                value: mode,
-                forward: mode == FacultyMode.panelist,
-                child: FilledButton.icon(
-                  onPressed: () => context.go(
-                      mode == FacultyMode.adviser ? '/advisees' : '/panels'),
-                  icon: Icon(
-                    mode == FacultyMode.adviser
-                        ? Icons.school_outlined
-                        : Icons.forum_outlined,
-                    size: 18,
-                  ),
-                  label: Text(mode == FacultyMode.adviser
-                      ? 'My advisees'
-                      : 'My panels'),
-                ),
-              ),
-          ],
-        ),
-        ModeSwap<FacultyMode?>(
-          value: stillResolving ? null : mode,
-          forward: mode != FacultyMode.adviser,
-          child: modeSection,
-        ),
-        SplitColumns(
-          primary: [
-            NeedsYouQueue(
+      child: DashboardBody(
+        children: [
+          DashboardHeader(
+            office: office,
+            animateKey: mode,
+            summary: NeedsYouHeadline(
               items: needsYouAsync,
-              emptyTitle: 'All caught up',
-              emptyMessage: 'Nothing needs your attention right now.',
+              suffix: 'your advisees and panels',
             ),
-            ModeSwap<FacultyMode?>(
-              value: stillResolving ? null : mode,
-              forward: mode != FacultyMode.adviser,
-              child: roster,
-            ),
-          ],
-          secondary: [
-            WeekAgenda(defences: myDefencesAsync),
-            const RecentNotificationsPanel(),
-          ],
-        ),
-      ]),
+            actions: [
+              OutlinedButton.icon(
+                onPressed: () => context.go('/nominations'),
+                icon: const Icon(Icons.drafts_outlined, size: 18),
+                label: const Text('Nomination inbox'),
+              ),
+              if (mode != null)
+                ModeSwap<FacultyMode>(
+                  value: mode,
+                  forward: mode == FacultyMode.panelist,
+                  child: FilledButton.icon(
+                    onPressed: () => context.go(
+                      mode == FacultyMode.adviser ? '/advisees' : '/panels',
+                    ),
+                    icon: Icon(
+                      mode == FacultyMode.adviser
+                          ? Icons.school_outlined
+                          : Icons.forum_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      mode == FacultyMode.adviser ? 'My advisees' : 'My panels',
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          ModeSwap<FacultyMode?>(
+            value: stillResolving ? null : mode,
+            forward: mode != FacultyMode.adviser,
+            child: modeSection,
+          ),
+          SplitColumns(
+            primary: [
+              NeedsYouQueue(
+                items: needsYouAsync,
+                emptyTitle: 'No pending items',
+                emptyMessage: 'You have nothing to act on.',
+              ),
+              ModeSwap<FacultyMode?>(
+                value: stillResolving ? null : mode,
+                forward: mode != FacultyMode.adviser,
+                child: roster,
+              ),
+            ],
+            secondary: [
+              WeekAgenda(defences: myDefencesAsync),
+              const RecentNotificationsPanel(),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

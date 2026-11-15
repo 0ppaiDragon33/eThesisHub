@@ -21,6 +21,7 @@ import {
   writeBatch,
   deleteField,
   runTransaction,
+  arrayUnion,
   Timestamp,
 } from "firebase/firestore";
 
@@ -235,7 +236,7 @@ test("unauthenticated access is denied", async () => {
   await assertFails(getDoc(doc(anon, "users/student-uid")));
 });
 
-// --- Added for review round 1: coordinator self-elevation lockdown ---
+// --- coordinator self-elevation lockdown ---
 
 test("a coordinator may NOT change their own role to dean", async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -391,7 +392,7 @@ test("an audit log may NOT be overwritten via setDoc on an existing id", async (
   );
 });
 
-// --- Added for review round 2: self-invite / consumed-invite lockdown ---
+// --- self-invite / consumed-invite lockdown ---
 
 test("a coordinator may NOT create an invite for their own address", async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -528,7 +529,7 @@ test("a coordinator may NOT update their OWN account via the coordinator branch"
   );
 });
 
-// --- Added for final fix wave: inviteUnconsumed() missing-field tolerance,
+// --- inviteUnconsumed() missing-field tolerance,
 // and a positive control on invite creation ---
 
 test("a coordinator MAY create a valid invite for someone else", async () => {
@@ -600,7 +601,7 @@ test("an invite may NOT carry unknown keys", async () => {
 
 test("an invite may NOT arrive already consumed", async () => {
   // Pre-consuming would be inert today, but `consumedAt` is what makes an
-  // invite single-use — it must only ever be set by the invitee applying it.
+  // invite single-use: it must only ever be set by the invitee applying it.
   const coordinator = await asCoordinator("coord-inv3", "coordinv3@isufst.edu.ph");
   await assertFails(
     setDoc(doc(coordinator, "facultyInvites/preconsumed@isufst.edu.ph"), {
@@ -773,7 +774,7 @@ test("promotion succeeds against an invite with no consumedAt field at all", asy
   );
 });
 
-// --- Task 7: theses, nominations, faculty directory ---
+// --- Theses, nominations, faculty directory ---
 
 async function seedThesis(id, leaderUid, status, extra = {}) {
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -951,8 +952,8 @@ test("a student may NOT write a faculty directory entry", async () => {
 // THIS thesis, moving only from nominationPendingConforme. The plan's
 // original rule (verified() + onlyChanged(['status']) + target status only)
 // let any verified stranger flip any thesis forward. First prove the allow
-// path actually works for a real nominee on the right prior status — a
-// falsifiability control for the deny tests that follow — then prove a
+// path actually works for a real nominee on the right prior status: a
+// falsifiability control for the deny tests that follow, then prove a
 // stranger with no nomination doc is denied, and prove a nominee cannot
 // replay the same transition from a later stage to walk the thesis
 // backwards.
@@ -1003,7 +1004,7 @@ test("a nominee may NOT advance a thesis that is already nominationApproved", as
 });
 
 // --- Self-review follow-up: the plan's coordinator/dean branches and the
-// leader's own status-editing branch had no prior-status guard either — the
+// leader's own status-editing branch had no prior-status guard either: the
 // same class of hole Ruling 2 flagged for the nominee branch. Prove the
 // legitimate forward transition still works (falsifiability control), then
 // prove the skip/backward path is denied.
@@ -1020,7 +1021,7 @@ test("a leader MAY move their own thesis from draft to nominationPendingConforme
 // --- Fix wave: nominationsSubmittedAt, the letter date Form 1 prints,
 // stamped by the same write that flips status to nominationPendingConforme
 // (ThesisRepository.submitNominations' batch). Same request.time pin as the
-// coordinator/dean timestamps above — a leader must not be able to backdate
+// coordinator/dean timestamps above: a leader must not be able to backdate
 // the date on their own submission letter.
 
 test("a leader MAY submit nominations with a server-timestamped nominationsSubmittedAt", async () => {
@@ -1109,9 +1110,9 @@ test("a dean MAY approve a thesis that is pending dean review", async () => {
     });
   });
   await seedThesis("t-dean-ok", "leader-uid", "nominationPendingDean");
-  // Fixture updated for the adviser-acceptance check added in fix wave 1:
+  // Fixture updated for the adviser-acceptance check added later:
   // the dean's approval now verifies that the nomination named by
-  // `adviserUid` actually reads `accepted`. The assertion is unchanged — this
+  // `adviserUid` actually reads `accepted`. The assertion is unchanged: this
   // only supplies the prerequisite document a real approval always has, which
   // the original fixture omitted because nothing checked it.
   await seedNomination("t-dean-ok", "adv-1", {
@@ -1164,10 +1165,10 @@ test("a dean may NOT approve a thesis directly from draft (stage skip)", async (
 });
 
 // =====================================================================
-// Task 7, fix wave 1 — the emulator-driven security review.
+// the emulator-driven security review.
 //
 // House rule for this block: every deny test is paired with an allow test
-// that walks the SAME path with the right user, because a deny can pass for
+// that walks the same path with the right user, because a deny can pass for
 // the wrong reason (a typo'd path, a missing prerequisite document) and look
 // exactly like a rule doing its job.
 // =====================================================================
@@ -1353,7 +1354,7 @@ test("C3 attack: a leader may NOT delete a decline once nominations have gone ou
 });
 
 test("C3 attack: a leader may NOT re-create a nomination after nominations have gone out", async () => {
-  // The other half of the laundering move — and the same rule stops a leader
+  // The other half of the laundering move, and the same rule stops a leader
   // from resetting a `pending` seat that is taking too long to answer.
   await seedThesis("c3-recreate", LEADER, "nominationPendingConforme");
   await assertFails(
@@ -1408,7 +1409,7 @@ test("(a) attack: a nominee who DECLINED may not advance the thesis", async () =
 });
 
 test("(a) attack: an ex officio coordinator may not advance a thesis they were never asked about", async () => {
-  // A coordinator sits ex officio on EVERY thesis, so before the fix every
+  // A coordinator sits ex officio on every thesis, so before the fix every
   // coordinator could advance every thesis awaiting Conforme.
   await seedThesis("a-exofficio", LEADER, "nominationPendingConforme");
   await seedNomination("a-exofficio", "coord-x", {
@@ -1423,7 +1424,7 @@ test("(a) attack: an ex officio coordinator may not advance a thesis they were n
 
 // Seeds the exact roster `submitNominations` writes: one adviser, three
 // panelists, and one ex-officio seat each for the dean and the coordinator.
-// A single-nomination fixture cannot exercise `respondToNomination` honestly —
+// A single-nomination fixture cannot exercise `respondToNomination` honestly,
 // the whole point of the sibling reads is deciding whether OTHER seats are
 // still outstanding, and with one document there are none.
 async function seedFullRoster(thesisId, status = "nominationPendingConforme", overrides = {}) {
@@ -1455,10 +1456,10 @@ async function seedFullRoster(thesisId, status = "nominationPendingConforme", ov
 }
 
 // `ThesisRepository.respondToNomination`, replayed call for call:
-//   1. `_nominationIds()` — a plain LIST of the whole subcollection, outside
+//   1. `_nominationIds()`: a plain LIST of the whole subcollection, outside
 //      the transaction (Transaction.get takes no Query in cloud_firestore).
-//   2. a transaction that gets the thesis, then gets EVERY sibling nomination,
-//      then writes the caller's conforme and — if nothing is outstanding —
+//   2. a transaction that gets the thesis, then gets every sibling nomination,
+//      then writes the caller's conforme and, if nothing is outstanding,
 //      flips the thesis status.
 async function replayRespondToNomination(db, thesisId, nomineeUid, accept = true) {
   const listed = await getDocs(collection(db, `theses/${thesisId}/nominations`));
@@ -1495,12 +1496,12 @@ async function replayRespondToNomination(db, thesisId, nomineeUid, accept = true
 // --- CRITICAL C1: a nominee must be able to read their co-nominees ------
 //
 // House rule for this block, as everywhere above: every deny is paired with an
-// allow that walks the SAME path with the right user.
+// allow that walks the same path with the right user.
 
 test("C1 allow: a nominee MAY list the whole nominations subcollection of their own thesis", async () => {
   // The exact first call `respondToNomination` makes, and the one that was
   // denied. A `list` never binds {nomineeUid}, so the own-seat arm cannot
-  // carry it — only the new nominee arm can. Six documents, not one.
+  // carry it, only the new nominee arm can. Six documents, not one.
   await seedFullRoster("c1r-list");
   const nominee = asUser("fac-b", "facb@isufst.edu.ph");
   const snap = await assertSucceeds(
@@ -1564,12 +1565,12 @@ test("C1: the nominee arm does NOT reopen the unfiltered collection-group scan",
 
 test("(a) allow: respondToNomination replayed CALL FOR CALL — list, sibling gets, accept, advance", async () => {
   // This replaces a fixture that seeded ONE nomination and read only the
-  // caller's own document — a shape the client never issues, which is why it
+  // caller's own document: a shape the client never issues, which is why it
   // passed while the real call was denied throughout.
   //
   // It also still covers why the advance rule accepts 'pending' as well as
   // 'accepted': rules evaluate every write in a transaction against the state
-  // BEFORE it, so the acceptance written below is invisible to the rule
+  // before it, so the acceptance written below is invisible to the rule
   // guarding the status flip beside it.
   //
   // Every other nominee has already accepted, so this caller is the last
@@ -1582,7 +1583,7 @@ test("(a) allow: respondToNomination replayed CALL FOR CALL — list, sibling ge
   await assertSucceeds(replayRespondToNomination(nominee, "a-txn", "fac-b"));
 
   // Read back through a genuinely authorized reader (the leader), not with
-  // rules disabled — the effect has to be visible on the real read surface.
+  // rules disabled: the effect has to be visible on the real read surface.
   const t = await getDoc(doc(leader, "theses/a-txn"));
   assert.equal(t.data().status, "nominationPendingCoordinator");
   const n = await getDoc(doc(leader, "theses/a-txn/nominations/fac-b"));
@@ -1821,8 +1822,8 @@ test("(g) allow: a faculty member MAY write their own directory entry with their
 });
 
 // `upsertOwnEntry` no longer writes `college`/`specialization` when the
-// profile carries neither — which is every real faculty account, since
-// nothing in the app ever fills them — and its plain `set` became a merge, so
+// profile carries neither, which is every real faculty account, since
+// nothing in the app ever fills them, and its plain `set` became a merge, so
 // an administrator's Console values survive the next sign-in instead of being
 // nulled. That reasoning rests on a claim about the rules that has to be
 // checked rather than assumed: under `{ merge: true }`, `request.resource.data`
@@ -1897,7 +1898,7 @@ test("(g) a directory entry may NOT be deleted", async () => {
 // The entry is written by its own subject at sign-in, so an invited account
 // that has never logged in has none, and the designation arm is update-only.
 // The coordinator's designation therefore reached `users` and stopped there,
-// while the student-facing picker reads only `facultyDirectory` — so the
+// while the student-facing picker reads only `facultyDirectory`, so the
 // designation did nothing until that person happened to sign in.
 
 test("a coordinator MAY create a directory entry for a designated account",
@@ -2006,7 +2007,7 @@ test("(h) a faculty member with no nomination on the thesis still may NOT read i
 });
 
 // =====================================================================
-// END TO END — the real client sequence, replayed against the real rules.
+// END TO END: the real client sequence, replayed against the real rules.
 //
 // C1 got through because every layer was checked in isolation: each rule had
 // a test, each repository method had a test, and no test ever issued the
@@ -2015,11 +2016,11 @@ test("(h) a faculty member with no nomination on the thesis still may NOT read i
 // `withSecurityRulesDisabled` seeding of anything the client itself writes.
 //
 // COVERAGE, stated plainly. This is the client's Firestore traffic replayed
-// call for call — same paths, same field maps, same batch/transaction
-// grouping, same ordering, same actors — under the deployed
-// `firestore.rules`. What it is NOT: it does not execute the Dart in
+// call for call: same paths, same field maps, same batch/transaction
+// grouping, same ordering, same actors: under the deployed
+// `firestore.rules`. What it is not: it does not execute the Dart in
 // `ThesisRepository`, so a defect that lives purely in Dart (a wrong local
-// filter, a bad `Timestamp` conversion) is out of its reach — those remain the
+// filter, a bad `Timestamp` conversion) is out of its reach: those remain the
 // Dart suite's job. What it does catch, and what nothing else in either suite
 // could, is a client/rules disagreement: a call the Dart issues that the rules
 // refuse. That is exactly the class C1 belonged to. The two shapes are kept in
@@ -2046,7 +2047,7 @@ test("END TO END: create -> submit -> four conformes -> recommend -> approve, un
 
   // --- 2. submitNominations' batch: 6 creates + the status flip -----
   // One adviser, three panelists, and one ex-officio seat each for the dean
-  // and the coordinator — the full roster the nominate screen produces, in
+  // and the coordinator: the full roster the nominate screen produces, in
   // one commit, exactly as `submitNominations` writes it.
   const nom = (uid, position, exOfficio) => ({
     nomineeUid: uid, nomineeName: `Dr. ${uid}`, position,
@@ -2066,8 +2067,8 @@ test("END TO END: create -> submit -> four conformes -> recommend -> approve, un
   });
   await assertSucceeds(batch.commit());
 
-  // --- 3. each nominee's inbox query, then their respondToNomination --
-  // All four, in turn — the ex-officio pair are never asked. The first three
+  // --- 3. each nominee's inbox query, then their respondToNomination,
+  // All four, in turn: the ex-officio pair are never asked. The first three
   // must record without advancing; the fourth is the last outstanding seat
   // and must carry the thesis to the coordinator.
   for (const uid of ["fac-a", "fac-b", "fac-c", "fac-d"]) {
@@ -2079,7 +2080,7 @@ test("END TO END: create -> submit -> four conformes -> recommend -> approve, un
     );
     // the inbox reads the parent thesis for its title
     await assertSucceeds(getDoc(doc(db, `theses/${T}`)));
-    // respondToNomination — the list, the sibling gets, the writes
+    // respondToNomination: the list, the sibling gets, the writes
     await assertSucceeds(replayRespondToNomination(db, T, uid));
   }
 
@@ -2153,13 +2154,13 @@ test("END TO END: create -> submit -> four conformes -> recommend -> approve, un
   }
 });
 
-// --- M1b title defence ------------------------------------------------
+// --- Title defence title defence ------------------------------------------------
 
 // Memoised, unlike `asUser` above: these tests reach for the same uid more
 // than once (a deny and its allow control are often two different people, and
 // the same person recurs across tests). Re-deriving a Firestore instance for a
 // uid that has already issued a request throws "Firestore has already been
-// started and its settings can no longer be changed" — a harness error that
+// started and its settings can no longer be changed": a harness error that
 // would masquerade as a rules failure, and worse, would satisfy an
 // `assertFails` for entirely the wrong reason.
 const defenceDbs = new Map();
@@ -2190,8 +2191,8 @@ function defenceThesis(status, extra = {}) {
   };
 }
 
-// Takes the Firestore handle, NOT the context. `ctx.firestore()` may only be
-// called ONCE per context — a second call throws "Firestore has already been
+// Takes the Firestore handle, not the context. `ctx.firestore()` may only be
+// called ONCE per context: a second call throws "Firestore has already been
 // started", which `assertFails` would happily swallow as though it were a
 // rules denial, and every deny test in this block would pass for the wrong
 // reason. Observed: eight of these tests "passed their denial" that way before
@@ -2226,9 +2227,9 @@ test("M1b allow: a panel member MAY read comments during the defence", async () 
 // title-defence comment was never covered, and it is exactly the question a
 // crash raised: `isOnPanel()` accepts an `exOfficio` conformeStatus, so a
 // dean who holds that nomination seat MAY comment and mark composing. The
-// earlier permission-denied was a dean who had NO such seat — an account
+// earlier permission-denied was a dean who had NO such seat: an account
 // with no facultyDirectory entry is never returned by fetchExOfficio and so
-// is never written an ex-officio nomination — not a rule that refuses deans.
+// is never written an ex-officio nomination, not a rule that refuses deans.
 test("M1b allow: an ex-officio dean on the seat MAY post a title comment",
   async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
@@ -2258,7 +2259,7 @@ test("M1b allow: an ex-officio dean on the seat MAY post a title comment",
 
 test("M1b: a dean with NO ex-officio seat may NOT post a title comment",
   async () => {
-    // The other half — this is the case the screen mishandles, showing a
+    // The other half: this is the case the screen mishandles, showing a
     // comment box to a dean the rules will refuse. The read arm lets any
     // dean SEE the thread; the create arm requires the seat.
     await env.withSecurityRulesDisabled(async (ctx) => {
@@ -2307,8 +2308,8 @@ test("M1b allow: the leader MAY read comments once the Dean has decided", async 
 // leader read the panel's round-2 remarks live, mid-defence. Reproduced on
 // the emulator before the fix: LEAKED: [ 'ROUND TWO REMARK, MID-DEFENCE' ].
 //
-// The state under test only exists across a task seam — pending defence WITH
-// a prior decision on the record — which is why no per-task test seeded it.
+// The state under test only exists across a task seam: pending defence WITH
+// a prior decision on the record, which is why no per-task test seeded it.
 // The resubmission below is the real client batch, field deletes included.
 async function resubmitIntoRoundTwo(leader, thesisId) {
   const batch = writeBatch(leader);
@@ -2407,7 +2408,7 @@ test("M1b attack: the leader may NEVER read composing indicators", async () => {
     });
   });
   const leader = asDefenceUser("leader-uid", "leader@isufst.edu.ph");
-  // Decided, so comments are readable — composing still is not.
+  // Decided, so comments are readable: composing still is not.
   await assertSucceeds(getDocs(collection(leader, "theses/td1/titleComments")));
   await assertFails(getDocs(collection(leader, "theses/td1/titleComposing")));
   // Control on the very same path: the panel member reads it fine.
@@ -2496,6 +2497,40 @@ test("M1b attack: an outsider may read NOTHING of another group's defence", asyn
   await assertSucceeds(getDocs(collection(panel, "theses/td1/titleComposing")));
 });
 
+// The Dean's decision closes the thread: no more remarks once a title is
+// approved, or the set is returned.
+for (const [label, status] of [["approved", "titleApproved"],
+                               ["returned", "titleRejected"]]) {
+  test(`M1b attack: nobody may remark once the Dean has ${label} the set`,
+    async () => {
+      await env.withSecurityRulesDisabled((ctx) =>
+        seedDefence(ctx.firestore(), { status, decided: Timestamp.now() }));
+      const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+      await assertFails(setDoc(doc(panel, "theses/td1/titleComments/late"), {
+        candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+        authorRole: "Panel Member", body: "One more thing.",
+        createdAt: serverTimestamp(),
+      }));
+      // Nor a marker saying someone is about to.
+      await assertFails(setDoc(doc(panel, "theses/td1/titleComposing/pan-uid"), {
+        name: "Dr. Panel", role: "Panel Member", candidateTitleId: "ct1",
+        updatedAt: serverTimestamp(),
+      }));
+    });
+}
+
+test("M1b: before the decision the same panel member may remark", async () => {
+  // The control for the test above: same path, same user, same body, only
+  // `titleDecidedAt` differs.
+  await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
+  const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
+  await assertSucceeds(setDoc(doc(panel, "theses/td1/titleComments/early"), {
+    candidateTitleId: "ct1", authorUid: "pan-uid", authorName: "Dr. Panel",
+    authorRole: "Panel Member", body: "One more thing.",
+    createdAt: serverTimestamp(),
+  }));
+});
+
 test("M1b attack: a panel member may NOT plant or clear someone else's composing marker", async () => {
   await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
   const panel = asDefenceUser("pan-uid", "pan@isufst.edu.ph");
@@ -2513,14 +2548,14 @@ test("M1b attack: a panel member may NOT plant or clear someone else's composing
 });
 
 // A nominee who explicitly declined to serve still had a nomination
-// DOCUMENT sitting there — undeletable once the thesis left `draft` — and
+// DOCUMENT sitting there (undeletable once the thesis left `draft`) and
 // `isOnPanel()` used to grant access on mere existence via `hasNomination()`,
 // never checking `conformeStatus`. That let a declined nominee keep reading
 // the panel's private remarks, keep reading who was typing, and keep filing
 // comments into the official record under whatever `authorRole` they chose.
-// `declined-uid` is deliberately NOT in `panelistUids` (seedDefence only ever
+// `declined-uid` is deliberately not in `panelistUids` (seedDefence only ever
 // puts "pan-uid" there), so these assertions exercise the nomination arm of
-// `isOnPanel()` in isolation — no other arm could be granting access.
+// `isOnPanel()` in isolation, no other arm could be granting access.
 test("M1b attack: a nominee who DECLINED may NOT read comments, read composing, or comment", async () => {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
@@ -2544,7 +2579,7 @@ test("M1b attack: a nominee who DECLINED may NOT read comments, read composing, 
 });
 
 test("M1b allow: the SAME nominee, ACCEPTED instead of declined, on the same path, can do all three", async () => {
-  // The control for the test above: same thesis, same uid, same collections —
+  // The control for the test above: same thesis, same uid, same collections,
   // only `conformeStatus` changes. Proves the denial above was the
   // `conformeStatus` gate and not a wrong path or a missing prerequisite doc.
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -2568,7 +2603,7 @@ test("M1b allow: the SAME nominee, ACCEPTED instead of declined, on the same pat
   }));
 });
 
-// The two people who chair the defence — Coordinator and Dean — sit on
+// The two people who chair the defence (Coordinator and Dean) sit on
 // every panel BY OFFICE and are never asked to accept, so their
 // `conformeStatus` is permanently "exOfficio". This is the case the fix
 // could most easily break: a gate on ['accepted'] alone would lock them out.
@@ -2605,8 +2640,8 @@ test("M1b attack: a candidate title may NOT be edited after submission", async (
 // The submit batch: candidates + the thesis flip, committed together.
 //
 // This pair is the emulator probe the rule depends on. Firestore evaluates
-// every write in a batch against the state BEFORE the batch, so a candidate
-// `create` is judged while the thesis is still `nominationApproved` — which is
+// every write in a batch against the state before the batch, so a candidate
+// `create` is judged while the thesis is still `nominationApproved`, which is
 // why the create rule names the PRE-submission statuses and not
 // `titlePendingDefence`. The second test is the two-sided half: the identical
 // writes issued sequentially are denied, because by then the status has moved.
@@ -2684,7 +2719,7 @@ test("M1b attack: a candidate may NOT carry unknown keys or an empty title", asy
     round: 1, position: 0, submittedAt: serverTimestamp(),
   }));
   // A missing or nonsense position. Order is what the panel reads the set
-  // in, and a candidate that carries no position -- or a forged one -- puts
+  // in, and a candidate that carries no position (or a forged one) puts
   // the group's titles in front of the Dean in an order they did not choose.
   await assertFails(setDoc(doc(leader, "theses/tdb4/candidateTitles/nopos"), {
     titleText: "Fine", justificationPath: "p", justificationUrl: "u",
@@ -2862,7 +2897,7 @@ test("M1b attack: the Dean may NOT skip the defence entirely", async () => {
     status: "titleApproved", approvedTitleId: "ct1",
     titleDecidedBy: "dean-uid", titleDecidedAt: serverTimestamp(),
   }));
-  // Control: once the thesis IS at titlePendingDefence, the same write lands.
+  // Control: once the thesis is at titlePendingDefence, the same write lands.
   await env.withSecurityRulesDisabled((ctx) => seedDefence(ctx.firestore()));
   await assertSucceeds(updateDoc(doc(dean, "theses/td1"), {
     status: "titleApproved", approvedTitleId: "ct1",
@@ -2870,7 +2905,7 @@ test("M1b attack: the Dean may NOT skip the defence entirely", async () => {
   }));
 });
 
-// ---------- M2: documents, versions and feedback ----------
+// ---------- documents, versions and feedback ----------
 
 function docThesis(status = "titleApproved", extra = {}) {
   return {
@@ -2917,7 +2952,7 @@ test("M2: the leader, adviser, coordinator and dean read a chapter", async () =>
 test("M2: an outsider may NOT read a chapter, its versions or its feedback",
   async () => {
     // Anyone not on the thesis (leader, adviser, coordinator, dean, or panel)
-    // is denied. The panel's access comes later in M3.
+    // is denied. The panel's access comes later in defence.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await seedChapters(db);
@@ -2944,7 +2979,7 @@ test("M2: an outsider may NOT read a chapter, its versions or its feedback",
 
 test("M2: the dean reads chapter status and versions but NOT its feedback",
   async () => {
-    // Spec 2026-09-26: the Dean sits on defences and reads the manuscript,
+    // The Dean sits on defences and reads the manuscript,
     // so chapter files are open to them like the Coordinator. The adviser's
     // feedback stays between the adviser and the group.
     await env.withSecurityRulesDisabled(async (ctx) => {
@@ -3066,7 +3101,7 @@ test("M2: a chapter update may NOT smuggle in unlisted keys", async () => {
 test("M2 batch evaluation: a version and its parent bump are judged PRE-batch",
   async () => {
     // Two-sided. The batched form must be ALLOWED and the identical writes
-    // issued SEQUENTIALLY must be DENIED -- by then the parent has already
+    // issued SEQUENTIALLY must be DENIED: by then the parent has already
     // moved and the version number no longer matches. This is a probe of
     // Firestore's behaviour, not an assumption about it.
     await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
@@ -3084,7 +3119,7 @@ test("M2 batch evaluation: a version and its parent bump are judged PRE-batch",
     await assertSucceeds(batch.commit());
 
     // Sequentially: versions/2 already exists after the batch above, so
-    // this second write is an UPDATE, not a create -- it is denied by
+    // this second write is an UPDATE, not a create: it is denied by
     // `allow update, delete: if false` before the create rule's version
     // logic is ever reached. This re-tests immutability (see "a version is
     // immutable once written" below), not the version-number check itself.
@@ -3099,7 +3134,7 @@ test("M2 batch evaluation: a version and its parent bump are judged PRE-batch",
 test("M2: a version number that is not currentVersion + 1 is refused",
   async () => {
     // A fresh document id, so this is a CREATE and the create rule's
-    // version logic actually runs -- rather than being denied earlier as
+    // version logic actually runs, rather than being denied earlier as
     // an update to an existing version. A fresh thesis id too: "m2" has
     // already been advanced to currentVersion 2 by an earlier test in this
     // file (versions/2 already exists there), so this test seeds its own
@@ -3126,7 +3161,7 @@ test("M2 batch: a group's FIRST upload creates the chapter and version 1 togethe
   async () => {
     // The chapter does not exist before this batch, so a rule that reads
     // the parent's currentVersion unconditionally denies every group's
-    // first upload -- while every Dart test still passes, because
+    // first upload, while every Dart test still passes, because
     // fake_cloud_firestore does not enforce rules.
     await env.withSecurityRulesDisabled((ctx) =>
       setDoc(doc(ctx.firestore(), "theses/m2first"), docThesis()));
@@ -3147,7 +3182,7 @@ test("M2 batch: a group's FIRST upload creates the chapter and version 1 togethe
 
 test("M2: a version is immutable once written", async () => {
   // A dedicated thesis id ("m2imm"), not the shared "m2" fixture other
-  // tests in this file mutate -- so the control below cannot be thrown off
+  // tests in this file mutate, so the control below cannot be thrown off
   // by a currentVersion some earlier test already bumped.
   await env.withSecurityRulesDisabled((ctx) =>
     seedChapters(ctx.firestore(), "m2imm"));
@@ -3211,7 +3246,7 @@ test("M2: only the adviser writes feedback, in their own name, append-only",
   });
 
 test("M2: the student reads their feedback immediately", async () => {
-  // Unlike M1b defence comments, this feedback exists to be acted on.
+  // Unlike title defence defence comments, this feedback exists to be acted on.
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await seedChapters(db);
@@ -3230,7 +3265,7 @@ test("M2: an adviser lists the theses they advise, and only those",
   async () => {
     // Until now `allow list` on theses was coordinator/dean/own-leader only,
     // which is why the faculty dashboard's "My advisees" was a placeholder.
-    // M2 breaks on it: an adviser has no way to find the chapters waiting.
+    // Chapters breaks on it: an adviser has no way to find the chapters waiting.
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await setDoc(doc(db, "theses/adv1"), docThesis());
@@ -3240,14 +3275,14 @@ test("M2: an adviser lists the theses they advise, and only those",
     const adv = asDocUser("adviser-uid", "adviser@isufst.edu.ph");
     await assertSucceeds(getDocs(query(collection(adv, "theses"),
       where("adviserUid", "==", "adviser-uid"))));
-    // Control: the same adviser may NOT list the whole collection.
+    // Control: the same adviser may not list the whole collection.
     await assertFails(getDocs(collection(adv, "theses")));
   });
 
 test("M3: a panelist reads the chapters they are about to hear defended",
   async () => {
-    // M2 deferred this deliberately. Widening is one arm; the dean's split
-    // -- status but not contents -- is unchanged.
+    // Chapters deferred this deliberately. Widening is one arm; the dean's split
+    // status but not contents: is unchanged.
     await env.withSecurityRulesDisabled((ctx) => seedChapters(ctx.firestore()));
     const pan = asDocUser("pan-uid", "pan@isufst.edu.ph");
 
@@ -3280,7 +3315,7 @@ test("M3: the dean reads a chapter's versions, as the panel does",
       doc(dean, "theses/m2/documents/chapterI/versions/1"), { sizeBytes: 1 }));
   });
 
-// ---------- M3: defence scheduling ----------
+// ---------- defence scheduling ----------
 
 function defThesis(extra = {}) {
   return {
@@ -3300,7 +3335,7 @@ function defDoc(extra = {}) {
     createdBy: "coord-uid",
     // `serverTimestamp()`, not `Timestamp.now()`: the `create` rule pins
     // `createdAt == request.time`, and a client-clock `Timestamp.now()`
-    // is never exactly equal to the server's commit time -- the mismatch
+    // is never exactly equal to the server's commit time: the mismatch
     // is usually too small to see, which is what makes it dangerous: it
     // surfaces as an intermittent, load-dependent denial of the very
     // control case a test relies on to prove the deny arms are denying
@@ -3312,7 +3347,7 @@ function defDoc(extra = {}) {
 // Memoised for the same reason `asDefenceUser` above is: re-deriving a
 // Firestore instance for a uid that already issued a request throws
 // "Firestore has already been started and its settings can no longer be
-// changed" -- a harness error, not a rules denial, that `assertFails` would
+// changed": a harness error, not a rules denial, that `assertFails` would
 // otherwise swallow as though it were one.
 const m3DefDbs = new Map();
 function asDefUser(uid, email) {
@@ -3398,15 +3433,15 @@ test("M3: the panel snapshot must match the thesis at scheduling",
     await assertSucceeds(setDoc(doc(coord, "defenses/dfG"), defDoc()));
   });
 
-// ---------- Re-defence (spec 2026-09-25 §5) ----------
+// ---------- Re-defence ----------
 
 async function seedFailed({ verdict = "fail", type = "preOral",
                             redefenceOf = null } = {}) {
   // Every re-defence test writes to the same derived id,
-  // "defenses/rf1_redefence" (that's the point of the id being derived --
-  // Task 2's whole one-per-Fail guarantee rides on it). Without a clean
+  // "defenses/rf1_redefence" (that's the point of the id being derived,
+  // the whole one-per-Fail guarantee rides on it). Without a clean
   // slate, a doc a prior test's assertSucceeds created survives into the
-  // next test, which Firestore then evaluates as an update -- and no
+  // next test, which Firestore then evaluates as an update, and no
   // update arm allows it, so a later test's own assertSucceeds fails for
   // a reason that has nothing to do with what it is testing. Same pattern
   // as seedM4 above.
@@ -3540,7 +3575,7 @@ test("M3: only the adviser releases, only once, only when completed",
       { consolidatedAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
       { status: "completed" }));
-    // Not the coordinator -- §4d makes this the adviser's act.
+    // Not the coordinator: §4d makes this the adviser's act.
     await assertFails(updateDoc(doc(coord, "defenses/df1"),
       { consolidatedAt: serverTimestamp() }));
     // Control.
@@ -3581,7 +3616,7 @@ test("M3: each role lists only the defences they belong to", async () => {
 
   const leader = asDefUser("leader-uid", "leader@isufst.edu.ph");
   // Filtered on `leaderUid`, the exact field the leader arm of `allow list`
-  // checks -- not on `thesisId`. Firestore can only serve a `list` request
+  // checks, not on `thesisId`. Firestore can only serve a `list` request
   // it can PROVE is safe from the query's own constraints; a filter on an
   // unrelated field (even one that happens to correlate 1:1 with thesisId
   // here) is not enough; probed against the emulator, where such a query
@@ -3595,7 +3630,7 @@ test("M3: each role lists only the defences they belong to", async () => {
   await assertSucceeds(getDocs(collection(coord, "defenses")));
 });
 
-// ---------- M3: defence comments ----------
+// ---------- defence comments ----------
 
 test("M3: comments may be written ONLY while the defence is in progress",
   async () => {
@@ -3611,7 +3646,7 @@ test("M3: comments may be written ONLY while the defence is in progress",
       createdAt: serverTimestamp(),
     };
 
-    // scheduled -- not open yet.
+    // scheduled, not open yet.
     await assertFails(
       setDoc(doc(pan, "defenses/df1/comments/c1"), remark));
 
@@ -3623,7 +3658,7 @@ test("M3: comments may be written ONLY while the defence is in progress",
 
     await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
       { status: "completed" }));
-    // completed -- the log is frozen.
+    // completed: the log is frozen.
     await assertFails(
       setDoc(doc(pan, "defenses/df1/comments/c2"), remark));
   });
@@ -3650,7 +3685,7 @@ test("M3: the group may NOT read comments until the adviser releases them",
 
     await assertSucceeds(updateDoc(doc(adv, "defenses/df1"),
       { consolidatedAt: serverTimestamp() }));
-    // Released -- now the group reads it.
+    // Released: now the group reads it.
     await assertSucceeds(getDoc(doc(leader, "defenses/df1/comments/c1")));
   });
 
@@ -3692,7 +3727,7 @@ test("M3: a comment is filed in its author's own name, and never edited",
   });
 
 
-// ---------- M3: the open window, cancel, and editing the schedule ----------
+// ---------- the open window, cancel, and editing the schedule ----------
 
 /// Minutes from now, as a Firestore Timestamp.
 function inMinutes(m) {
@@ -3713,7 +3748,7 @@ test("M3: a defence may NOT be opened before its window", async () => {
 test("M3: a defence opens inside the 30-minute grace window", async () => {
   // The control for the test above, and the pin on the boundary: 31 minutes
   // out is refused, 29 is allowed. The same 30 lives in defence.dart as
-  // `defenceOpenGrace`, which the rules cannot import -- if the two drift,
+  // `defenceOpenGrace`, which the rules cannot import, if the two drift,
   // one of these two tests fails.
   await env.withSecurityRulesDisabled((ctx) =>
     seedM3Defence(ctx.firestore(), { scheduledAt: inMinutes(29) }));
@@ -3735,7 +3770,7 @@ test("M3: a scheduled defence may be cancelled, an open one may not",
     // Control: the coordinator, same write.
     await assertSucceeds(updateDoc(doc(coord, "defenses/df1"),
       { status: "cancelled" }));
-    // Cancelled is terminal -- it cannot be walked back into the lifecycle.
+    // Cancelled is terminal: it cannot be walked back into the lifecycle.
     await assertFails(updateDoc(doc(coord, "defenses/df1"),
       { status: "inProgress" }));
   });
@@ -3786,7 +3821,7 @@ test("M3: the schedule may be edited while scheduled, and never after",
 //
 // The overview donut and the All-theses table both need an UNFILTERED list
 // of every thesis. The existing arm reads no field off `resource` for these
-// two roles, so unlike the M3 defence listing there is no filter the query
+// two roles, so unlike the defence defence listing there is no filter the query
 // must carry. That is a claim about rules, and fake_cloud_firestore enforces
 // none, so it can only be proven here.
 
@@ -3847,7 +3882,7 @@ test("a student may NOT list every thesis", async () => {
   await assertFails(getDocs(collection(s, "theses")));
 });
 
-// ...and the narrow query a student IS allowed, proving the denial above is
+// ...and the narrow query a student is allowed, proving the denial above is
 // about the missing filter rather than about the student being blocked from
 // `theses` outright.
 test("a student may still list their own thesis", async () => {
@@ -3985,7 +4020,7 @@ test("an ordinary sign-in upsert still succeeds on an entry that carries designa
 
 test("a faculty member may NOT change their own designation in the directory",
   async () => {
-    // Widening hasOnly is exactly what would open this. D27's whole point.
+    // Widening hasOnly is exactly what would open this. The whole point.
     await seedRole("dir-self-uid", "faculty");
     await seedDirectory("dir-self-uid", { nominableAsAdviser: false });
 
@@ -4130,7 +4165,7 @@ test("a nomination naming an adviser-only nominee as PANELIST is refused",
       }));
   });
 
-// The control: the same nominee, the position they ARE designated for.
+// The control: the same nominee, the position they are designated for.
 test("the same nominee succeeds as ADVISER", async () => {
   await seedRole("nom-leader2-uid", "student");
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -4179,7 +4214,7 @@ test("an account with NO designation fields is still nominable", async () => {
 });
 
 test("an EX-OFFICIO nomination ignores designation entirely", async () => {
-  // Spec D32: that seat comes from the office, not from a list.
+  // That seat comes from the office, not from a list.
   await seedRole("nom-leader4-uid", "student");
   await env.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), "users/nom-dean-uid"), {
@@ -4205,9 +4240,9 @@ test("an EX-OFFICIO nomination ignores designation entirely", async () => {
     }));
 });
 
-// ---------- M4: evaluations ----------
+// ---------- evaluations ----------
 
-// The full eleven, all at their weight -- a perfect sheet totalling 100.
+// The full eleven, all at their weight: a perfect sheet totalling 100.
 function fullScores(extra = {}) {
   return {
     title: 5, introduction: 5, materialsAndMethods: 10, result: 10,
@@ -4230,15 +4265,20 @@ function evalDoc(extra = {}) {
   };
 }
 
-// Each M4 test seeds through here, and each needs a truly fresh
-// evaluations subcollection: unlike M3's `defenses/df1`, which every test
+// Each evaluation test seeds through here, and each needs a truly fresh
+// evaluations subcollection: unlike defence's `defenses/df1`, which every test
 // resets by fully overwriting the parent doc, an evaluation is keyed by
 // evaluatorUid and reused as "pan-uid" across tests. Without a clean
 // slate, a doc a prior test created survives into the next test's
-// "create" attempt, which Firestore then evaluates as an "update" --
+// "create" attempt, which Firestore then evaluates as an "update",
 // and the update rule correctly (if confusingly, for a test relying on a
 // fresh create) denies it, since evalDoc() regenerates submittedAt on
 // every call and the update arm pins it to the stored value.
+// Every grader recorded: both panelists in defDoc, the Coordinator and the
+// Dean. The release rule reads this list (it cannot count evaluations), so
+// a release that is meant to succeed has to start from here.
+const ALL_SUBMITTED = ["pan-uid", "pan2-uid", "coord-uid", "dean-uid"];
+
 async function seedM4(extra = {}) {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -4260,7 +4300,7 @@ test("M4: a panelist writes their own evaluation", async () => {
     evalDoc()));
 });
 
-// D37, and the whole reason it is a rule and not a hidden button: the
+// This is the whole reason it is a rule and not a hidden button: the
 // adviser has spent months on this thesis and cannot mark it at arm's
 // length. They are not in panelUids, so isPanelistHere() refuses them.
 test("M4 attack: the ADVISER may NOT write an evaluation", async () => {
@@ -4324,6 +4364,19 @@ test("grading: before release the Coordinator reads only their own sheet",
     await assertFails(getDoc(doc(coord, "defenses/m4/evaluations/pan-uid")));
   });
 
+test("grading: a total of 75 or more cannot be rated Fail", async () => {
+  await seedM4();
+  const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  // 100 and exactly 75 are Pass-only; 74 is Fail-only (the test below).
+  await assertFails(setDoc(doc(pan, "defenses/m4/evaluations/pan-uid"),
+    evalDoc({ rating: "fail" })));
+  await assertFails(setDoc(doc(pan, "defenses/m4/evaluations/pan-uid"),
+    evalDoc({ scores: fullScores({ personality: 0, alertness: 10 }),
+              rating: "fail" })));
+  await assertSucceeds(setDoc(doc(pan, "defenses/m4/evaluations/pan-uid"),
+    evalDoc({ rating: "pass" })));
+});
+
 test("grading: Pass needs a total of at least 75", async () => {
   await seedM4();
   const pan = asDefUser("pan-uid", "pan@isufst.edu.ph");
@@ -4362,14 +4415,14 @@ test("M4: each score is bounded by its own criterion's weight",
       discussion: 10, conclusion: 5, recommendation: 2, references: 3,
       preciseness: 15, alertness: 25, personality: 10,
     };
-    // EVERY case here must run as a CREATE -- the positive one and both
+    // every case here must run as a CREATE: the positive one and both
     // negative ones alike. evalDoc() regenerates submittedAt via
     // serverTimestamp() on every call, and the update arm pins
     // submittedAt to its stored value, so a negative case left to run as
     // an update against the document the positive case just wrote is
     // denied by that (unrelated) submittedAt mismatch whatever the bound
-    // says. Written that way, this test passed with `title <= 50` --
-    // exactly the D35 mistake it exists to catch -- while proving
+    // says. Written that way, this test passed with `title <= 50`,
+    // exactly the mistake it exists to catch, while proving
     // nothing at all about the weights. Hence a fresh delete before each
     // of the three assertions, not one per key.
     const fresh = () => env.withSecurityRulesDisabled((ctx) => deleteDoc(
@@ -4399,7 +4452,7 @@ test("M4 attack: a total that does not equal the scores is denied",
       { ...evalDoc(), total: 100 - 1 }));
   });
 
-// D45: a half-scored sheet counting toward the seal would be worse than
+// A half-scored sheet counting toward the seal would be worse than
 // no sheet, so it is never written at all.
 test("M4 attack: a sheet missing a criterion is denied", async () => {
   await seedM4();
@@ -4472,7 +4525,7 @@ test("M4: a live defence may be scored", async () => {
     evalDoc()));
 });
 
-// D39: a panelist who can see two colleagues at 78 and 81 before marking
+// A panelist who can see two colleagues at 78 and 81 before marking
 // is anchored, and §8b's deliberation is worth less if the numbers
 // converged before anyone spoke.
 test("M4: before release, a panelist reads their own and NOT a colleague's",
@@ -4492,8 +4545,8 @@ test("M4: before release, a panelist reads their own and NOT a colleague's",
   });
 
 // Ruled during execution. The adviser needs the SUBMITTED COUNT before
-// release -- it is printed on the release button so releasing at 2 of 3
-// is a visible choice -- and a Firestore `list` returns documents, so
+// release: it is printed on the release button so releasing at 2 of 3
+// is a visible choice, and a Firestore `list` returns documents, so
 // there is no query yielding "how many" without "what". The seal's real
 // purpose is anti-ANCHORING between panelists, and the adviser cannot
 // score at all, so their reading early anchors no score that exists.
@@ -4510,8 +4563,8 @@ test("M4: the adviser MAY read evaluations before release",
   });
 
 // The LIST, not the get, is what the release flow actually depends on:
-// defence_grades_screen.dart opens defenceEvaluationsProvider -- a
-// collection snapshots(), i.e. a list -- for the adviser BEFORE release,
+// defence_grades_screen.dart opens defenceEvaluationsProvider: a
+// collection snapshots(), i.e. a list: for the adviser before release,
 // to print the submitted count on the release button. If this were
 // denied the adviser would see an error where the count belongs and
 // could never reach the release control, breaking the chain at the one
@@ -4549,7 +4602,7 @@ test("M4: after release the panel, adviser, coordinator and dean read all",
     }
   });
 
-// D47: the numbers are unreachable for the group, not merely unrendered.
+// The numbers are unreachable for the group, not merely unrendered.
 // §11b routes the grading sheet to the subject professor on paper.
 test("M4 attack: the LEADER may not read evaluations, even after release",
   async () => {
@@ -4563,7 +4616,7 @@ test("M4 attack: the LEADER may not read evaluations, even after release",
     await assertFails(getDocs(collection(db, "defenses/m4/evaluations")));
   });
 
-// D44: before the seal it is a draft, after it it is the record.
+// Before the seal it is a draft, after it it is the record.
 test("M4: a panelist edits their sheet until release, then cannot",
   async () => {
     await seedM4();
@@ -4597,7 +4650,7 @@ test("M4 attack: an edit may not rewrite when it was first submitted",
   });
 
 // The record is evidence. Same reasoning as the defence itself, and as
-// M3's append-only comments.
+// defence's append-only comments.
 test("M4 attack: nobody may delete an evaluation", async () => {
   await seedM4();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -4611,10 +4664,10 @@ test("M4 attack: nobody may delete an evaluation", async () => {
   }
 });
 
-// ---------- M4: release and verdict ----------
+// ---------- release and verdict ----------
 
 test("M4: the adviser releases the evaluations, once", async () => {
-  await seedM4();
+  await seedM4({ submittedUids: ALL_SUBMITTED });
   const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
   await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
     { evaluationsReleasedAt: serverTimestamp() }));
@@ -4623,7 +4676,7 @@ test("M4: the adviser releases the evaluations, once", async () => {
 });
 
 test("M4 attack: nobody but the adviser releases", async () => {
-  await seedM4();
+  await seedM4({ submittedUids: ALL_SUBMITTED });
   for (const uid of ["pan-uid", "coord-uid", "dean-uid", "leader-uid"]) {
     await assertFails(updateDoc(
       doc(asDefUser(uid, `${uid}@isufst.edu.ph`), "defenses/m4"),
@@ -4633,7 +4686,7 @@ test("M4 attack: nobody but the adviser releases", async () => {
 
 test("M4: a defence still running may not have its grades released",
   async () => {
-    await seedM4({ status: "inProgress" });
+    await seedM4({ status: "inProgress", submittedUids: ALL_SUBMITTED });
     await assertFails(updateDoc(
       doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"),
           "defenses/m4"),
@@ -4641,15 +4694,15 @@ test("M4: a defence still running may not have its grades released",
   });
 
 // The affectedKeys guard is what stops either new arm doubling as a
-// status transition -- the same discipline the four coordinator arms use.
+// status transition: the same discipline the four coordinator arms use.
 test("M4 attack: a release may not smuggle a status change", async () => {
-  await seedM4();
+  await seedM4({ submittedUids: ALL_SUBMITTED });
   await assertFails(updateDoc(
     doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
     { evaluationsReleasedAt: serverTimestamp(), status: "cancelled" }));
 });
 
-// D43. §8b has the panel deliberate OVER the final grades, so they must
+// §8b has the panel deliberate OVER the final grades, so they must
 // be able to see them first: release precedes the verdict, always.
 test("M4: no verdict may be recorded before release", async () => {
   await seedM4();
@@ -4708,7 +4761,7 @@ test("M4 attack: a partial verdict write is denied", async () => {
 
 // Consolidation and release are separate gates on separate things.
 test("M4: releasing the grades does not release the comments", async () => {
-  await seedM4();
+  await seedM4({ submittedUids: ALL_SUBMITTED });
   const db = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
   await assertSucceeds(updateDoc(doc(db, "defenses/m4"),
     { evaluationsReleasedAt: serverTimestamp() }));
@@ -4734,7 +4787,164 @@ test("M4 attack: a create may not pre-set the seal or the verdict",
       defDoc({ panelVerdict: "pass" })));
   });
 
-// ---------- M5a: the manuscript upload ----------
+
+// ---------- Grade release is locked on submittedUids ----------
+//
+// Firestore rules cannot count the evaluations, so each grader records
+// their own uid on the defence in the same batch as their sheet, and the
+// release arm reads that list.
+
+const RELEASE = { evaluationsReleasedAt: serverTimestamp() };
+
+// The batch the app sends: the sheet, and the uid on the defence.
+function submitBatch(db, uid) {
+  const b = writeBatch(db);
+  b.set(doc(db, `defenses/m4/evaluations/${uid}`), evalDoc());
+  b.update(doc(db, "defenses/m4"), { submittedUids: arrayUnion(uid) });
+  return b.commit();
+}
+
+test("release lock: the adviser cannot release with nobody recorded",
+  async () => {
+    await seedM4();
+    await assertFails(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+      RELEASE));
+  });
+
+test("release lock: every panelist short is refused, one at a time",
+  async () => {
+    const adviser = asDefUser("adviser-uid", "adviser@isufst.edu.ph");
+    for (const missing of ALL_SUBMITTED) {
+      await seedM4({
+        submittedUids: ALL_SUBMITTED.filter((u) => u !== missing),
+      });
+      await assertFails(updateDoc(doc(adviser, "defenses/m4"), RELEASE));
+    }
+  });
+
+// The case a bare count cannot see: four uids is the required four, but
+// pan2-uid never graded.
+test("release lock: the right COUNT with a panelist missing is refused",
+  async () => {
+    await seedM4({
+      submittedUids: ["pan-uid", "coord-uid", "dean-uid", "stranger-uid"],
+    });
+    await assertFails(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+      RELEASE));
+  });
+
+test("release lock: with every grader recorded the adviser releases",
+  async () => {
+    await seedM4({ submittedUids: ALL_SUBMITTED });
+    await assertSucceeds(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+      RELEASE));
+  });
+
+test("submit record: each grader adds their own uid with their sheet",
+  async () => {
+    await seedM4();
+    for (const uid of ["pan-uid", "pan2-uid", "coord-uid", "dean-uid"]) {
+      await assertSucceeds(submitBatch(
+        asDefUser(uid, `${uid}@isufst.edu.ph`), uid));
+    }
+    // And that is enough to unlock the release.
+    await assertSucceeds(updateDoc(
+      doc(asDefUser("adviser-uid", "adviser@isufst.edu.ph"), "defenses/m4"),
+      RELEASE));
+  });
+
+test("submit record: a uid cannot be recorded without its sheet",
+  async () => {
+    await seedM4();
+    await assertFails(updateDoc(
+      doc(asDefUser("pan-uid", "pan@isufst.edu.ph"), "defenses/m4"),
+      { submittedUids: arrayUnion("pan-uid") }));
+  });
+
+test("submit record attack: nobody records someone else's uid", async () => {
+  await seedM4();
+  const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  const b = writeBatch(db);
+  b.set(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+  b.update(doc(db, "defenses/m4"), { submittedUids: arrayUnion("pan2-uid") });
+  await assertFails(b.commit());
+});
+
+test("submit record attack: nobody records two uids at once", async () => {
+  await seedM4();
+  const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  const b = writeBatch(db);
+  b.set(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+  b.update(doc(db, "defenses/m4"),
+    { submittedUids: arrayUnion("pan-uid", "pan2-uid") });
+  await assertFails(b.commit());
+});
+
+test("submit record attack: the list cannot be replaced or shrunk",
+  async () => {
+    await seedM4({ submittedUids: ["pan2-uid", "coord-uid"] });
+    const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+    const b = writeBatch(db);
+    b.set(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+    b.update(doc(db, "defenses/m4"), { submittedUids: ["pan-uid"] });
+    await assertFails(b.commit());
+  });
+
+test("submit record attack: only graders record -- not the adviser, the "
+  + "group, or a stranger", async () => {
+    for (const uid of ["adviser-uid", "leader-uid", "stranger-uid"]) {
+      await seedM4();
+      const db = asDefUser(uid, `${uid}@isufst.edu.ph`);
+      const b = writeBatch(db);
+      b.set(doc(db, `defenses/m4/evaluations/${uid}`), evalDoc());
+      b.update(doc(db, "defenses/m4"), { submittedUids: arrayUnion(uid) });
+      await assertFails(b.commit());
+    }
+  });
+
+test("submit record attack: it cannot smuggle another field", async () => {
+  await seedM4();
+  const db = asDefUser("pan-uid", "pan@isufst.edu.ph");
+  for (const extra of [
+    { status: "cancelled" },
+    { evaluationsReleasedAt: serverTimestamp() },
+    { panelVerdict: "pass" },
+  ]) {
+    const b = writeBatch(db);
+    b.set(doc(db, "defenses/m4/evaluations/pan-uid"), evalDoc());
+    b.update(doc(db, "defenses/m4"),
+      { submittedUids: arrayUnion("pan-uid"), ...extra });
+    await assertFails(b.commit());
+  }
+});
+
+test("submit record: closed once released, and not before it is under way",
+  async () => {
+    await seedM4({ evaluationsReleasedAt: Timestamp.now() });
+    await assertFails(submitBatch(
+      asDefUser("pan-uid", "pan@isufst.edu.ph"), "pan-uid"));
+    await seedM4({ status: "scheduled" });
+    await assertFails(submitBatch(
+      asDefUser("pan-uid", "pan@isufst.edu.ph"), "pan-uid"));
+  });
+
+test("submit record attack: a defence cannot be created with the list "
+  + "pre-filled", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "theses/dt1"), defThesis());
+      await setDoc(doc(db, "users/coord-uid"),
+        { role: "coordinator", active: true });
+    });
+    await assertFails(setDoc(
+      doc(asDefUser("coord-uid", "coord@isufst.edu.ph"), "defenses/m4d"),
+      defDoc({ submittedUids: ALL_SUBMITTED })));
+  });
+
+// ---------- the manuscript upload ----------
 
 function m5Thesis(extra = {}) {
   return {
@@ -4808,7 +5018,7 @@ test("M5a attack: an empty abstract is denied", async () => {
     { ...manuscript(), manuscriptAbstract: "" }));
 });
 
-// The upload must not double as an edit of anything else -- the same
+// The upload must not double as an edit of anything else: the same
 // affectedKeys discipline every other arm in this file uses.
 test("M5a attack: the upload may not smuggle a title or status change",
   async () => {
@@ -4828,7 +5038,7 @@ test("M5a attack: the upload timestamp cannot be backdated", async () => {
         new Date("2020-01-01")) }));
 });
 
-// ---------- M5a: the archived status ----------
+// ---------- the archived status ----------
 
 test("M5a: the coordinator moves a thesis to archived", async () => {
   await seedM5();
@@ -4849,7 +5059,7 @@ test("M5a attack: nobody but the coordinator archives", async () => {
 test("M5a attack: archiving is forward-only and once", async () => {
   await seedM5({ status: "archived" });
   const db = asM5("coord-uid", "coord@isufst.edu.ph");
-  // Already archived -- no second archiving.
+  // Already archived, no second archiving.
   await assertFails(updateDoc(doc(db, "theses/mt1"),
     { status: "archived" }));
   // ...and no route to ANY other status either. The one exception is the
@@ -4861,9 +5071,9 @@ test("M5a attack: archiving is forward-only and once", async () => {
   }
 });
 
-// ---------- M5a: retraction restores the thesis ----------
+// ---------- retraction restores the thesis ----------
 //
-// D57 says a thesis published in error must be RETRACTABLE. Deleting
+// The spec says a thesis published in error must be RETRACTABLE. Deleting
 // archive/{thesisId} on its own does not retract it, it strands it: the
 // thesis keeps 'archived', which the archive arm above refuses to leave and
 // which the manuscript arm refuses to accept. This arm is the inverse of the
@@ -4880,9 +5090,9 @@ test("M5a attack: nobody but the coordinator retracts", async () => {
   await seedM5({ status: "archived" });
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    // Real profiles with real, WRONG roles -- without them isCoordinator()'s
+    // Real profiles with real, WRONG roles: without them isCoordinator()'s
     // get() throws and the rule fails closed, which would pass this test for
-    // the wrong reason (see the Task 4 finding on exactly that).
+    // the wrong reason.
     await setDoc(doc(db, "users/leader-uid"), { role: "student", active: true });
     await setDoc(doc(db, "users/adviser-uid"), { role: "faculty", active: true });
     await setDoc(doc(db, "users/pan-uid"), { role: "faculty", active: true });
@@ -4898,7 +5108,7 @@ test("M5a attack: retraction reaches titleApproved from 'archived' ONLY",
   async () => {
     const db = asM5("coord-uid", "coord@isufst.edu.ph");
     // Every status that is not 'archived' must not be able to ride this
-    // arm into titleApproved -- otherwise it is a general-purpose approval
+    // arm into titleApproved, otherwise it is a general-purpose approval
     // shortcut wearing a retraction's clothes.
     for (const status of ["draft", "nominationPendingConforme",
                           "nominationPendingCoordinator",
@@ -4929,7 +5139,7 @@ test("M5a attack: a thesis still in draft cannot be archived", async () => {
     { status: "archived" }));
 });
 
-// ---------- M5a: the archive ----------
+// ---------- the archive ----------
 
 function archiveDoc(extra = {}) {
   return {
@@ -5012,7 +5222,7 @@ test("M5a: a thesis not at titleApproved may NOT be published", async () => {
     archiveDoc()));
 });
 
-// The whole college reads it -- that is the point of the collection.
+// The whole college reads it: that is the point of the collection.
 test("M5a: everyone signed in reads the archive", async () => {
   await seedArchivable();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -5046,7 +5256,7 @@ test("M5a attack: nobody but the coordinator publishes", async () => {
   }
 });
 
-// D52 -- the gate. A failed thesis cannot be published even by a
+// The gate. A failed thesis cannot be published even by a
 // coordinator who clicks the wrong row.
 test("M5a attack: a FAILED thesis cannot be published", async () => {
   await seedArchivable({ verdict: "fail" });
@@ -5086,9 +5296,9 @@ test("M5a attack: the archiver must name themselves", async () => {
     archiveDoc({ archivedBy: "leader-uid" })));
 });
 
-// The stamp is pinned to request.time, so a client-chosen one -- the ONLY
+// The stamp is pinned to request.time, so a client-chosen one: the only
 // way to backdate or forward-date a publication, and the one clause on the
-// create rule that had no adversarial test -- must be refused. Timestamp.now()
+// create rule that had no adversarial test: must be refused. Timestamp.now()
 // is the client's clock; serverTimestamp() (used everywhere else here) is
 // the value the rule actually demands.
 test("M5a attack: the archive stamp cannot be client-supplied", async () => {
@@ -5098,7 +5308,7 @@ test("M5a attack: the archive stamp cannot be client-supplied", async () => {
     archiveDoc({ archivedAt: Timestamp.now() })));
 });
 
-// D57 -- a publication, not an audit record: a typo in a permanent public
+// A publication, not an audit record: a typo in a permanent public
 // title has to be fixable, and a wrongly published thesis retractable.
 test("M5a: the coordinator corrects display metadata", async () => {
   await seedArchivable();
@@ -5141,7 +5351,7 @@ test("M5a: the coordinator retracts, and nobody else does", async () => {
     doc(asM5("coord-uid", "coord@isufst.edu.ph"), "archive/mt1")));
 });
 
-// --- Task 3: notifications -- owner-only ---
+// --- Notifications: owner-only ---
 
 function notifDoc(overrides = {}) {
   return {
@@ -5225,7 +5435,7 @@ test("notifications: an update may only flip read to true", async () => {
   });
   await assertFails(updateDoc(doc(owner, "notifications/notif-upd/items/a"),
     { read: false }));
-  // The control — marking read is allowed.
+  // The control: marking read is allowed.
   await env.withSecurityRulesDisabled(async (ctx) => {
     await updateDoc(doc(ctx.firestore(), "notifications/notif-upd/items/a"),
       { read: false });
@@ -5251,7 +5461,7 @@ test("notifications: a deactivated account may not write to its own feed",
 // Account deactivation (users.active), enforced at the rules layer.
 //
 // active:false revokes every write and every position/role-based read, while
-// the account may STILL read its own users doc — otherwise the client cannot
+// the account may STILL read its own users doc, otherwise the client cannot
 // discover it is deactivated to show the DeactivatedScreen. In firestore.rules
 // this is isActive(), folded into every named authorization helper; the
 // self-read arm (users get) uses bare signedIn() and is deliberately left
@@ -5268,7 +5478,7 @@ async function seedDeactivated(uid, role, email) {
   });
 }
 
-// isCoordinator() seam — the case that matters most: a deactivated
+// isCoordinator() seam: the case that matters most: a deactivated
 // coordinator must not be able to administer accounts, least of all
 // reactivate themselves.
 test("active: a deactivated coordinator may NOT administer another account", async () => {
@@ -5280,18 +5490,18 @@ test("active: a deactivated coordinator may NOT administer another account", asy
   await assertFails(updateDoc(doc(coord, "users/target-off"), { active: true }));
 });
 
-// isDean() seam — privileged read revoked too.
+// isDean() seam: privileged read revoked too.
 test("active: a deactivated dean may NOT list accounts", async () => {
   await seedDeactivated("dean-off", "dean", "deanoff@isufst.edu.ph");
   const dean = asUser("dean-off", "deanoff@isufst.edu.ph");
   await assertFails(getDocs(collection(dean, "users")));
 });
 
-// mayCreateNomination() — the signedIn()-based leader write the naive
+// mayCreateNomination(): the signedIn()-based leader write the naive
 // "verified() only" plan would have missed.
 // Mirrors the known-passing C2 "a faculty leader MAY nominate a DIFFERENT
-// faculty member" (fac-b nominee) so the ONLY thing that can deny the write
-// is the leader's active:false — isolating the mayCreateNomination() seam.
+// faculty member" (fac-b nominee) so the only thing that can deny the write
+// is the leader's active:false: isolating the mayCreateNomination() seam.
 test("active: a deactivated leader may NOT create a nomination", async () => {
   await seedDeactivated("flead-off", "faculty", "fleadoff@isufst.edu.ph");
   await seedThesis("t-off", "flead-off", "draft");
@@ -5301,7 +5511,7 @@ test("active: a deactivated leader may NOT create a nomination", async () => {
   );
 });
 
-// isThesisLeader() seam — another signedIn()-based leader write.
+// isThesisLeader() seam: another signedIn()-based leader write.
 test("active: a deactivated leader may NOT edit their own thesis", async () => {
   await seedDeactivated("lead-off2", "student", "leadoff2@isufst.edu.ph");
   await seedThesis("t-off2", "lead-off2", "draft");
@@ -5334,7 +5544,7 @@ test("active CONTROL: an ACTIVE coordinator still administers accounts", async (
 // request.auth.uid and friends) still open, so a deactivated leader could
 // LIST their own theses while every get and every write was refused.
 // activeUser() closes that asymmetry. The self-read control below is the
-// line that must NOT move.
+// line that must not move.
 test("active: a deactivated leader may NOT list their own theses", async () => {
   await seedDeactivated("lead-off3", "student", "leadoff3@isufst.edu.ph");
   await seedThesis("t-off3", "lead-off3", "draft");
@@ -5363,13 +5573,13 @@ test("active: a deactivated account may NOT read the archive", async () => {
 // Stalled-thesis recovery. A declined Conforme is terminal without this:
 // the nominee cannot un-decline, and the leader is frozen out the moment
 // the thesis leaves 'draft'. A coordinator returns it to draft so the group
-// can re-nominate. The arm authorises the transition, not the diagnosis --
+// can re-nominate. The arm authorises the transition, not the diagnosis,
 // rules have no queries, so "is it actually stalled" is unknowable here.
 //
 // These use `asDefenceUser` (memoised) with uids of their own rather than
 // `asUser` with coord-x/fac-a. Both of those have already issued requests
 // earlier in this file, and re-deriving a Firestore instance for such a uid
-// throws a HARNESS error -- which an assertFails swallows as a pass. The
+// throws a HARNESS error, which an assertFails swallows as a pass. The
 // allow case below is what caught it: the denies all "passed" while proving
 // nothing. See the note above `asDefenceUser`.
 
@@ -5804,7 +6014,7 @@ test("deleting a folder moves its copy and file out and removes it, in one batch
   await assertSucceeds(batch.commit());
 });
 
-// ---------- Change of adviser / title (spec 2026-09-25) ----------
+// ---------- Change of adviser / title ----------
 
 function crThesis(extra = {}) {
   return {
@@ -5889,7 +6099,7 @@ test("CR: create must start every sign-off pending at the first stage",
 test("CR: no second open request of the same type", async () => {
   // seedCr() alone leaves reqExtra at its default (null), which skips
   // seeding the request doc entirely (see seedCr's `if (reqExtra !== null)`
-  // guard) -- seedCr({}) is what actually seeds an open request at
+  // guard): seedCr({}) is what actually seeds an open request at
   // pendingAdvisers, matching every other test in this block.
   await seedCr({});
   const leader = asCrUser("cr-leader", "cr-leader@isufst.edu.ph");
@@ -5998,8 +6208,8 @@ test("CR: a sign-off changes only its own role", async () => {
     "signoffs.coordinator.status": "accepted" }));
 });
 
-// --- Fix round 1: the dean's accept-to-`approved` path must be paired with
-// the SAME commit's thesis-field write (getAfter, symmetric with the
+// --- the dean's accept-to-`approved` path must be paired with
+// the same commit's thesis-field write (getAfter, symmetric with the
 // thesis-side arm), and the title-type request had no test coverage. ---
 
 function titleReq(extra = {}) {
@@ -6042,7 +6252,7 @@ test("CR adviser-type: the dean's request-only approval (no thesis write) is den
       coordinator: { status: "accepted" }, dean: { status: "pending" } } });
     const dean = asCrUser("cr-dean", "cr-dean@isufst.edu.ph");
     // Same as the earlier Dean-batch test's premise, but this time approving
-    // the request WITHOUT touching the thesis at all -- must be denied, so
+    // the request WITHOUT touching the thesis at all: must be denied, so
     // the thesis can never be left stale behind an "approved" request.
     await assertFails(updateDoc(doc(dean, crPath), {
       "signoffs.dean.status": "accepted",
@@ -6075,7 +6285,7 @@ test("CR title: the full flow reaches the dean; either half of the batch alone i
       { workingTitle: titleReq().newTitle,
         approvedTitleText: titleReq().newTitle }));
 
-    // A batch that changes workingTitle but NOT approvedTitleText is denied:
+    // A batch that changes workingTitle but not approvedTitleText is denied:
     // the approved-title resolvers read approvedTitleText, so a change that
     // skipped it would leave the archive showing the stale title.
     const halfBatch = writeBatch(dean);
@@ -6086,7 +6296,7 @@ test("CR title: the full flow reaches the dean; either half of the batch alone i
       { workingTitle: titleReq().newTitle });
     await assertFails(halfBatch.commit());
 
-    // Both together, in one batch, succeed — workingTitle AND approvedTitleText.
+    // Both together, in one batch, succeed: workingTitle AND approvedTitleText.
     const batch = writeBatch(dean);
     batch.update(doc(dean, crTitlePath), {
       "signoffs.dean.status": "accepted",
@@ -6097,9 +6307,9 @@ test("CR title: the full flow reaches the dean; either half of the batch alone i
     await assertSucceeds(batch.commit());
   });
 
-// --- Fix round 2, Fix 1: the faculty inbox's real collection-group query,
+// --- the faculty inbox's real collection-group query,
 // filtered by the denormalized `awaitingUids` field, must be ALLOWED, while
-// an unfiltered scan across every thesis's requests must stay DENIED --
+// an unfiltered scan across every thesis's requests must stay DENIED,
 // modeled on the nominations collection-group tests above ("(c)").
 
 test("CR awaitingUids: allow -- a faculty member's arrayContains query for " +
@@ -6125,7 +6335,7 @@ test("CR awaitingUids: deny -- an UNFILTERED collection-group scan of " +
 
 // The Coordinator's and the Dean's queues are the app's real queries: a
 // collection-group read filtered by stage. A collection-group query is
-// authorized ONLY by the `{path=**}` rule, never by the nested per-thesis
+// authorized only by the `{path=**}` rule, never by the nested per-thesis
 // one, so both roles need their own arm there.
 test("CR queues: the coordinator's stage query across every thesis is allowed",
   async () => {
@@ -6167,9 +6377,9 @@ test("CR awaitingUids: deny -- a faculty member not awaited on a request " +
   await seedCr({ signoffs: adviserReq().signoffs,
     awaitingUids: ["cr-new-adv", "cr-old-adv"] });
   // A faculty member with no seat on this thesis at all (not the leader,
-  // not a panelist, not the coordinator/dean, and not in awaitingUids) --
+  // not a panelist, not the coordinator/dean, and not in awaitingUids),
   // proves the field, not mere verified-faculty status, is what the arm
-  // authorises on. (cr-pan is deliberately NOT used here: it IS a panelist
+  // authorises on. (cr-pan is deliberately not used here: it is a panelist
   // on this thesis and is legitimately authorized by the nested rule's own
   // panelist arm, which would make this a false negative.)
   const outsider = asCrUser("cr-outsider", "cr-outsider@isufst.edu.ph");
@@ -6180,8 +6390,8 @@ test("CR awaitingUids: deny -- a faculty member not awaited on a request " +
   );
 });
 
-// --- Fix round 2, Fix 3: keptUnless compares the whole other-role sub-map,
-// not just `.status` -- a signer must not be able to scribble another
+// --- keptUnless compares the whole other-role sub-map,
+// not just `.status`: a signer must not be able to scribble another
 // role's `reason` or `respondedAt` in the same write. ---
 
 test("CR: a sign-off may NOT rewrite another role's reason or " +
@@ -6192,12 +6402,12 @@ test("CR: a sign-off may NOT rewrite another role's reason or " +
     "signoffs.newAdviser.status": "accepted",
     "signoffs.newAdviser.respondedAt": serverTimestamp(),
     // formerAdviser's status is unchanged (still "pending"), but its
-    // reason is scribbled -- keptUnless must still catch this.
+    // reason is scribbled: keptUnless must still catch this.
     "signoffs.formerAdviser.reason": "planted",
   }));
 });
 
-// ---------- Manuscript highlights and typing (spec 2026-09-26) ----------
+// ---------- Manuscript highlights and typing ----------
 
 function highlight(uid, extra = {}) {
   return {
@@ -6491,6 +6701,61 @@ test("chapters IV-V: allowed once the pre-oral passed, and stay allowed",
     };
     await assertFails(next({ preOralDefenceId: "does-not-exist" }));
     await assertSucceeds(next({}));
+  });
+
+// ---------- One manuscript, not five chapters ----------
+//
+// A group uploads Chapters I-III as ONE manuscript before its pre-oral, and
+// the whole of I-V as ONE manuscript after it. The full one is gated on a
+// passed pre-oral exactly as Chapters IV and V were; the proposal one is
+// not.
+
+test("manuscripts: the proposal manuscript needs no pre-oral", async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "theses/m1"), docThesis());
+  });
+  const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+  await assertSucceeds(firstUpload(leader, "m1", "manuscriptProposal"));
+});
+
+test("manuscripts: the full manuscript is refused without a passed pre-oral",
+  async () => {
+    await env.clearFirestore();
+    await seedPreOral("m2", "po-fail", { verdict: "fail" });
+    await seedPreOral("m2", "po-none", { verdict: null });
+    await seedPreOral("m2", "fin-pass", { type: "final" });
+    await seedPreOral("m2", "other-pass", { otherThesis: true });
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+
+    await assertFails(firstUpload(leader, "m2", "manuscriptFinal"));
+    for (const id of ["po-fail", "po-none", "fin-pass", "other-pass",
+                      "does-not-exist"]) {
+      await assertFails(firstUpload(leader, "m2", "manuscriptFinal",
+        { preOralDefenceId: id }));
+    }
+  });
+
+test("manuscripts: the full manuscript is allowed once the pre-oral passed",
+  async () => {
+    await env.clearFirestore();
+    await seedPreOral("m3", "po-pass");
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    await assertSucceeds(firstUpload(leader, "m3", "manuscriptFinal",
+      { preOralDefenceId: "po-pass" }));
+  });
+
+test("manuscripts: only the two manuscripts and the five old chapters exist",
+  async () => {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "theses/m4"), docThesis());
+    });
+    const leader = asDocUser("leader-uid", "leader@isufst.edu.ph");
+    for (const bad of ["manuscript", "manuscriptDraft", "chapterVI",
+                       "appendix"]) {
+      await assertFails(firstUpload(leader, "m4", bad));
+    }
   });
 
 // ---- Form 1 attachment: a snapshot of the leader's own My files copy,

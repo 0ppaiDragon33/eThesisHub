@@ -106,7 +106,7 @@ void main() {
   // observes a loading or error branch. A regression collapsing any one of
   // the six `isLoading`/`hasError` checks in the screen back into
   // `valueOrNull ?? const []` would compile and pass every test above
-  // without ever showing up here -- which is exactly the defect this
+  // without ever showing up here, which is exactly the defect this
   // project has now shipped four times, most recently in the chapters list
   // screen this one mirrors.
 
@@ -214,7 +214,7 @@ void main() {
     // versionsAsync), each backed by fake_cloud_firestore rather than
     // overridden, so each needs its own microtask tick to deliver its first
     // snapshot. A single pump() left one of them still loading and the
-    // screen showed an earlier branch's message instead of this one -- not
+    // screen showed an earlier branch's message instead of this one, not
     // pumpAndSettle (which would race the never-emitting controller's
     // stream to a false "settled" state), just enough discrete pumps to let
     // the two real streams resolve while the overridden one stays stuck.

@@ -10,10 +10,19 @@ const modeSwitchHold = Duration(milliseconds: 1100);
 String modeSwitchTitle(FacultyMode to) =>
     'Switching to ${to == FacultyMode.adviser ? 'Adviser' : 'Panelist'} View';
 
+/// True while a "Switching to … View" screen is up. Anything that wants to
+/// open its own dialog (a celebration, say) waits for this to go false, so
+/// two dialogs are never stacked on the root navigator at once.
+final ValueNotifier<bool> modeSwitchShowing = ValueNotifier<bool>(false);
+
+int _switchesShowing = 0;
+
 /// Shows a short full-screen "Switching to … View" moment while the
 /// sidebar and pages change over to the other mode, then clears itself.
 /// Purely visual: the mode has already changed when this appears.
 Future<void> showModeSwitchTransition(BuildContext context, FacultyMode to) {
+  _switchesShowing++;
+  modeSwitchShowing.value = true;
   return showGeneralDialog<void>(
     context: context,
     useRootNavigator: true,
@@ -24,7 +33,13 @@ Future<void> showModeSwitchTransition(BuildContext context, FacultyMode to) {
     pageBuilder: (_, _, _) => _ModeSwitchScreen(to: to),
     transitionBuilder: (_, animation, _, child) =>
         FadeTransition(opacity: animation, child: child),
-  );
+  ).whenComplete(() {
+    _switchesShowing--;
+    if (_switchesShowing <= 0) {
+      _switchesShowing = 0;
+      modeSwitchShowing.value = false;
+    }
+  });
 }
 
 class _ModeSwitchScreen extends StatefulWidget {
@@ -40,9 +55,23 @@ class _ModeSwitchScreenState extends State<_ModeSwitchScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(modeSwitchHold, () {
-      if (mounted) Navigator.of(context).pop();
-    });
+    Future<void>.delayed(modeSwitchHold, _dismiss);
+  }
+
+  /// Closes THIS screen, not whatever happens to be on top. A bare
+  /// `Navigator.pop()` closes the topmost route, so if another dialog had
+  /// opened over this one, that dialog closed instead and this screen
+  /// stayed up for good.
+  void _dismiss() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route == null) return;
+    final navigator = Navigator.of(context);
+    if (route.isCurrent) {
+      navigator.pop();
+    } else {
+      navigator.removeRoute(route);
+    }
   }
 
   @override

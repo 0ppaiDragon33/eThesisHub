@@ -14,7 +14,7 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// The college pipeline: how many theses sit at each [ThesisStage], as one
 /// proportional bar with every count written out beneath it.
 ///
-/// Dean and coordinator only — it watches [allThesesProvider], which the
+/// Dean and coordinator only: it watches [allThesesProvider], which the
 /// rules deny to every other role. Stages are coloured from the accent
 /// palette by position: they identify, they do not judge.
 ///

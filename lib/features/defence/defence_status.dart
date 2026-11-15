@@ -17,7 +17,7 @@ String defenceStatusLabel(DefenceStatus status) => switch (status) {
 
 /// The one place a [DefenceStatus] becomes a colour.
 ///
-/// Shared by [DefencesList] and the calendar view -- both a status chip and
+/// Shared by [DefencesList] and the calendar view: both a status chip and
 /// a calendar dot must agree on what colour "cancelled" is.
 Color defenceStatusColor(DefenceStatus status, Brightness brightness) {
   final light = brightness == Brightness.light;

@@ -11,11 +11,11 @@ import 'package:ethesishub/data/repositories/user_repository.dart';
 ///
 /// `fake_cloud_firestore` answers `not-found` when you update a document that
 /// does not exist, and `UserRepository.setDesignation` already swallows that
-/// — so a test built on the fake alone passes whether or not the bug is
+/// so a test built on the fake alone passes whether or not the bug is
 /// present, and proves nothing.
 ///
 /// Firestore does not behave that way. `mayCoordinatorSetDesignation` in
-/// `firestore.rules` requires `resource != null` — it is update-only — so
+/// `firestore.rules` requires `resource != null` (it is update-only) so
 /// when the entry is missing that arm cannot pass, and a refused rule is
 /// reported as **permission-denied**, never as not-found. That is the case
 /// this fake reproduces: `setDesignation` refuses unless the uid is known.
@@ -96,9 +96,9 @@ void main() {
     });
   });
 
-  // Spec §4.2.1 names this window: an invited faculty account that has never
+  // names this window: an invited faculty account that has never
   // signed in has no directory entry, because the entry is only written
-  // client-side at sign-in. Designating them must still work — the
+  // client-side at sign-in. Designating them must still work: the
   // authoritative flags live on `users`, and the directory is only a mirror
   // the student-facing picker can read.
   test('designating an account that has never signed in still succeeds',
@@ -119,7 +119,7 @@ void main() {
 
     await repo.setDesignation(uid: 'f1', adviser: true, panelist: false);
 
-    // An update here would be refused — `mayCoordinatorSetDesignation` is
+    // An update here would be refused: `mayCoordinatorSetDesignation` is
     // update-only. Creating instead is what stops the designation sitting
     // inert on `users` until this person's first sign-in. Swallowing the
     // refusal would also have silenced the error, but it would have
@@ -151,7 +151,7 @@ void main() {
   });
 }
 
-/// An entry that exists but whose write is refused anyway — a coordinator who
+/// An entry that exists but whose write is refused anyway: a coordinator who
 /// has lost the role, or a rules change. This must still reach the screen.
 class _AlwaysRefuses extends _RulesLikeDirectory {
   _AlwaysRefuses() : super(existingUids: const {'f1'});

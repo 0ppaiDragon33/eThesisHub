@@ -385,7 +385,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('saveCopy')));
       // A pump alone advances the fake clock, not the real one the fake
-      // Firestore transaction resolves on -- so the save has started but not
+      // Firestore transaction resolves on, so the save has started but not
       // finished when the next keystroke below lands.
       await tester.pump();
       await tester.enterText(

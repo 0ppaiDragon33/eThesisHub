@@ -44,7 +44,7 @@ Future<FakeFirebaseFirestore> _seed() async {
 /// app is initialised in a widget test, `authStateProvider` settles into
 /// AsyncError, and any uid read off it is silently null forever. See
 /// adviser_review_test.dart's `_wrap` for the same pattern. sharedPrefsProvider
-/// must also be overridden -- facultyModeProvider reads it on every build,
+/// must also be overridden: facultyModeProvider reads it on every build,
 /// and it throws UnimplementedError unless a value is supplied.
 Future<Widget> _wrap(
   FakeFirebaseFirestore db, {
@@ -95,14 +95,14 @@ void main() {
       'an empty screen and no way out', (tester) async {
     // The reported failure this milestone closes: `FacultyMode.fromString
     // (null)` resolves to adviser, so a newly invited faculty member landed
-    // on an empty Advisees list -- and could not leave, because the switch
+    // on an empty Advisees list, and could not leave, because the switch
     // was gated on holding an adviser position, which they never had.
     //
     // A missing `users/{uid}` designation field defaults to `true` for both
-    // `nominableAsAdviser` and `nominableAsPanelist` (spec §6): a brand-new
+    // `nominableAsAdviser` and `nominableAsPanelist`: a brand-new
     // account, not yet narrowed by a coordinator, is designated for both.
     // Capability is the union of designation and positions held, so this
-    // member is "both capable" even though they hold zero positions --
+    // member is "both capable" even though they hold zero positions,
     // which is exactly the fix: they land on the stored preference
     // (defaulting to Advisees) WITH the switch, rather than being stranded
     // wherever the old position-only clamp happened to put them.
@@ -143,14 +143,14 @@ void main() {
     await tester.pumpAndSettle();
 
     // Overview is destination 0 regardless of position; it is the
-    // destination AFTER it -- the mode's own work -- that must be Advisees
+    // destination after it (the mode's own work) that must be Advisees
     // (the stored preference's default), not absent and not a dead end.
     final rail = find.byKey(const Key('shellSidebar'));
     expect(find.descendant(of: rail, matching: find.text('Advisees')),
         findsOneWidget);
     expect(find.byType(ErrorWidget), findsNothing);
 
-    // And the switch is there, because they can reach both modes -- so
+    // And the switch is there, because they can reach both modes, so
     // Panels is not unreachable even though no position ever put them there.
     expect(find.byKey(const Key('facultyModeSegmented')), findsOneWidget);
 
@@ -184,16 +184,16 @@ void main() {
       myAdviseesProvider.overrideWith((ref) => StreamController<List<Thesis>>().stream),
     ]));
     // The screen is pumped on its own now rather than reached by tapping a
-    // dashboard destination -- '/advisees' is a route of its own, and that
+    // dashboard destination: '/advisees' is a route of its own, and that
     // it is reachable is asserted in
     // test/core/routing/shell_routes_test.dart. What this test is about is
     // this screen's own handling of an unsettled stream.
     //
-    // Deliberately NOT pumpAndSettle: it asserts the loading branch
+    // Deliberately not pumpAndSettle: it asserts the loading branch
     // renders before the stream's first snapshot, rather than the
     // empty-list branch. Collapsing loading into an empty data(const [])
     // list would make "still loading" and "no advisees" indistinguishable
-    // -- a bug this project has already shipped four times (see the
+    // a bug we have already shipped four times (see the
     // comment on adviseesAsync.when in advisees_screen.dart).
     await tester.pump();
     await tester.pump();
@@ -235,7 +235,7 @@ void main() {
     // Two pumps, same reasoning as the analogous case in
     // defence_readiness_list_test.dart: the first resolves the outer
     // myAdviseesProvider stream (mounting the advisee's own card), the
-    // second lets that card's chaptersProvider start -- but its stream has
+    // second lets that card's chaptersProvider start, but its stream has
     // not emitted yet, so the card's own loading branch is what should show.
     final db = await _seed();
     // The mode is resolved up front so this test isolates the stream it is
@@ -246,20 +246,20 @@ void main() {
       effectiveFacultyModeProvider
           .overrideWith((ref) async => FacultyMode.adviser),
       // A chapter stream that never emits, so the card's own loading branch
-      // is genuinely observable -- fake_cloud_firestore settles inside a
+      // is genuinely observable: fake_cloud_firestore settles inside a
       // pump, which is why the previous two-pump timing no longer holds.
       chaptersProvider('mine')
           .overrideWith((ref) => StreamController<List<ThesisChapter>>().stream),
     ]));
     // The two-pump timing: the first resolves myAdviseesProvider (mounting
     // the advisee's own card), the second lets that card's chaptersProvider
-    // start -- but its stream has not emitted yet, so the card's own
+    // start, but its stream has not emitted yet, so the card's own
     // loading branch is what should show.
     await tester.pump();
     await tester.pump();
 
-    // The point is that a loading chapter stream is NOT rendered as "0
-    // awaiting" or "Nothing awaiting" — a distinct loading line stands in
+    // The point is that a loading chapter stream is not rendered as "0
+    // awaiting" or "Nothing awaiting": a distinct loading line stands in
     // its place. The exact wording ('Checking chapters…') is the screen's.
     expect(find.text('Checking chapters…'), findsOneWidget);
     expect(find.textContaining('0 chapters awaiting review'), findsNothing);

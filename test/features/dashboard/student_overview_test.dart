@@ -10,7 +10,7 @@ import 'package:ethesishub/features/dashboard/student_overview.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/shared_prefs_provider.dart';
 
-// Copied from navigation_test.dart -- see that file's own copy for the note
+// Copied from navigation_test.dart: see that file's own copy for the note
 // on why each test file keeps its own rather than sharing one.
 Map<String, dynamic> thesis({
   String leaderUid = 'l1',
@@ -65,7 +65,7 @@ void main() {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(leaderUid: 'l1'));
     // Chapters live under `theses/{id}/documents`, keyed by the full
-    // ChapterId name -- not `theses/{id}/chapters` keyed by a roman
+    // ChapterId name, not `theses/{id}/chapters` keyed by a roman
     // numeral. See document_repository.dart:14-15 and ChapterId.fromString,
     // which throws on any id that is not one of the enum's own names.
     const ids = [
@@ -98,24 +98,15 @@ void main() {
     expect(find.byKey(const Key('studentOverview')), findsOneWidget);
   });
 
-  testWidgets('counts approved chapters out of five', (tester) async {
+  // One manuscript, not a count of five chapters.
+  testWidgets('the card shows the Chapters I-III manuscript and its status',
+      (tester) async {
     final db = FakeFirebaseFirestore();
     await db.collection('theses').doc('t1').set(thesis(leaderUid: 'l1'));
-    const ids = [
-      'chapterI',
-      'chapterII',
-      'chapterIII',
-      'chapterIV',
-      'chapterV',
-    ];
-    for (final id in ids) {
-      await db.collection('theses/t1/documents').doc(id).set({
-        'currentVersion': 1,
-        'status': id == 'chapterI' || id == 'chapterII'
-            ? 'approved'
-            : 'submitted',
-      });
-    }
+    await db.collection('theses/t1/documents').doc('manuscriptProposal').set({
+      'currentVersion': 2,
+      'status': 'approved',
+    });
 
     await tester.pumpWidget(await wrap(
       const OverviewScreen(),
@@ -125,9 +116,53 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // The count renders as one line, '2 of 5 approved', beside a progress
-    // ring, rather than separate '2' and '/ 5' figures.
-    expect(find.textContaining('2 of 5'), findsOneWidget);
+    expect(find.text('Manuscript — Chapters I–III'), findsOneWidget);
+    expect(find.textContaining('Approved · v2'), findsOneWidget);
+    // Not the full manuscript yet, and no per-chapter lines or "of N".
+    expect(find.text('Manuscript — Chapters I–V'), findsNothing);
+    expect(find.textContaining(' of 5'), findsNothing);
+    expect(find.textContaining(' of 3'), findsNothing);
+    expect(find.textContaining('Chapter II'), findsNothing);
+  });
+
+  testWidgets('a manuscript not yet uploaded reads as not uploaded',
+      (tester) async {
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set(thesis(leaderUid: 'l1'));
+
+    await tester.pumpWidget(await wrap(
+      const OverviewScreen(),
+      db,
+      uid: 'l1',
+      role: 'student',
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manuscript — Chapters I–III'), findsOneWidget);
+    expect(find.text('Not uploaded'), findsOneWidget);
+  });
+
+  // A thesis that uploaded chapter by chapter, before manuscripts existed,
+  // keeps those lines on its card, beneath the manuscript.
+  testWidgets('chapters uploaded one by one stay listed beneath the '
+      'manuscript', (tester) async {
+    final db = FakeFirebaseFirestore();
+    await db.collection('theses').doc('t1').set(thesis(leaderUid: 'l1'));
+    await db.collection('theses/t1/documents').doc('chapterI').set({
+      'currentVersion': 1,
+      'status': 'approved',
+    });
+
+    await tester.pumpWidget(await wrap(
+      const OverviewScreen(),
+      db,
+      uid: 'l1',
+      role: 'student',
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manuscript — Chapters I–III'), findsOneWidget);
+    expect(find.textContaining('Chapter I · Introduction'), findsOneWidget);
   });
 
   testWidgets('a returned chapter appears in the queue', (tester) async {
@@ -152,14 +187,14 @@ void main() {
 
   testWidgets('the greeting survives a missing profile document',
       (tester) async {
-    // M2 shipped a leader lockout by gating on the profile doc. Nothing on
+    // Chapters shipped a leader lockout by gating on the profile doc. Nothing on
     // an overview may depend on `users/{uid}` existing.
     //
     // Pumped as [StudentOverview] rather than through [OverviewScreen],
     // which is the widget whose whole job is to pick an overview BY role
     // and which correctly renders nothing once the role has settled as
-    // unknown — a signed-in account with no profile is routed to
-    // /no-profile now, not left on an overview (spec D25). Routing it
+    // unknown: a signed-in account with no profile is routed to
+    // /no-profile now, not left on an overview. Routing it
     // through the role dispatcher would therefore assert the opposite of
     // what the app is supposed to do. The property under test is this
     // overview's own: none of its panels may gate on `users/{uid}`. That

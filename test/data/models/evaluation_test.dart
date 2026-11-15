@@ -6,7 +6,7 @@ Map<String, int> fullScores({int each = 1}) =>
     {for (final c in evaluationCriteria) c.key: each};
 
 void main() {
-  // A sheet written before evaluatorName existed must still read back --
+  // A sheet written before evaluatorName existed must still read back,
   // this is a permanent record with no delete and no migration, so a
   // missing name reads as empty and the screens fall back to the uid.
   test('a sheet with no stored evaluatorName reads back with an empty one',
@@ -80,7 +80,7 @@ void main() {
       'total': 13,
       'rating': 'fail',
     });
-    // Kept in `scores` verbatim -- it is someone's permanent record --
+    // Kept in `scores` verbatim: it is someone's permanent record,
     // but excluded from a section subtotal, which can only count criteria
     // it can place in a section.
     expect(e.scores['someFutureCriterion'], 9);

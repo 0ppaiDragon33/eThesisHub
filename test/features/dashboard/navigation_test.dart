@@ -33,10 +33,10 @@ Future<ProviderContainer> containerFor(
   FakeFirebaseFirestore db, {
   required String uid,
   required String role,
-  // Both default `true` -- a missing designation reads as fully nominable
-  // (spec §6) -- so a scenario that means "panelist only" or "adviser only"
+  // Both default `true`: a missing designation reads as fully nominable,
+  // so a scenario that means "panelist only" or "adviser only"
   // must say so explicitly now that designation feeds the mode switch, not
-  // rely on holding just the one position the way it did before Task 8.
+  // rely on holding just the one position the way it did before.
   bool? nominableAsAdviser,
   bool? nominableAsPanelist,
 }) async {
@@ -75,8 +75,8 @@ Future<void> pumpApp(WidgetTester tester, ProviderContainer c) async {
   await tester.pumpAndSettle();
 }
 
-/// The nav items the sidebar is offering — the `InkWell`s keyed
-/// `nav-<route>`, not the page — so a heading that happens to use the same
+/// The nav items the sidebar is offering: the `InkWell`s keyed
+/// `nav-<route>`, not the page, so a heading that happens to use the same
 /// word cannot stand in for a destination that is not there. (The shell no
 /// longer uses `NavigationRail`; the sidebar is a keyed ink column.)
 Finder _navItems() => find.byWidgetPredicate((w) =>
@@ -109,8 +109,8 @@ Future<void> tapDestination(WidgetTester tester, String label) async {
 /// reads as a broken app rather than an unfinished one.
 ///
 /// Every case here drives the REAL router. The four dashboards these tests
-/// used to pump directly are gone -- navigation is one shell around every
-/// signed-in route now -- so there is no widget below the router that could
+/// used to pump directly are gone: navigation is one shell around every
+/// signed-in route now, so there is no widget below the router that could
 /// answer "which destinations does this role get, and does each one land
 /// somewhere". Bodies are asserted by their screen Key rather than by
 /// heading copy, because several destination labels and page headings are
@@ -124,8 +124,8 @@ void main() {
       // Chapters and Defences stay gated on the Dean approving a title:
       // before then Chapters leads straight to "Chapters are not open yet"
       // and no defence can have been scheduled. Archive and Forms are
-      // unaffected by that gate -- neither is scoped to what the reader is
-      // involved in (Task 11 for Archive; Forms guarantees a blank
+      // unaffected by that gate: neither is scoped to what the reader is
+      // involved in (the archive opens to any active reader; Forms guarantees a blank
       // template with no data at all).
       final db = FakeFirebaseFirestore();
       await db
@@ -176,7 +176,7 @@ void main() {
 
       await tapDestination(tester, 'Chapters');
 
-      // The real chapter list, not a placeholder -- and no second chrome.
+      // The real chapter list, not a placeholder, and no second chrome.
       // The shell's own top bar is a custom bar, not an `AppBar`, so a
       // screen that wrongly kept its own Scaffold+AppBar (the failure the
       // `embedded` flag used to work around) would show up as an AppBar
@@ -194,9 +194,9 @@ void main() {
       // not leave, because the switch hides itself precisely when you hold
       // no adviser position.
       //
-      // A missing designation now defaults to fully nominable (spec §6), so
+      // A missing designation now defaults to fully nominable, so
       // holding only a panel position is no longer, on its own, enough to
-      // make someone "panelist only" -- a coordinator's explicit narrowing
+      // make someone "panelist only": a coordinator's explicit narrowing
       // is what does that. Seeding `nominableAsAdviser: false` is what makes
       // this genuinely a panelist-only scenario under the new rule, rather
       // than one that happens to hold no adviser position today but could
@@ -252,7 +252,7 @@ void main() {
         (tester) async {
       // The switch used to sit in the faculty dashboard's app bar and swap
       // a body index. Advisees and Panels are separate ROUTES now, so
-      // flipping the mode has to carry the reader across -- leaving them
+      // flipping the mode has to carry the reader across: leaving them
       // on '/advisees' in panelist mode would show a panelist a list the
       // sidebar no longer even offers.
       final db = FakeFirebaseFirestore();
@@ -285,7 +285,7 @@ void main() {
     testWidgets('the dean gets three destinations that each swap the body',
         (tester) async {
       // Title defences now live inside Defences, as its Title stage (spec
-      // 2026-09-25 §6.7) -- there is no separate sidebar entry for them any
+      // 2026-09-25 §6.7): there is no separate sidebar entry for them any
       // more, so this only checks Approvals, Defences and Readiness.
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'd1', role: 'dean');
@@ -299,7 +299,7 @@ void main() {
       await tapDestination(tester, 'Approvals');
       expect(find.byKey(const Key('approvalsScreen')), findsOneWidget);
 
-      await tapDestination(tester, 'Defences');
+      await tapDestination(tester, 'Defenses');
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
       expect(find.byKey(const Key('approvalsScreen')), findsNothing);
 
@@ -328,23 +328,23 @@ void main() {
       expect(find.byKey(const Key('recommendationsScreen')), findsNothing);
 
       await tapDestination(tester, 'Users');
-      // 'Users' lands on '/users' (Accounts), not '/invites' directly --
+      // 'Users' lands on '/users' (Accounts), not '/invites' directly,
       // Invites is the destination's other tab, see users_screen.dart.
       expect(find.byKey(const Key('usersScreen')), findsOneWidget);
       expect(find.byKey(const Key('readinessScreen')), findsNothing);
     });
 
-    testWidgets('the coordinator reaches title defences through Defences',
+    testWidgets('the coordinator reaches title defenses through Defenses',
         (tester) async {
       // Title defences are the Title stage of the one Defences destination
-      // now (spec 2026-09-25 §6.7), not a screen of their own -- Defences
+      // now, not a screen of their own. Defences
       // opens on that stage by default.
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'c1', role: 'coordinator');
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      await tapDestination(tester, 'Defences');
+      await tapDestination(tester, 'Defenses');
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
       expect(
           tester
@@ -357,17 +357,17 @@ void main() {
     });
 
     // Fix: links to Defences open the stage they mean. Both of these used
-    // to `context.go('/defences')`, landing on the Title stage -- wrong for
+    // to `context.go('/defences')`, landing on the Title stage: wrong for
     // a link that means "the scheduled defences".
     testWidgets(
-        "the coordinator's Defence calendar command opens the Calendar",
+        "the coordinator's Defense calendar command opens the Calendar",
         (tester) async {
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'c1', role: 'coordinator');
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      await tester.tap(find.text('Defence calendar'));
+      await tester.tap(find.text('Defense calendar'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('calendarScreen')), findsOneWidget);
@@ -381,14 +381,14 @@ void main() {
           '/calendar');
     });
 
-    testWidgets("the dean's Defences this week tile opens the Pre-oral stage",
+    testWidgets("the dean's Defenses this week tile opens the Pre-oral stage",
         (tester) async {
       final db = FakeFirebaseFirestore();
       final c = await containerFor(db, uid: 'd1', role: 'dean');
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      await tester.tap(find.text('Defences this week'));
+      await tester.tap(find.text('Defenses this week'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('defencesScreen')), findsOneWidget);
@@ -403,12 +403,12 @@ void main() {
     });
   });
 
-  group('adviser attending a defence', () {
-    testWidgets('an adviser in adviser mode can reach their advisee\'s defence',
+  group('adviser attending a defense', () {
+    testWidgets('an adviser in adviser mode can reach their advisee\'s defense',
         (tester) async {
       // The gap this closes: DefencesList lived only in the panelist-mode
       // body, so a faculty member who advises a group and sits on no panels
-      // was clamped to adviser mode and had NO route to any defence -- not
+      // was clamped to adviser mode and had NO route to any defence, not
       // even the ones they advise, where they are the only person who can
       // release the consolidation to the group.
       final db = FakeFirebaseFirestore();
@@ -459,7 +459,7 @@ void main() {
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      await tapDestination(tester, 'Defences');
+      await tapDestination(tester, 'Defenses');
 
       expect(find.byKey(const Key('scheduleDefence')), findsNothing);
       expect(find.byKey(const Key('openDefence')), findsNothing);
@@ -467,10 +467,10 @@ void main() {
     });
   });
 
-  group('Defences as its own destination', () {
-    testWidgets('a panelist reaches Defences without wading past the queue',
+  group('Defenses as its own destination', () {
+    testWidgets('a panelist reaches Defenses without wading past the queue',
         (tester) async {
-      // Stacked under Panels, the title-defence queue came FIRST -- so an
+      // Stacked under Panels, the title-defence queue came FIRST, so an
       // empty "No defences waiting" was the first thing a panelist saw, and
       // their actual schedule sat underneath it. Two unrelated lists whose
       // widgets are even named alike.
@@ -506,7 +506,7 @@ void main() {
       expect(find.byKey(const Key('panelsScreen')), findsOneWidget);
 
       // This defence is a final one, and Defences now defaults to the
-      // Title stage (spec 2026-09-25 §6.1), so go straight to the Final
+      // Title stage, so go straight to the Final
       // stage where it actually lives.
       c.read(goRouterProvider).go('/defences?stage=final');
       await tester.pumpAndSettle();
@@ -515,10 +515,10 @@ void main() {
       expect(find.byKey(const Key('panelsScreen')), findsNothing);
     });
 
-    testWidgets('the student gets Defences only once the title is approved',
+    testWidgets('the student gets Defenses only once the title is approved',
         (tester) async {
       // A defence is only ever scheduled for an approved thesis, so before
-      // then the destination would lead to a permanently empty page -- the
+      // then the destination would lead to a permanently empty page: the
       // control-that-does-nothing the shell hides its navigation to avoid.
       final db = FakeFirebaseFirestore();
       await db
@@ -530,10 +530,10 @@ void main() {
       addTearDown(c.dispose);
       await pumpApp(tester, c);
 
-      expect(railLabels(tester), isNot(contains('Defences')));
+      expect(railLabels(tester), isNot(contains('Defenses')));
     });
 
-    testWidgets('the student reaches Defences after approval', (tester) async {
+    testWidgets('the student reaches Defenses after approval', (tester) async {
       final db = FakeFirebaseFirestore();
       await db.collection('theses').doc('t1').set(thesis());
       await db.collection('defenses').doc('d1').set({
@@ -549,7 +549,7 @@ void main() {
       await pumpApp(tester, c);
 
       // This defence is a pre-oral one, and Defences now defaults to the
-      // Title stage (spec 2026-09-25 §6.1), so go straight to the Pre-oral
+      // Title stage, so go straight to the Pre-oral
       // stage where it actually lives.
       c.read(goRouterProvider).go('/defences?stage=preOral');
       await tester.pumpAndSettle();

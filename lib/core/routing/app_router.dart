@@ -65,7 +65,7 @@ class _RouterRefreshNotifier extends ChangeNotifier {
 /// Home route for each account role.
 ///
 /// One route for all four now. Each role used to land on a dashboard of
-/// its own — '/student', '/faculty', '/coordinator', '/dean' — which is
+/// its own ('/student', '/faculty', '/coordinator', '/dean') which is
 /// also why navigation existed on exactly those four screens and nowhere
 /// else. `/overview` renders the same per-role overview inside the one
 /// shell that now wraps every signed-in route, so leaving it no longer
@@ -99,7 +99,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
   // Needed so the `/thesis/nominate` bare-visit fallback (below) gets a
   // second chance to redirect once the leader's thesis has actually loaded
-  // — the first redirect evaluation can land before this stream's first
+  // the first redirect evaluation can land before this stream's first
   // event arrives, same class of race documented on authStateProvider.
   ref.listen(myThesisProvider, (_, _) {
     refreshNotifier.notify();
@@ -137,18 +137,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // does not exist for this signed-in, verified account (e.g.
               // it was never created, or was removed).
               //
-              // /no-profile, not /login: this account IS signed in, and
+              // /no-profile, not /login: this account is signed in, and
               // sending it to the sign-in screen said the opposite. The
-              // screen it lands on now names the two causes apart — the
-              // document is absent versus the read failed — and offers
-              // Retry and Sign out (spec D25).
+              // screen it lands on now names the two causes apart: the
+              // document is absent versus the read failed, and offers
+              // Retry and Sign out.
               if (profile == null) {
                 return location == '/no-profile' ? null : '/no-profile';
               }
 
               // A coordinator has switched off this account
               // (`users/{uid}.active == false`). It is signed in and has a
-              // profile, but every screen is closed to it -- it is held on
+              // profile, but every screen is closed to it: it is held on
               // the deactivated screen with only sign-out. This is a UX
               // guard; the authoritative boundary is firestore.rules, the
               // same as for the role guards further down. Placed before the
@@ -160,7 +160,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
               final home = homeRouteFor(profile.role);
               // A reactivated account (active flipped back on) must not stay
-              // parked on the deactivated dead end -- only reached here when
+              // parked on the deactivated dead end, only reached here when
               // profile.active is true.
               if (location == '/deactivated') return home;
               if (onAuthScreen || location == '/verify-email') return home;
@@ -175,9 +175,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // one overview rather than nothing.
               if (oldHomeRoutes.contains(location)) return home;
 
-              // M1a screens are role-scoped. A wrong-role user goes to their
+              // Nomination screens are role-scoped. A wrong-role user goes to their
               // own home rather than seeing an empty or forbidden screen.
-              // This is a UX guard only — the real authorization boundary is
+              // This is a UX guard only: the real authorization boundary is
               // firestore.rules, which every screen's writes and reads still
               // go through regardless of what the client permits.
               //
@@ -187,7 +187,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // faculty_dashboard.dart's own link into
               // '/thesis/chapters?id=...' would otherwise bounce every
               // adviser straight back to their dashboard before
-              // ChaptersScreen ever built — the same class of "the link
+              // ChaptersScreen ever built: the same class of "the link
               // exists but the route refuses the very role that needs it"
               // failure this whole task exists to close.
               //
@@ -202,8 +202,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // branch under /thesis that faculty need, because an adviser
               // reviews them. No query-string clause here: `location` above
               // is `state.matchedLocation`, which is the matched path only
-              // — go_router strips the query string before this callback
-              // ever sees it — so a clause checking for '/thesis/chapters?'
+              // go_router strips the query string before this callback
+              // ever sees it, so a clause checking for '/thesis/chapters?'
               // could never fire.
               final isChapterRoute = location == '/thesis/chapters' ||
                   location.startsWith('/thesis/chapters/');
@@ -218,7 +218,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.student) {
                 return home;
               }
-              // Open to faculty, coordinators and deans — a coordinator or
+              // Open to faculty, coordinators and deans: a coordinator or
               // dean nominated as a panel member on someone else's thesis
               // still needs their own inbox.
               if (location.startsWith('/nominations') &&
@@ -230,10 +230,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.dean) {
                 return home;
               }
-              // The eight sidebar-destination routes (Task 6/7) each admit a
-              // subset of roles per the M1a spec's permission table. All
-              // eight are static single-segment paths -- see the comment
-              // above their GoRoute registrations -- so none of them needs
+              // The eight sidebar-destination routes each admit a
+              // subset of roles per the nomination spec's permission table. All
+              // eight are static single-segment paths: see the comment
+              // above their GoRoute registrations, so none of them needs
               // an exemption the way '/thesis/chapters' and
               // '/defence/room/' do below: nothing dynamic ever shares
               // their prefix.
@@ -242,13 +242,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               // so need no guard here at all.
               //
               // '/advisees' and '/panels' admit faculty, coordinators AND
-              // deans -- not just faculty -- for the same reason
+              // deans (not just faculty) for the same reason
               // '/nominations' above is open to all three: a coordinator or
               // dean nominated onto someone else's thesis genuinely holds
               // an adviser or panel position and needs their own list of
               // advisees or panels, same as a plain faculty member would.
               if ((location == '/advisees' || location == '/panels') &&
                   profile.role == UserRole.student) {
+                return home;
+              }
+              // The Forms library is a student's page. Just the library, not
+              // '/forms/:formId/copies/:copyId': a saved copy opens in the
+              // editor for whoever made it, from My files, in every role.
+              if (location == '/forms' && profile.role != UserRole.student) {
                 return home;
               }
               // '/approvals' is the dean's queue alone.
@@ -260,16 +266,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.coordinator) {
                 return home;
               }
-              // '/change-requests' is a coordinator and dean destination --
+              // '/change-requests' is a coordinator and dean destination,
               // the two queues in this file (ChangeRequestQueueScreen picks
-              // between them from the signed-in role) -- never faculty or
+              // between them from the signed-in role), never faculty or
               // the student whose request it is.
               if (location == '/change-requests' &&
                   profile.role != UserRole.coordinator &&
                   profile.role != UserRole.dean) {
                 return home;
               }
-              // '/readiness' is a coordinator and dean destination -- never
+              // '/readiness' is a coordinator and dean destination, never
               // faculty (who sit on individual title defence panels via
               // '/defence/:thesisId' instead, unguarded by role here) and
               // never the student whose own readiness is what this screen
@@ -280,7 +286,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 return home;
               }
               // '/users' (Accounts) and '/invites' (Invites) are the two
-              // tabs of the coordinator's Users destination -- coordinator
+              // tabs of the coordinator's Users destination: coordinator
               // only. This is UX, not the security boundary: the rules
               // deny `list` on `users` and on `facultyInvites` to every
               // other role, so a wrong-role visitor who reached either
@@ -289,7 +295,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.coordinator) {
                 return home;
               }
-              // '/audit' is the activity log — coordinator and dean, the two
+              // '/audit' is the activity log: coordinator and dean, the two
               // roles the rules let `list` auditLogs. UX guard, not the
               // boundary: the rules deny the read to everyone else.
               if (location == '/audit' &&
@@ -297,12 +303,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                   profile.role != UserRole.dean) {
                 return home;
               }
-              // '/archive/queue' is the coordinator's publish control, not
-              // a destination anyone can navigate to directly -- reachable
-              // only from a link inside '/users' (UsersScreen). Unlike the
+              // '/archive/queue' is the coordinator's publish queue, a
+              // destination in the Coordinator's sidebar only. Unlike the
               // other role guards above, `home` is not the right landing
               // spot for a non-coordinator here: home for every role
-              // already IS '/overview', but the reader who typed this URL
+              // already is '/overview', but the reader who typed this URL
               // was trying to see the archive, not their dashboard, and
               // '/archive' is a destination every role gets (see
               // shell_destination.dart). Sending them there instead of to
@@ -314,19 +319,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 return '/archive';
               }
               // The title defence panel is faculty, coordinators and the
-              // dean — never the student whose titles are being judged.
+              // dean, never the student whose titles are being judged.
               //
               // '/defence/room/...' is deliberately exempt, even though it
               // starts with '/defence/': DefencesList is shared by all four
               // dashboards (see its own doc comment), including the
-              // student's -- those four dashboards are now the one
+              // student's: those four dashboards are now the one
               // '/defences' destination every role reaches through the app
-              // shell, which changes nothing about who follows this link --
+              // shell, which changes nothing about who follows this link,
               // and its "Open" button sends the leader straight
               // into '/defence/room/${d.id}', and once the adviser releases
               // them, to the manuscript with the panel's highlights.
               // A blanket prefix match here would bounce that same student
-              // straight back home before either screen ever built — the
+              // straight back home before either screen ever built: the
               // same class of "the link exists but the route refuses the
               // very role that needs it" failure the '/thesis/chapters'
               // exemption above already closed once for advisers.
@@ -349,7 +354,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 // '/thesis/change-adviser' and '/thesis/change-title' (Task
                 // 5) are pushed from the thesis status screen's own buttons
                 // with '?id=...' already attached, but a bare visit is still
-                // reachable -- typed directly, or a stale bookmark -- and a
+                // reachable (typed directly, or a stale bookmark) and a
                 // student leads exactly one thesis, so the same "fall back
                 // to the leader's own thesis" resolution applies as for
                 // '/thesis/titles' just above. Student-scoped like
@@ -372,7 +377,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 // leader's own thesis can supply. The dashboard tab it
                 // replaces passed that id in directly, so without this the
                 // Chapters destination would land every student on "No
-                // thesis given" -- a control that does nothing, which is
+                // thesis given": a control that does nothing, which is
                 // exactly what the destination list is curated to avoid.
                 //
                 // Students only. An adviser reaches chapters through
@@ -385,14 +390,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               ];
               if (bareVisitFallbackPaths.contains(location) &&
                   state.uri.queryParameters['id'] == null) {
-                // Distinguish "still loading" from "has no thesis" — reading
+                // Distinguish "still loading" from "has no thesis": reading
                 // `.valueOrNull` here would treat an unsettled stream the
                 // same as a settled `null`, misrouting a leader who genuinely
                 // has a thesis to /thesis/create on first load (this bites
                 // on Web, where a page reload re-runs this redirect before
                 // myThesisProvider's first snapshot has arrived; in-app
                 // navigation never sees it because the provider is already
-                // warm by then). While loading, hold here (no redirect) —
+                // warm by then). While loading, hold here (no redirect),
                 // the route builder below renders a brief loading state for
                 // the bare-visit case, and the `ref.listen(myThesisProvider)`
                 // above re-triggers this same redirect, at this same
@@ -415,8 +420,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             // the reader wherever they happened to be, with no error and
             // no explanation, on a screen whose every query was about to
             // fail for the same reason. /no-profile shows the Firestore
-            // code — the only place the reason surfaces in the field,
-            // there being no server-side logs on Spark — plus Retry and
+            // code: the only place the reason surfaces in the field,
+            // there being no server-side logs on Spark: plus Retry and
             // Sign out.
             error: (_, _) => location == '/no-profile' ? null : '/no-profile',
           );
@@ -449,13 +454,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // (the four dashboards, each carrying its own ResponsiveScaffold),
       // and every one of the sixteen screens you could reach from them was
       // a bare Scaffold. Leaving a dashboard left you with no sidebar, no
-      // bottom bar and no way home — reported from the field as "I don't
+      // bottom bar and no way home: reported from the field as "I don't
       // see any back menu while navigating on screens."
       //
       // Login, register and verify-email stay OUTSIDE it, above: they are
       // the screens for someone who is not signed in, and a sidebar full
       // of destinations they cannot reach is worse than none. /no-profile
-      // is inside, because that reader IS signed in — the shell renders
+      // is inside, because that reader is signed in: the shell renders
       // its app bar and simply offers no destinations, since
       // shellDestinationsProvider yields an empty list for an unknown role
       // rather than guessing one.
@@ -464,15 +469,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // Not `state.matchedLocation`: that field is the location
           // where this ShellRoute itself first matched, and it does not
           // advance for an imperative `push` onto a sibling route
-          // already inside the shell -- only a fresh `go` moves it.
+          // already inside the shell, only a fresh `go` moves it.
           // Verified against the pinned go_router 17.5.0 source
           // (lib/src/match.dart, `ShellRouteMatch.buildState`): it
           // passes `matches.uri` straight through for `uri` but its own
-          // `matchedLocation` field -- set once, when the shell itself
-          // matched -- for `matchedLocation`, so only `uri` picks up a
+          // `matchedLocation` field: set once, when the shell itself
+          // matched: for `matchedLocation`, so only `uri` picks up a
           // later imperative push. `state.uri.path` is therefore the
           // field that is actually current after a deep-screen push.
-          // Task 9 needs this: without it, the shell keeps computing
+          // The shell needs this: without it, it keeps computing
           // "deeper than a destination" against the pre-push location
           // and never draws a back control on a pushed screen. Pinned
           // to `deep_navigation_test.dart`'s "shows a back control
@@ -526,13 +531,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/change-requests',
         builder: (_, _) => const ChangeRequestQueueScreen(),
       ),
-      // NOT '/titles' -- '/thesis/titles' (below) already exists for
+      // not '/titles': '/thesis/titles' (below) already exists for
       // submitting a candidate title set. Two routes a character apart
       // meaning different things is exactly how '/faculty' came to be
-      // registered twice in M1, leaving the invites screen permanently
+      // registered twice, leaving the invites screen permanently
       // unreachable (see '/invites' further down).
       // Kept so old links and bookmarks still work: title defences are now
-      // the Title stage of the Defences page (spec 2026-09-25 §6.7).
+      // the Title stage of the Defences page.
       GoRoute(
         path: '/title-defences',
         redirect: (_, _) => DefenceStage.title.route,
@@ -588,9 +593,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       // '/thesis/change-adviser' and '/thesis/change-title': the student
-      // leader's request forms (Task 5). A bare visit (no '?id=') is caught
+      // leader's request forms. A bare visit (no '?id=') is caught
       // by the bareVisitFallbackPaths redirect above, the same as
-      // '/thesis/titles', and never reaches this builder with a null id --
+      // '/thesis/titles', and never reaches this builder with a null id,
       // this EmptyState branch is the last-resort for a reader that guard
       // does not cover (a non-student who somehow reaches this URL; the
       // studentOnly guard ordinarily turns them away first, same as for
@@ -642,10 +647,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      // The three routes below are registered BEFORE '/defence/:thesisId'
+      // The three routes below are registered before '/defence/:thesisId'
       // on purpose. go_router matches a static segment before a dynamic one
-      // at the same level, but this project has already lost a screen to a
-      // route collision -- '/faculty' registered twice left the invites
+      // at the same level, but we have already lost a screen to a
+      // route collision: '/faculty' registered twice left the invites
       // screen unreachable, caught only because m2_routes_test.dart drove
       // the router rather than pumping the screen directly (see '/invites'
       // below). '/defence/schedule' is the one genuine collision risk here:
@@ -662,7 +667,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           }
           final id = state.uri.queryParameters['id'];
           // No force-unwrap: a bare visit (typed directly, or a stale link)
-          // must not crash into a blank screen with no way back -- same
+          // must not crash into a blank screen with no way back: same
           // failure mode '/thesis/chapters' avoids for a missing thesis id.
           if (id == null || id.isEmpty) {
             // The shell supplies the app bar (titled 'Schedule a defence',
@@ -683,7 +688,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // ('/manuscript', '/evaluate', '/grades') cannot swallow one another:
       // the segment counts differ. DefenceRoomScreen renders its own
       // "not found" state through the same `_framed` helper as
-      // their loaded state -- a KeyedSubtree around a PageShell, carrying
+      // their loaded state: a KeyedSubtree around a PageShell, carrying
       // the screen's own key, with no Scaffold and no AppBar of its own
       // since the shell above supplies both. So no wrapper is needed here
       // the way one is for the missing-id case above: an unknown defenceId
@@ -701,7 +706,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             defenceId: state.pathParameters['defenceId']!),
       ),
       // Both are three segments, so ':defenceId' at position 2 can never
-      // swallow them -- the same reasoning as 'consolidated' above.
+      // swallow them: the same reasoning as 'consolidated' above.
       GoRoute(
         path: '/defence/room/:defenceId/evaluate',
         builder: (context, state) => EvaluationScreen(
@@ -739,7 +744,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // write to anyone who is not a coordinator, so a student who typed
       // this path would reach a screen that can load nothing and save
       // nothing.
-      // NOT '/faculty' — that path is already the faculty dashboard (above),
+      // not '/faculty': that path is already the faculty dashboard (above),
       // and go_router takes the first match, so registering it twice left
       // this screen unreachable: the coordinator's "Invite faculty" button
       // landed on the faculty dashboard instead.
@@ -748,7 +753,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const FacultyInvitesScreen(),
       ),
       // The Accounts tab of the same Users destination as '/invites'
-      // (Invites) -- see shell_destination.dart's `alsoOwns: ['/invites']`
+      // (Invites): see shell_destination.dart's `alsoOwns: ['/invites']`
       // on the Users entry. Registered as its own route, not a query
       // parameter on '/invites', so both tabs stay independently
       // bookmarkable.
@@ -778,7 +783,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final id = state.uri.queryParameters['id'];
           // No force-unwrap: a bare visit (typed directly, or a stale link
           // after a thesis id changes) must not crash into a blank screen
-          // with no way back -- the same failure mode the chapter-detail
+          // with no way back: the same failure mode the chapter-detail
           // route below avoids for an unknown chapter id.
           if (id == null || id.isEmpty) {
             return const PageShell(children: [
@@ -812,7 +817,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               EmptyState(
                 icon: Icons.search_off,
                 title: 'No such chapter',
-                message: 'There are five chapters, I through V.',
+                message: 'That is not a manuscript of this thesis.',
               ),
             ]);
           }
@@ -844,10 +849,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
-      // '/archive/queue' MUST be registered BEFORE '/archive/:thesisId'
+      // '/archive/queue' must be registered before '/archive/:thesisId'
       // below. This is the OPPOSITE situation from '/defence/room/:id' vs
       // '/defence/room/:id/consolidated' above, where the segment counts
-      // differ (2 vs 3) and order genuinely does not matter -- go_router
+      // differ (2 vs 3) and order genuinely does not matter: go_router
       // never even considers the shorter route for the longer path there.
       // Here both '/archive/queue' and '/archive/:thesisId' are two
       // segments, so a dynamic parameter at position 2 WOULD swallow the

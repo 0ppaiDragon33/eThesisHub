@@ -101,12 +101,12 @@ void main() {
     expect(text, contains('We'));
     expect(text, contains('have the honor'));
     // Ex officio entries carry the marker text in place of an acceptance
-    // timestamp — proving they are not rendered as though they accepted.
-    expect(text, contains('Ex officio member'));
+    // timestamp: proving they are not rendered as though they accepted.
+    expect(text, contains('Designated member'));
     // The adviser's Conforme row (a nominated member) must render before the
     // ex officio marker text: ex officio comes after nominated members.
     final adviserIndex = text.indexOf('Armada');
-    final exOfficioIndex = text.indexOf('Ex officio member');
+    final exOfficioIndex = text.indexOf('Designated member');
     expect(adviserIndex, greaterThanOrEqualTo(0));
     expect(exOfficioIndex, greaterThan(adviserIndex));
   });
@@ -162,7 +162,7 @@ void main() {
   // `extractPdfText` pulls literal strings out of `Tj`/`TJ` operators, but the
   // font-weight distinction between a Helvetica and a Helvetica-Bold glyph
   // run lives in the graphics-state operators around the text-showing ops,
-  // not in the parenthesized string literals themselves — the extractor
+  // not in the parenthesized string literals themselves: the extractor
   // cannot see it. `buildAdviserParagraphSpan` and `buildPanelParagraphSpan`
   // are exposed as standalone, non-rendering functions specifically so the
   // span tree can be asserted on directly instead: this inspects the actual
@@ -217,7 +217,7 @@ void main() {
 
   test('a large group does not lose the approvals off the bottom', () async {
     // Found in a real submission. The form was a single `pw.Page`, which
-    // CLIPS overflow silently — no exception, nothing in the logs. A group
+    // CLIPS overflow silently, no exception, nothing in the logs. A group
     // of six researchers pushed the end of the document past the sheet, and
     // the generated PDF stopped mid-Conforme: the last panel member, both
     // ex-officio entries, the Coordinator's recommendation and the Dean's

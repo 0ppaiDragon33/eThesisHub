@@ -90,11 +90,11 @@ Widget _wrap(
               path: '/schedule',
               // the app shell supplies the Scaffold in the real app.
               builder: (_, _) => Scaffold(
-                  appBar: AppBar(title: const Text('Schedule a defence')),
+                  appBar: AppBar(title: const Text('Schedule a defense')),
                   body: const ScheduleDefenceScreen(thesisId: 't1')),
             ),
-            // Matches the real path Task 11 registers for the defence room
-            // (Task 8): '/defence/room/:defenceId'. If the screen's own
+            // Matches the real path registered for the defence room
+            // : '/defence/room/:defenceId'. If the screen's own
             // navigation target ever drifts from that path, this route
             // will not match and the test fails instead of silently
             // agreeing with whatever the screen happens to call.
@@ -102,7 +102,7 @@ Widget _wrap(
               path: '/defence/room/:id',
               builder: (_, _) => const Scaffold(
                 body: Center(
-                    child: Text('defence room', key: Key('landedOnRoom'))),
+                    child: Text('defense room', key: Key('landedOnRoom'))),
               ),
             ),
           ],
@@ -200,7 +200,7 @@ void main() {
     await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Give the defence a venue'), findsOneWidget);
+    expect(find.textContaining('Give the defense a venue'), findsOneWidget);
     expect((await db.collection('defenses').get()).docs, isEmpty);
   });
 
@@ -263,8 +263,8 @@ void main() {
         chaptersProvider('t1').overrideWith((ref) => neverChapters.stream),
       ],
     ));
-    // Unlike the thesis-loading test above, thesisByIdProvider here is NOT
-    // overridden -- it still has to resolve through the real auth stream
+    // Unlike the thesis-loading test above, thesisByIdProvider here is not
+    // overridden: it still has to resolve through the real auth stream
     // and the real fake-firestore query before the chapters branch is even
     // reached. Each of those is its own async gap, so one pump only gets
     // partway; pumping a few more times (never pumpAndSettle, which would
@@ -279,13 +279,13 @@ void main() {
     // (an empty list would read as notReady) and no silent "all clear".
     expect(find.byKey(const Key('readinessWarning')), findsNothing);
     expect(find.byType(AppBar), findsOneWidget);
-    // The form itself is unaffected -- only the thesis stream gates it.
+    // The form itself is unaffected, only the thesis stream gates it.
     expect(find.byKey(const Key('defenceVenue')), findsOneWidget);
   });
 
   testWidgets(
-      'a group that already failed this kind of defence is pointed to the '
-      're-defence instead', (tester) async {
+      'a group that already failed this kind of defense is pointed to the '
+      'redefense instead', (tester) async {
     final db = await seed();
     await db.collection('defenses').doc('f1').set({
       'thesisId': 't1',
@@ -307,7 +307,7 @@ void main() {
     // preOral is the default selection.
     expect(find.byKey(const Key('scheduleRedefenceInstead')), findsOneWidget);
 
-    await tester.tap(find.text('Final defence'));
+    await tester.tap(find.text('Final defense'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('scheduleRedefenceInstead')), findsNothing);

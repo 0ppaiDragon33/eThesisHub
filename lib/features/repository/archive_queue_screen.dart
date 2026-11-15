@@ -14,6 +14,7 @@ import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
 import 'package:ethesishub/data/models/faculty_directory_entry.dart';
 import 'package:ethesishub/data/models/thesis.dart';
+import 'package:ethesishub/features/repository/designated_members.dart';
 import 'package:ethesishub/providers/academic_term_providers.dart';
 import 'package:ethesishub/providers/archive_providers.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
@@ -71,7 +72,7 @@ class ArchiveQueueScreen extends ConsumerWidget {
           key: Key('emptyQueue'),
           icon: Icons.inbox_outlined,
           title: 'Nothing is waiting to be published.',
-          message: 'Theses that passed the final defence appear here.',
+          message: 'Theses that passed the final defense appear here.',
         ),
       ]);
     }
@@ -116,9 +117,9 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   /// The title this row will actually PUBLISH: the approved candidate's
   /// text, not `thesis.workingTitle`.
   ///
-  /// The two are different strings -- the working title is what the group
+  /// The two are different strings: the working title is what the group
   /// typed when they created the thesis, the approved one is what the panel
-  /// and the dean signed off -- and [publish] writes the approved one. A row
+  /// and the dean signed off, and [publish] writes the approved one. A row
   /// labelled with the working title therefore had the coordinator approving
   /// one thing and publishing another.
   ///
@@ -142,7 +143,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
   }
 
   /// A directory entry's name, or the uid itself when the directory has
-  /// none — a raw uid is not an identity, but it beats a blank field in a
+  /// none: a raw uid is not an identity, but it beats a blank field in a
   /// record meant to stay public and correct forever.
   String _nameFor(List<FacultyDirectoryEntry> directory, String uid) {
     for (final entry in directory) {
@@ -151,9 +152,44 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
     return uid;
   }
 
+  /// The group leader's name: the one stored on the thesis, else their
+  /// profile. Empty when neither is available, so publishing is never
+  /// blocked by a missing name.
+  Future<String> _leaderName(Thesis thesis) async {
+    final stored = thesis.leaderName?.trim() ?? '';
+    if (stored.isNotEmpty) return stored;
+    try {
+      final user =
+          await ref.read(userRepositoryProvider).fetchUser(thesis.leaderUid);
+      return user?.fullName.trim() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// The designated members (Research Coordinator and Dean), as
+  /// "Name (Role)". Empty if they cannot be read, so publishing is never
+  /// blocked by it.
+  Future<List<String>> _designatedNames(
+      Thesis thesis, List<FacultyDirectoryEntry> directory) async {
+    try {
+      final nominations = await ref
+          .read(thesisRepositoryProvider)
+          .watchNominations(thesis.id)
+          .first;
+      return designatedMembers(
+        thesis: thesis,
+        nominations: nominations,
+        directory: directory,
+      );
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _publish() async {
     // Publishing makes the manuscript readable to the whole college and is
-    // the one write in this screen with a public, lasting effect — worth a
+    // the one write in this screen with a public, lasting effect: worth a
     // pause even though a coordinator can retract it.
     final confirmed = await confirmAction(
       context,
@@ -174,7 +210,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
       final defences = await ref.read(allDefencesProvider.future);
       final finalDefence = _passedFinalDefence(defences);
       if (finalDefence == null) {
-        throw StateError('This thesis has no passed final defence on '
+        throw StateError('This thesis has no passed final defense on '
             'record anymore.');
       }
 
@@ -189,7 +225,9 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
           : _nameFor(directory, adviserUid);
       final panelNames = [
         for (final uid in thesis.panelistUids) _nameFor(directory, uid),
+        ...await _designatedNames(thesis, directory),
       ];
+      final leaderName = await _leaderName(thesis);
 
       final coordinatorUid = ref.read(signedInUidProvider);
       if (coordinatorUid == null) {
@@ -204,6 +242,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
             finalDefenceId: finalDefence.id,
             coordinatorUid: coordinatorUid,
             academicYear: ref.read(currentTermProvider).valueOrNull?.academicYear,
+            leaderName: leaderName,
           );
       // Best-effort, after the entry is published, swallowing its own failure.
       try {
@@ -239,9 +278,12 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
             ref.watch(candidateTitlesProvider(thesis.id)).valueOrNull) ??
         thesis.workingTitle;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final authors = thesis.memberNames.isNotEmpty
-        ? thesis.memberNames.join(', ')
-        : 'Unknown authors';
+    final everyone = [
+      if ((thesis.leaderName ?? '').trim().isNotEmpty) thesis.leaderName!.trim(),
+      ...thesis.memberNames,
+    ];
+    final authors =
+        everyone.isNotEmpty ? everyone.join(', ') : 'Unknown authors';
     final uploadedAt = thesis.manuscriptUploadedAt;
     final uploadedLabel = uploadedAt == null
         ? 'Manuscript uploaded'
@@ -260,14 +302,14 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
               runSpacing: AppTokens.xs,
               children: [
                 ToneBadge(
-                  label: 'Final defence passed',
+                  label: 'Final defense passed',
                   tone: Tone.endorsed,
                   dense: true,
                 ),
                 ToneBadge(
                   label: 'Manuscript on file',
                   tone: Tone.endorsed,
-                  icon: Icons.picture_as_pdf_outlined,
+                  icon: Icons.description_outlined,
                   dense: true,
                 ),
               ],
@@ -295,7 +337,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
             ],
             const SizedBox(height: AppTokens.md),
             // Check the file is the complete manuscript before publishing
-            // it: the app cannot tell what a PDF contains.
+            // it: the app cannot tell what a PDF or Word file contains.
             Wrap(
               alignment: WrapAlignment.end,
               spacing: AppTokens.sm,
@@ -309,7 +351,7 @@ class _QueueRowState extends ConsumerState<_QueueRow> {
                     thesis.manuscriptPath ?? '',
                     label: 'the manuscript',
                   ),
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  icon: const Icon(Icons.description_outlined, size: 18),
                   label: const Text('Open manuscript'),
                 ),
                 _publishButton(thesis),

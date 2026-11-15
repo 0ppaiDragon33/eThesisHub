@@ -59,7 +59,7 @@ void main() {
   test('uploading onto an approved chapter is refused before any write',
       () async {
     // The rules deny it too, but fake_cloud_firestore does not enforce
-    // rules -- without this check the app would report success and write
+    // rules: without this check the app would report success and write
     // nothing anyone could see.
     final db = await seed();
     final repo = DocumentRepository(db);
@@ -106,7 +106,7 @@ void main() {
     // so a lexical-id test would pass by accident; what actually needs
     // proving is that watchChapters sorts explicitly rather than trusting
     // Firestore's document order, which fake_cloud_firestore returns as
-    // insertion order -- V, II, IV in the order they were written below.
+    // insertion order. V, II, IV in the order they were written below.
     final db = await seed();
     // IV and V need a passed pre-oral to be uploaded at all.
     await db.collection('defenses').doc('po').set({
@@ -185,7 +185,7 @@ void main() {
     );
   });
 
-  group('Chapters IV and V wait for a passed pre-oral', () {
+  group('the full manuscript waits for a passed pre-oral', () {
     Future<void> defence(FakeFirebaseFirestore db, String id,
             {String type = 'preOral',
             String? verdict,
@@ -217,15 +217,22 @@ void main() {
       await defence(db, 'other', verdict: 'pass', thesisId: 't2');
       final repo = DocumentRepository(db);
 
-      for (final c in [ChapterId.chapterIV, ChapterId.chapterV]) {
+      // The full manuscript, and the old Chapters IV and V.
+      for (final c in [
+        ChapterId.manuscriptFinal,
+        ChapterId.chapterIV,
+        ChapterId.chapterV,
+      ]) {
         await expectLater(upload(repo, c), throwsStateError, reason: c.name);
       }
       expect((await db.collection('theses/t1/documents').get()).docs, isEmpty);
-      // Chapters I-III are untouched by the rule.
+      // The Chapters I-III manuscript (and the old Chapter III) are
+      // untouched by the rule.
+      await upload(repo, ChapterId.manuscriptProposal);
       await upload(repo, ChapterId.chapterIII);
     });
 
-    test('allowed once it passed, naming the defence it relies on',
+    test('allowed once it passed, naming the defense it relies on',
         () async {
       final db = await seed();
       await defence(db, 'po-fail', verdict: 'fail');
@@ -233,13 +240,13 @@ void main() {
       await defence(db, 'po-fail_redefence', verdict: 'pass');
       final repo = DocumentRepository(db);
 
-      await upload(repo, ChapterId.chapterIV);
-      final doc = await db.doc('theses/t1/documents/chapterIV').get();
+      await upload(repo, ChapterId.manuscriptFinal);
+      final doc = await db.doc('theses/t1/documents/manuscriptFinal').get();
       expect(doc.data()!['preOralDefenceId'], 'po-fail_redefence');
 
       // The next version keeps naming it.
-      await upload(repo, ChapterId.chapterIV);
-      final again = await db.doc('theses/t1/documents/chapterIV').get();
+      await upload(repo, ChapterId.manuscriptFinal);
+      final again = await db.doc('theses/t1/documents/manuscriptFinal').get();
       expect(again.data()!['currentVersion'], 2);
       expect(again.data()!['preOralDefenceId'], 'po-fail_redefence');
     });

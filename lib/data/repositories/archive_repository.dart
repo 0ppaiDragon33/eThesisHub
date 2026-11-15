@@ -28,9 +28,18 @@ class ArchiveRepository {
   /// Sorted in Dart rather than with `orderBy` so the query needs no index
   /// beside a `where`, and an entry whose `archivedAt` has not yet
   /// resolved from the server sentinel is not silently dropped from the
-  /// list — the same reasoning the defences list already carries.
-  Stream<List<ArchiveEntry>> watchArchive() {
-    return _archive.snapshots().map((s) {
+  /// list: the same reasoning the defences list already carries.
+  ///
+  /// [ownerUid] limits the query to the entries that person owns
+  /// (`uploadedBy`). A student must pass their own uid: the rules let a
+  /// student read only their own entries, and a query that could return
+  /// anyone else's is refused outright. Faculty-side roles pass null and
+  /// see every entry.
+  Stream<List<ArchiveEntry>> watchArchive({String? ownerUid}) {
+    final Query<Map<String, dynamic>> query = ownerUid == null
+        ? _archive
+        : _archive.where('uploadedBy', isEqualTo: ownerUid);
+    return query.snapshots().map((s) {
       final list = s.docs.map((d) => _toEntry(d.id, d.data())).toList();
       list.sort((a, b) {
         final at = a.archivedAt;
@@ -44,23 +53,28 @@ class ArchiveRepository {
   }
 
   Stream<ArchiveEntry?> watchEntry(String thesisId) {
-    return _entry(thesisId)
-        .snapshots()
-        .map((s) => s.exists ? _toEntry(s.id, s.data()!) : null);
+    return _entry(
+      thesisId,
+    ).snapshots().map((s) => s.exists ? _toEntry(s.id, s.data()!) : null);
   }
 
   /// Publishes a thesis: writes the entry and moves the thesis to
   /// `archived`, as ONE batch.
   ///
   /// Two writes, because rules evaluate each independently and neither can
-  /// require the other. The batch is what keeps them together — without it
+  /// require the other. The batch is what keeps them together: without it
   /// a failure between the two would leave the archive and the thesis
   /// disagreeing about whether this work is published.
   ///
   /// [title], [adviserName] and [panelNames] are resolved by the CALLER,
   /// not here: the title lives in a subcollection and the names in the
   /// directory, and a repository that reached into both would be doing the
-  /// screen's job. They are snapshotted verbatim (D49).
+  /// screen's job. They are snapshotted verbatim.
+  ///
+  /// `thesis.memberNames` holds the members the leader ADDED; the leader is
+  /// not in it (Form 1 prints them separately). The archive entry and Form 8
+  /// must name everyone in the group, so [leaderName] is put first, unless
+  /// that name is already there.
   Future<void> publish({
     required Thesis thesis,
     required String title,
@@ -69,6 +83,7 @@ class ArchiveRepository {
     required String finalDefenceId,
     required String coordinatorUid,
     String? academicYear,
+    String? leaderName,
   }) async {
     if (!thesis.hasManuscript) {
       throw StateError('This thesis has no manuscript to publish yet.');
@@ -81,10 +96,19 @@ class ArchiveRepository {
       throw StateError('This thesis is already in the archive.');
     }
 
+    final leader = leaderName?.trim() ?? '';
+    final alreadyListed = thesis.memberNames.any(
+      (n) => n.trim().toLowerCase() == leader.toLowerCase(),
+    );
+    final memberNames = [
+      if (leader.isNotEmpty && !alreadyListed) leader,
+      ...thesis.memberNames,
+    ];
+
     final batch = _db.batch();
     batch.set(_entry(thesis.id), {
       'title': title,
-      'memberNames': thesis.memberNames,
+      'memberNames': memberNames,
       'abstract': thesis.manuscriptAbstract ?? '',
       'college': thesis.college,
       'program': thesis.program,
@@ -112,9 +136,22 @@ class ArchiveRepository {
     await batch.commit();
   }
 
-  /// Corrects display metadata on a published entry (D57).
+  /// Rewrites the names on a published entry: who did the work, and who sat
+  /// on the panel. Display metadata only, which the rules let a coordinator
+  /// change; nothing else on the entry is touched.
+  Future<void> updateNames({
+    required String thesisId,
+    required List<String> memberNames,
+    required List<String> panelNames,
+  }) {
+    return _entry(
+      thesisId,
+    ).update({'memberNames': memberNames, 'panelNames': panelNames});
+  }
+
+  /// Corrects display metadata on a published entry.
   ///
-  /// Cannot touch the manuscript or the archive stamps — the rules refuse
+  /// Cannot touch the manuscript or the archive stamps: the rules refuse
   /// those, and so does this signature: there is no parameter for them.
   Future<void> correct({
     required String thesisId,
@@ -135,12 +172,12 @@ class ArchiveRepository {
   }
 
   /// Retracts a published entry: deletes it AND puts the thesis back to
-  /// `titleApproved`, as ONE batch — the exact inverse of [publish].
+  /// `titleApproved`, as ONE batch: the exact inverse of [publish].
   ///
   /// Deliberately possible, unlike almost everything else in this project:
   /// an archive entry is a publication, not an audit record, and a thesis
-  /// published in error — someone else's work, made readable to the whole
-  /// college — has to be retractable (D57).
+  /// published in error: someone else's work, made readable to the whole
+  /// college: has to be retractable.
   ///
   /// The status restore is not optional tidying. Deleting the entry alone
   /// STRANDS the thesis: it leaves `archived` behind, so the coordinator's

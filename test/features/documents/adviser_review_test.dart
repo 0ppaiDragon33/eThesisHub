@@ -24,7 +24,7 @@ Future<FakeFirebaseFirestore> seed() async {
     'role': 'faculty', 'active': true,
   });
   // The upload control is gated on `thesis.leaderUid == me.uid`, and `me`
-  // comes from the leader's own `users/l1` profile document -- needed for
+  // comes from the leader's own `users/l1` profile document: needed for
   // the leader-view portion of "marking approved locks the upload control
   // for the leader" below.
   await db.collection('users').doc('l1').set({
@@ -48,7 +48,7 @@ Future<FakeFirebaseFirestore> seed() async {
 // app is initialised in a widget test, `authStateProvider` settles into
 // AsyncError, and any uid read off it is silently null forever. Every other
 // screen that reads a uid off `authStateProvider` overrides this the same
-// way -- see upload_version_test.dart's `_wrap`.
+// way: see upload_version_test.dart's `_wrap`.
 Widget _wrap(FakeFirebaseFirestore db, {required String uid}) =>
     ProviderScope(
       overrides: [
@@ -192,8 +192,8 @@ void main() {
   testWidgets('marking approved locks the upload control for the leader',
       (tester) async {
     // The adviser has no upload control at all (see the test above), so
-    // this now signs in as the leader -- the one actor who ever sees the
-    // button -- to keep testing the behaviour it guards: an approved
+    // this now signs in as the leader: the one actor who ever sees the
+    // button: to keep testing the behaviour it guards: an approved
     // chapter is locked to the student, and only the adviser can reopen it.
     _useTallSurface(tester);
     final db = await seed();

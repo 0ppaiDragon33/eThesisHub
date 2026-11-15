@@ -6,13 +6,13 @@ import 'package:ethesishub/data/models/thesis.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/title_providers.dart';
 
-/// The four stages the Defences page switches between (spec 2026-09-25
-/// §6.1), in the order a thesis meets them.
+/// The four stages the Defences page switches between, in the order a
+/// thesis meets them.
 enum DefenceStage {
-  title('title', 'Title defence', 'Title', Icons.forum_outlined),
+  title('title', 'Title defense', 'Title', Icons.forum_outlined),
   preOral('preOral', 'Pre-oral', 'Pre-oral', Icons.record_voice_over_outlined),
-  finalDefence('final', 'Final defence', 'Final', Icons.school_outlined),
-  redefence('redefence', 'Re-defence', 'Re-defence', Icons.replay_outlined);
+  finalDefence('final', 'Final defense', 'Final', Icons.school_outlined),
+  redefence('redefence', 'Redefense', 'Redefense', Icons.replay_outlined);
 
   const DefenceStage(this.param, this.label, this.shortLabel, this.icon);
 
@@ -78,7 +78,7 @@ final defenceStageCountsProvider = Provider<Map<DefenceStage, int>>((ref) {
 });
 
 /// The first stage, in the order a thesis meets them, with something open;
-/// Title when none has (spec 2026-09-25 §6.1, as amended).
+/// Title when none has.
 DefenceStage firstStageWithSomethingOpen(Map<DefenceStage, int> counts) {
   for (final s in DefenceStage.values) {
     if ((counts[s] ?? 0) > 0) return s;
@@ -87,7 +87,7 @@ DefenceStage firstStageWithSomethingOpen(Map<DefenceStage, int> counts) {
 }
 
 /// The stage a bare '/defences' (the sidebar) opens on: wherever the reader
-/// has something open, rather than always Title — a group past its title
+/// has something open, rather than always Title: a group past its title
 /// defence would otherwise land on an empty tab every time.
 ///
 /// Loading until both lists behind the counts have arrived, so the choice is

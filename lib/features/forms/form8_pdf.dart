@@ -68,7 +68,7 @@ final FormTemplate form8Template = FormTemplate(
 ///
 /// No "blank template" marking and no watermark: both were built and then
 /// taken out. The blank is a sheet somebody prints and completes by hand;
-/// once completed and signed it IS an issued certification. `Form8Unissuable`
+/// once completed and signed it is an issued certification. `Form8Unissuable`
 /// guards the case that matters, a certificate generated from incomplete
 /// real data.
 pw.Widget _page(FormText t, {Form8Data? data}) {
@@ -142,7 +142,7 @@ pw.Widget _page(FormText t, {Form8Data? data}) {
   );
 }
 
-/// Generates Form 8 — Certification of Submission of Bound Copies — as a
+/// Generates Form 8 (Certification of Submission of Bound Copies) as a
 /// PDF. `compress: false` keeps the content streams text-greppable; see
 /// `form1_pdf.dart` for why that matters.
 Future<Uint8List> buildForm8Pdf(Form8Data data) async {

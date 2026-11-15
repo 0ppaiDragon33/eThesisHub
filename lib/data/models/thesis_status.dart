@@ -4,7 +4,7 @@ enum ThesisStatus {
   nominationPendingCoordinator,
   nominationPendingDean,
   nominationApproved,
-  // M1b. `titleApproved` is this milestone's terminal state; the move to
+  // Title defence. `titleApproved` is this milestone's terminal state; the move to
   // in_progress belongs to the documents module.
   titlePendingDefence,
   titleApproved,
@@ -24,13 +24,13 @@ enum ThesisStatus {
   }
 }
 
-/// The five buckets a whole-college view groups theses into — coarser than
+/// The five buckets a whole-college view groups theses into: coarser than
 /// [ThesisStatus], which the dean and coordinator dashboards use so a chart
 /// and a table filtering "the same thing" can never silently disagree about
 /// which statuses that means.
 enum ThesisStage {
   nomination('Nomination'),
-  titleDefence('Title defence'),
+  titleDefence('Title defense'),
   chapters('Chapters'),
   draft('Draft'),
   returned('Returned'),

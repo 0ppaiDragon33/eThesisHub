@@ -5,7 +5,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 
 /// A region of a workspace: a heading line and its content on paper.
 ///
-/// Deliberately not a floating card — no shadow, a single hairline, and the
+/// Deliberately not a floating card, no shadow, a single hairline, and the
 /// heading sits inside the border so a page of panels reads as one sheet
 /// divided into parts. [flush] drops the inner padding for content that
 /// draws its own rows edge to edge (tables, action lists).

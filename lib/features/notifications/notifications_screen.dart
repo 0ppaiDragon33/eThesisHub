@@ -17,7 +17,7 @@ import 'package:ethesishub/providers/faculty_mode_provider.dart';
 import 'package:ethesishub/providers/notification_providers.dart';
 
 /// Where tapping a notification of this type should land, and which
-/// [FacultyMode] the reader needs to be in to land there sensibly (D75).
+/// [FacultyMode] the reader needs to be in to land there sensibly.
 ///
 /// `null` mode means "no mode-switch is relevant".
 ({String route, FacultyMode? mode}) notificationDestination(
@@ -34,10 +34,11 @@ import 'package:ethesishub/providers/notification_providers.dart';
     case NotificationType.chapterFeedback:
       return (route: '/thesis/chapters', mode: FacultyMode.adviser);
     // A defence is addressed by its OWN id, through '/defence/room/...'.
-    // '/defence/{thesisId}' is the title defence screen — a different
-    // screen — so an item with no `defenceId` goes to the defences list.
+    // '/defence/{thesisId}' is the title defence screen: a different
+    // screen, so an item with no `defenceId` goes to the defences list.
     case NotificationType.defenceComment:
     case NotificationType.defenceScheduled:
+    case NotificationType.defenceCancelled:
       final id = n.defenceId;
       return (
         route: id == null ? '/defences?stage=preOral' : '/defence/room/$id',
@@ -60,8 +61,20 @@ import 'package:ethesishub/providers/notification_providers.dart';
             : '/defence/room/$gid/grades',
         mode: FacultyMode.adviser,
       );
+    // The group reads its result on its own thesis page.
+    case NotificationType.verdictRecorded:
+      return (route: '/thesis', mode: null);
     case NotificationType.archivePublished:
       return (route: '/archive/${n.thesisId}', mode: null);
+    // Straight to the remarks the adviser just released to the group.
+    case NotificationType.remarksReleased:
+      final id = n.defenceId;
+      return (
+        route: id == null
+            ? '/defences?stage=preOral'
+            : '/defence/room/$id/grades',
+        mode: null,
+      );
     // Straight to the manuscript with the panel's highlights on it.
     case NotificationType.highlightsReleased:
       final id = n.defenceId;
@@ -103,6 +116,12 @@ import 'package:ethesishub/providers/notification_providers.dart';
         (icon: Icons.undo_rounded, tone: Tone.returned),
       NotificationType.evaluationsComplete =>
         (icon: Icons.fact_check_outlined, tone: Tone.act),
+      NotificationType.defenceCancelled =>
+        (icon: Icons.event_busy_outlined, tone: Tone.returned),
+      NotificationType.verdictRecorded =>
+        (icon: Icons.gavel_outlined, tone: Tone.act),
+      NotificationType.remarksReleased =>
+        (icon: Icons.fact_check_outlined, tone: Tone.act),
     };
 
 /// Marks [n] read, switches faculty mode when the target needs it, then
@@ -115,7 +134,7 @@ Future<void> openNotification(
   final role = ref.read(currentUserProvider).valueOrNull?.role;
   await markNotificationRead(ref, n.id);
   final dest = notificationDestination(n);
-  // Switch mode first (D75): a faculty member opening a panelist-only
+  // Switch mode first: a faculty member opening a panelist-only
   // notification while in Adviser mode must not land on a screen their
   // current mode hides.
   if (dest.mode != null && role == UserRole.faculty) {
@@ -147,7 +166,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       title: 'Notifications',
       subtitle: unread == 0
           ? 'You are up to date.'
-          : '$unread unread. Opening one takes you to what it is about.',
+          : '$unread unread.',
       actions: [
         TextButton.icon(
           key: const Key('markAllRead'),
@@ -190,7 +209,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 title: _filter == _Filter.all
                     ? 'No notifications yet'
                     : 'No unread notifications',
-                message: 'Updates on your thesis appear here.',
               );
             }
             return FadeIn(child: NotificationGroups(items: items));
@@ -357,8 +375,7 @@ class RecentNotificationsPanel extends ConsumerWidget {
             return Padding(
               padding: const EdgeInsets.all(AppTokens.lg - 4),
               child: Text(
-                'Nothing yet. Decisions and schedule changes will appear '
-                'here.',
+                'No notifications yet.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             );

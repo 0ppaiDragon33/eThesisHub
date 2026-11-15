@@ -14,33 +14,33 @@ final defenceRepositoryProvider = Provider<DefenceRepository>(
   (ref) => DefenceRepository(ref.watch(firestoreProvider)),
 );
 
-/// Every defence in the college, unfiltered -- straight off
+/// Every defence in the college, unfiltered: straight off
 /// [defenceRepositoryProvider] rather than through [myDefencesProvider].
 ///
 /// [myDefencesProvider] awaits `currentUserProvider.future` before it can
 /// decide which query to run, so anything reading it inherits a dependency
-/// on `users/{uid}` resolving. That dependency does not hang -- `watchUser`
-/// resolves to `null` for a missing profile rather than staying pending --
+/// on `users/{uid}` resolving. That dependency does not hang: `watchUser`
+/// resolves to `null` for a missing profile rather than staying pending,
 /// but a `null` profile does not match the coordinator/dean branch either,
 /// so a coordinator or dean without a profile document silently falls
 /// through to the faculty adviser/panel fan-in and sees the wrong count
 /// instead of the college-wide one. That is the exact race window an
 /// earlier milestone's lockout bug came from (see the "never blocks on the
 /// profile document" notes on the overview screens), so anything on an
-/// overview that wants "every defence" -- a coordinator's or dean's
+/// overview that wants "every defence": a coordinator's or dean's
 /// "Defences this week" tile, or [coordinatorNeedsYouProvider]'s own
-/// "no defence scheduled" check -- reads it from here instead.
+/// "no defence scheduled" check: reads it from here instead.
 final allDefencesProvider = StreamProvider<List<Defence>>((ref) {
   // Rebuilt on a change of user, exactly like defenceProvider and
   // defenceCommentsProvider below. `watchAll` is a `list` on `defenses`,
   // allowed only for a coordinator or dean, so on a COLD sign-in the
   // listener can attach a beat before the auth token reaches the Firestore
-  // SDK -- the first query goes out unauthenticated and is refused, and a
+  // SDK: the first query goes out unauthenticated and is refused, and a
   // plain StreamProvider keeps that AsyncError until a new listener opens.
   // Watching signedInUidProvider re-subscribes the moment auth resolves, so
   // the coordinator/dean overview stops showing "Could not load" until a
   // manual page refresh. (A token refresh keeps the same uid, so this does
-  // not churn the listener -- see the provider's own test.)
+  // not churn the listener: see the provider's own test.)
   ref.watch(signedInUidProvider);
   return ref.watch(defenceRepositoryProvider).watchAll();
 });
@@ -77,7 +77,7 @@ final defenceComposingProvider =
 /// The defences the signed-in user belongs to.
 ///
 /// Each role reaches them by a different query, because `allow list` on
-/// `defenses` has one arm per role — a coordinator's unfiltered list would
+/// `defenses` has one arm per role: a coordinator's unfiltered list would
 /// be denied outright for an adviser.
 final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
   final uid = ref.watch(signedInUidProvider);
@@ -101,7 +101,7 @@ final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
     return;
   }
   // A faculty member advises one group and sits on other panels, and those
-  // are separate `allow list` arms -- no single query returns both. This is
+  // are separate `allow list` arms, no single query returns both. This is
   // a genuine fan-in, not a sample: an earlier shape advanced only when the
   // ADVISER stream emitted and re-read the panel side with `.first`, so a
   // defence that added this member to a panel and touched nothing else
@@ -152,7 +152,7 @@ final myDefencesProvider = StreamProvider<List<Defence>>((ref) async* {
 /// Every submitted evaluation for a defence.
 ///
 /// Before release the rules let a panelist read only their own, so this
-/// stream ERRORS for them rather than returning an empty list -- which is
+/// stream ERRORS for them rather than returning an empty list, which is
 /// correct and must not be smoothed over: an empty list would read as
 /// "nobody has submitted", and the grades screen would then show a
 /// confident, wrong zero. The screen uses [myEvaluationProvider] and the
@@ -164,10 +164,20 @@ final defenceEvaluationsProvider =
   return ref.watch(defenceRepositoryProvider).watchEvaluations(defenceId);
 });
 
+/// The panel's written remarks for a defence, with no scores.
+///
+/// What the group's leader reads once the adviser releases: the rules let
+/// no one else open it, and the leader can open nothing else.
+final defenceRemarksProvider =
+    StreamProvider.family<List<EvaluationRemarks>, String>((ref, defenceId) {
+  ref.watch(signedInUidProvider);
+  return ref.watch(defenceRepositoryProvider).watchRemarks(defenceId);
+});
+
 /// The signed-in panelist's own sheet for a defence, or null.
 ///
-/// Null covers three different things on purpose -- nobody signed in, not
-/// a panelist, or a panelist who has not submitted -- because the screen
+/// Null covers three different things on purpose: nobody signed in, not
+/// a panelist, or a panelist who has not submitted, because the screen
 /// treats all three the same way: there is nothing of yours to show. A
 /// FAILED read is not among them; that arrives as an error on the
 /// AsyncValue and must render as one.

@@ -45,7 +45,7 @@ void main() {
   });
 
   // D (this form): the review table lists a fixed seven roles and is
-  // never prefilled, filled certificate or not -- two of the roles
+  // never prefilled, filled certificate or not: two of the roles
   // (Grammarian, Statistician) aren't modelled anywhere in this app.
   test('the review table always lists all seven roles, unfilled', () async {
     final filled = extractPdfText(await buildForm7Pdf(Form7Data.assemble(

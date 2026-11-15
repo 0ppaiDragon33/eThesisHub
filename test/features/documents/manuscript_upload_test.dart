@@ -16,8 +16,8 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 
 /// A thesis `t1` led by `l1`, with a completed FINAL defence `d1`.
 ///
-/// [verdict] is the only signal that the defence passed — the thesis
-/// status stays `titleApproved` throughout, because nothing in M2–M4 ever
+/// [verdict] is the only signal that the defence passed: the thesis
+/// status stays `titleApproved` throughout, because nothing in chapters–evaluation ever
 /// advances it. Pass `null` for a defence that finished without a verdict
 /// recorded yet.
 Future<FakeFirebaseFirestore> seed({
@@ -88,10 +88,10 @@ Future<FakeFirebaseFirestore> seed({
 }
 
 /// [myDefencesProvider] resolves which query to run off the signed-in
-/// user's OWN role -- a student reaches their defences through
+/// user's OWN role: a student reaches their defences through
 /// `watchForLeader`, everyone else through the adviser/panel fan-in (see
 /// `defences_list_test.dart`'s identical `_seedUser`). `seed()` above is
-/// shared with Task 10 and deliberately carries no `users` collection, so
+/// shared with other suites and deliberately carries no `users` collection, so
 /// this suite's own wrapper supplies the leader's profile.
 Widget app(FakeFirebaseFirestore db, {List<Override> overrides = const []}) {
   // Fire-and-forget: fake_cloud_firestore's write settles on a microtask,
@@ -122,8 +122,8 @@ Widget app(FakeFirebaseFirestore db, {List<Override> overrides = const []}) {
 }
 
 /// [ManuscriptUpload] takes a resolved [Thesis], not a thesis id, so the
-/// wrapper reads it off [myThesisProvider] itself -- the same provider
-/// `thesis_status_screen.dart` reads before ever constructing the widget --
+/// wrapper reads it off [myThesisProvider] itself: the same provider
+/// `thesis_status_screen.dart` reads before ever constructing the widget,
 /// rather than reconstructing one from the literal seeded above, which
 /// would silently drift from whatever `seed()` actually wrote (in
 /// particular `withManuscript`).
@@ -156,7 +156,7 @@ void useTallSurface(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('hidden until the final defence passes', (tester) async {
+  testWidgets('hidden until the final defense passes', (tester) async {
     useTallSurface(tester);
     // A completed final defence with NO verdict recorded.
     await tester.pumpWidget(app(await seed(verdict: null)));
@@ -182,8 +182,8 @@ void main() {
   });
 
   // The archive publishes this file, not the chapter drafts, so the card
-  // says it must be the complete Chapters I to V in one PDF.
-  testWidgets('says to upload the complete Chapters I to V as one PDF',
+  // says it must be the complete Chapters I to V in one PDF or Word file.
+  testWidgets('says to upload the complete Chapters I to V as one file',
       (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(await seed(verdict: 'pass')));
@@ -192,7 +192,7 @@ void main() {
     final instructions = tester.widget<Text>(
         find.byKey(const Key('manuscriptInstructions')));
     expect(instructions.data, contains('Chapters I to V'));
-    expect(instructions.data, contains('one PDF'));
+    expect(instructions.data, contains('one PDF or Word file'));
     expect(instructions.data, contains('archive'));
   });
 
@@ -245,7 +245,7 @@ void main() {
     expect(find.byKey(const Key('manuscriptSubmitted')), findsOneWidget);
   });
 
-  // "Awaiting the coordinator" is a lie once the coordinator has acted --
+  // "Awaiting the coordinator" is a lie once the coordinator has acted,
   // and it used to persist forever, on the same screen that was already
   // showing this group an Archived chip.
   testWidgets('a published thesis says so instead of awaiting the '
@@ -261,11 +261,11 @@ void main() {
     expect(find.byKey(const Key('replaceManuscript')), findsNothing);
   });
 
-  // A failed read is NOT "your defence has not passed". Before this branch
+  // A failed read is not "your defence has not passed". Before this branch
   // existed, `valueOrNull ?? const []` rendered a permission-denied as
   // SizedBox.shrink(): an eligible leader saw no form, no error, no
-  // explanation -- exactly what a group whose defence has not passed sees.
-  testWidgets('a failed defence read surfaces, and is not silence',
+  // explanation: exactly what a group whose defence has not passed sees.
+  testWidgets('a failed defense read surfaces, and is not silence',
       (tester) async {
     useTallSurface(tester);
     await tester.pumpWidget(app(
@@ -285,7 +285,7 @@ void main() {
     // The Firestore code itself, because there are no server-side logs.
     expect(find.byKey(const Key('errorCode')), findsOneWidget);
     expect(find.text('[permission-denied]'), findsOneWidget);
-    // ...and NOT the "not eligible" silence this used to render as.
+    // ...and not the "not eligible" silence this used to render as.
     expect(find.byKey(const Key('manuscriptUpload')), findsNothing);
   });
 }

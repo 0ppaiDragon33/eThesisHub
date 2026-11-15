@@ -15,6 +15,7 @@ import 'package:ethesishub/data/models/defence_annotation.dart';
 import 'package:ethesishub/data/models/defence_composing.dart';
 import 'package:ethesishub/data/models/user_role.dart';
 import 'package:ethesishub/features/defence/defence_status.dart';
+import 'package:ethesishub/features/defence/defence_mode_gate.dart';
 import 'package:ethesishub/features/defence/manuscript/defence_typing.dart';
 import 'package:ethesishub/features/defence/manuscript/highlights_panel.dart';
 import 'package:ethesishub/features/defence/manuscript/manuscript_pane.dart';
@@ -32,13 +33,13 @@ import 'package:ethesishub/providers/thesis_providers.dart';
 /// passage it is about. (Comments written before this are still stored, and
 /// the adviser's consolidation still shows them.)
 ///
-/// Highlights may be drawn only while `defence.status.acceptsComments` --
+/// Highlights may be drawn only while `defence.status.acceptsComments`,
 /// i.e. only while the defence is `inProgress`. The security rules and
 /// [DefenceRepository.addAnnotation] both enforce that independently, but
 /// this screen never offers a control that would always fail.
 ///
 /// `authorPosition` is derived from the signed-in user's relationship to
-/// THIS defence -- not from their account role -- because the position held
+/// THIS defence (not from their account role) because the position held
 /// at a defence must not change retroactively when the account's role does
 /// later. See [Defence]'s and [DefenceAnnotation]'s own doc comments.
 class DefenceRoomScreen extends ConsumerStatefulWidget {
@@ -176,7 +177,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
 
   /// `'Adviser'` if the signed-in uid matches this defence's adviser,
   /// `'Panel Member'` if it sits among this defence's panel, else the
-  /// account's own role for a coordinator or dean. Null for anyone else --
+  /// account's own role for a coordinator or dean. Null for anyone else,
   /// who may not highlight either.
   String? _authorPositionFor(Defence defence, String? uid, UserRole? role) {
     if (uid == null) return null;
@@ -200,7 +201,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
   ///
   /// Before this existed the schedule was frozen at creation, so a
   /// coordinator who picked the wrong day could neither fix it nor remove
-  /// the defence -- the only way forward was opening it anyway.
+  /// the defence: the only way forward was opening it anyway.
   Future<void> _editSchedule(Defence defence) async {
     final venue = TextEditingController(text: defence.venue);
     var when = defence.scheduledAt ?? DateTime.now();
@@ -240,7 +241,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               // The time needs its own control. A date picker alone carries
               // the original hour and minute forward, so a defence booked
               // for the wrong time could have its day corrected and never
-              // its hour -- which is the half more likely to be wrong.
+              // its hour, which is the half more likely to be wrong.
               OutlinedButton(
                 key: const Key('editTime'),
                 onPressed: () async {
@@ -305,7 +306,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancel this defence?'),
+        title: const Text('Cancel this defense?'),
         content: const Text(
             'It stays on record as cancelled and cannot be reopened.'),
         actions: [
@@ -316,7 +317,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
           FilledButton(
             key: const Key('confirmCancel'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Cancel the defence'),
+            child: const Text('Cancel the defense'),
           ),
         ],
       ),
@@ -335,12 +336,11 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       final open = status == DefenceStatus.inProgress;
       final confirmed = await confirmAction(
         context,
-        title: open ? 'Open this defence?' : 'Close this defence?',
+        title: open ? 'Open this defense?' : 'Close this defense?',
         message: open
             ? 'The panel can highlight the manuscript once it is open.'
-            : 'Highlighting stops and grading begins. A closed defence '
-                'cannot be reopened.',
-        confirmLabel: open ? 'Open defence' : 'Close defence',
+            : 'Highlighting stops and grading begins. It cannot be reopened.',
+        confirmLabel: open ? 'Open defense' : 'Close defense',
         confirmKey: const Key('confirmStatus'),
       );
       if (!confirmed || !mounted) return;
@@ -361,14 +361,14 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     } on FirebaseException catch (e) {
       if (mounted) {
         setState(() => _statusError = e.code == 'permission-denied'
-            ? 'You do not have permission to change this defence\'s status '
+            ? 'You do not have permission to change this defense\'s status '
                 '[permission-denied].'
-            : 'Could not update this defence. Please try again.');
+            : 'Could not update this defense. Please try again.');
       }
     } catch (_) {
       if (mounted) {
         setState(() =>
-            _statusError = 'Could not update this defence. Please try again.');
+            _statusError = 'Could not update this defense. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _statusBusy = false);
@@ -380,7 +380,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
   /// profile is never a bare, unnavigable page.
   ///
   /// The Scaffold and AppBar moved to the app shell, which titles this
-  /// route 'Defence room' for every one of these states — hence the
+  /// route 'Defence room' for every one of these states: hence the
   /// [title] override being gone: it named the app bar, and there is no
   /// longer an app bar here to name. Which defence this is, is said by
   /// [PageShell]'s own heading instead.
@@ -396,17 +396,17 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
 
     // Each stream gets its own isLoading/hasError branch, checked apart from
-    // the others -- collapsing them would tell a viewer whose profile is
+    // the others: collapsing them would tell a viewer whose profile is
     // merely still connecting that the defence itself does not exist, or
     // vice versa.
     if (defenceAsync.isLoading) {
-      return _framed(const [LoadingState(label: 'Loading defence…')]);
+      return _framed(const [LoadingState(label: 'Loading defense…')]);
     }
     if (defenceAsync.hasError) {
       return _framed([
         ErrorState(
           error: defenceAsync.error,
-          message: 'Could not load this defence.',
+          message: 'Could not load this defense.',
         ),
       ]);
     }
@@ -415,14 +415,26 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       return _framed(const [
         EmptyState(
           icon: Icons.search_off,
-          title: 'Defence not found',
-          message: 'This defence no longer exists.',
+          title: 'Defense not found',
+          message: 'This defense no longer exists.',
         ),
       ]);
     }
 
+    // A faculty member who holds both capabilities must be in the mode that
+    // matches their seat on THIS defense: adviser mode for the adviser,
+    // panelist mode for a panelist. Anything else is turned away here, before
+    // a single highlight, grade or evaluation is read.
+    final modeGate = checkDefenceModeGate(ref, defence, uid);
+    if (modeGate.gate == DefenceModeGate.loading) {
+      return _framed(const [LoadingState(label: 'Checking your mode…')]);
+    }
+    if (modeGate.gate == DefenceModeGate.blocked) {
+      return _framed([DefenceModeBlock(needed: modeGate.needed!)]);
+    }
+
     // The group sees the panel's highlights only once the adviser has
-    // released them, never while the defence is live (M3-2): a remark may
+    // released them, never while the defence is live: a remark may
     // be half-finished or withdrawn. Decided from `defence` alone, before
     // any highlight stream is consulted, so nothing here can render a live
     // highlight to the one reader who must not see it yet.
@@ -449,8 +461,17 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                     : 'Highlights appear here once your adviser releases them.',
                 key: const Key('leaderRefusal'),
               ),
-              // D47: the group's route to the numbers is the paper grading
-              // sheet, so nothing here links to '/grades'.
+              // The adviser's release of the evaluations opens the panel's
+              // written remarks to the group, never the scores. Until
+              // then, say so rather than show nothing.
+              if (completed && !defence.evaluationsReleased) ...[
+                const Gap.md(),
+                const Text(
+                  'The panel\'s remarks appear here once your adviser '
+                  'releases the evaluations.',
+                  key: Key('leaderGradesPending'),
+                ),
+              ],
               if (completed) ...[
                 const Gap.md(),
                 if (defence.hasVerdict) ...[
@@ -473,7 +494,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                 runSpacing: AppTokens.sm,
                 children: [
                   // The panel's highlights reach the group on the adviser's
-                  // release (spec §7.2): the main thing to do here.
+                  // release: the main thing to do here.
                   if (defence.isReleased)
                     FilledButton.icon(
                       key: const Key('goToManuscript'),
@@ -481,6 +502,17 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                           .go('/defence/room/${widget.defenceId}/manuscript'),
                       icon: const Icon(Icons.highlight_alt, size: 18),
                       label: const Text('View manuscript and highlights'),
+                    ),
+                  // `push`, not `go`: the grades are a deep screen under the
+                  // Defences destination, like the faculty's own link.
+                  if (completed && defence.evaluationsReleased)
+                    FilledButton.icon(
+                      // Opens the remarks-only view of the grades screen.
+                      key: const Key('leaderGoToGrades'),
+                      onPressed: () => context
+                          .push('/defence/room/${widget.defenceId}/grades'),
+                      icon: const Icon(Icons.fact_check_outlined, size: 18),
+                      label: const Text('View remarks'),
                     ),
                 ],
               ),
@@ -508,18 +540,18 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
     final me = meAsync.valueOrNull;
     final role = me?.role;
 
-    // Coordinator only -- not the dean, who may also highlight but does not
+    // Coordinator only, not the dean, who may also highlight but does not
     // drive the room's own open/close lifecycle.
     final isCoordinator = role == UserRole.coordinator;
     final authorPosition = _authorPositionFor(defence, uid, role);
 
-    // Thesis title only, shown for orientation; never gates the room --
+    // Thesis title only, shown for orientation; never gates the room,
     // this stream is not one of the three the room depends on to function.
     final thesisTitle =
         ref.watch(thesisByIdProvider(defence.thesisId)).valueOrNull?.workingTitle;
 
     // The grader's own sheet, watched only for a grader on a closed defence
-    // -- the only reader this figure is ever shown to. Graders are the
+    // the only reader this figure is ever shown to. Graders are the
     // panel, and the Coordinator and the Dean (2026-10-01); never the
     // adviser. Watching it for anyone else would open a stream the rules
     // deny to a role that never asked for it.
@@ -581,7 +613,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
       controller: _manuscript,
       canHighlight: canHighlight,
       highlightClosedReason: defence.status == DefenceStatus.scheduled
-          ? 'Highlighting opens when the defence starts.'
+          ? 'Highlighting opens when the defense starts.'
           : null,
       // Spelled out rather than `canHighlight ? …`: the null checks here are
       // what promote `uid` and `authorPosition` inside the closure.
@@ -642,7 +674,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                         ? null
                         : () => _setStatus(DefenceStatus.inProgress),
                     icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: Text(_statusBusy ? 'Opening…' : 'Open defence'),
+                    label: Text(_statusBusy ? 'Opening…' : 'Open defense'),
                   ),
                   // Say when, not just no.
                   if (tooEarly) ...[
@@ -669,7 +701,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               style: TextButton.styleFrom(
                   foregroundColor: Tone.returned.color(context)),
               onPressed: _statusBusy ? null : _confirmCancel,
-              child: const Text('Cancel this defence'),
+              child: const Text('Cancel this defense'),
             ),
           ],
           if (isCoordinator && defence.status == DefenceStatus.inProgress)
@@ -678,7 +710,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
               onPressed:
                   _statusBusy ? null : () => _setStatus(DefenceStatus.completed),
               icon: const Icon(Icons.stop_rounded, size: 20),
-              label: Text(_statusBusy ? 'Closing…' : 'Close defence'),
+              label: Text(_statusBusy ? 'Closing…' : 'Close defense'),
             ),
         ],
       ),
@@ -741,7 +773,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
           ],
           if (!completed) ...[
             const Gap.sm(),
-            Text('Evaluation opens once the defence is closed.',
+            Text('Evaluation opens once the defense is closed.',
                 style: text.bodySmall),
           ],
         ],
@@ -757,7 +789,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             onPressed: () =>
                 context.push('/defence/room/${defence.redefenceOf}'),
             icon: const Icon(Icons.history, size: 18),
-            label: Text('Re-defence of an earlier '
+            label: Text('Redefense of an earlier '
                 '${defence.type.label.toLowerCase()}. Open the original'),
           ),
         ),
@@ -781,7 +813,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
           kicker: defence.label,
           title: thesisTitle ?? defence.label,
           children: [
-            ...redefenceLink,
+...redefenceLink,
             SplitColumns(
               secondaryFirstWhenStacked: true,
               primary: [
@@ -789,7 +821,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
                   title: 'Highlights',
                   icon: Icons.highlight_alt,
                   child: Text(
-                    'This defence was cancelled, so nothing was marked.',
+                    'This defense was cancelled, so nothing was marked.',
                     key: const Key('cancelledNote'),
                     style: text.bodySmall,
                   ),
@@ -804,7 +836,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
 
     switch (Breakpoint.of(context)) {
       case Breakpoint.expanded:
-        // Spec §7.1 Option A: the manuscript left, the room on the right.
+        // Option A: the manuscript left, the room on the right.
         return KeyedSubtree(
           key: const Key('defenceRoom'),
           child: PageShell(
@@ -813,7 +845,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             kicker: defence.label,
             title: thesisTitle ?? defence.label,
             children: [
-              ...redefenceLink,
+...redefenceLink,
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -848,7 +880,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             kicker: defence.label,
             title: thesisTitle ?? defence.label,
             children: [
-              ...redefenceLink,
+...redefenceLink,
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, box) => Stack(
@@ -910,7 +942,7 @@ class _DefenceRoomScreenState extends ConsumerState<DefenceRoomScreen> {
             kicker: defence.label,
             title: thesisTitle ?? defence.label,
             children: [
-              ...redefenceLink,
+...redefenceLink,
               stacked,
               const Gap.lg(),
               SizedBox(

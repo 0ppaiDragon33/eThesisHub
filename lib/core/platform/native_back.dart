@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 /// The Android back gesture is owned in native code because go_router's
 /// `ShellRoute` reports "nothing to pop" to Android at a top-level
 /// destination, so a Dart-side `PopScope`/`BackButtonListener` is never
-/// consulted — the activity finishes first. Native intercepts the gesture and
+/// consulted: the activity finishes first. Native intercepts the gesture and
 /// calls here so a deep screen still pops through go_router.
 const MethodChannel nativeNavigationChannel = MethodChannel('app/navigation');
 

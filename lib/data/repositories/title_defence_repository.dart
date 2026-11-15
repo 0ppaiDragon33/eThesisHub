@@ -27,7 +27,7 @@ class TitleDefenceRepository {
 
   /// Three is the floor; ten is the ceiling and it is a rules constraint, not
   /// a taste one. Each candidate's create rule costs a `get()` on the thesis,
-  /// and M1a measured that a batch of 20 is denied while 19 commits.
+  /// and nomination measured that a batch of 20 is denied while 19 commits.
   static const int minCandidates = 3;
   static const int maxCandidates = 10;
 
@@ -71,10 +71,10 @@ class TitleDefenceRepository {
   /// Writes the candidates and moves the thesis to `titlePendingDefence`, in
   /// one batch.
   ///
-  /// Batched writes are each evaluated against the state BEFORE the batch, so
-  /// the candidate creates are judged against the thesis's current status —
+  /// Batched writes are each evaluated against the state before the batch, so
+  /// the candidate creates are judged against the thesis's current status,
   /// which is exactly why they are permitted while it is still
-  /// `nominationApproved` or `titleRejected`. M1a verified this behaviour
+  /// `nominationApproved` or `titleRejected`. Nomination verified this behaviour
   /// against the emulator rather than assuming it.
   Future<void> submitCandidateTitles({
     required String thesisId,
@@ -167,8 +167,8 @@ class TitleDefenceRepository {
   /// `deleteComment` on this class. A comment is part of the record the
   /// student eventually reads, and once the panel has seen it, rewriting or
   /// removing it would rewrite history rather than correct it. That
-  /// property is enforced where it can actually be enforced — the security
-  /// rules — and by review of this class; it is not something a unit test
+  /// property is enforced where it can actually be enforced: the security
+  /// rules, and by review of this class; it is not something a unit test
   /// against this API can prove, since the absence of a method cannot fail
   /// a test that never calls it.
   Future<void> addComment({
@@ -195,7 +195,7 @@ class TitleDefenceRepository {
   CollectionReference<Map<String, dynamic>> _composing(String thesisId) =>
       _thesis(thesisId).collection('titleComposing');
 
-  /// Live "is writing" markers, stale ones included — the reader expires
+  /// Live "is writing" markers, stale ones included: the reader expires
   /// them via [ComposingIndicator.isStaleAt], because there are no Cloud
   /// Functions to sweep a laptop that was closed mid-comment.
   Stream<List<ComposingIndicator>> watchComposing(String thesisId) {
@@ -238,7 +238,7 @@ class TitleDefenceRepository {
   /// The Dean records which candidate the panel approved.
   ///
   /// Guarded on the CURRENT persisted status, not on anything the caller
-  /// supplies. M1a shipped a transition without that guard and a stale tab
+  /// supplies. Nomination shipped a transition without that guard and a stale tab
   /// could walk an approved thesis backwards.
   Future<void> approveTitle({
     required String thesisId,
@@ -307,7 +307,7 @@ class TitleDefenceRepository {
     if (!snap.exists) throw StateError('That thesis no longer exists.');
     final status = ThesisStatus.fromString(snap.data()!['status'] as String?);
     if (status != ThesisStatus.titlePendingDefence) {
-      throw StateError('This title defence has already been decided.');
+      throw StateError('This title defense has already been decided.');
     }
   }
 
@@ -329,7 +329,7 @@ class TitleDefenceRepository {
       );
     } catch (_) {
       // Swallowed on purpose. A thesis must not be left undecided because a
-      // log write failed — the same posture the sign-in path takes.
+      // log write failed: the same posture the sign-in path takes.
     }
   }
 
@@ -339,7 +339,7 @@ class TitleDefenceRepository {
   /// rules allow a faculty member to LIST theses only if they are the leader,
   /// a coordinator or the dean. They may however read their own nominations
   /// across every thesis, which is the same query
-  /// `watchMyPendingNominations` uses — and it reuses that query's existing
+  /// `watchMyPendingNominations` uses, and it reuses that query's existing
   /// COLLECTION_GROUP index on `nomineeUid`, so no index change is needed.
   ///
   /// No `conformeStatus` filter: a coordinator and the dean sit on every

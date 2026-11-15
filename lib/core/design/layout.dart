@@ -4,7 +4,7 @@ import 'package:ethesishub/core/theme/app_tokens.dart';
 
 /// The three layout classes the app is designed for.
 ///
-/// Each screen asks which one it is in and composes differently — a phone
+/// Each screen asks which one it is in and composes differently: a phone
 /// is not a shrunken desktop.
 enum Breakpoint {
   /// Under 720: bottom navigation, one stacked column.

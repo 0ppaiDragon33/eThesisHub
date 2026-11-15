@@ -1,13 +1,13 @@
-/// How strong a password looks, for guidance only — never a gate.
+/// How strong a password looks, for guidance only, never a gate.
 enum PasswordStrength { weak, fair, strong }
 
 /// The password rules, in one testable place.
 ///
-/// Deliberately NOT composition rules. NIST SP 800-63B §5.1.1.2 advises
+/// Deliberately not composition rules. NIST SP 800-63B §5.1.1.2 advises
 /// against requiring a mix of character classes: it pushes people toward
 /// `Password1!` and away from long passphrases, which are stronger and
 /// easier to remember. What it recommends instead is a length minimum plus
-/// a check against common, expected and context-specific passwords — which
+/// a check against common, expected and context-specific passwords, which
 /// is also precisely what OWASP A07 names as the failure ("permits weak or
 /// well-known passwords"), rather than the absence of a symbol.
 ///
@@ -28,7 +28,7 @@ class PasswordPolicy {
   ///
   /// Matched as substrings, so `password123` and `isufst2026` are caught by
   /// `password` and `isufst`. A real deployment would check a breach corpus;
-  /// this is a defensible subset for a system with no server to host one —
+  /// this is a defensible subset for a system with no server to host one,
   /// there are no Cloud Functions on the Spark plan, so a k-anonymity call
   /// to an external breach API would have to run from the client and leak
   /// the request to a third party.
@@ -42,7 +42,7 @@ class PasswordPolicy {
   /// The blocking check. Returns an error message, or null to allow.
   ///
   /// [email] is optional so the caller can also refuse a password built from
-  /// the account's own address — NIST names "the username, and derivatives
+  /// the account's own address: NIST names "the username, and derivatives
   /// thereof". Only local parts of four characters or more are considered,
   /// or a two-letter address would ban most passwords containing those two
   /// letters in sequence.

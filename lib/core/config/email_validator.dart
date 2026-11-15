@@ -8,7 +8,7 @@ class EmailValidator {
   /// [enforceDomain] defaults to [AppConfig.enforceInstitutionalDomain] and
   /// exists so tests can exercise both states regardless of how the flag is
   /// currently set. Without it, relaxing the flag for testing would silently
-  /// delete the coverage that proves the restriction works — and that
+  /// delete the coverage that proves the restriction works, and that
   /// restriction is the whole self-registration defence the manuscript
   /// describes.
   static String? validateForRegistration(String email, {bool? enforceDomain}) {

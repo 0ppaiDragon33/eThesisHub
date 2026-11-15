@@ -39,22 +39,37 @@ class ManuscriptPart {
   final bool reopened;
 }
 
-/// The chapters a defence of [type] is about. A re-defence has the same
-/// type as the defence it re-does, so it shows the same chapters.
-List<ChapterId> manuscriptChapters(DefenceType type) =>
-    type == DefenceType.preOral
-        ? ChapterId.proposalChapters
-        : ChapterId.finalChapters;
+/// What a defence of [type] is about: the Chapters I-III manuscript for a
+/// pre-oral, the Chapters I-V manuscript for a final. A re-defence has the
+/// same type as the defence it re-does, so it shows the same one.
+///
+/// A thesis from before manuscripts has its chapters on file as separate
+/// records and no manuscript record: for that, [uploaded] names the
+/// records that exist and the chapters are shown as they always were.
+List<ChapterId> manuscriptChapters(
+  DefenceType type, {
+  Iterable<ChapterId> uploaded = const [],
+}) {
+  final manuscript = type == DefenceType.preOral
+      ? ChapterId.manuscriptProposal
+      : ChapterId.manuscriptFinal;
+  final have = uploaded.toSet();
+  final legacy = type == DefenceType.preOral
+      ? ChapterId.proposalChapters
+      : ChapterId.finalChapters;
+  if (!have.contains(manuscript) && legacy.any(have.contains)) return legacy;
+  return [manuscript];
+}
 
-String chapterNumeral(ChapterId c) =>
-    const ['I', 'II', 'III', 'IV', 'V'][c.index];
+/// "I" for a chapter, "I–III" or "I–V" for a manuscript.
+String chapterNumeral(ChapterId c) => c.mark;
 
 bool isPdfVersion(ChapterVersion v) =>
     v.mimeType == 'application/pdf' ||
     v.storagePath.toLowerCase().endsWith('.pdf');
 
 /// The manuscript, chapter by chapter. [approvedVersions] holds, for each
-/// approved chapter, the version whose number is its `currentVersion` — an
+/// approved chapter, the version whose number is its `currentVersion`: an
 /// approved chapter cannot take a new upload, so that is the approved one.
 ///
 /// [markedVersions] holds, for each chapter, the version records this
@@ -69,7 +84,7 @@ List<ManuscriptPart> planManuscript({
 }) {
   final byId = {for (final c in chapters) c.id: c};
   return [
-    for (final id in manuscriptChapters(type))
+    for (final id in manuscriptChapters(type, uploaded: byId.keys))
       _partFor(id, byId[id], approvedVersions[id],
           markedVersions[id] ?? const []),
   ];

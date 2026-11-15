@@ -35,7 +35,7 @@ Future<void> pump(
           GoRoute(
             path: '/defence/room/:defenceId',
             builder: (_, s) => Scaffold(
-                body: Text('Defence room ${s.pathParameters['defenceId']}')),
+                body: Text('Defense room ${s.pathParameters['defenceId']}')),
           ),
           GoRoute(
             path: '/defence/room/:defenceId/evaluate',
@@ -45,15 +45,15 @@ Future<void> pump(
           GoRoute(
             path: '/defences',
             builder: (_, state) => Scaffold(
-                body: Text('Defences list, stage='
+                body: Text('Defenses list, stage='
                     '${state.uri.queryParameters['stage']}')),
           ),
-          // Present so a test can prove we do NOT land here: this is M1b's
+          // Present so a test can prove we do not land here: this is title defence's
           // title defence screen, keyed by a THESIS id.
           GoRoute(
             path: '/defence/:thesisId',
             builder: (_, s) => Scaffold(
-                body: Text('Title defence ${s.pathParameters['thesisId']}')),
+                body: Text('Title defense ${s.pathParameters['thesisId']}')),
           ),
         ]),
       ),
@@ -165,51 +165,51 @@ void main() {
     final items = await firestore.collection('notifications').doc('u1').collection('items').get();
     expect(items.docs.every((d) => d.data()['read'] == true), isTrue);
   });
-  group('defence notifications address the defence, not the thesis', () {
-    // A defence notification used to route to '/defence/{thesisId}' --
-    // M1b's TitleDefenceScreen. The reader wanted the defence they were
+  group('defense notifications address the defense, not the thesis', () {
+    // A defence notification used to route to '/defence/{thesisId}',
+    // title defence's TitleDefenceScreen. The reader wanted the defence they were
     // told about and landed on a screen about candidate titles instead.
     // The item now carries the defence's own id.
 
-    testWidgets('a defence comment opens that defence room', (tester) async {
+    testWidgets('a defense comment opens that defense room', (tester) async {
       final firestore = await firestoreWith([
         {
           'id': 'c1',
           'type': 'defenceComment',
           'thesisId': 't1',
           'defenceId': 'd1',
-          'message': 'Dr. Cruz commented on your defence.',
+          'message': 'Dr. Cruz commented on your defense.',
           'read': false,
           'createdAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
         },
       ], 'u1');
 
       await pump(tester, firestore: firestore, uid: 'u1');
-      await tester.tap(find.text('Dr. Cruz commented on your defence.'));
+      await tester.tap(find.text('Dr. Cruz commented on your defense.'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Defence room d1'), findsOneWidget);
-      expect(find.text('Title defence t1'), findsNothing);
+      expect(find.text('Defense room d1'), findsOneWidget);
+      expect(find.text('Title defense t1'), findsNothing);
     });
 
-    testWidgets('a scheduled defence opens that defence room', (tester) async {
+    testWidgets('a scheduled defense opens that defense room', (tester) async {
       final firestore = await firestoreWith([
         {
           'id': 's1',
           'type': 'defenceScheduled',
           'thesisId': 't1',
           'defenceId': 'd2',
-          'message': 'Your defence is scheduled.',
+          'message': 'Your defense is scheduled.',
           'read': false,
           'createdAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
         },
       ], 'u1');
 
       await pump(tester, firestore: firestore, uid: 'u1');
-      await tester.tap(find.text('Your defence is scheduled.'));
+      await tester.tap(find.text('Your defense is scheduled.'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Defence room d2'), findsOneWidget);
+      expect(find.text('Defense room d2'), findsOneWidget);
     });
 
     testWidgets('an owed evaluation opens the Form 5c sheet itself',
@@ -220,14 +220,14 @@ void main() {
           'type': 'evaluationAwaits',
           'thesisId': 't1',
           'defenceId': 'd3',
-          'message': 'A defence is waiting on your Form 5c.',
+          'message': 'A defense is waiting on your Form 5c.',
           'read': false,
           'createdAt': Timestamp.fromDate(DateTime(2026, 5, 1)),
         },
       ], 'u1');
 
       await pump(tester, firestore: firestore, uid: 'u1');
-      await tester.tap(find.text('A defence is waiting on your Form 5c.'));
+      await tester.tap(find.text('A defense is waiting on your Form 5c.'));
       await tester.pumpAndSettle();
 
       expect(find.text('Evaluate d3'), findsOneWidget);
@@ -235,10 +235,10 @@ void main() {
 
     testWidgets(
         'an item written before defenceId existed falls back to the '
-        'defences list, never to the title defence screen', (tester) async {
+        'defenses list, never to the title defense screen', (tester) async {
       // Items already in real users' feeds have no `defenceId` key. They
-      // must still go somewhere sensible -- the list the reader can find
-      // the defence in -- rather than a screen about something else.
+      // must still go somewhere sensible: the list the reader can find
+      // the defence in, rather than a screen about something else.
       final firestore = await firestoreWith([
         {
           'id': 'legacy',
@@ -257,8 +257,8 @@ void main() {
       // A defenceScheduled/defenceComment item means a scheduled defence,
       // so the fallback must land on the Pre-oral stage rather than the
       // bare '/defences' (which opens Title).
-      expect(find.text('Defences list, stage=preOral'), findsOneWidget);
-      expect(find.text('Title defence t1'), findsNothing);
+      expect(find.text('Defenses list, stage=preOral'), findsOneWidget);
+      expect(find.text('Title defense t1'), findsNothing);
     });
   });
 }

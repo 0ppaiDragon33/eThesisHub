@@ -48,7 +48,7 @@ void main() {
     await tester.tap(find.byKey(const Key('sendInvite')));
     await tester.pumpAndSettle();
 
-    // The document id is the LOWERCASED address — promotion looks the invite
+    // The document id is the LOWERCASED address: promotion looks the invite
     // up by the signed-in user's lowercased email, so a mixed-case id would
     // never be found and the promotion would silently never happen.
     final doc =
@@ -63,7 +63,7 @@ void main() {
   });
 
   testWidgets('a coordinator cannot invite themselves', (tester) async {
-    // The rules refuse this too — this is the client half, so the coordinator
+    // The rules refuse this too: this is the client half, so the coordinator
     // gets a reason instead of a permission denial. It is the guard that
     // closes the self-elevation path: without it a coordinator could invite
     // themselves as dean and claim it on their next sign-in.

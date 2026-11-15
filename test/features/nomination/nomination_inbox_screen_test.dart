@@ -99,7 +99,7 @@ void main() {
     await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
-    // Falsifiability: this must fail if the reason requirement is deleted —
+    // Falsifiability: this must fail if the reason requirement is deleted,
     // it targets the screen's own keyed error banner, not a label that
     // exists regardless (see task brief's warning about
     // `find.textContaining('Working title')` matching a field's own
@@ -217,14 +217,14 @@ void main() {
     // underlying write keeps the response genuinely "in flight" across one
     // pump so the assertion below is actually falsifiable. flutter_test
     // fakes the clock for Future.delayed, so a bare `pump()` (no duration)
-    // does not advance it — only `pumpAndSettle()` below does.
+    // does not advance it, only `pumpAndSettle()` below does.
     await tester.pumpWidget(
         wrap(db, repository: _SlowThesisRepository(db)));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('accept-t1')));
     await confirmIfAsked(tester);
-    // One pump only — deliberately not settled, so the async response is
+    // One pump only: deliberately not settled, so the async response is
     // still in flight and busy state, if wired, must already be visible.
     await tester.pump();
 

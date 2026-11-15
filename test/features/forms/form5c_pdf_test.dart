@@ -85,7 +85,7 @@ void main() {
     expect(text, contains('ILOILO STATE UNIVERSITY'));
   });
 
-  // D60. The printed 5c has NO identifying fields at all — it works on
+  // The printed 5c has NO identifying fields at all: it works on
   // paper only because it is stapled to Form 5b. A PDF is not.
   test('carries the 5b-style header the printed form lacks', () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
@@ -98,16 +98,16 @@ void main() {
     expect(text, contains('September'));
   });
 
-  test('names which defence it scored', () async {
+  test('names which defense it scored', () async {
     final finalText = extractPdfText(await buildForm5cPdf(assemble()));
-    expect(finalText, contains('Final defence'));
+    expect(finalText, contains('Final defense'));
 
     final preOral = extractPdfText(await buildForm5cPdf(
         assemble(defence: buildDefence(type: DefenceType.preOral))));
-    expect(preOral, contains('Pre-oral defence'));
+    expect(preOral, contains('Pre-oral defense'));
   });
 
-  // D61. The app holds neither, and the paper form rules a line for both.
+  // The app holds neither, and the paper form rules a line for both.
   // The caption alone is not the assertion: `_field`'s null branch would
   // pass that even if it rendered nothing at all beside the label. Assert
   // the caption present AND the literal string "null" absent from the whole
@@ -129,10 +129,10 @@ void main() {
     }
   });
 
-  // D63. M4 scored Title out of 5 (its D35); printing the paper form's
+  // Evaluation scored Title out of 5; printing the paper form's
   // "50%" beside a mark out of 5 would be incoherent. RULING: assert the
   // weight actually printed beside Title (5%), not merely the absence of
-  // "50%" anywhere on the page — the section headers legitimately print
+  // "50%" anywhere on the page: the section headers legitimately print
   // "50%" for A. CONTENT and B. PRESENTATION AND DEFENSE.
   test('Title prints at 5%, not the paper form\'s 50%', () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
@@ -163,7 +163,7 @@ void main() {
     expect(text, contains('Pass'));
   });
 
-  // D62. M4 deliberately does not compute it (its D46). A blank line says
+  // Evaluation deliberately does not compute it. A blank line says
   // so; deleting the row would silently alter the office's form.
   test('Average Rating prints as a labelled blank line', () async {
     final text = extractPdfText(await buildForm5cPdf(assemble()));
@@ -186,7 +186,7 @@ void main() {
     expect(bytes, isNotEmpty);
     expect(text, isNot(contains('null')));
     // Both captions are unconditional, so their presence rules out the rows
-    // being dropped wholesale -- distinct from merely not printing "null".
+    // being dropped wholesale: distinct from merely not printing "null".
     expect(text, contains('Date of Presentation'));
     expect(text, contains('Time of Presentation'));
     // And the rest of the sheet still renders.
@@ -226,7 +226,7 @@ void main() {
   group('buildForm5cBlank', () {
     // Requirement test 2: the blank renders the chrome, all eleven
     // criteria, both section headings, and never prints the literal
-    // string "null" -- a template is nothing but a page where every one
+    // string "null": a template is nothing but a page where every one
     // of Form 5c's existing null-safe renderers (_field, _criterionRow,
     // _summaryRow) is handed nothing to fill in.
     test('renders the chrome, all eleven criteria, the section headings, '
@@ -253,7 +253,7 @@ void main() {
         () async {
       final text = extractPdfText(await buildForm5cBlank());
       // A genuine zero score would print "0 / <weight>", indistinguishable
-      // from a panelist who actually scored the criterion nothing -- the
+      // from a panelist who actually scored the criterion nothing: the
       // same reasoning `form5c_pdf.dart`'s missing-key handling documents.
       // A blank template must print none of those.
       for (final c in evaluationCriteria) {

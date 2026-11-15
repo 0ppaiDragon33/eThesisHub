@@ -62,35 +62,35 @@ class Thesis {
   final DateTime? titlesSubmittedAt;
 
   /// 1 for the first submission, incremented on each resubmission after a
-  /// rejection. Absent on theses created by M1a — read as 0.
+  /// rejection. Absent on theses created by nomination: read as 0.
   final int titleRound;
 
   final String? approvedTitleId;
 
   /// The approved title's text when it was set OUTSIDE the candidate-title
-  /// flow — i.e. by an approved change-of-title (Form 4b). Null on every
+  /// flow: i.e. by an approved change-of-title (Form 4b). Null on every
   /// thesis whose title came the ordinary way (its approved title is
   /// [approvedTitleId]'s candidate). The approved-title resolvers (archive,
   /// evaluation sheet, the student's approved-title card) prefer this when
-  /// present, so a change of title reaches the official record — not only
+  /// present, so a change of title reaches the official record, not only
   /// the [workingTitle] shown in list views.
   final String? approvedTitleText;
   final DateTime? titleDecidedAt;
   final String? titleDecidedBy;
   final String? titleRejectionRemark;
 
-  /// The final consolidated manuscript — one PDF, not the five chapters.
+  /// The final consolidated manuscript: one PDF, not the five chapters.
   ///
   /// Chapters are working artifacts with revision history and feedback
   /// attached; this is the finished publication, the thing §9c has the
   /// student reproduce and §10a has them bind. Kept separate so the
   /// archive's contents cannot change when someone uploads a chapter
-  /// revision (D50).
+  /// revision.
   final String? manuscriptPath;
   final String? manuscriptUrl;
 
   /// Supplied by the student at upload. What makes the archive browsable
-  /// rather than a list of filenames (D56).
+  /// rather than a list of filenames.
   final String? manuscriptAbstract;
 
   final DateTime? manuscriptUploadedAt;
@@ -168,9 +168,9 @@ class Thesis {
     );
   }
 
-  /// Read-side only — for round-tripping in tests and in-memory copies.
+  /// Read-side only: for round-tripping in tests and in-memory copies.
   ///
-  /// Do NOT hand this to `.set()` or `.update()`: `createdAt` is emitted as a
+  /// Do not hand this to `.set()` or `.update()`: `createdAt` is emitted as a
   /// client `DateTime`, and the rules pin server-written timestamps to
   /// `request.time`. Repositories build their own write maps with
   /// `FieldValue.serverTimestamp()`.

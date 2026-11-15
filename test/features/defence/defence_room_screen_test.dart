@@ -23,6 +23,7 @@ Future<FakeFirebaseFirestore> seed({
   List<Map<String, String>> comments = const [],
   DateTime? scheduledAt,
   String? verdict,
+  DateTime? evaluationsReleasedAt,
 }) async {
   final db = FakeFirebaseFirestore();
   await db.collection('theses').doc('t1').set({
@@ -41,7 +42,7 @@ Future<FakeFirebaseFirestore> seed({
     'thesisId': 't1',
     'type': 'preOral',
     // Default is well in the future, so the open window is shut unless a
-    // test says otherwise -- that is the state most tests want, and the
+    // test says otherwise: that is the state most tests want, and the
     // window tests pass their own time relative to now.
     'scheduledAt': Timestamp.fromDate(
         scheduledAt ?? DateTime.now().add(const Duration(days: 7))),
@@ -53,6 +54,8 @@ Future<FakeFirebaseFirestore> seed({
     'createdBy': 'c1',
     'createdAt': Timestamp.fromDate(DateTime(2026, 8, 1)),
     'panelVerdict': ?verdict,
+    if (evaluationsReleasedAt != null)
+      'evaluationsReleasedAt': Timestamp.fromDate(evaluationsReleasedAt),
     if (verdict != null) 'verdictRecordedBy': 'a1',
     if (verdict != null)
       'verdictRecordedAt': Timestamp.fromDate(DateTime(2026, 8, 20)),
@@ -119,7 +122,7 @@ Widget app(
       child: MaterialApp(
         // the app shell supplies the Scaffold in the real app.
         home: Scaffold(
-          appBar: AppBar(title: const Text('Defence room')),
+          appBar: AppBar(title: const Text('Defense room')),
           body: DefenceRoomScreen(defenceId: 'd1'),
         ),
       ),
@@ -185,10 +188,10 @@ void main() {
       'the thesis leader never sees the comment box, even in progress',
       (tester) async {
     // inProgress is the one status where every other role (panelist,
-    // adviser, coordinator, dean) DOES get the box -- see the test above.
+    // adviser, coordinator, dean) does get the box: see the test above.
     // FIX 4 goes further than merely hiding the box: the leader is now
     // refused the room entirely (see the dedicated refusal test below), so
-    // this asserts the box and its reason are BOTH absent -- the leader
+    // this asserts the box and its reason are BOTH absent: the leader
     // never reaches the branch that renders either.
     final db = await seed(status: 'inProgress');
     await db.collection('users').doc('l1').set({
@@ -207,7 +210,7 @@ void main() {
     expect(find.byKey(const Key('leaderRefusal')), findsOneWidget);
   });
 
-  testWidgets('the defence stream loading is shown, not collapsed into absent',
+  testWidgets('the defense stream loading is shown, not collapsed into absent',
       (tester) async {
     // A stream that never emits: the widget stays in the loading state for
     // as long as the test looks at it, without pumpAndSettle racing past
@@ -225,7 +228,7 @@ void main() {
     ));
     await tester.pump();
 
-    expect(find.text('Loading defence…'), findsOneWidget);
+    expect(find.text('Loading defense…'), findsOneWidget);
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.byKey(const Key('commentBody')), findsNothing);
     expect(find.textContaining('Pre-oral'), findsNothing);
@@ -293,7 +296,7 @@ void main() {
       'the thesis leader sees a refusal in the room, not the comment log',
       (tester) async {
     // FIX 4: every role, students included, used to route straight into the
-    // raw live log. M3-2 forbids the group from ever reading it -- the log
+    // raw live log. The spec forbids the group from ever reading it: the log
     // may hold half-finished remarks and ones the panel withdrew.
     final db = await seed(status: 'completed', comments: [
       {
@@ -356,7 +359,7 @@ void main() {
     expect(find.byKey(const Key('openNotYet')), findsNothing);
   });
 
-  testWidgets('the coordinator can move the venue of a scheduled defence',
+  testWidgets('the coordinator can move the venue of a scheduled defense',
       (tester) async {
     // Before this the schedule was frozen at creation: a coordinator who
     // picked the wrong day could neither fix it nor remove the defence.
@@ -381,7 +384,7 @@ void main() {
   testWidgets('the coordinator can move the TIME, not only the date',
       (tester) async {
     // Reported from the field: the dialog had a date picker only, and it
-    // carried the original hour and minute forward -- so a defence booked
+    // carried the original hour and minute forward, so a defence booked
     // for the wrong time could have its day corrected and never its hour,
     // which is the half more likely to be wrong.
     final db = await seed(
@@ -435,7 +438,7 @@ void main() {
     expect(find.byKey(const Key('cancelDefence')), findsNothing);
   });
 
-  testWidgets('cancelling a scheduled defence records it as cancelled',
+  testWidgets('cancelling a scheduled defense records it as cancelled',
       (tester) async {
     // Cancelled rather than deleted: the defence record is evidence, and a
     // hard delete leaves nothing to explain a gap in the history.
@@ -456,7 +459,7 @@ void main() {
     expect(saved.data()!['status'], 'cancelled');
   });
 
-  testWidgets('a panelist on a closed defence is offered the sheet',
+  testWidgets('a panelist on a closed defense is offered the sheet',
       (tester) async {
     await tester.pumpWidget(app(await seed(status: 'completed'), 'p1'));
     await tester.pumpAndSettle();
@@ -464,7 +467,7 @@ void main() {
     expect(find.byKey(const Key('goToEvaluate')), findsOneWidget);
   });
 
-  testWidgets('nobody is offered the sheet before the defence closes',
+  testWidgets('nobody is offered the sheet before the defense closes',
       (tester) async {
     await tester.pumpWidget(app(await seed(status: 'scheduled'), 'p1'));
     await tester.pumpAndSettle();
@@ -481,9 +484,9 @@ void main() {
     expect(find.byKey(const Key('goToEvaluate')), findsNothing);
   });
 
-  // Task 11 review, whole-branch: `goToGrades` is offered on two arms --
+  // `goToGrades` is offered on two arms,
   // always to the adviser once completed (covered above), and to a
-  // panelist once evaluations are released -- but only the adviser arm had
+  // panelist once evaluations are released, but only the adviser arm had
   // a test. This pins the second.
   testWidgets(
       'a panelist is offered the grades too, once evaluations are released',
@@ -535,8 +538,8 @@ void main() {
     expect(find.byKey(const Key('goToGrades')), findsNothing);
   });
 
-  // D47. The verdict is the outcome the group must know, and it lives on
-  // the defence document they can already read -- so it reaches them
+  // The verdict is the outcome the group must know, and it lives on
+  // the defence document they can already read, so it reaches them
   // without any evaluation ever being readable to them.
   testWidgets('the leader is shown their verdict once it is recorded',
       (tester) async {
@@ -547,13 +550,32 @@ void main() {
     expect(find.byKey(const Key('leaderVerdict')), findsOneWidget);
   });
 
-  testWidgets('the leader is shown no grade and no route to one',
+  // The adviser's release is what opens the grades to the
+  // group, so the leader is offered them from that moment and not before.
+  testWidgets('before the release the leader is told the grades are pending',
       (tester) async {
     await tester.pumpWidget(app(
         await seed(status: 'completed', verdict: 'pass'), 'l1'));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('leaderGradesPending')), findsOneWidget);
+    expect(find.byKey(const Key('leaderGoToGrades')), findsNothing);
+    // Never the faculty's affordances.
     expect(find.byKey(const Key('goToGrades')), findsNothing);
+    expect(find.byKey(const Key('goToEvaluate')), findsNothing);
+  });
+
+  testWidgets('once the adviser releases the grades the leader can open them',
+      (tester) async {
+    await tester.pumpWidget(app(
+        await seed(
+            status: 'completed',
+            evaluationsReleasedAt: DateTime(2026, 8, 19)),
+        'l1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('leaderGoToGrades')), findsOneWidget);
+    expect(find.byKey(const Key('leaderGradesPending')), findsNothing);
     expect(find.byKey(const Key('goToEvaluate')), findsNothing);
   });
 
@@ -565,7 +587,7 @@ void main() {
     expect(find.byKey(const Key('leaderVerdictPending')), findsOneWidget);
   });
 
-  testWidgets('a re-defence names itself and links back to the original',
+  testWidgets('a redefense names itself and links back to the original',
       (tester) async {
     final db = await seed(status: 'completed', verdict: 'fail');
     await db.collection('defenses').doc('d1_redefence').set({
@@ -593,14 +615,14 @@ void main() {
       ],
       child: MaterialApp(
         home: Scaffold(
-          appBar: AppBar(title: const Text('Defence room')),
+          appBar: AppBar(title: const Text('Defense room')),
           body: DefenceRoomScreen(defenceId: 'd1_redefence'),
         ),
       ),
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Pre-oral re-defence'), findsAtLeastNWidgets(1));
+    expect(find.text('Pre-oral redefense'), findsAtLeastNWidgets(1));
     expect(find.byKey(const Key('redefenceOfLink')), findsOneWidget);
   });
 }

@@ -40,7 +40,7 @@ Future<ProviderContainer> containerFor(String role, String uid,
 /// Every "reaches X by tapping" case below taps a sidebar destination or a
 /// link on the page one destination across. Those destinations used to be
 /// a dashboard's own bar; they belong to the one app shell now, which
-/// hides them behind a hamburger below 900px -- so on the default 800px
+/// hides them behind a hamburger below 900px, so on the default 800px
 /// test surface the drawer would be shut and every such tap would find
 /// nothing.
 Future<void> pumpApp(WidgetTester tester, ProviderContainer c) async {
@@ -70,7 +70,7 @@ void main() {
     // The only in-app door to '/thesis/create' used to be a button on the
     // student dashboard, which this milestone deletes. It moved onto the
     // 'My thesis' destination that replaced that dashboard's Thesis tab,
-    // so the tap is one destination across rather than on first paint --
+    // so the tap is one destination across rather than on first paint,
     // and this test still fails if that door disappears entirely, which is
     // the whole point of it existing.
     final c = await containerFor('student', 'u1');
@@ -106,15 +106,15 @@ void main() {
 
     // The 'goToThesis' button lived on the student dashboard, which this
     // milestone deletes; the thesis status screen is a sidebar destination
-    // of its own now. The property is unchanged -- a student reaches their
-    // thesis by TAPPING, not only by typing the URL -- and the tap is on
+    // of its own now. The property is unchanged: a student reaches their
+    // thesis by TAPPING, not only by typing the URL, and the tap is on
     // the destination rather than on a button that pointed at it.
     await tester.tap(find.descendant(
         of: find.byKey(const Key('shellSidebar')), matching: find.text('My thesis')));
     await tester.pumpAndSettle();
 
     // The destination screen's own Key, never a heading the origin shares
-    // -- that is what made four M1a navigation tests pass without
+    // that is what made four nomination navigation tests pass without
     // navigating.
     expect(find.byKey(const Key('thesisStatusScreen')), findsOneWidget);
   });
@@ -138,7 +138,7 @@ void main() {
     await pumpApp(tester, c);
 
     // The Conforme inbox is its own destination now, in both faculty
-    // modes -- a nomination belongs to neither role, it is how you acquire
+    // modes: a nomination belongs to neither role, it is how you acquire
     // one. The 'goToInbox' button lived on the deleted faculty dashboard's
     // Nominations tab and pointed at this same route; the destination goes
     // there directly.
@@ -176,8 +176,8 @@ void main() {
   });
 
   testWidgets('a coordinator reaches the faculty invites screen', (tester) async {
-    // This caught a real defect: '/faculty' was registered twice — the
-    // faculty dashboard and then this screen — and go_router takes the
+    // This caught a real defect: '/faculty' was registered twice: the
+    // faculty dashboard and then this screen, and go_router takes the
     // first match, so the invites screen was unreachable and the button
     // landed the coordinator on the faculty dashboard instead. The screen's
     // own widget tests pump it directly, bypassing the router, so only a
@@ -206,7 +206,7 @@ void main() {
       'the coordinator Users destination reaches /users after the '
       'Overview shift', (tester) async {
     // Prepending Overview shifted every other coordinator destination's
-    // index by one -- this destination (Faculty, now Users) moved from
+    // index by one: this destination (Faculty, now Users) moved from
     // index 4 to index 5. The dashboard used to jump on a hard-coded
     // `if (i == 4)`, which would have silently routed this exact tap (now
     // index 5) to whatever destination 4 (Readiness) renders instead, with
@@ -371,8 +371,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // Task 5's change-of-adviser/title request routes. Same fallback as
-  // '/thesis/nominate' and '/thesis/titles' above -- a bare visit (no
+  // The change-of-adviser/title request routes. Same fallback as
+  // '/thesis/nominate' and '/thesis/titles' above: a bare visit (no
   // '?id=') resolves to the leader's own thesis rather than the
   // route builder's "No thesis given" refusal, because a student leads
   // exactly one thesis and the request buttons on the thesis status screen
@@ -397,7 +397,7 @@ void main() {
     c.read(goRouterProvider).go('/thesis/change-adviser');
     await tester.pumpAndSettle();
 
-    // No crash, no "No thesis given" refusal -- resolved straight to the
+    // No crash, no "No thesis given" refusal: resolved straight to the
     // leader's own thesis's request screen.
     expect(find.byKey(const Key('changeRequestScreen')), findsOneWidget);
     expect(find.text('No thesis given'), findsNothing);

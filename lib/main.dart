@@ -19,20 +19,20 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Serve reads from a local cache when the network drops — campus wifi is
+  // Serve reads from a local cache when the network drops: campus wifi is
   // not reliable, and a defence should not stall on a lost connection.
   // Persistence is already on by default on Android/iOS; setting it here is
   // explicit for those and is what opts Web in (IndexedDB). Must be set
   // before any Firestore access, so it sits right after initializeApp. A
-  // second browser tab may decline to share the cache — the app still works,
+  // second browser tab may decline to share the cache: the app still works,
   // just without the offline cache in that tab.
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
 
   // Crash reporting, so a failure during the defence demo leaves a record
-  // instead of a blank stare. Crashlytics is Android/iOS only — it has no
-  // web plugin — so on Web the same two hooks fall back to presenting the
+  // instead of a blank stare. Crashlytics is Android/iOS only: it has no
+  // web plugin, so on Web the same two hooks fall back to presenting the
   // error, which is all the framework can do there.
   if (!kIsWeb) {
     FlutterError.onError =

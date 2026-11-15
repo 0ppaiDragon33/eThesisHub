@@ -14,7 +14,7 @@ import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/form_copy_providers.dart';
 
 /// A repository whose `create` does not resolve until [gate] completes, so
-/// a test can observe the state while a create is still in flight -- which
+/// a test can observe the state while a create is still in flight, which
 /// [FakeFirebaseFirestore]'s own `set()` resolves too quickly to catch.
 class _SlowCreateRepo extends FormCopyRepository {
   _SlowCreateRepo(super.db, this.gate);
@@ -125,7 +125,7 @@ void main() {
     expect(copy.data()['name'], 'Group 3 – Santos');
     expect(copy.data()['formId'], 'form1');
     // go_router 17.5.0's `currentConfiguration.uri` deliberately excludes
-    // ImperativeRouteMatch entries (pushed routes) — see RouteMatchList.uri's
+    // ImperativeRouteMatch entries (pushed routes): see RouteMatchList.uri's
     // doc comment in package:go_router/src/match.dart. A `context.push` is
     // therefore checked on the match list itself, not `.uri.path`.
     expect(

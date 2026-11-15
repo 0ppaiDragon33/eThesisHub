@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:ethesishub/core/design/panel.dart';
+import 'package:ethesishub/data/models/faculty_mode.dart';
+import 'package:ethesishub/features/defence/defence_mode_gate.dart';
+import 'package:ethesishub/features/dashboard/switch_mode_notice.dart';
 import 'package:ethesishub/core/design/tone.dart';
 import 'package:ethesishub/core/theme/app_tokens.dart';
 import 'package:ethesishub/core/widgets/confirm.dart';
@@ -9,20 +12,22 @@ import 'package:ethesishub/core/widgets/page_shell.dart';
 import 'package:ethesishub/core/widgets/states.dart';
 import 'package:ethesishub/data/models/defence.dart';
 import 'package:ethesishub/data/models/evaluation.dart';
-import 'package:ethesishub/data/models/evaluation_criteria.dart';
 import 'package:ethesishub/data/models/user_role.dart';
+import 'package:ethesishub/features/defence/grades_table.dart';
 import 'package:ethesishub/features/defence/redefence_notice.dart';
+import 'package:ethesishub/features/defence/remarks_view.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/defence_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
+import 'package:ethesishub/data/models/evaluation_criteria.dart';
 
 /// Research Form 5c, the other half: release, deliberation and the
 /// recorded verdict.
 ///
 /// The pre-release count is gated on ROLE, never on whether a stream
-/// happened to return data. Task 4's rules grant the adviser `get, list`
+/// happened to return data. The rules grant the adviser `get, list`
 /// on `evaluations` unconditionally, so [defenceEvaluationsProvider] is
-/// safe to open for them before release -- but the same rules still deny
+/// safe to open for them before release, but the same rules still deny
 /// that list to a panelist until release, so opening it for a panelist
 /// here would surface a `permission-denied` this screen would then have
 /// to explain away. `fake_cloud_firestore` enforces no rules, so a
@@ -39,28 +44,6 @@ class DefenceGradesScreen extends ConsumerStatefulWidget {
       _DefenceGradesScreenState();
 }
 
-/// Preferred width of the grades table's first column.
-///
-/// A hint, not a guarantee: `DataCell` passes its own constraints down, so
-/// on a narrow screen this box is squeezed smaller and the label wraps.
-/// Measured — widening it to 420 changes nothing at 360dp. What it does
-/// buy is a cap on a WIDE screen, where the criterion column would
-/// otherwise stretch to fit "Material and Methods  /10" on one line and
-/// leave the three number columns marooned at the far right.
-const double _labelWidth = 230;
-
-/// Width of each panelist column heading, and THE reason the table fits.
-///
-/// A numeric column's heading is laid out in its own Row that will not
-/// wrap, and it is sized against cells holding one or two digits — so an
-/// unboxed "Dr. Panelist One" overflows a column built for "22". Measured:
-/// remove this box and the table overflows by 113px at 360dp and 39px at
-/// every width above it. Boxed and allowed two lines, nothing clips.
-///
-/// `defence_grades_screen_test.dart` pins this with `takeException()` at
-/// 360dp and at 1400dp.
-const double _panelistWidth = 58;
-
 class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
   bool _releasing = false;
   String? _releaseError;
@@ -74,9 +57,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
     final confirmed = await confirmAction(
       context,
-      title: 'Release evaluations to the group?',
-      message: 'The students will see their scores and comments. This cannot '
-          'be undone.',
+      title: 'Release the evaluations?',
+      message:
+          'The panel, the Coordinator and the Dean will see every score and '
+          'comment. The students will see the written remarks only, not the '
+          'scores. This cannot be undone.',
       confirmLabel: 'Release',
       confirmKey: const Key('confirmRelease'),
     );
@@ -92,13 +77,17 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           .releaseEvaluations(defenceId: defenceId, adviserUid: adviserUid);
       // Best-effort, after the release, swallowing its own failure.
       try {
-        await ref.read(auditServiceProvider).log(
+        await ref
+            .read(auditServiceProvider)
+            .log(
               actorUid: adviserUid,
               action: 'evaluations.released',
               targetType: 'defence',
               targetId: defenceId,
             );
-      } catch (_) {/* audit must never block the action */}
+      } catch (_) {
+        /* audit must never block the action */
+      }
     } on StateError catch (e) {
       if (mounted) setState(() => _releaseError = e.message);
     } catch (_) {
@@ -128,7 +117,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     final confirmed = await confirmAction(
       context,
       title: 'Record a ${pass ? 'Pass' : 'Fail'} verdict?',
-      message: 'This is the panel\'s decision and goes on the permanent '
+      message:
+          'This is the panel\'s decision and goes on the permanent '
           'record.',
       confirmLabel: 'Record ${pass ? 'Pass' : 'Fail'}',
       confirmKey: const Key('confirmVerdict'),
@@ -163,7 +153,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
   /// The name the panelist carried when they submitted, denormalized onto
   /// the evaluation itself. Falls back to the uid only for a sheet written
-  /// before the field existed -- a raw uid is not an identity, but it is
+  /// before the field existed: a raw uid is not an identity, but it is
   /// better than a blank cell in a column that must identify someone.
   String _evaluatorLabel(Evaluation e) =>
       e.evaluatorName.isNotEmpty ? e.evaluatorName : e.evaluatorUid;
@@ -192,8 +182,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       );
 
   /// The pre-release block. Everything here is decided from `defence`
-  /// and, for the adviser only, [defenceEvaluationsProvider] -- a
-  /// panelist NEVER opens that stream before release (see the class doc).
+  /// and, for the adviser only, [defenceEvaluationsProvider]: a
+  /// panelist never opens that stream before release (see the class doc).
   List<Widget> _preRelease(
     BuildContext context,
     Defence defence,
@@ -226,6 +216,20 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       }
       final submitted = evalsAsync.valueOrNull ?? const <Evaluation>[];
       final count = submitted.length;
+      // The release is judged on the uids RECORDED on the defence, the
+      // very list the rules read, and on who they are rather than how many:
+      // every panelist must be among them.
+      final outstanding = defence.evaluationsOutstanding(defence.submittedUids);
+      final canRelease = outstanding == 0;
+      // Sheets that exist but were never recorded: submitted before the
+      // record was kept. They count on screen yet not for release, so say
+      // what unlocks it rather than leave a button that looks stuck.
+      final unrecorded =
+          defence.evaluationsOutstanding(
+                submitted.map((e) => e.evaluatorUid),
+              ) ==
+              0 &&
+          !canRelease;
       return [
         Text(
           '$count of $total have submitted',
@@ -233,13 +237,13 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         // Names, not scores: §6 keeps every number off this screen until
-        // release, and D40's mitigation only works if the adviser can see
+        // release, and the mitigation only works if the adviser can see
         // WHO the count is missing rather than a bare fraction.
         //
-        // DELIBERATE OMISSION: §6 asks for who has NOT submitted as well,
+        // DELIBERATE OMISSION: §6 asks for who has not submitted as well,
         // and that half is not built. Naming an absent panelist needs
         // their name, and the defence document carries `panelUids` only
-        // -- no names -- so the missing half would mean either a fan-out
+        // no names, so the missing half would mean either a fan-out
         // of profile reads per row or another denormalization onto the
         // defence. Recorded here so the next reader knows it was decided
         // rather than missed.
@@ -261,19 +265,29 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
-        // Released only once every grader has submitted.
+        if (unrecorded)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'All sheets are in, but some were not recorded. Each grader must save their sheet again.',
+              key: const Key('unrecordedNote'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        // Locked until every grader, every panelist included, has
+        // submitted. A disabled button that says why it is disabled.
         FilledButton(
           key: const Key('releaseEvaluations'),
-          onPressed: _releasing || count < total
+          onPressed: _releasing || !canRelease
               ? null
               : () => _release(widget.defenceId, uid!),
           child: Text(
             _releasing
                 ? 'Releasing…'
-                : count < total
-                    ? 'Waiting on ${total - count} more '
-                        'evaluation${total - count == 1 ? '' : 's'}'
-                    : 'Release evaluations',
+                : !canRelease
+                ? 'Waiting on $outstanding more '
+                      'evaluation${outstanding == 1 ? '' : 's'}'
+                : 'Release evaluations',
           ),
         ),
       ];
@@ -299,7 +313,7 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
         Text(
           submitted
               ? 'Submitted. The adviser releases the grades once every sheet '
-                  'is in.'
+                    'is in.'
               : 'You have not submitted your evaluation yet.',
           key: const Key('mySubmissionStatus'),
           style: Theme.of(context).textTheme.titleMedium,
@@ -315,8 +329,66 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
     ];
   }
 
-  /// Post-release: [defenceEvaluationsProvider] is open to everyone with a
-  /// stake in the defence, adviser and panel alike.
+  /// What the release gives the group: the panel's written remarks and the
+  /// verdict, and never a score. Reads [defenceRemarksProvider], the only
+  /// evaluation data the rules let the group's leader open.
+  List<Widget> _leaderPostRelease(
+    BuildContext context,
+    Defence defence,
+    String? uid,
+  ) {
+    final remarksAsync = ref.watch(defenceRemarksProvider(widget.defenceId));
+    if (remarksAsync.isLoading) {
+      return const [
+        LoadingState(key: Key('gradesLoading'), label: 'Loading remarks…'),
+      ];
+    }
+    if (remarksAsync.hasError) {
+      return [
+        ErrorState(
+          error: remarksAsync.error,
+          message: 'Could not load the panel\'s remarks.',
+        ),
+      ];
+    }
+    final remarks = remarksAsync.valueOrNull ?? const <EvaluationRemarks>[];
+    // Nothing written by anyone is one state; some panelists silent is
+    // another, and those cards say so rather than vanish.
+    final anyWritten = remarks.any((r) => r.comments.isNotEmpty);
+
+    return [
+      Text(
+        'Your adviser has released the panel\'s written remarks on your '
+        '${defence.label.toLowerCase()}. Open a panelist to read theirs. '
+        'Scores are not shown to the group.',
+        key: const Key('leaderGradesIntro'),
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      const Gap.md(),
+      if (!anyWritten)
+        const EmptyState(
+          key: Key('noRemarks'),
+          icon: Icons.notes_rounded,
+          title: 'The panel wrote no remarks',
+          message: 'Nothing was written on the evaluation sheets.',
+        )
+      else
+        RemarksGrid(remarks: remarks),
+      const Gap.md(),
+      Panel(
+        title: 'Panel verdict',
+        icon: Icons.gavel_outlined,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _verdictBlock(context, defence, uid, false, null),
+        ),
+      ),
+    ];
+  }
+
+  /// Post-release: [defenceEvaluationsProvider] is open to the adviser, the
+  /// panel, the Coordinator and the Dean. The group's leader is not among
+  /// them: they read [_leaderPostRelease] instead, which has no scores.
   List<Widget> _postRelease(
     BuildContext context,
     Defence defence,
@@ -358,164 +430,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           message: 'These evaluations were released with none on file.',
         )
       else ...[
-        // CRITERIA DOWN, PANELISTS ACROSS -- deliberately the transpose of
-        // the obvious layout, and the reason is not just width.
-        //
-        // Criteria are fixed at eleven forever; panelists are three, maybe
-        // four. Putting the fixed-and-large count on the horizontal axis
-        // guaranteed overflow on every device permanently -- fourteen
-        // columns against three rows. This way it is eleven rows against
-        // three columns, which fits a 360dp phone with nothing hidden.
-        //
-        // The stronger reason is §8b. The panel deliberates over where they
-        // DISAGREE, and disagreement lives within a criterion, across
-        // panelists -- which is exactly one row here. "Result: 9, 7, 6"
-        // reads in a glance; laid out the other way those three numbers sat
-        // in three different rows and were off-screen together. The section
-        // rows also restore Form 5c's own A/B structure, which the wide
-        // table flattened away.
-        //
-        // NO horizontal scroll, deliberately. A DataTable given unbounded
-        // width -- which is what a horizontal SingleChildScrollView hands
-        // it -- sizes itself to about 1260dp whatever it contains, so the
-        // scroll view was CAUSING the overflow it existed to rescue.
-        // Bounded by the page instead, the table lays its columns out
-        // inside the width it actually has, and the long criterion labels
-        // wrap rather than push it wider.
-        // The table is a bordered, clipped surface rather than rows adrift
-        // on the page. Without it the section headers and the final-grade
-        // row read as more criteria, and the whole thing loses the shape of
-        // a form -- which is what a panel comparing three columns needs.
-        Container(
-          decoration: BoxDecoration(
-            color: Palette.of(context).paper,
-            border: Border.all(color: Palette.of(context).rule),
-            borderRadius: BorderRadius.circular(AppTokens.radius + 2),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: DataTable(
-            key: const Key('gradesTable'),
-            columnSpacing: AppTokens.md,
-            horizontalMargin: AppTokens.md,
-            // UNBOUNDED, not a fixed 60: "Alertness and smartness in
-            // answering question /25" is the form's own wording and runs to
-            // three lines at this column width, and a fixed height clipped
-            // it mid-word. The row grows to whatever the label needs.
-            dataRowMinHeight: 44,
-            dataRowMaxHeight: double.infinity,
-            // A panelist's NAME is far wider than the one or two digits
-            // beneath it, and a numeric column's heading is laid out in its
-            // own Row that will not wrap -- so an unboxed "Dr. Panelist One"
-            // overflowed a column sized for "22". Boxed and allowed two
-            // lines, with the extra heading height that needs.
-            headingRowHeight: 64,
-            columns: [
-              const DataColumn(label: Text('Criterion')),
-              for (final e in evaluations)
-                DataColumn(
-                  label: SizedBox(
-                    width: _panelistWidth,
-                    child: Text(
-                      _evaluatorLabel(e),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                  numeric: true,
-                ),
-            ],
-            rows: [
-              for (final section in EvaluationSection.values) ...[
-                // A section header. DataTable gives no spanning cell, so
-                // the label sits in the first column and the rest are
-                // blank -- which reads correctly and keeps the row count
-                // honest for anything counting rows.
-                DataRow(
-                  key: ValueKey('section_${section.name}'),
-                  // Tinted so a section header does not read as a twelfth
-                  // criterion. Theme colours, not literals -- this screen has
-                  // to survive the dark toggle.
-                  color: WidgetStateProperty.all(
-                    Theme.of(context).colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-                  ),
-                  cells: [
-                    DataCell(
-                      SizedBox(
-                        width: _labelWidth,
-                        child: Text(
-                          '${section.label}, out of ${EvaluationSection.sectionTotal}',
-                          style: Theme.of(context).textTheme.labelMedium,
-                        ),
-                      ),
-                    ),
-                    for (final _ in evaluations) const DataCell(Text('')),
-                  ],
-                ),
-                for (final c in evaluationCriteria.where(
-                  (c) => c.section == section,
-                ))
-                  DataRow(
-                    key: ValueKey('criterion_${c.key}'),
-                    cells: [
-                      // The weight travels with the criterion, so a 6
-                      // beside "/10" and a 6 beside "/25" are not read as
-                      // the same performance.
-                      DataCell(
-                        SizedBox(
-                          width: _labelWidth,
-                          // The weight travels with the criterion, so a 6
-                          // beside /10 and a 6 beside /25 are not read as
-                          // the same performance.
-                          child: Text('${c.label}  /${c.weight}'),
-                        ),
-                      ),
-                      for (final e in evaluations)
-                        DataCell(Text('${e.scores[c.key] ?? 0}')),
-                    ],
-                  ),
-              ],
-              DataRow(
-                key: const ValueKey('row_total'),
-                // The row the whole sheet exists to produce, so it is tinted
-                // and coloured rather than sitting as one more line of digits.
-                color: WidgetStateProperty.all(
-                  Theme.of(
-                    context,
-                  ).colorScheme.primaryContainer.withValues(alpha: 0.35),
-                ),
-                cells: [
-                  DataCell(
-                    Text(
-                      'Final grade',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  for (final e in evaluations)
-                    DataCell(
-                      Text(
-                        '${e.total}',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              DataRow(
-                key: const ValueKey('row_rating'),
-                cells: [
-                  const DataCell(Text('Rating')),
-                  for (final e in evaluations)
-                    DataCell(Text(e.rating?.label ?? '—')),
-                ],
-              ),
-            ],
-          ),
-        ),
+        // Criteria down, panelists across: eleven rows against a few
+        // columns, so the numbers a panel disagrees over (one criterion,
+        // across panelists) sit in a single row. The criterion column stays
+        // put and the panelists' columns slide, so a row keeps its label.
+        GradesTable(evaluations: evaluations, evaluatorLabel: _evaluatorLabel),
         const Gap.lg(),
         Panel(
           child: Row(
@@ -524,8 +443,10 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Panel mean',
-                        style: Theme.of(context).textTheme.labelMedium),
+                    Text(
+                      'Panel mean',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
                     Text(
                       // One decimal place: 83.5 and 84.4 must not both
                       // read as 84.
@@ -547,8 +468,9 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
             ],
           ),
         ),
-        if (contentKeys
-            .any((k) => evaluations.any((e) => e.comments[k] != null))) ...[
+        if (contentKeys.any(
+          (k) => evaluations.any((e) => e.comments[k] != null),
+        )) ...[
           const Gap.md(),
           Panel(
             title: 'Remarks by criterion',
@@ -572,7 +494,8 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                    '${_evaluatorLabel(e)}: ${e.comments[key]}'),
+                                  '${_evaluatorLabel(e)}: ${e.comments[key]}',
+                                ),
                               ),
                         ],
                       ),
@@ -617,12 +540,12 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           // verdictRecordedBy == request.auth.uid on the only arm that
           // can write it, and only the adviser passes that arm, so the
           // scribe is always the adviser and needs no second
-          // denormalization to say so. D42 wants a reader to see that
-          // this was transcribed rather than decided -- which is what
+          // denormalization to say so. The spec wants a reader to see that
+          // this was transcribed rather than decided, which is what
           // this sentence says.
           defence.verdictRecordedAt != null
               ? 'Recorded by the adviser on '
-                  '${_formatDateTime(defence.verdictRecordedAt!)}.'
+                    '${_formatDateTime(defence.verdictRecordedAt!)}.'
               : 'Recorded by the adviser.',
           key: const Key('verdictScribe'),
           style: Theme.of(context).textTheme.bodySmall,
@@ -641,13 +564,18 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       ];
     }
 
-    // A mean below the passing mark admits only Fail (D77). A null mean
-    // means nothing was submitted, so there is nothing to gate on -- the
-    // release gate upstream already prevents a verdict in that state.
+    // The mean decides which verdict is open, both ways. Below the passing
+    // mark only Fail is allowed; at or above it only Pass is, so Fail
+    // is locked. Exactly one of the two is ever open. A null mean means
+    // nothing was submitted, so there is nothing to gate on: the release
+    // gate upstream already prevents a verdict in that state.
     final passLocked = mean != null && !meanClearsPassingMark(mean);
+    final failLocked = mean != null && meanClearsPassingMark(mean);
     // Never hand the record button a selection the gate forbids, even if
-    // the selection drifted to Pass before the grades resolved.
-    final selection = passLocked && _verdictSelection == PassFail.pass
+    // the selection drifted there before the grades resolved.
+    final selection =
+        (passLocked && _verdictSelection == PassFail.pass) ||
+            (failLocked && _verdictSelection == PassFail.fail)
         ? null
         : _verdictSelection;
 
@@ -669,6 +597,16 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ],
+      if (failLocked) ...[
+        const Gap.sm(),
+        Text(
+          // The precise mean, for the same reason as the Pass lock above.
+          'Mean ${mean.toStringAsFixed(2)} is $passingMark or more, so only '
+          'Pass is allowed.',
+          key: const Key('verdictFailLocked'),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
       const Gap.md(),
       SegmentedButton<PassFail>(
         segments: [
@@ -677,7 +615,11 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
             label: const Text('Pass'),
             enabled: !passLocked,
           ),
-          const ButtonSegment(value: PassFail.fail, label: Text('Fail')),
+          ButtonSegment(
+            value: PassFail.fail,
+            label: const Text('Fail'),
+            enabled: !failLocked,
+          ),
         ],
         selected: {?selection},
         emptySelectionAllowed: true,
@@ -712,14 +654,14 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
 
     if (defenceAsync.isLoading) {
       return _framed(const [
-        LoadingState(key: Key('gradesLoading'), label: 'Loading defence…'),
+        LoadingState(key: Key('gradesLoading'), label: 'Loading defense…'),
       ]);
     }
     if (defenceAsync.hasError) {
       return _framed([
         ErrorState(
           error: defenceAsync.error,
-          message: 'Could not load this defence.',
+          message: 'Could not load this defense.',
         ),
       ]);
     }
@@ -728,26 +670,62 @@ class _DefenceGradesScreenState extends ConsumerState<DefenceGradesScreen> {
       return _framed(const [
         EmptyState(
           icon: Icons.search_off,
-          title: 'Defence not found',
-          message: 'This defence no longer exists.',
+          title: 'Defense not found',
+          message: 'This defense no longer exists.',
         ),
       ]);
+    }
+
+    // A faculty member who holds both capabilities must be in the mode that
+    // matches their seat on THIS defense: adviser mode for the adviser,
+    // panelist mode for a panelist. Anything else is turned away here, before
+    // a single highlight, grade or evaluation is read.
+    final modeGate = checkDefenceModeGate(ref, defence, uid);
+    if (modeGate.gate == DefenceModeGate.loading) {
+      return _framed(const [LoadingState(label: 'Checking your mode…')]);
+    }
+    if (modeGate.gate == DefenceModeGate.blocked) {
+      return _framed([DefenceModeBlock(needed: modeGate.needed!)]);
     }
 
     final isAdviser = uid != null && uid == defence.adviserUid;
     // Graders: the panel, and the Coordinator and the Dean (2026-10-01).
     final role = ref.watch(currentUserProvider).valueOrNull?.role;
-    final isGrader = uid != null &&
+    final isGrader =
+        uid != null &&
         !isAdviser &&
         (defence.panelUids.contains(uid) ||
             role == UserRole.coordinator ||
             role == UserRole.dean);
+    // The group's leader: the student who owns the thesis. Not a grader and
+    // not on the panel, so the mode switch never applies to them.
+    final isLeader =
+        uid != null && !isAdviser && !isGrader && uid == defence.leaderUid;
     final released = defence.evaluationsReleased;
 
     final children = released
-        ? _postRelease(context, defence, uid, isAdviser)
+        ? (isLeader
+              ? _leaderPostRelease(context, defence, uid)
+              : _postRelease(context, defence, uid, isAdviser))
         : _preRelease(context, defence, uid, isAdviser, isGrader);
 
-    return _framed(children, title: defence.label, subtitle: 'Grades');
+    final isPanelMember = uid != null && defence.panelUids.contains(uid);
+    final modeNotice = isAdviser
+        ? const SwitchModeNotice(
+            needed: FacultyMode.adviser,
+            message: 'Switch to Adviser mode to release grades.',
+          )
+        : isPanelMember
+        ? const SwitchModeNotice(
+            needed: FacultyMode.panelist,
+            message: 'Switch to Panelist mode to evaluate.',
+          )
+        : null;
+
+    return _framed(
+      [?modeNotice, ...children],
+      title: defence.label,
+      subtitle: 'Grades',
+    );
   }
 }

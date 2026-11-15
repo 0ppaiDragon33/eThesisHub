@@ -113,7 +113,7 @@ void main() {
     );
 
     final noms = await repo.watchNominations(thesisId).first;
-    // 4 distinct people total (d1, p1, p2, p3) — catches a collision that
+    // 4 distinct people total (d1, p1, p2, p3): catches a collision that
     // writes two separate documents (e.g. under different doc ids) instead
     // of resolving to one, which a same-uid count alone would miss.
     expect(noms, hasLength(4));
@@ -135,7 +135,7 @@ void main() {
     // FOUR panelists are passed, not three, and that is load-bearing rather
     // than incidental: the collision means only THREE of them survive as real
     // panel members, and `submitNominations` now refuses any submission whose
-    // effective panel would fall below three (I2 — such a thesis wedges
+    // effective panel would fall below three (I2: such a thesis wedges
     // permanently at `approve`). This fixture used to pass three, one of them
     // the coordinator, which is precisely the wedging shape; the subject
     // under test here is the collapse itself, so the fixture is widened to a
@@ -153,7 +153,7 @@ void main() {
     );
 
     final noms = await repo.watchNominations(thesisId).first;
-    // 5 distinct people total (a1, c1, p2, p3, p4) — catches a collision that
+    // 5 distinct people total (a1, c1, p2, p3, p4): catches a collision that
     // writes two separate documents (e.g. under different doc ids) instead
     // of resolving to one, which a same-uid count alone would miss.
     expect(noms, hasLength(5));
@@ -194,7 +194,7 @@ void main() {
   });
 
   test('reopening refuses a thesis that is not awaiting Conforme', () async {
-    // Still 'draft' -- never submitted. The same guard is what stops a
+    // Still 'draft', never submitted. The same guard is what stops a
     // reopen rewinding an already-recommended or already-approved thesis.
     expect(
       () => repo.reopenForRenomination(
@@ -205,7 +205,7 @@ void main() {
     );
   });
 
-  // This used to assert the opposite — that resubmitting silently pruned ANY
+  // This used to assert the opposite: that resubmitting silently pruned ANY
   // nominee dropped from the roster, including one still waiting to answer.
   // That passed only because `fake_cloud_firestore` does not evaluate rules.
   // Firestore does: the leader's delete arm is pinned to
@@ -221,7 +221,7 @@ void main() {
       coordinatorUid: 'c1',
     );
 
-    // p1 is still pending — nobody declined here — and is dropped for p4.
+    // p1 is still pending (nobody declined here) and is dropped for p4.
     await expectLater(
       repo.submitNominations(
         thesisId: thesisId,
@@ -247,7 +247,7 @@ void main() {
   });
 
   // The regression that matters: the whole rescue path, end to end. Without
-  // the prune this fails at the last line -- p1's `declined` document
+  // the prune this fails at the last line: p1's `declined` document
   // survives their replacement and counts as outstanding forever, so the
   // thesis stalls again on the very action meant to free it.
   test('decline, reopen, re-nominate and accept advances the thesis',

@@ -80,7 +80,7 @@ Future<FakeFirebaseFirestore> seed({String status = 'titleApproved'}) async {
     'semester': 'First', 'academicYear': '2026-2027',
   });
   // The upload control is now gated on `thesis.leaderUid == me.uid`, and
-  // `me` comes from the leader's own `users/l1` profile document -- without
+  // `me` comes from the leader's own `users/l1` profile document: without
   // it, currentUserProvider yields null forever and the button this whole
   // file taps would never render.
   await db.collection('users').doc('l1').set({
@@ -92,7 +92,7 @@ Future<FakeFirebaseFirestore> seed({String status = 'titleApproved'}) async {
 
 // Without this, `FirebaseAuth.instance` throws `[core/no-app]` because no
 // app is initialised in a widget test, `authStateProvider` settles into
-// AsyncError, and the handler's uid read is silently null forever -- the
+// AsyncError, and the handler's uid read is silently null forever: the
 // upload would never even start. Every other screen that reads a uid off
 // `authStateProvider` for a write (e.g. submit_titles_screen_test.dart)
 // overrides this the same way.
@@ -199,8 +199,8 @@ void main() {
       'the leader still sees the upload control when their users/{uid} '
       'profile document does not exist', (tester) async {
     // No `users/l1` doc is seeded here, unlike `seed()` above. A leader can
-    // reach this screen with no profile document at all -- a failed
-    // signup, a migration gap, manual data entry -- and `leaderUid` is a
+    // reach this screen with no profile document at all: a failed
+    // signup, a migration gap, manual data entry, and `leaderUid` is a
     // plain uid on the thesis itself, so the control must not depend on a
     // second Firestore read that this leader may never have a document for.
     final db = FakeFirebaseFirestore();
@@ -237,13 +237,12 @@ void main() {
             thesisId: 't1',
             chapter: ChapterId.chapterI,
             pickDocument: ({required Set<String> allowed}) async {
-              expect(allowed, {'pdf'});
+              expect(allowed, {'pdf', 'docx', 'doc'});
               return PickedDocument(
-                name: 'chapter1.docx',
-                bytes: Uint8List.fromList([0x50, 0x4B, 3, 4]),
-                extension: 'docx',
-                contentType: 'application/vnd.openxmlformats-'
-                    'officedocument.wordprocessingml.document',
+                name: 'chapter1.txt',
+                bytes: Uint8List.fromList([0x68, 0x69]),
+                extension: 'txt',
+                contentType: 'text/plain',
               );
             },
           ),
@@ -256,16 +255,16 @@ void main() {
     await confirmIfAsked(tester);
     await tester.pumpAndSettle();
 
-    expect(find.text('Choose a PDF file.'), findsOneWidget);
+    expect(find.text('Choose a PDF, DOCX or DOC file.'), findsOneWidget);
     expect(
         (await db.collection('theses/t1/documents').get()).docs, isEmpty);
   });
 
-  testWidgets('the upload area says to save as PDF', (tester) async {
+  testWidgets('the upload area says PDF or Word is accepted', (tester) async {
     final db = await seed();
     await tester.pumpWidget(_wrap(db, _FakeStorage()));
     await tester.pumpAndSettle();
-    expect(find.text('Upload chapters as PDF. From Word: File → Save As → PDF.'),
-        findsOneWidget);
+    final hint = tester.widget<Text>(find.byKey(const Key('chapterPdfHint')));
+    expect(hint.data, contains('PDF or Word'));
   });
 }

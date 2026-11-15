@@ -10,7 +10,7 @@ import 'package:ethesishub/data/services/storage_service.dart';
 import 'package:ethesishub/data/services/supabase_storage_service.dart';
 
 /// functions_client 2.7.1 never returns a non-2xx [FunctionResponse] from
-/// `invoke` — it throws a [FunctionException] instead. These tests exercise
+/// `invoke`: it throws a [FunctionException] instead. These tests exercise
 /// [SupabaseStorageService] against a real [SupabaseClient] whose HTTP layer
 /// is a [MockClient], so the refusal comes from the same code path a device
 /// hits: through `functions.invoke` throwing, not a hand-built response.

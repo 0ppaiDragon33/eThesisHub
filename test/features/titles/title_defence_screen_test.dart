@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -6,8 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import 'package:ethesishub/core/widgets/open_document.dart';
 import 'package:ethesishub/data/repositories/title_defence_repository.dart';
 import 'package:ethesishub/data/services/storage_service.dart';
+import 'package:ethesishub/features/forms/editable/editor_services.dart';
 import 'package:ethesishub/features/titles/title_defence_screen.dart';
 import 'package:ethesishub/providers/auth_providers.dart';
 import 'package:ethesishub/providers/service_providers.dart';
@@ -21,6 +25,7 @@ import '../../support/confirm_dialog.dart';
 Future<FakeFirebaseFirestore> seeded({
   String viewerRole = 'faculty',
   bool withPreviousRound = false,
+  String status = 'titlePendingDefence',
 }) async {
   final round = withPreviousRound ? 2 : 1;
   final db = FakeFirebaseFirestore();
@@ -29,7 +34,7 @@ Future<FakeFirebaseFirestore> seeded({
     'role': viewerRole, 'active': true,
   });
   await db.collection('theses').doc('t1').set({
-    'leaderUid': 'l1', 'status': 'titlePendingDefence',
+    'leaderUid': 'l1', 'status': status,
     'panelistUids': <String>['viewer'], 'adviserUid': 'a1',
     'memberNames': <String>[], 'workingTitle': 'T', 'college': 'CICT',
     'program': 'BSIT', 'semester': 'First', 'academicYear': '2026-2027',
@@ -78,9 +83,11 @@ Widget wrap(
   FakeFirebaseFirestore db, {
   UrlOpener? openUrl,
   TitleDefenceRepository? repository,
+  List<Override> extra = const [],
 }) =>
     ProviderScope(
       overrides: [
+        ...extra,
         firestoreProvider.overrideWithValue(db),
         if (repository != null)
           titleDefenceRepositoryProvider.overrideWithValue(repository),
@@ -124,7 +131,7 @@ void main() {
   testWidgets('shows every candidate of the current round, and only those',
       (tester) async {
     // Two rounds on the record. The previous round's candidate is history
-    // the panel must not be asked to judge — and it is the only thing that
+    // the panel must not be asked to judge, and it is the only thing that
     // makes this test about the ROUND. With a single-round fixture the
     // round filter could be deleted outright and all nine tests still
     // passed; this seeds the superseded candidate and asserts its absence.
@@ -145,19 +152,28 @@ void main() {
     // The URLs were written on submission and rendered nowhere: the panel
     // saw three title strings and could not read a single justification.
     useTallSurface(tester);
-    final opened = <Uri>[];
-    await tester.pumpWidget(wrap(await seeded(), openUrl: (uri) async {
-      opened.add(uri);
-      return true;
-    }));
+    final fetched = <Uri>[];
+    await tester.pumpWidget(wrap(await seeded(), extra: [
+      storedDocumentBytesProvider.overrideWithValue((url) async {
+        fetched.add(url);
+        return Uint8List.fromList([1, 2, 3]);
+      }),
+      formPreviewBuilderProvider.overrideWithValue((build) {
+        build();
+        return const Text('pages', key: Key('stubPreview'));
+      }),
+    ]));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('openJustification-ct2')));
     await tester.pumpAndSettle();
 
-    expect(opened.map((u) => u.toString()),
+    // A justification is a PDF: previewed in the viewer, like a form.
+    expect(find.byKey(const Key('documentViewer')), findsOneWidget);
+    expect(find.byKey(const Key('stubPreview')), findsOneWidget);
+    expect(fetched.map((u) => u.toString()),
         ['https://signed.test/theses/t1/ct2/uuid.pdf'],
-        reason: 'the link must open THAT candidate, not the first one');
+        reason: 'the viewer must open THAT candidate, not the first one');
   });
 
   testWidgets('the panel can open the presentation', (tester) async {
@@ -172,6 +188,14 @@ void main() {
     await tester.tap(find.byKey(const Key('openPresentation')));
     await tester.pumpAndSettle();
 
+    // A PPTX cannot be drawn here: the viewer says so, and the file leaves
+    // the app only when the panel member presses Download.
+    expect(find.byKey(const Key('noPreview')), findsOneWidget);
+    expect(opened, isEmpty);
+
+    await tester.tap(find.byKey(const Key('downloadDocument')));
+    await tester.pumpAndSettle();
+
     expect(opened.map((u) => u.toString()),
         ['https://signed.test/theses/t1/presentation/uuid.pptx']);
   });
@@ -183,12 +207,13 @@ void main() {
         wrap(await seeded(), openUrl: (_) async => false));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('openJustification-ct1')));
+    await tester.tap(find.byKey(const Key('openPresentation')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('downloadDocument')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('error')), findsOneWidget);
-    expect(find.textContaining('Could not open the justification'),
-        findsOneWidget);
+    expect(find.byKey(const Key('documentViewerError')), findsOneWidget);
+    expect(find.text('Could not open that file.'), findsOneWidget);
   });
 
   testWidgets('a panel member can post a comment on one candidate',
@@ -209,6 +234,35 @@ void main() {
     expect(saved.docs.first.data()['authorUid'], 'viewer');
     expect(saved.docs.first.data()['authorRole'], isNotEmpty,
         reason: 'the role held at the time is part of the record');
+  });
+
+  // The Dean's decision closes the thread.
+  for (final status in ['titleApproved', 'titleRejected']) {
+    testWidgets('once the set is $status nobody can post a comment',
+        (tester) async {
+      useTallSurface(tester);
+      final db = await seeded(status: status);
+      await tester.pumpWidget(wrap(db));
+      await tester.pumpAndSettle();
+
+      for (final id in ['ct1', 'ct2', 'ct3']) {
+        expect(find.byKey(Key('commentBox-$id')), findsNothing, reason: id);
+        expect(find.byKey(Key('postComment-$id')), findsNothing, reason: id);
+        expect(find.byKey(Key('commentsClosed-$id')), findsOneWidget,
+            reason: id);
+      }
+      expect(find.textContaining('Comments are closed'), findsNWidgets(3));
+    });
+  }
+
+  testWidgets('while the set is under defense the comment box is open',
+      (tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(wrap(await seeded()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('commentBox-ct1')), findsOneWidget);
+    expect(find.byKey(const Key('commentsClosed-ct1')), findsNothing);
   });
 
   testWidgets('an empty comment is refused', (tester) async {
@@ -317,7 +371,7 @@ void main() {
   // to anyone who is not on the panel: `titleComposing` allows create only
   // for isOnPanel(), while get/list also allows the Coordinator and the
   // Dean. So a Dean or Coordinator reading this screen is shown a comment
-  // box, focuses it, and the marker write is denied — once on focus and then
+  // box, focuses it, and the marker write is denied: once on focus and then
   // again every five seconds by the heartbeat.
   //
   // Nothing awaits those writes, so each refusal escaped as an uncaught

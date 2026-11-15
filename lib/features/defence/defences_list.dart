@@ -26,16 +26,15 @@ class DefencesList extends ConsumerWidget {
   const DefencesList({
     super.key,
     this.where,
-    this.emptyTitle = 'No defences scheduled',
-    this.emptyMessage = 'A defence appears here once the Coordinator '
-        'schedules one you are part of.',
+    this.emptyTitle = 'No defenses scheduled',
+    this.emptyMessage,
   });
 
   /// Which of the reader's defences to show; all of them when null. The
   /// Defences page passes one stage's [DefenceStage.includes].
   final bool Function(Defence)? where;
   final String emptyTitle;
-  final String emptyMessage;
+  final String? emptyMessage;
 
   /// Same shape as the picker copy in `schedule_defence_screen.dart`, kept
   /// local rather than shared: this is the only other screen that renders a
@@ -50,7 +49,7 @@ class DefencesList extends ConsumerWidget {
   }
 
   /// Soonest-first within a section. A null [Defence.scheduledAt] ("Date to
-  /// be confirmed") sorts to the end -- it has no date to compare and does
+  /// be confirmed") sorts to the end: it has no date to compare and does
   /// not belong ahead of one that does.
   static List<Defence> _sorted(List<Defence> defences) {
     final sorted = [...defences];
@@ -72,14 +71,14 @@ class DefencesList extends ConsumerWidget {
 
     // Its own loading/error/empty branches, kept apart from whatever else
     // shares the page: a schedule that is merely still connecting must
-    // never render as "no defences" -- see the loading test, which pumps a
+    // never render as "no defences": see the loading test, which pumps a
     // never-emitting stream once (no pumpAndSettle) specifically to catch
     // this collapsing back in.
     return defencesAsync.when(
-      loading: () => const LoadingState(label: 'Loading your defences…'),
+      loading: () => const LoadingState(label: 'Loading your defenses…'),
       error: (e, _) => ErrorState(
         error: e,
-        message: 'Could not load your defences.',
+        message: 'Could not load your defenses.',
       ),
       data: (defences) {
         final shown = where == null ? defences : defences.where(where!).toList();
@@ -95,8 +94,8 @@ class DefencesList extends ConsumerWidget {
             shown.where((d) => d.type == DefenceType.preOral).toList());
         final final_ = _sorted(
             shown.where((d) => d.type == DefenceType.final_).toList());
-        // A section reads "re-defences" only when EVERY defence in it is
-        // one -- a mixed section (the ordinary Defences list, where a
+        // A section reads "re-defences" only when every defence in it is
+        // one: a mixed section (the ordinary Defences list, where a
         // pre-oral and its re-defence can both appear) still reads as a
         // plain pre-oral/final section.
         bool allRedefences(List<Defence> ds) =>
@@ -109,8 +108,8 @@ class DefencesList extends ConsumerWidget {
               _SectionHeading(
                   key: const Key('defenceSection-preOral'),
                   label: allRedefences(preOral)
-                      ? 'Pre-oral re-defences'
-                      : 'Pre-oral defences',
+                      ? 'Pre-oral redefenses'
+                      : 'Pre-oral defenses',
                   count: preOral.length),
               for (final d in preOral) DefenceRow(defence: d),
             ],
@@ -118,8 +117,8 @@ class DefencesList extends ConsumerWidget {
               _SectionHeading(
                   key: const Key('defenceSection-final'),
                   label: allRedefences(final_)
-                      ? 'Final re-defences'
-                      : 'Final defences',
+                      ? 'Final redefenses'
+                      : 'Final defenses',
                   count: final_.length),
               for (final d in final_) DefenceRow(defence: d),
             ],
@@ -160,6 +159,7 @@ class DefenceRow extends ConsumerWidget {
     final completed = d.status == DefenceStatus.completed;
     final isPanelist = uid != null && d.panelUids.contains(uid);
     final isAdviser = uid != null && uid == d.adviserUid;
+    final isLeader = uid != null && uid == d.leaderUid;
     // Read non-blockingly, unlike the room screen: a row must render its
     // title, status and Open control the instant the defence arrives, and
     // a profile still in flight simply means the two release-gated
@@ -196,15 +196,17 @@ class DefenceRow extends ConsumerWidget {
           onPressed: () => context.push('/defence/room/${d.id}/evaluate'),
           child: const Text('Evaluate'),
         ),
-      // The adviser always; panelists, coordinator and dean once released.
+      // The adviser always; panelists, coordinator, dean and the group's
+      // leader once released.
       if (completed &&
           (isAdviser ||
-              ((isPanelist || isCoordinator || isDean) &&
+              ((isPanelist || isCoordinator || isDean || isLeader) &&
                   d.evaluationsReleased)))
         OutlinedButton(
           key: Key('goToGrades-${d.id}'),
           onPressed: () => context.push('/defence/room/${d.id}/grades'),
-          child: const Text('Grades'),
+          // The group reads the panel's remarks there, not the scores.
+          child: Text(isLeader ? 'Remarks' : 'Grades'),
         ),
       FilledButton.tonal(
         key: Key('goToDefence-${d.id}'),

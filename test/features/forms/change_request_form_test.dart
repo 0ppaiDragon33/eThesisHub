@@ -54,7 +54,7 @@ void main() {
     final request = ChangeRequest(
       type: ChangeRequestType.title,
       stage: ChangeRequestStage.approved,
-      reasons: 'Scope narrowed after the title defence panel feedback',
+      reasons: 'Scope narrowed after the title defense panel feedback',
       leaderUid: 'leader-1',
       signoffs: const {},
       newTitle: 'A Framework for Zylotropic Inference Systems',
@@ -69,7 +69,7 @@ void main() {
     expect(text, contains('Zylotropic'));
     expect(
       text,
-      contains('Scope narrowed after the title defence panel feedback'),
+      contains('Scope narrowed after the title defense panel feedback'),
     );
   });
 
@@ -81,7 +81,7 @@ void main() {
       final request = ChangeRequest(
         type: ChangeRequestType.title,
         stage: ChangeRequestStage.approved,
-        reasons: 'Scope narrowed after the title defence panel feedback',
+        reasons: 'Scope narrowed after the title defense panel feedback',
         leaderUid: 'leader-1',
         signoffs: const {},
         newTitle: 'A Framework for Zylotropic Inference Systems',
